@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,7 +19,8 @@ class GuideActivity : ComponentActivity() {
         setContent {
             NotifyRelayTheme {
                 GuideScreen(onContinue = {
-                    // TODO: 跳转到 MainActivity
+                    startActivity(Intent(this@GuideActivity, MainActivity::class.java))
+                    finish()
                 })
             }
         }
