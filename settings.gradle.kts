@@ -20,4 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "NotifyRelay"
-include(":app")
+include(":app", ":miuix-main", ":miuix-main:miuix")

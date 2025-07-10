@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="miuix-desktop">
+    <output-path>$PROJECT_DIR$/miuix-main/miuix/build/libs</output-path>
+    <root id="archive" name="miuix-desktop.jar">
+      <element id="module-output" name="NotifyRelay.miuix-main.miuix.desktopMain" />
+    </root>
+  </artifact>
+</component>

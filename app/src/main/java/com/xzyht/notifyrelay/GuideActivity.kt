@@ -1,26 +1,40 @@
 package com.xzyht.notifyrelay
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons // 可选，若用 Material Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.ui.theme.NotifyRelayTheme
+import androidx.compose.material3.Icon
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.basic.Check
+import top.yukonga.miuix.kmp.icon.icons.basic.Search
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            NotifyRelayTheme {
+            MiuixTheme {
                 GuideScreen(onContinue = {
-                    startActivity(Intent(this@GuideActivity, MainActivity::class.java))
-                    finish()
+                    requestAllPermissions(this@GuideActivity)
                 })
             }
         }
@@ -29,19 +43,83 @@ class GuideActivity : ComponentActivity() {
 
 @Composable
 fun GuideScreen(onContinue: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    val context = LocalContext.current
+    var permissionsGranted by remember { mutableStateOf(false) }
+    var showCheck by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        permissionsGranted = checkAllPermissions(context)
+        showCheck = permissionsGranted
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        Text("欢迎使用通知转发应用", fontSize = 24.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("本应用需要以下权限：\n\n- 通知访问权限\n- 应用列表权限\n- 通知发送权限 (Android 13+)\n\n请在后续页面统一授权，保障功能正常使用。", fontSize = 16.sp)
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onContinue) {
-            Text("同意并继续")
+        Card(modifier = Modifier.padding(24.dp)) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("欢迎使用通知转发应用", fontSize = 24.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "本应用需要以下权限：\n\n- 通知访问权限\n- 应用列表权限\n- 通知发送权限 (Android 13+)\n\n请在后续页面统一授权，保障功能正常使用。",
+                    fontSize = 16.sp
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+                if (showCheck) {
+                    Icon(imageVector = MiuixIcons.Basic.Check, contentDescription = null, tint = Color(0xFF4CAF50))
+                    Text("所有权限已授权，可继续", color = Color(0xFF4CAF50))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = {
+                        (context as? Activity)?.startActivity(Intent(context, MainActivity::class.java))
+                        (context as? Activity)?.finish()
+                    }) {
+                        Text("进入应用")
+                    }
+                } else {
+                    Icon(imageVector = MiuixIcons.Basic.Search, contentDescription = null, tint = Color(0xFFFF9800))
+                    Button(onClick = onContinue) {
+                        Text("同意并继续授权")
+                    }
+                }
+            }
         }
     }
+}
+
+fun requestAllPermissions(activity: Activity) {
+    // 通知访问权限
+    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+    activity.startActivity(intent)
+    // 应用列表权限（Android 11+需 PACKAGE_USAGE_STATS）
+    val usageIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    activity.startActivity(usageIntent)
+    // 通知发送权限（Android 13+）
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
+    }
+}
+
+fun checkAllPermissions(context: Context): Boolean {
+    // 检查通知监听
+    val enabledListeners = Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners"
+    ) ?: ""
+    val hasNotification = enabledListeners.contains(context.packageName)
+    // 检查应用列表权限
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+    val mode = appOps.checkOpNoThrow(
+        "android:get_usage_stats",
+        android.os.Process.myUid(),
+        context.packageName
+    )
+    val hasUsage = mode == android.app.AppOpsManager.MODE_ALLOWED
+    // 检查通知发送权限
+    val hasPost = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    } else true
+    return hasNotification && hasUsage && hasPost
 }

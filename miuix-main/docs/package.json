@@ -1,0 +1,16 @@
+{
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "vitepress": "^1.6.3",
+    "vue": "^3.5.16"
+  },
+  "scripts": {
+    "docs:dev": "vitepress dev --host",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "dependencies": {
+    "medium-zoom": "^1.1.0"
+  },
+  "type": "module"
+}

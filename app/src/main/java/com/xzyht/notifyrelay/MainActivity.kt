@@ -3,21 +3,22 @@ package com.xzyht.notifyrelay
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.xzyht.notifyrelay.ui.theme.AppIcons
-import com.xzyht.notifyrelay.ui.theme.NotifyRelayTheme
+import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.basic.Check
+import top.yukonga.miuix.kmp.icon.icons.useful.Settings
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            NotifyRelayTheme {
+            MiuixTheme {
                 MainApp()
             }
         }
@@ -27,27 +28,28 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainApp() {
     var selectedTab by remember { mutableStateOf(0) }
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    label = { Text("设备与转发") },
-                    icon = { Icon(AppIcons.Settings, contentDescription = null) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    label = { Text("通知历史") },
-                    icon = { Icon(AppIcons.Notifications, contentDescription = null) }
-                )
+    val items = listOf(
+        NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
+        NavigationItem("通知历史", MiuixIcons.Basic.Check)
+    )
+    Scaffold { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize()) {
+            NavigationBar(
+                items = items,
+                selected = selectedTab,
+                onClick = { selectedTab = it }
+            )
+            Box(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .weight(1f)
+                    .fillMaxSize()
+            ) {
+                when (selectedTab) {
+                    0 -> DeviceForwardScreen()
+                    1 -> NotificationHistoryScreen()
+                }
             }
-        }
-    ) { innerPadding ->
-        when (selectedTab) {
-            0 -> DeviceForwardScreen()
-            1 -> NotificationHistoryScreen()
         }
     }
 }
@@ -55,19 +57,19 @@ fun MainApp() {
 @Composable
 fun DeviceForwardScreen() {
     // TODO: 设备与转发设置界面实现
-    Text("设备与转发设置页")
+    Text("设备与转发设置页", modifier = Modifier.padding(32.dp))
 }
 
 @Composable
 fun NotificationHistoryScreen() {
     // TODO: 通知历史界面实现
-    Text("通知历史页")
+    Text("通知历史页", modifier = Modifier.padding(32.dp))
 }
 
 @Preview(showBackground = true)
 @Composable
 fun MainAppPreview() {
-    NotifyRelayTheme {
+    MiuixTheme {
         MainApp()
     }
 }
