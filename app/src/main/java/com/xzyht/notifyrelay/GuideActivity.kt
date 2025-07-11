@@ -32,15 +32,37 @@ import top.yukonga.miuix.kmp.basic.Switch
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("notifyrelay_prefs", Context.MODE_PRIVATE)
+        val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
+        // 优化：仅首次启动或未完成必要权限时进入引导页，否则直接进入主界面（不渲染引导页）
+        if (checkAllPermissions(this) && !isFirstLaunch) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
         setContent {
             MiuixTheme {
                 GuideScreen(onContinue = {
+                    // 首次启动后标记为已启动
+                    prefs.edit().putBoolean("isFirstLaunch", false).apply()
                     startActivity(Intent(this@GuideActivity, MainActivity::class.java))
                     finish()
                 })
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // 页面回到前台时刷新权限状态
+        // 通过 Compose 的全局事件通知 GuideScreen 刷新
+        GuideScreen.refreshTrigger++
+    }
+}
+
+object GuideScreen {
+    // 用于触发刷新
+    var refreshTrigger by mutableStateOf(0)
 }
 
 @Composable
@@ -52,6 +74,8 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasUsage by remember { mutableStateOf(false) }
     var hasPost by remember { mutableStateOf(false) }
     var canQueryApps by remember { mutableStateOf(false) }
+    val prefs = context.getSharedPreferences("notifyrelay_prefs", Context.MODE_PRIVATE)
+    val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
 
     // Toast工具
     fun showToast(msg: String) {
@@ -75,7 +99,6 @@ fun GuideScreen(onContinue: () -> Unit) {
         hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         } else true
-        // 检查应用列表权限
         try {
             val pm = context.packageManager
             val apps = pm.getInstalledApplications(0)
@@ -88,6 +111,11 @@ fun GuideScreen(onContinue: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        refreshPermissions()
+    }
+    // 监听 GuideActivity 的刷新事件
+    val trigger = GuideScreen.refreshTrigger
+    LaunchedEffect(trigger) {
         refreshPermissions()
     }
 
@@ -113,7 +141,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 showToast("跳转通知访问授权页面")
                                 val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
                                 context.startActivity(intent)
-                                refreshPermissions()
+                                // 移除 refreshPermissions()，授权后由 onResume 刷新
                             },
                             enabled = true
                         )
@@ -134,6 +162,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                                     canQueryApps = false
                                     showToast("获取应用列表失败：${e.message}")
                                 }
+                                // 保持原逻辑，应用列表权限本地可直接刷新
                                 refreshPermissions()
                             },
                             enabled = true
@@ -152,7 +181,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                                         arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100
                                     )
                                 }
-                                refreshPermissions()
+                                // 移除 refreshPermissions()，授权后由 onResume 刷新
                             },
                             enabled = true
                         )
@@ -173,7 +202,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         }
                     }
                 }) {
-                    Text(if (permissionsGranted) "进入应用" else "同意并继续授权")
+                    Text(if (permissionsGranted) "进入应用" else "请先完成必要权限的授权")
                 }
             }
         }
@@ -201,16 +230,17 @@ fun checkAllPermissions(context: Context): Boolean {
     ) ?: ""
     val hasNotification = enabledListeners.contains(context.packageName)
     // 检查应用列表权限
-    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-    val mode = appOps.checkOpNoThrow(
-        "android:get_usage_stats",
-        android.os.Process.myUid(),
-        context.packageName
-    )
-    val hasUsage = mode == android.app.AppOpsManager.MODE_ALLOWED
+    var canQueryApps = false
+    try {
+        val pm = context.packageManager
+        val apps = pm.getInstalledApplications(0)
+        canQueryApps = apps.size > 2
+    } catch (e: Exception) {
+        canQueryApps = false
+    }
     // 检查通知发送权限
     val hasPost = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
     } else true
-    return hasNotification && hasUsage && hasPost
+    return hasNotification && canQueryApps && hasPost
 }
