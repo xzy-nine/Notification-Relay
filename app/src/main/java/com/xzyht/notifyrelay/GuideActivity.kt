@@ -27,6 +27,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import top.yukonga.miuix.kmp.icon.icons.basic.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Switch
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,7 +35,8 @@ class GuideActivity : ComponentActivity() {
         setContent {
             MiuixTheme {
                 GuideScreen(onContinue = {
-                    requestAllPermissions(this@GuideActivity)
+                    startActivity(Intent(this@GuideActivity, MainActivity::class.java))
+                    finish()
                 })
             }
         }
@@ -46,10 +48,47 @@ fun GuideScreen(onContinue: () -> Unit) {
     val context = LocalContext.current
     var permissionsGranted by remember { mutableStateOf(false) }
     var showCheck by remember { mutableStateOf(false) }
+    var hasNotification by remember { mutableStateOf(false) }
+    var hasUsage by remember { mutableStateOf(false) }
+    var hasPost by remember { mutableStateOf(false) }
+    var canQueryApps by remember { mutableStateOf(false) }
+
+    // Toast工具
+    fun showToast(msg: String) {
+        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    // 权限检测方法
+    fun refreshPermissions() {
+        val enabledListeners = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        ) ?: ""
+        hasNotification = enabledListeners.contains(context.packageName)
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            "android:get_usage_stats",
+            android.os.Process.myUid(),
+            context.packageName
+        )
+        hasUsage = mode == android.app.AppOpsManager.MODE_ALLOWED
+        hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else true
+        // 检查应用列表权限
+        try {
+            val pm = context.packageManager
+            val apps = pm.getInstalledApplications(0)
+            canQueryApps = apps.size > 2
+        } catch (e: Exception) {
+            canQueryApps = false
+        }
+        permissionsGranted = hasNotification && canQueryApps && hasPost
+        showCheck = permissionsGranted
+    }
 
     LaunchedEffect(Unit) {
-        permissionsGranted = checkAllPermissions(context)
-        showCheck = permissionsGranted
+        refreshPermissions()
     }
 
     Box(
@@ -63,26 +102,78 @@ fun GuideScreen(onContinue: () -> Unit) {
             ) {
                 Text("欢迎使用通知转发应用", fontSize = 24.sp)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "本应用需要以下权限：\n\n- 通知访问权限\n- 应用列表权限\n- 通知发送权限 (Android 13+)\n\n请在后续页面统一授权，保障功能正常使用。",
-                    fontSize = 16.sp
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-                if (showCheck) {
-                    Icon(imageVector = MiuixIcons.Basic.Check, contentDescription = null, tint = Color(0xFF4CAF50))
-                    Text("所有权限已授权，可继续", color = Color(0xFF4CAF50))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = {
-                        (context as? Activity)?.startActivity(Intent(context, MainActivity::class.java))
-                        (context as? Activity)?.finish()
-                    }) {
-                        Text("进入应用")
+                // 权限状态列表
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("通知访问权限", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = hasNotification,
+                            onCheckedChange = {
+                                showToast("跳转通知访问授权页面")
+                                val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                                context.startActivity(intent)
+                                refreshPermissions()
+                            },
+                            enabled = true
+                        )
                     }
-                } else {
-                    Icon(imageVector = MiuixIcons.Basic.Search, contentDescription = null, tint = Color(0xFFFF9800))
-                    Button(onClick = onContinue) {
-                        Text("同意并继续授权")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("应用列表权限", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = canQueryApps,
+                            onCheckedChange = {
+                                try {
+                                    val pm = context.packageManager
+                                    val apps = pm.getInstalledApplications(0)
+                                    canQueryApps = apps.size > 2
+                                    showToast("已获取应用列表，数量：${apps.size}")
+                                } catch (e: Exception) {
+                                    canQueryApps = false
+                                    showToast("获取应用列表失败：${e.message}")
+                                }
+                                refreshPermissions()
+                            },
+                            enabled = true
+                        )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("通知发送权限 (Android 13+)", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = hasPost,
+                            onCheckedChange = {
+                                showToast("请求通知发送权限")
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                    (context as? Activity)?.requestPermissions(
+                                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100
+                                    )
+                                }
+                                refreshPermissions()
+                            },
+                            enabled = true
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = {
+                    if (permissionsGranted) {
+                        onContinue()
+                    } else {
+                        val missing = buildList {
+                            if (!hasNotification) add("通知访问权限")
+                            if (!canQueryApps) add("应用列表权限")
+                            if (!hasPost) add("通知发送权限")
+                        }.joinToString(", ")
+                        if (missing.isNotEmpty()) {
+                            showToast("请先授权: $missing")
+                        }
+                    }
+                }) {
+                    Text(if (permissionsGranted) "进入应用" else "同意并继续授权")
                 }
             }
         }
@@ -91,11 +182,11 @@ fun GuideScreen(onContinue: () -> Unit) {
 
 fun requestAllPermissions(activity: Activity) {
     // 通知访问权限
-    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-    activity.startActivity(intent)
-    // 应用列表权限（Android 11+需 PACKAGE_USAGE_STATS）
-    val usageIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-    activity.startActivity(usageIntent)
+    val intentNotification = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+    activity.startActivity(intentNotification)
+    // 应用使用情况访问权限（应用列表权限）
+    val intentUsage = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    activity.startActivity(intentUsage)
     // 通知发送权限（Android 13+）
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
