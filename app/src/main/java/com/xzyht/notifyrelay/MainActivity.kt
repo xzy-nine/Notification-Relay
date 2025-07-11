@@ -18,7 +18,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MiuixTheme {
+            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
+            MiuixTheme(colors = colors) {
                 MainApp()
             }
         }

@@ -41,7 +41,9 @@ class GuideActivity : ComponentActivity() {
             return
         }
         setContent {
-            MiuixTheme {
+            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
+            MiuixTheme(colors = colors) {
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
                     prefs.edit().putBoolean("isFirstLaunch", false).apply()
