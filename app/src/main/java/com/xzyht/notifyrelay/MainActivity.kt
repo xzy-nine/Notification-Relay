@@ -34,23 +34,23 @@ fun MainApp() {
         NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
     )
-    Scaffold { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        bottomBar = {
             NavigationBar(
                 items = items,
                 selected = selectedTab,
                 onClick = { selectedTab = it }
             )
-            Box(
-                modifier = Modifier
-                    .padding(innerPadding)
-                    .weight(1f)
-                    .fillMaxSize()
-            ) {
-                when (selectedTab) {
-                    0 -> DeviceForwardScreen()
-                    1 -> NotificationHistoryScreen()
-                }
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            when (selectedTab) {
+                0 -> DeviceForwardScreen()
+                1 -> NotificationHistoryScreen()
             }
         }
     }

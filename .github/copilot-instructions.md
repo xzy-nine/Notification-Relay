@@ -16,8 +16,6 @@
 ## UI与交互约定
 - 所有 Compose 组件优先使用 Miuix 主题库（如 `MiuixTheme`、`MiuixIcons`、`Button`、`Card` 等），详见[官方组件文档](https://miuix-kotlin-multiplatform.github.io/miuix/zh_CN/components/)。
 
-- 导航栏采用响应式设计：竖屏底部，横屏左侧。
-- 设备列表分组显示，连接弹窗用 Material 风格。
 - 通知历史支持应用图标显示（包名匹配本机已安装应用），未安装显示默认图标。
 
 ## 构建与依赖
