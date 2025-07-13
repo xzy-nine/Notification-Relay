@@ -17,7 +17,7 @@ class NotificationRecordStore(private val context: Context) {
         return gson.fromJson(json, object : TypeToken<MutableList<NotificationRecordEntity>>() {}.type) ?: mutableListOf()
     }
 
-    private fun writeAll(list: List<NotificationRecordEntity>) {
+    internal fun writeAll(list: List<NotificationRecordEntity>) {
         file.writeText(gson.toJson(list))
     }
 
