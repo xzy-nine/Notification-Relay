@@ -24,6 +24,10 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Button
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import com.xzyht.notifyrelay.R
 
@@ -131,19 +135,34 @@ fun NotificationHistoryScreen() {
     // }
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
-    var notifications by remember { mutableStateOf(NotificationRepository.getNotificationsByDevice(selectedDevice)) }
-    // 移除媒体通知分组与置顶逻辑，所有通知统一处理
+    // 只保留同包名同key最新一条通知（如进度/状态类通知）
+    var notifications by remember {
+        mutableStateOf(
+            NotificationRepository.getNotificationsByDevice(selectedDevice)
+                .groupBy { Pair(it.packageName, it.key ?: "") }
+                .map { (_, list) -> list.maxByOrNull { it.time }!! }
+        )
+    }
     val textStyles = MiuixTheme.textStyles
     val colorScheme = MiuixTheme.colorScheme
     val pm = context.packageManager
-    // 用 BitmapFactory 强制加载 PNG 作为默认图标，避免 XML/VectorDrawable 问题
     val defaultIconBitmap = remember {
         BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)?.asImageBitmap()
     }
-    // 权限检测日志输出
     val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
     val listenerEnabled = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.contains(context.packageName) == true
     android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
+    // 分组折叠状态
+    var expandedGroups by remember { mutableStateOf(setOf<String>()) }
+    // 分组逻辑：同包名分组，分组内只会有最新的同key通知
+    val grouped = notifications.groupBy { it.packageName }
+    val groupList = grouped.entries.map { (pkg, list) ->
+        pkg to list.sortedByDescending { it.time }
+    }.sortedByDescending { it.second.firstOrNull()?.time ?: 0L }
+    // 单条通知（未分组）
+    val singleList = groupList.filter { it.second.size <= 2 }.flatMap { it.second }
+    // 分组（大于2条）
+    val multiGroups = groupList.filter { it.second.size > 2 }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -172,8 +191,10 @@ fun NotificationHistoryScreen() {
                     onClick = {
                         try {
                             NotificationRepository.clearDeviceHistory(selectedDevice, context)
-                            // 清除后刷新通知列表
+                            // 清除后刷新通知列表，需重新去重
                             notifications = NotificationRepository.getNotificationsByDevice(selectedDevice)
+                                .groupBy { Pair(it.packageName, it.key ?: "") }
+                                .map { (_, list) -> list.maxByOrNull { it.time }!! }
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay", "清除历史异常", e)
                             android.widget.Toast.makeText(context, "清除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
@@ -196,9 +217,173 @@ fun NotificationHistoryScreen() {
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                // 所有通知统一展示，无媒体置顶分组和专属UI
-                items(notifications) { record ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                // 分组展示（大于2条）
+                items(multiGroups) { (pkg, list) ->
+                    val isExpanded = expandedGroups.contains(pkg)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        cornerRadius = 12.dp,
+                        pressFeedbackType = PressFeedbackType.Sink,
+                        showIndication = true,
+                        onClick = {
+                            expandedGroups = if (isExpanded) expandedGroups - pkg else expandedGroups + pkg
+                        }
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        expandedGroups = if (isExpanded) expandedGroups - pkg else expandedGroups + pkg
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 应用图标
+                                val iconBitmap = remember(pkg) {
+                                    try {
+                                        pm.getApplicationInfo(pkg, 0)
+                                        val appIcon = pm.getApplicationIcon(pkg)
+                                        when (appIcon) {
+                                            is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
+                                            else -> {
+                                                val bmp = android.graphics.Bitmap.createBitmap(
+                                                    appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
+                                                    appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
+                                                    android.graphics.Bitmap.Config.ARGB_8888
+                                                )
+                                                val canvas = android.graphics.Canvas(bmp)
+                                                appIcon.setBounds(0, 0, canvas.width, canvas.height)
+                                                appIcon.draw(canvas)
+                                                bmp.asImageBitmap()
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        defaultIconBitmap
+                                    }
+                                }
+                                val finalBitmap = iconBitmap ?: defaultIconBitmap
+                                Box(modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                                    if (finalBitmap != null) {
+                                        Image(
+                                            bitmap = finalBitmap,
+                                            contentDescription = pkg,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = pkg,
+                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = if (isExpanded) "收起" else "展开",
+                                    style = textStyles.footnote2.copy(color = colorScheme.primary)
+                                )
+                            }
+                            if (!isExpanded) {
+                                // 折叠时最多显示三条通知（单行：加粗标题+空格+内容）
+                                list.take(3).forEach { record ->
+                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = (record.title ?: "(无标题)") + " ",
+                                            style = textStyles.title4.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = colorScheme.onBackground),
+                                            maxLines = 1
+                                        )
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = record.text ?: "(无内容)",
+                                            style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                                if (list.size > 3) {
+                                    top.yukonga.miuix.kmp.basic.Text(
+                                        text = "...共${list.size}条，点击展开",
+                                        style = textStyles.footnote2.copy(color = colorScheme.outline),
+                                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
+                                    )
+                                }
+                            } else {
+                                // 展开时，正常通知卡片外套分组块
+                                list.forEach { record ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                                        cornerRadius = 8.dp,
+                                        pressFeedbackType = PressFeedbackType.Sink,
+                                        showIndication = true,
+                                        onClick = {
+                                            // 可扩展：通知详情、批量操作等
+                                        }
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            // ...existing icon code...
+                                            val iconBitmap = remember(record.packageName) {
+                                                try {
+                                                    pm.getApplicationInfo(record.packageName, 0)
+                                                    val appIcon = pm.getApplicationIcon(record.packageName)
+                                                    when (appIcon) {
+                                                        is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
+                                                        else -> {
+                                                            val bmp = android.graphics.Bitmap.createBitmap(
+                                                                appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
+                                                                appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
+                                                                android.graphics.Bitmap.Config.ARGB_8888
+                                                            )
+                                                            val canvas = android.graphics.Canvas(bmp)
+                                                            appIcon.setBounds(0, 0, canvas.width, canvas.height)
+                                                            appIcon.draw(canvas)
+                                                            bmp.asImageBitmap()
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    defaultIconBitmap
+                                                }
+                                            }
+                                            val finalBitmap = iconBitmap ?: defaultIconBitmap
+                                            Box(modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                                                if (finalBitmap != null) {
+                                                    Image(
+                                                        bitmap = finalBitmap,
+                                                        contentDescription = record.packageName,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                            }
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = record.title ?: "(无标题)",
+                                                    style = textStyles.title4.copy(color = colorScheme.onBackground)
+                                                )
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = record.text ?: "(无内容)",
+                                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                                )
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = "时间: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(record.time))}",
+                                                    style = textStyles.footnote2.copy(color = colorScheme.onBackground)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // 单条通知（未分组）
+                items(singleList) { record ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        cornerRadius = 8.dp,
+                        pressFeedbackType = PressFeedbackType.Sink,
+                        showIndication = true,
+                        onClick = {
+                            // 可扩展：通知详情、批量操作等
+                        }
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val iconBitmap = remember(record.packageName) {
                                 try {
@@ -219,7 +404,6 @@ fun NotificationHistoryScreen() {
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.e("NotifyRelay", "iconerr: 图标加载异常, 包名=${record.packageName}", e)
                                     defaultIconBitmap
                                 }
                             }
@@ -232,34 +416,6 @@ fun NotificationHistoryScreen() {
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
-                                // smallIcon实际绘制（跨包获取Drawable并转Bitmap）
-                                val smallIconResId = record.smallIconResId
-                                if (smallIconResId != null && smallIconResId != 0) {
-                                    val smallIconBitmap = try {
-                                        val res = context.packageManager.getResourcesForApplication(record.packageName)
-                                        val drawable = res.getDrawable(smallIconResId, null)
-                                        if (drawable != null) {
-                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                drawable.intrinsicWidth.takeIf { it > 0 } ?: 20,
-                                                drawable.intrinsicHeight.takeIf { it > 0 } ?: 20,
-                                                android.graphics.Bitmap.Config.ARGB_8888
-                                            )
-                                            val canvas = android.graphics.Canvas(bmp)
-                                            drawable.setBounds(0, 0, canvas.width, canvas.height)
-                                            drawable.draw(canvas)
-                                            bmp
-                                        } else null
-                                    } catch (e: Exception) { null }
-                                    if (smallIconBitmap != null) {
-                                        Image(
-                                            bitmap = smallIconBitmap.asImageBitmap(),
-                                            contentDescription = "smallIcon",
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .align(Alignment.BottomEnd)
-                                        )
-                                    }
-                                }
                             }
                             Column(modifier = Modifier.padding(12.dp)) {
                                 top.yukonga.miuix.kmp.basic.Text(
@@ -269,10 +425,6 @@ fun NotificationHistoryScreen() {
                                 top.yukonga.miuix.kmp.basic.Text(
                                     text = record.text ?: "(无内容)",
                                     style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "包名: ${record.packageName}",
-                                    style = textStyles.footnote1.copy(color = colorScheme.onBackground)
                                 )
                                 top.yukonga.miuix.kmp.basic.Text(
                                     text = "时间: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(record.time))}",
