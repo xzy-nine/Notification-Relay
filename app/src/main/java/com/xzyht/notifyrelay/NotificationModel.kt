@@ -76,7 +76,6 @@ object NotificationRepository {
         // 移除媒体通知特例，所有通知统一处理
         // 过滤无标题且无内容的通知
         if (title.isNullOrBlank() && text.isNullOrBlank()) return
-        }
         val record = NotificationRecord(
             key = sbn.key,
             packageName = sbn.packageName,
@@ -124,7 +123,6 @@ object NotificationRepository {
     }
 
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
-        // 过滤无标题且无内容的通知
-        return notifications.filter { it.device == device && !(it.title.isNullOrBlank() && it.text.isNullOrBlank()) }
+        return notifications.filter { it.device == device }
     }
 }
