@@ -4,6 +4,11 @@
 - 安卓通知转发应用，支持多设备间通知内容的双向转发，含应用跳转能力。
 - 具体功能、页面与权限要求详见 `README.md`。
 
+
+## ai的agent要求
+- 要求修改时直接修改不二次征求同意
+- 分析日志时结合代码详情给出修改建议并直接修改
+- 代码bug修改后直接提交git和对应git消息，但不要同步
 ## 架构与主要组件
 - 主模块为 `app`，核心源码位于 `app/src/main/java/com/xzyht/notifyrelay/`。
 - UI采用 Jetpack Compose，全部界面风格统一使用 Miuix Compose 主题（`miuix-main/miuix` 子模块）。
