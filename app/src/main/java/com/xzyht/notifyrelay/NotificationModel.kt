@@ -37,30 +37,17 @@ object NotificationRepository {
     var currentDevice: String = "本机"
     val deviceList = listOf("本机") // 预留扩展
 
-    private var store: NotificationRecordStore? = null
-
-    fun init(context: Context) {
-        if (store == null) {
-            store = NotifyRelayStoreProvider.getInstance(context)
-            CoroutineScope(Dispatchers.IO).launch {
-                val list = store?.getAll() ?: emptyList()
-                notifications.clear()
-                notifications.addAll(list.map {
-                    NotificationRecord(
-                        key = it.key,
-                        packageName = it.packageName,
-                        title = it.title,
-                        text = it.text,
-                        time = it.time,
-                        device = it.device
-                    )
-                })
-            }
-        }
+    // 默认每设备最多100条通知，支持动态调整
+    private var maxNotificationsPerDevice: Int = 100
+    /**
+     * 设置每个设备的通知缓存上限
+     * TODO: 可扩展为持久化配置或多设备自定义
+     */
+    fun setMaxNotificationsPerDevice(max: Int) {
+        maxNotificationsPerDevice = max
     }
 
     fun addNotification(sbn: StatusBarNotification, context: Context) {
-        if (store == null) init(context)
         if (sbn.packageName == context.packageName) return // 忽略自身通知
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()
@@ -73,7 +60,6 @@ object NotificationRepository {
             )
         } ?: emptyList()
 
-        // 移除媒体通知特例，所有通知统一处理
         // 过滤无标题且无内容的通知
         if (title.isNullOrBlank() && text.isNullOrBlank()) return
         val record = NotificationRecord(
@@ -89,37 +75,22 @@ object NotificationRepository {
         if (idx >= 0) {
             notifications[idx] = record
         } else {
-            notifications.add(record) // 所有通知统一处理，无置顶媒体特例
-        }
-        CoroutineScope(Dispatchers.IO).launch {
-            store?.insert(
-                NotificationRecordEntity(
-                    key = record.key,
-                    packageName = record.packageName,
-                    title = record.title,
-                    text = record.text,
-                    time = record.time,
-                    device = record.device
-                    // actions/封面图不存储，仅内存展示
-                )
-            )
+            // 按设备分组，超出上限则移除最旧的
+            val deviceRecords = notifications.filter { it.device == record.device }
+            if (deviceRecords.size >= maxNotificationsPerDevice) {
+                val oldest = deviceRecords.minByOrNull { it.time }
+                if (oldest != null) notifications.remove(oldest)
+            }
+            notifications.add(record)
         }
     }
 
     fun removeNotification(key: String, context: Context) {
-        if (store == null) init(context)
         notifications.removeAll { it.key == key }
-        CoroutineScope(Dispatchers.IO).launch {
-            store?.deleteByKey(key)
-        }
     }
 
     fun clearDeviceHistory(device: String, context: Context) {
-        if (store == null) init(context)
         notifications.removeAll { it.device == device }
-        CoroutineScope(Dispatchers.IO).launch {
-            store?.clearByDevice(device)
-        }
     }
 
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
