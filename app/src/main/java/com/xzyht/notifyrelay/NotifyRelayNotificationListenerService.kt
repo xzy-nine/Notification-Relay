@@ -8,7 +8,16 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         NotificationRepository.addNotification(sbn, this)
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        NotificationRepository.removeNotification(sbn.key)
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        // 启动时同步所有活跃通知到历史
+        val actives = activeNotifications
+        if (actives != null) {
+            for (sbn in actives) {
+                NotificationRepository.addNotification(sbn, this)
+            }
+        }
     }
+
+    // 保留通知历史，不做移除处理
 }

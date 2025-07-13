@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.21"
+    id("kotlin-kapt")
 }
 
 android {
@@ -58,6 +59,11 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
 
     // Miuix Compose 主题库
+    // DataStore 持久化（设备名、规则设置）
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore:1.0.0")
+    // Gson 用于通知历史 JSON 文件读写
+    implementation("com.google.code.gson:gson:2.10.1")
     implementation(project(":miuix-main:miuix"))
 }
 
