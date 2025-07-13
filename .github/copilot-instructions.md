@@ -18,13 +18,11 @@
 - 入口页面为 `GuideActivity`（首次启动引导权限），主页面为 `MainActivity`（导航栏切换核心功能）。
 - 主要页面：
   - 设备与转发设置（`DeviceForwardScreen`）：设备发现、连接、转发规则、黑名单管理。
-  - 通知历史（`NotificationHistoryScreen`）：分组/时间线展示，支持详情、批量操作。
-- 所有必要权限（通知访问、应用列表、通知发送）需在引导页统一请求，参考 `GuideActivity.kt` 的 `requestAllPermissions` 和 `checkAllPermissions` 实现。
+  - 通知历史
+  参见README.md 中的功能页面说明。
 
 ## UI与交互约定
 - 所有 Compose 组件优先使用 Miuix 主题库（如 `MiuixTheme`、`MiuixIcons`、`Button`、`Card` 等），详见[官方组件文档](https://miuix-kotlin-multiplatform.github.io/miuix/zh_CN/components/)。
-
-- 通知历史支持应用图标显示（包名匹配本机已安装应用），未安装显示默认图标。
 
 ## 构建与依赖
 - 构建仅限 Android Studio IDE，不支持命令行（如 gradlew）。
@@ -36,27 +34,10 @@
 - 设备发现与连接、转发规则、黑名单等均在首页 Tab 实现，历史记录独立页面展示。
 - 权限状态检测与跳转均在引导页完成，主流程为：引导页授权 → 主页面功能。
 
-## 约定与模式示例
-- 权限统一请求示例：
-  ```kotlin
-  fun requestAllPermissions(activity: Activity) { ... }
-  fun checkAllPermissions(context: Context): Boolean { ... }
-  ```
-- Miuix 主题用法：
-  ```kotlin
-  setContent { MiuixTheme { ... } }
-  Icon(imageVector = MiuixIcons.Basic.Check, ...)
-  ```
-- 导航与页面切换：
-  ```kotlin
-  Scaffold { ... NavigationBar(items = ...) ... when(selectedTab) { ... } }
-  ```
 
 ## 其他说明
 - 仅记录已实现的模式，理想方案请勿补充。
-- 关键文件/目录：`README.md`、`GuideActivity.kt`、`MainActivity.kt`、`app/build.gradle.kts`、`miuix-main/miuix`。
+- 代码风格遵循 Kotlin 官方规范，使用 Ktlint 进行格式化。
 - 如需扩展功能或集成新依赖，优先查阅 Miuix 官方文档与本项目现有实现。
 本应用不会上架 Google Play等应用商店，仅限私有分发和自用,且没有对公网提供服务的计划。
 ---
-
-如有不清晰或遗漏的部分，请反馈具体需求或场景，以便进一步完善指令。
