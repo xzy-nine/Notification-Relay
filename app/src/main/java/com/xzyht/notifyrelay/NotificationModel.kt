@@ -40,6 +40,10 @@ object NotificationRepository {
     // 默认每设备最多100条通知，支持动态调整
     private var maxNotificationsPerDevice: Int = 100
 
+    // 防抖持久化相关变量
+    private var debounceJob: kotlinx.coroutines.Job? = null
+    private const val DEBOUNCE_DELAY = 500L // 500ms内多次变动只写一次
+
     /**
      * 初始化：从本地缓存加载历史通知
      */
@@ -56,9 +60,6 @@ object NotificationRepository {
                     title = it.title,
                     text = it.text,
                     time = it.time,
-    // 防抖持久化相关变量
-    private var debounceJob: kotlinx.coroutines.Job? = null
-    private const val DEBOUNCE_DELAY = 500L // 500ms内多次变动只写一次
                     device = it.device
                 )
             })
@@ -97,31 +98,17 @@ object NotificationRepository {
             time = sbn.postTime,
             device = "本机",
             actions = actions
+        )
+        // 按设备分组，超出上限则移除最旧的
+        val deviceRecords = notifications.filter { it.device == record.device }
+        if (deviceRecords.size >= maxNotificationsPerDevice) {
+            val oldest = deviceRecords.minByOrNull { it.time }
+            if (oldest != null) notifications.remove(oldest)
+        }
+        notifications.add(record)
         debounceJob?.cancel()
         debounceJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             kotlinx.coroutines.delay(DEBOUNCE_DELAY)
-            syncToCache(context)
-        }
-        } else {
-            // 按设备分组，超出上限则移除最旧的
-            val deviceRecords = notifications.filter { it.device == record.device }
-            if (deviceRecords.size >= maxNotificationsPerDevice) {
-        debounceJob?.cancel()
-        debounceJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            kotlinx.coroutines.delay(DEBOUNCE_DELAY)
-            syncToCache(context)
-        }
-                if (oldest != null) notifications.remove(oldest)
-            }
-            notifications.add(record)
-        }
-        debounceJob?.cancel()
-        debounceJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            kotlinx.coroutines.delay(DEBOUNCE_DELAY)
-            syncToCache(context)
-        }
-        // 持久化改为异步，避免阻塞主流程
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             syncToCache(context)
         }
     }
