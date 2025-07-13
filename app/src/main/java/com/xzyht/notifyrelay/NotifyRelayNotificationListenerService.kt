@@ -5,10 +5,10 @@ import android.service.notification.StatusBarNotification
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // ...后续可扩展通知转发逻辑...
+        NotificationRepository.addNotification(sbn, this)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        // ...后续可扩展通知移除逻辑...
+        NotificationRepository.removeNotification(sbn.key)
     }
 }

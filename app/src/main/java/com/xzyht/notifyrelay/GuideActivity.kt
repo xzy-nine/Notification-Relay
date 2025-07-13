@@ -155,17 +155,11 @@ fun GuideScreen(onContinue: () -> Unit) {
                         Switch(
                             checked = canQueryApps,
                             onCheckedChange = {
-                                try {
-                                    val pm = context.packageManager
-                                    val apps = pm.getInstalledApplications(0)
-                                    canQueryApps = apps.size > 2
-                                    showToast("已获取应用列表，数量：${apps.size}")
-                                } catch (e: Exception) {
-                                    canQueryApps = false
-                                    showToast("获取应用列表失败：${e.message}")
-                                }
-                                // 保持原逻辑，应用列表权限本地可直接刷新
-                                refreshPermissions()
+                                showToast("请在应用信息页面的权限管理中允许访问应用列表/使用情况")
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                context.startActivity(intent)
+                                // 授权后由 onResume 刷新，无需本地直接刷新
                             },
                             enabled = true
                         )
