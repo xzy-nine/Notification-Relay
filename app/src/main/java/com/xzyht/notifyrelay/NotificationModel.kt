@@ -65,33 +65,17 @@ object NotificationRepository {
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()
         val text = extras.getCharSequence("android.text")?.toString()
-        var actions = sbn.notification.actions?.map {
+        val actions = sbn.notification.actions?.map {
             NotificationAction(
                 icon = try { it.getIcon() } catch (e: Exception) { null },
                 title = it.title?.toString(),
                 intent = it.actionIntent
             )
         } ?: emptyList()
-        val isMedia = sbn.notification.category == Notification.CATEGORY_TRANSPORT || sbn.notification.category == "media" || sbn.notification.category == Notification.CATEGORY_CALL || sbn.notification.category == Notification.CATEGORY_SYSTEM || sbn.notification.category == Notification.CATEGORY_PROGRESS
 
-        // 如果是媒体通知且有按钮，插入自定义上一首/下一首/暂停按钮（SVG图标）
-        if (isMedia && actions.isNotEmpty()) {
-            val prevAction = NotificationAction(
-                svgResId = R.drawable.ic_media_prev,
-                title = "上一首",
-                intent = null
-            )
-            val playPauseAction = NotificationAction(
-                svgResId = R.drawable.ic_media_play_pause,
-                title = "暂停/继续",
-                intent = null
-            )
-            val nextAction = NotificationAction(
-                svgResId = R.drawable.ic_media_next,
-                title = "下一首",
-                intent = null
-            )
-            actions = listOf(prevAction, playPauseAction, nextAction) + actions
+        // 移除媒体通知特例，所有通知统一处理
+        // 过滤无标题且无内容的通知
+        if (title.isNullOrBlank() && text.isNullOrBlank()) return
         }
         val record = NotificationRecord(
             key = sbn.key,
@@ -106,11 +90,7 @@ object NotificationRepository {
         if (idx >= 0) {
             notifications[idx] = record
         } else {
-            if (isMedia && actions.isNotEmpty()) {
-                notifications.add(0, record) // 媒体通知且有按钮，置顶
-            } else {
-                notifications.add(record) // 普通通知或无按钮媒体通知，正常添加
-            }
+            notifications.add(record) // 所有通知统一处理，无置顶媒体特例
         }
         CoroutineScope(Dispatchers.IO).launch {
             store?.insert(
@@ -144,6 +124,7 @@ object NotificationRepository {
     }
 
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
-        return notifications.filter { it.device == device }
+        // 过滤无标题且无内容的通知
+        return notifications.filter { it.device == device && !(it.title.isNullOrBlank() && it.text.isNullOrBlank()) }
     }
 }

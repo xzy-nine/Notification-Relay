@@ -129,11 +129,7 @@ fun NotificationHistoryScreen() {
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
     var notifications by remember { mutableStateOf(NotificationRepository.getNotificationsByDevice(selectedDevice)) }
-    // 媒体通知置顶逻辑
-    val (mediaNotifications, normalNotifications) = notifications.partition {
-        // 以常见媒体包名或通知内容判断，也可扩展
-        it.packageName == "com.android.music" || it.packageName == "com.tencent.qqmusic" || it.packageName == "com.netease.cloudmusic" || it.packageName == "com.kugou.android" || it.packageName == "com.spotify.music" || it.packageName == "com.xiaomi.mediacontrol" || it.title?.contains("播放") == true || it.title?.contains("暂停") == true
-    }
+    // 移除媒体通知分组与置顶逻辑，所有通知统一处理
     val textStyles = MiuixTheme.textStyles
     val colorScheme = MiuixTheme.colorScheme
     val pm = context.packageManager
@@ -197,8 +193,8 @@ fun NotificationHistoryScreen() {
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                // 先置顶媒体通知
-                items(mediaNotifications) { record ->
+                // 所有通知统一展示，无媒体置顶分组和专属UI
+                items(notifications) { record ->
                     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val iconBitmap = remember(record.packageName) {
@@ -220,73 +216,7 @@ fun NotificationHistoryScreen() {
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.e("NotifyRelay", "mediaiconerr: 图标加载异常, 包名=${record.packageName}", e)
-                                    defaultIconBitmap
-                                }
-                            }
-                            val finalBitmap = iconBitmap ?: defaultIconBitmap
-                            if (finalBitmap != null) {
-                                Image(
-                                    bitmap = finalBitmap,
-                                    contentDescription = record.packageName,
-                                    modifier = Modifier.size(40.dp).padding(end = 8.dp)
-                                )
-                            }
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "[媒体通知] " + (record.title ?: "(无标题)"),
-                                    style = textStyles.title4.copy(color = colorScheme.primary)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = record.text ?: "(无内容)",
-                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "包名: ${record.packageName}",
-                                    style = textStyles.footnote1.copy(color = colorScheme.onBackground)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "时间: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(record.time))}",
-                                    style = textStyles.footnote2.copy(color = colorScheme.onBackground)
-                                )
-                                // 媒体控制按钮复用（示例，实际可扩展为播放/暂停/下一首等）
-                                Row(modifier = Modifier.padding(top = 8.dp)) {
-                                    Button(onClick = { /* TODO: 调用媒体控制API */ }) {
-                                        top.yukonga.miuix.kmp.basic.Text(text = "播放")
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Button(onClick = { /* TODO: 调用媒体控制API */ }) {
-                                        top.yukonga.miuix.kmp.basic.Text(text = "暂停")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // 其他通知
-                items(normalNotifications) { record ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val iconBitmap = remember(record.packageName) {
-                                try {
-                                    pm.getApplicationInfo(record.packageName, 0)
-                                    val appIcon = pm.getApplicationIcon(record.packageName)
-                                    when (appIcon) {
-                                        is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
-                                        else -> {
-                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
-                                                appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
-                                                android.graphics.Bitmap.Config.ARGB_8888
-                                            )
-                                            val canvas = android.graphics.Canvas(bmp)
-                                            appIcon.setBounds(0, 0, canvas.width, canvas.height)
-                                            appIcon.draw(canvas)
-                                            bmp.asImageBitmap()
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    android.util.Log.e("NotifyRelay", "tongzhierr: 图标加载异常, 包名=${record.packageName}", e)
+                                    android.util.Log.e("NotifyRelay", "iconerr: 图标加载异常, 包名=${record.packageName}", e)
                                     defaultIconBitmap
                                 }
                             }
