@@ -5,16 +5,21 @@ import android.service.notification.StatusBarNotification
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        NotificationRepository.addNotification(sbn, this)
+        // 使用协程在后台处理通知，提升实时性且不阻塞主线程
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+        }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        // 启动时同步所有活跃通知到历史
+        // 启动时同步所有活跃通知到历史，后台处理
         val actives = activeNotifications
         if (actives != null) {
-            for (sbn in actives) {
-                NotificationRepository.addNotification(sbn, this)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                for (sbn in actives) {
+                    NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                }
             }
         }
     }

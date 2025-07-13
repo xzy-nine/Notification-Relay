@@ -57,6 +57,8 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
+        // 启动时加载本地历史通知
+        NotificationRepository.init(this)
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
@@ -74,6 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // 检查应用使用情况权限
+    @Suppress("DEPRECATION")
     private fun isUsageStatsEnabled(): Boolean {
         val appOps = getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
         val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), packageName)
@@ -123,9 +126,9 @@ fun DeviceForwardScreen() {
 fun NotificationHistoryScreen() {
     val context = LocalContext.current
     // 每次进入页面时同步本地存储
-    LaunchedEffect(Unit) {
-        NotificationRepository.init(context)
-    }
+    // LaunchedEffect(Unit) {
+    //     NotificationRepository.init(context)
+    // }
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
     var notifications by remember { mutableStateOf(NotificationRepository.getNotificationsByDevice(selectedDevice)) }

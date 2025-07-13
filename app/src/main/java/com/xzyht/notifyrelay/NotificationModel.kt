@@ -39,6 +39,30 @@ object NotificationRepository {
 
     // 默认每设备最多100条通知，支持动态调整
     private var maxNotificationsPerDevice: Int = 100
+
+    /**
+     * 初始化：从本地缓存加载历史通知
+     */
+    fun init(context: Context) {
+        try {
+            val store = NotifyRelayStoreProvider.getInstance(context)
+            // 只加载本机设备历史
+            val entities = runBlocking { store.getAll().filter { it.device == "本机" } }
+            notifications.clear()
+            notifications.addAll(entities.map {
+                NotificationRecord(
+                    key = it.key,
+                    packageName = it.packageName,
+                    title = it.title,
+                    text = it.text,
+                    time = it.time,
+                    device = it.device
+                )
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("NotifyRelay", "历史通知加载失败", e)
+        }
+    }
     /**
      * 设置每个设备的通知缓存上限
      * TODO: 可扩展为持久化配置或多设备自定义
@@ -83,14 +107,39 @@ object NotificationRepository {
             }
             notifications.add(record)
         }
+        // 保存到本地缓存
+        syncToCache(context)
     }
 
     fun removeNotification(key: String, context: Context) {
         notifications.removeAll { it.key == key }
+        syncToCache(context)
     }
 
     fun clearDeviceHistory(device: String, context: Context) {
         notifications.removeAll { it.device == device }
+        syncToCache(context)
+    }
+    /**
+     * 将当前通知列表同步到本地缓存
+     */
+    private fun syncToCache(context: Context) {
+        try {
+            val store = NotifyRelayStoreProvider.getInstance(context)
+            val entities = notifications.map {
+                com.xzyht.notifyrelay.NotificationRecordEntity(
+                    key = it.key,
+                    packageName = it.packageName,
+                    title = it.title,
+                    text = it.text,
+                    time = it.time,
+                    device = it.device
+                )
+            }
+            kotlinx.coroutines.runBlocking { store.writeAll(entities) }
+        } catch (e: Exception) {
+            android.util.Log.e("NotifyRelay", "通知保存到缓存失败", e)
+        }
     }
 
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
