@@ -60,9 +60,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
+                    val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
+                    val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+                    if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
                     try {
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
+                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=$title, text=$text")
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (active) error", e)
                     }
@@ -82,9 +85,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (actives != null) {
                     android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}")
                     for (sbn in actives) {
+                        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
+                        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+                        if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
                         try {
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
+                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=$title, text=$text")
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (timer) error", e)
                         }
