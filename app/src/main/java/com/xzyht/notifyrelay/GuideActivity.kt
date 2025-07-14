@@ -84,7 +84,7 @@ fun GuideScreen(onContinue: () -> Unit) {
         android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    // 权限检测方法
+    // 权限检测方法（去除自动跳转，仅检测状态）
     fun refreshPermissions() {
         val enabledListeners = android.provider.Settings.Secure.getString(
             context.contentResolver,
@@ -124,14 +124,6 @@ fun GuideScreen(onContinue: () -> Unit) {
         }
         permissionsGranted = hasNotification && canQueryApps && hasPost
         showCheck = permissionsGranted
-
-        // 若通知监听权限未开启，自动弹窗并跳转系统设置页
-        if (!hasNotification) {
-            showToast("请开启通知访问权限，否则无法正常转发通知！")
-            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-        }
     }
 
     LaunchedEffect(Unit) {
@@ -163,9 +155,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                             checked = hasNotification,
                             onCheckedChange = {
                                 showToast("跳转通知访问授权页面")
-                                val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                                 context.startActivity(intent)
-                                // 移除 refreshPermissions()，授权后由 onResume 刷新
                             },
                             enabled = true
                         )
@@ -181,7 +172,6 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                 intent.data = android.net.Uri.parse("package:" + context.packageName)
                                 context.startActivity(intent)
-                                // 授权后由 onResume 刷新，无需本地直接刷新
                             },
                             enabled = true
                         )
@@ -198,8 +188,9 @@ fun GuideScreen(onContinue: () -> Unit) {
                                     (context as? Activity)?.requestPermissions(
                                         arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100
                                     )
+                                } else {
+                                    showToast("请在系统设置中开启通知权限")
                                 }
-                                // 移除 refreshPermissions()，授权后由 onResume 刷新
                             },
                             enabled = true
                         )
