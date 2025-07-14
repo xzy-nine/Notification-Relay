@@ -24,7 +24,9 @@
 - 构建仅限 Android Studio IDE，不支持命令行（如 gradlew）。
 - 依赖管理与版本锁定见 `app/build.gradle.kts`，所有 kotlin-stdlib 强制使用 1.9.23。
 - Miuix 主题库通过 `implementation(project(":miuix-main:miuix"))` 集成，相关依赖版本需与 Compose 1.8.x 兼容。
-
+### 应用 API 版本
+- 最低 API 版本（minSdk）：26
+- 目标 API 版本（targetSdk）：35
 ## 数据流与服务边界
 - 通知内容通过系统权限获取，转发依赖设备间网络通信（需同一局域网）。
 - 设备发现与连接、转发规则、黑名单等均在首页 Tab 实现，历史记录独立页面展示。
