@@ -175,66 +175,6 @@ fun NotificationHistoryScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            // MiuixTheme.shapes.medium 未定义，直接用默认圆角
-            // CardDefaults.cardColors 未定义，直接用 color 参数
-            // 这里用 MiuixTheme.colorScheme.surfaceContainer 作为背景色
-            // 直接用 Card(color = ...)
-            color = colorScheme.surfaceContainer,
-            cornerRadius = 16.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val icon = if (listenerEnabled) MiuixIcons.Basic.Check else Icons.Filled.Warning
-                Button(
-                    onClick = {
-                        // 跳转系统通知监听设置
-                        val intent =
-                            android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        context.startActivity(intent)
-                    },
-                    colors = if (listenerEnabled) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
-                    enabled = true
-                ) {
-                    top.yukonga.miuix.kmp.basic.Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (listenerEnabled) colorScheme.primary else Color(0xFFF44336),
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    top.yukonga.miuix.kmp.basic.Text(
-                        text = if (listenerEnabled) "通知监听服务已启用" else "通知监听服务未启用",
-                        style = textStyles.body2.copy(
-                            color = if (listenerEnabled) colorScheme.primary else Color(
-                                0xFFF44336
-                            )
-                        )
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                val permIcon =
-                    if (notificationPermission) MiuixIcons.Basic.Check else Icons.Filled.Warning
-                top.yukonga.miuix.kmp.basic.Icon(
-                    imageVector = permIcon,
-                    contentDescription = null,
-                    tint = if (notificationPermission) colorScheme.primary else Color(0xFFF44336),
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                top.yukonga.miuix.kmp.basic.Text(
-                    text = if (notificationPermission) "通知权限已授权" else "通知权限未授权",
-                    style = textStyles.body2.copy(
-                        color = if (notificationPermission) colorScheme.primary else Color(
-                            0xFFF44336
-                        )
-                    )
-                )
-            }
-        }
         // 顶部分组与操作按钮始终显示
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             top.yukonga.miuix.kmp.basic.Text(
