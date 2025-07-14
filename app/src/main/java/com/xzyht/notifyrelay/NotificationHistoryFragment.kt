@@ -32,14 +32,59 @@ import com.xzyht.notifyrelay.R
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 
+// 防抖 Toast（文件级顶层对象）
+object ToastDebounce {
+    var lastToastTime: Long = 0L
+    const val debounceMillis: Long = 1500L
+}
+
 @Composable
 fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
-    Card(
+    val context = LocalContext.current
+    Surface(
+        onClick = {
+            // 跳转到对应应用主界面
+            val pkg = record.packageName
+            var opened = false
+            if (!pkg.isNullOrEmpty()) {
+                try {
+                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    if (intent != null) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        opened = true
+                    } else {
+                        val now = System.currentTimeMillis()
+                        if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
+                            android.widget.Toast.makeText(context, "无法打开应用：$pkg", android.widget.Toast.LENGTH_SHORT).show()
+                            ToastDebounce.lastToastTime = now
+                        }
+                    }
+                } catch (e: Exception) {
+                    val now = System.currentTimeMillis()
+                    if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
+                        android.widget.Toast.makeText(context, "启动失败：${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        ToastDebounce.lastToastTime = now
+                    }
+                }
+            }
+            // 仅在成功打开应用时显示通知标题和内容
+            if (opened) {
+                val title = record.title ?: "(无标题)"
+                val text = record.text ?: "(无内容)"
+                // 延长显示时间，LENGTH_LONG*2
+                val toast = android.widget.Toast.makeText(context, "$title\n$text", android.widget.Toast.LENGTH_LONG)
+                toast.show()
+                // 再次 show 一次，模拟更长时间
+                android.os.Handler(context.mainLooper).postDelayed({ toast.show() }, 2000)
+            }
+        },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         color = cardColorScheme.surfaceContainerHighest,
-        cornerRadius = 8.dp
+        shadowElevation = 4.dp
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
