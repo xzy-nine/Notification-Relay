@@ -1,5 +1,7 @@
 package com.xzyht.notifyrelay
 
+import com.xzyht.notifyrelay.data.NotificationRepository
+
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.compose.foundation.Image
@@ -67,20 +69,15 @@ fun NotificationHistoryScreen() {
     }
     val textStyles = MiuixTheme.textStyles
     val colorScheme = MiuixTheme.colorScheme
-    val pm = context.packageManager
-    val defaultIconBitmap = remember {
-        BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)?.asImageBitmap()
-    }
     val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
     val listenerEnabled = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.contains(context.packageName) == true
     android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
-    var expandedGroups by remember { mutableStateOf(setOf<String>()) }
     val grouped = notifications.groupBy { it.packageName }
-    val groupList = grouped.entries.map { (pkg, list) ->
-        pkg to list.sortedByDescending { it.time }
-    }.sortedByDescending { it.second.firstOrNull()?.time ?: 0L }
-    val singleList = groupList.filter { it.second.size <= 2 }.flatMap { it.second }
-    val multiGroups = groupList.filter { it.second.size > 2 }
+    val groupList = grouped.entries.map { (_, list) ->
+        list.sortedByDescending { it.time }
+    }.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+    val singleList = groupList.filter { it.size <= 2 }.flatMap { it }
+    val multiGroups = groupList.filter { it.size > 2 }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // 顶部分组与操作按钮始终显示
@@ -141,10 +138,10 @@ fun NotificationHistoryScreen() {
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 // ...existing code...
-                items(multiGroups) { (pkg, list) ->
+                items(multiGroups) { list ->
                     // ...existing code...
                 }
-                items(singleList) { record ->
+                items(singleList) { _ ->
                     // ...existing code...
                 }
             }

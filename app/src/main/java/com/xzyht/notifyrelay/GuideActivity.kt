@@ -89,7 +89,7 @@ fun GuideScreen(onContinue: () -> Unit) {
         val enabledListeners = android.provider.Settings.Secure.getString(
             context.contentResolver,
             "enabled_notification_listeners"
-        ) ?: ""
+        )
         hasNotification = enabledListeners.contains(context.packageName)
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
         val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {

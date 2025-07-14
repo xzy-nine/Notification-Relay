@@ -1,4 +1,6 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.data
+
+import com.xzyht.notifyrelay.data.NotificationRecordStore
 
 import android.content.Context
 

@@ -1,4 +1,7 @@
-package com.xzyht.notifyrelay
+
+package com.xzyht.notifyrelay.data
+
+import com.xzyht.notifyrelay.data.NotificationRecordEntity
 
 import android.app.Notification
 import android.content.Context
@@ -129,7 +132,7 @@ object NotificationRepository {
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val entities = notifications.map {
-                com.xzyht.notifyrelay.NotificationRecordEntity(
+                NotificationRecordEntity(
                     key = it.key,
                     packageName = it.packageName,
                     title = it.title,

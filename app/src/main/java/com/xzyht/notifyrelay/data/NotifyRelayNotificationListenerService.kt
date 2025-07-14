@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.data
 
 import android.app.Notification
 import android.app.NotificationChannel

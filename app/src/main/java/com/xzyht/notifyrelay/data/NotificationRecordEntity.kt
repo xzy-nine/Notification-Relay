@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.data
 
 data class NotificationRecordEntity(
     val key: String,
