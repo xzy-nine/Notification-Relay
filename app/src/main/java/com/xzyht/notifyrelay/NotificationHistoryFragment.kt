@@ -166,9 +166,9 @@ fun NotificationHistoryScreen() {
     val grouped = notifications.groupBy { it.packageName }
     val groupList = grouped.entries.map { (_, list) ->
         list.sortedByDescending { it.time }
-    }.sortedByDescending { it.firstOrNull()?.time ?: 0L }
-    val singleList = groupList.filter { it.size <= 2 }.flatMap { it }
-    val multiGroups = groupList.filter { it.size > 2 }
+    }
+    // 混合排序：单条和分组都按分组最新时间降序排列
+    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Card(
@@ -290,148 +290,147 @@ fun NotificationHistoryScreen() {
                 )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    // 渲染单条/少量分组（<=2条）
-                    items(singleList) { record ->
-                        NotificationCard(record)
-                    }
-                    // 渲染多条分组（>2条），分组块以分组最新时间排序
-                    items(multiGroups) { list ->
-                        val latest = list.maxByOrNull { it.time }
-                        var expanded by remember { mutableStateOf(false) }
-                        // 获取应用名称和图标
-                        val (appName, appIcon) = remember(latest?.packageName) {
-                            var name = latest?.packageName ?: ""
-                            var icon: android.graphics.Bitmap? = null
-                            try {
-                                latest?.packageName?.let { pkg ->
-                                    val pm = context.packageManager
-                                    val appInfo = pm.getApplicationInfo(pkg, 0)
-                                    name = pm.getApplicationLabel(appInfo)?.toString() ?: pkg
-                                    val drawable = pm.getApplicationIcon(appInfo)
-                                    if (drawable is android.graphics.drawable.BitmapDrawable) {
-                                        icon = drawable.bitmap
-                                    } else {
-                                        // 兼容非 BitmapDrawable
-                                        val bmp = android.graphics.Bitmap.createBitmap(
-                                            drawable.intrinsicWidth.coerceAtLeast(1),
-                                            drawable.intrinsicHeight.coerceAtLeast(1),
-                                            android.graphics.Bitmap.Config.ARGB_8888
-                                        )
-                                        val canvas = android.graphics.Canvas(bmp)
-                                        drawable.setBounds(0, 0, canvas.width, canvas.height)
-                                        drawable.draw(canvas)
-                                        icon = bmp
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                // 获取失败则用本应用图标
-                                try {
-                                    val pm = context.packageManager
-                                    val appInfo = pm.getApplicationInfo(context.packageName, 0)
-                                    name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
-                                    val drawable = pm.getApplicationIcon(appInfo)
-                                    if (drawable is android.graphics.drawable.BitmapDrawable) {
-                                        icon = drawable.bitmap
-                                    } else {
-                                        val bmp = android.graphics.Bitmap.createBitmap(
-                                            drawable.intrinsicWidth.coerceAtLeast(1),
-                                            drawable.intrinsicHeight.coerceAtLeast(1),
-                                            android.graphics.Bitmap.Config.ARGB_8888
-                                        )
-                                        val canvas = android.graphics.Canvas(bmp)
-                                        drawable.setBounds(0, 0, canvas.width, canvas.height)
-                                        drawable.draw(canvas)
-                                        icon = bmp
-                                    }
-                                } catch (_: Exception) {
-                                    icon = null
-                                }
+                    items(mixedList) { list ->
+                        if (list.size <= 2) {
+                            // 单条或少量分组，直接渲染每条
+                            list.forEach { record ->
+                                NotificationCard(record)
                             }
-                            name to icon
-                        }
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier), // 收起时整个卡片可展开
-                            color = colorScheme.surfaceContainer,
-                            cornerRadius = 12.dp
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = if (expanded)
-                                        Modifier.fillMaxWidth().clickable { expanded = false }
-                                    else Modifier.fillMaxWidth(), // 展开时仅标题区可收起
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // 分组标题始终显示应用图标
-                                    if (appIcon != null) {
-                                        Image(
-                                            bitmap = appIcon.asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                        } else {
+                            // 多条分组，分组卡片
+                            val latest = list.maxByOrNull { it.time }
+                            var expanded by remember { mutableStateOf(false) }
+                            val (appName, appIcon) = remember(latest?.packageName) {
+                                var name = latest?.packageName ?: ""
+                                var icon: android.graphics.Bitmap? = null
+                                try {
+                                    latest?.packageName?.let { pkg ->
+                                        val pm = context.packageManager
+                                        val appInfo = pm.getApplicationInfo(pkg, 0)
+                                        name = pm.getApplicationLabel(appInfo)?.toString() ?: pkg
+                                        val drawable = pm.getApplicationIcon(appInfo)
+                                        if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                            icon = drawable.bitmap
+                                        } else {
+                                            val bmp = android.graphics.Bitmap.createBitmap(
+                                                drawable.intrinsicWidth.coerceAtLeast(1),
+                                                drawable.intrinsicHeight.coerceAtLeast(1),
+                                                android.graphics.Bitmap.Config.ARGB_8888
+                                            )
+                                            val canvas = android.graphics.Canvas(bmp)
+                                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                                            drawable.draw(canvas)
+                                            icon = bmp
+                                        }
                                     }
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = appName,
-                                        style = textStyles.title3.copy(color = colorScheme.onBackground)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = "最新时间: " + (latest?.time?.let {
-                                            java.text.SimpleDateFormat(
-                                                "yyyy-MM-dd HH:mm:ss"
-                                            ).format(java.util.Date(it))
-                                        } ?: ""),
-                                        style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                    )
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = if (expanded) "收起" else "展开",
-                                        style = textStyles.body2.copy(color = colorScheme.primary)
-                                    )
+                                } catch (e: Exception) {
+                                    try {
+                                        val pm = context.packageManager
+                                        val appInfo = pm.getApplicationInfo(context.packageName, 0)
+                                        name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
+                                        val drawable = pm.getApplicationIcon(appInfo)
+                                        if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                            icon = drawable.bitmap
+                                        } else {
+                                            val bmp = android.graphics.Bitmap.createBitmap(
+                                                drawable.intrinsicWidth.coerceAtLeast(1),
+                                                drawable.intrinsicHeight.coerceAtLeast(1),
+                                                android.graphics.Bitmap.Config.ARGB_8888
+                                            )
+                                            val canvas = android.graphics.Canvas(bmp)
+                                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                                            drawable.draw(canvas)
+                                            icon = bmp
+                                        }
+                                    } catch (_: Exception) {
+                                        icon = null
+                                    }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
-                                if (!expanded) {
-                                    showList.forEachIndexed { idx, record ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            top.yukonga.miuix.kmp.basic.Text(
-                                                text = record.title ?: "(无标题)",
-                                                style = textStyles.body2.copy(
-                                                    color = androidx.compose.ui.graphics.Color(0xFF0066B2),
-                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                                ),
-                                                modifier = Modifier.weight(0.4f)
+                                name to icon
+                            }
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
+                                color = colorScheme.surfaceContainer,
+                                cornerRadius = 12.dp
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = if (expanded)
+                                            Modifier.fillMaxWidth().clickable { expanded = false }
+                                        else Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (appIcon != null) {
+                                            Image(
+                                                bitmap = appIcon.asImageBitmap(),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(24.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            top.yukonga.miuix.kmp.basic.Text(
-                                                text = record.text ?: "(无内容)",
-                                                style = textStyles.body2.copy(color = colorScheme.onBackground),
-                                                modifier = Modifier.weight(0.6f)
-                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
                                         }
-                                        if (idx < showList.lastIndex) {
-                                            Divider(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                                color = colorScheme.outline,
-                                                thickness = 1.dp
-                                            )
-                                        }
-                                    }
-                                    if (list.size > 3) {
                                         top.yukonga.miuix.kmp.basic.Text(
-                                            text = "... 共${list.size}条，点击展开",
-                                            style = textStyles.body2.copy(color = colorScheme.outline)
+                                            text = appName,
+                                            style = textStyles.title3.copy(color = colorScheme.onBackground)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = "最新时间: " + (latest?.time?.let {
+                                                java.text.SimpleDateFormat(
+                                                    "yyyy-MM-dd HH:mm:ss"
+                                                ).format(java.util.Date(it))
+                                            } ?: ""),
+                                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                        )
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = if (expanded) "收起" else "展开",
+                                            style = textStyles.body2.copy(color = colorScheme.primary)
                                         )
                                     }
-                                } else {
-                                    list.sortedByDescending { it.time }.forEach { record ->
-                                        NotificationCard(record)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
+                                    if (!expanded) {
+                                        showList.forEachIndexed { idx, record ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = record.title ?: "(无标题)",
+                                                    style = textStyles.body2.copy(
+                                                        color = androidx.compose.ui.graphics.Color(0xFF0066B2),
+                                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                    ),
+                                                    modifier = Modifier.weight(0.4f)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = record.text ?: "(无内容)",
+                                                    style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                                    modifier = Modifier.weight(0.6f)
+                                                )
+                                            }
+                                            if (idx < showList.lastIndex) {
+                                                Divider(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                    color = colorScheme.outline,
+                                                    thickness = 1.dp
+                                                )
+                                            }
+                                        }
+                                        if (list.size > 3) {
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = "... 共${list.size}条，点击展开",
+                                                style = textStyles.body2.copy(color = colorScheme.outline)
+                                            )
+                                        }
+                                    } else {
+                                        list.sortedByDescending { it.time }.forEach { record ->
+                                            NotificationCard(record)
+                                        }
                                     }
                                 }
                             }
