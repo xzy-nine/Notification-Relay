@@ -14,27 +14,61 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
+    override fun onCreate() {
+        super.onCreate()
+        android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onCreate")
+    }
+
+    override fun onBind(intent: android.content.Intent?): android.os.IBinder? {
+        android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onBind: intent=$intent")
+        return super.onBind(intent)
+    }
     private var foregroundJob: Job? = null
     private val CHANNEL_ID = "notifyrelay_foreground"
     private val NOTIFY_ID = 1001
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        android.util.Log.d("NotifyRelay", "onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}")
         // 使用协程在后台处理通知，提升实时性且不阻塞主线程
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
-            NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+            try {
+                NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                android.util.Log.d("NotifyRelay", "addNotification success: key=${sbn.key}")
+            } catch (e: Exception) {
+                android.util.Log.e("NotifyRelay", "addNotification error", e)
+            }
         }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        android.util.Log.i("NotifyRelay", "NotificationListenerService connected")
+        // 检查监听服务是否启用
+        val enabledListeners = android.provider.Settings.Secure.getString(
+            applicationContext.contentResolver,
+            "enabled_notification_listeners"
+        )
+        val isEnabled = enabledListeners?.contains(applicationContext.packageName) == true
+        android.util.Log.i("NotifyRelay", "Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
+        if (!isEnabled) {
+            android.util.Log.w("NotifyRelay", "NotificationListenerService 未被系统启用，无法获取通知！")
+        }
         // 启动时同步所有活跃通知到历史，后台处理
         val actives = activeNotifications
         if (actives != null) {
+            android.util.Log.d("NotifyRelay", "activeNotifications size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
-                    NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                    try {
+                        NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                        android.util.Log.d("NotifyRelay", "addNotification (active) success: key=${sbn.key}")
+                    } catch (e: Exception) {
+                        android.util.Log.e("NotifyRelay", "addNotification (active) error", e)
+                    }
                 }
             }
+        } else {
+            android.util.Log.w("NotifyRelay", "activeNotifications is null")
         }
         // 启动前台服务，保证后台存活
         startForegroundService()
@@ -45,9 +79,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 delay(5000) // 每5秒拉取一次
                 val actives = activeNotifications
                 if (actives != null) {
+                    android.util.Log.d("NotifyRelay", "定时拉取 activeNotifications size=${actives.size}")
                     for (sbn in actives) {
-                        NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                        try {
+                            NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                            android.util.Log.d("NotifyRelay", "addNotification (timer) success: key=${sbn.key}")
+                        } catch (e: Exception) {
+                            android.util.Log.e("NotifyRelay", "addNotification (timer) error", e)
+                        }
                     }
+                } else {
+                    android.util.Log.w("NotifyRelay", "定时拉取 activeNotifications is null")
                 }
             }
         }
@@ -56,29 +98,23 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     override fun onDestroy() {
         super.onDestroy()
         foregroundJob?.cancel()
-        stopForeground(true)
+        stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
     }
 
     private fun startForegroundService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "通知转发后台服务",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
-        val notification = Notification.Builder(this)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "通知转发后台服务",
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
+
+        val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("通知转发后台运行中")
             .setContentText("保证通知实时同步")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    setChannelId(CHANNEL_ID)
-                }
-            }
             .build()
         startForeground(NOTIFY_ID, notification)
     }

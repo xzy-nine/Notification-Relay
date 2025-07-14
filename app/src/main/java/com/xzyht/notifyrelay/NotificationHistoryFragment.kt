@@ -58,6 +58,10 @@ fun NotificationHistoryScreen() {
             }
         }
     }
+    // 页面初始化时同步通知历史
+    LaunchedEffect(Unit) {
+        NotificationRepository.init(context)
+    }
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
     var notifications by remember {

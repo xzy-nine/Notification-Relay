@@ -90,20 +90,26 @@ fun GuideScreen(onContinue: () -> Unit) {
             context.contentResolver,
             "enabled_notification_listeners"
         )
-        hasNotification = enabledListeners.contains(context.packageName)
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        hasNotification = enabledListeners?.contains(context.packageName) == true
         val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
             appOps.unsafeCheckOpNoThrow(
                 "android:get_usage_stats",
                 android.os.Process.myUid(),
                 context.packageName
             )
         } else {
-            appOps.checkOpNoThrow(
+            val compatMode = androidx.core.app.AppOpsManagerCompat.noteOp(
+                context,
                 "android:get_usage_stats",
                 android.os.Process.myUid(),
                 context.packageName
             )
+            if (compatMode == androidx.core.app.AppOpsManagerCompat.MODE_ALLOWED) {
+                android.app.AppOpsManager.MODE_ALLOWED
+            } else {
+                android.app.AppOpsManager.MODE_IGNORED
+            }
         }
         hasUsage = mode == android.app.AppOpsManager.MODE_ALLOWED
         hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -118,6 +124,14 @@ fun GuideScreen(onContinue: () -> Unit) {
         }
         permissionsGranted = hasNotification && canQueryApps && hasPost
         showCheck = permissionsGranted
+
+        // 若通知监听权限未开启，自动弹窗并跳转系统设置页
+        if (!hasNotification) {
+            showToast("请开启通知访问权限，否则无法正常转发通知！")
+            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        }
     }
 
     LaunchedEffect(Unit) {
