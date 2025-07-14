@@ -15,6 +15,7 @@ import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -34,16 +35,30 @@ import androidx.compose.ui.platform.ComposeView
 fun NotificationCard(record: NotificationRecord) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
+    val context = LocalContext.current
+    val (appName, appIcon) = remember(record.packageName) {
+        getAppNameAndIcon(context, record.packageName)
+    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         color = cardColorScheme.surface,
         cornerRadius = 8.dp
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            top.yukonga.miuix.kmp.basic.Text(
-                text = record.title ?: "(无标题)",
-                style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (appIcon != null) {
+                    Image(
+                        bitmap = appIcon.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = record.title ?: "(无标题)",
+                    style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             top.yukonga.miuix.kmp.basic.Text(
                 text = record.text ?: "(无内容)",
@@ -57,6 +72,48 @@ fun NotificationCard(record: NotificationRecord) {
         }
     }
 }
+
+// 工具函数：获取应用名和图标（文件级顶层）
+fun getAppNameAndIcon(context: android.content.Context, packageName: String?): Pair<String, android.graphics.Bitmap?> {
+    var name = packageName ?: ""
+    var icon: android.graphics.Bitmap? = null
+    if (packageName != null) {
+        try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            name = pm.getApplicationLabel(appInfo)?.toString() ?: packageName
+            val drawable = pm.getApplicationIcon(appInfo)
+            icon = drawableToBitmap(drawable)
+        } catch (_: Exception) {
+            try {
+                val pm = context.packageManager
+                val appInfo = pm.getApplicationInfo(context.packageName, 0)
+                name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
+                val drawable = pm.getApplicationIcon(appInfo)
+                icon = drawableToBitmap(drawable)
+            } catch (_: Exception) {
+                icon = null
+            }
+        }
+    }
+    return name to icon
+}
+
+// 工具函数：Drawable转Bitmap（文件级顶层）
+fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): android.graphics.Bitmap {
+    if (drawable is android.graphics.drawable.BitmapDrawable) {
+        val bmp = drawable.bitmap
+        if (bmp != null) return bmp
+    }
+    val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 1
+    val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 1
+    val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    drawable.setBounds(0, 0, canvas.width, canvas.height)
+    drawable.draw(canvas)
+    return bmp
+}
+
 
 class NotificationHistoryFragment : Fragment() {
     override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, savedInstanceState: Bundle?): android.view.View? {
@@ -241,31 +298,81 @@ fun NotificationHistoryScreen() {
                     items(multiGroups) { list ->
                         val latest = list.maxByOrNull { it.time }
                         var expanded by remember { mutableStateOf(false) }
-                        // 获取应用名称
-                        val appName = remember(latest?.packageName) {
+                        // 获取应用名称和图标
+                        val (appName, appIcon) = remember(latest?.packageName) {
+                            var name = latest?.packageName ?: ""
+                            var icon: android.graphics.Bitmap? = null
                             try {
                                 latest?.packageName?.let { pkg ->
                                     val pm = context.packageManager
                                     val appInfo = pm.getApplicationInfo(pkg, 0)
-                                    pm.getApplicationLabel(appInfo)?.toString() ?: pkg
-                                } ?: ""
+                                    name = pm.getApplicationLabel(appInfo)?.toString() ?: pkg
+                                    val drawable = pm.getApplicationIcon(appInfo)
+                                    if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                        icon = drawable.bitmap
+                                    } else {
+                                        // 兼容非 BitmapDrawable
+                                        val bmp = android.graphics.Bitmap.createBitmap(
+                                            drawable.intrinsicWidth.coerceAtLeast(1),
+                                            drawable.intrinsicHeight.coerceAtLeast(1),
+                                            android.graphics.Bitmap.Config.ARGB_8888
+                                        )
+                                        val canvas = android.graphics.Canvas(bmp)
+                                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                                        drawable.draw(canvas)
+                                        icon = bmp
+                                    }
+                                }
                             } catch (e: Exception) {
-                                latest?.packageName ?: ""
+                                // 获取失败则用本应用图标
+                                try {
+                                    val pm = context.packageManager
+                                    val appInfo = pm.getApplicationInfo(context.packageName, 0)
+                                    name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
+                                    val drawable = pm.getApplicationIcon(appInfo)
+                                    if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                        icon = drawable.bitmap
+                                    } else {
+                                        val bmp = android.graphics.Bitmap.createBitmap(
+                                            drawable.intrinsicWidth.coerceAtLeast(1),
+                                            drawable.intrinsicHeight.coerceAtLeast(1),
+                                            android.graphics.Bitmap.Config.ARGB_8888
+                                        )
+                                        val canvas = android.graphics.Canvas(bmp)
+                                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                                        drawable.draw(canvas)
+                                        icon = bmp
+                                    }
+                                } catch (_: Exception) {
+                                    icon = null
+                                }
                             }
+                            name to icon
                         }
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
-                                .clickable { expanded = !expanded }, // 整个块可点击
+                                .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier), // 收起时整个卡片可展开
                             color = colorScheme.surfaceContainer,
                             cornerRadius = 12.dp
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = if (expanded)
+                                        Modifier.fillMaxWidth().clickable { expanded = false }
+                                    else Modifier.fillMaxWidth(), // 展开时仅标题区可收起
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // 分组标题始终显示应用图标
+                                    if (appIcon != null) {
+                                        Image(
+                                            bitmap = appIcon.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
                                     top.yukonga.miuix.kmp.basic.Text(
                                         text = appName,
                                         style = textStyles.title3.copy(color = colorScheme.onBackground)
