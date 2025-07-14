@@ -240,27 +240,58 @@ fun NotificationHistoryScreen() {
                     // 渲染多条分组（>2条），分组块以分组最新时间排序
                     items(multiGroups) { list ->
                         val latest = list.maxByOrNull { it.time }
+                        var expanded by remember { mutableStateOf(false) }
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                             color = colorScheme.surfaceContainer,
                             cornerRadius = 12.dp
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = latest?.packageName ?: "",
-                                    style = textStyles.title3.copy(color = colorScheme.primary)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "最新时间: " + (latest?.time?.let {
-                                        java.text.SimpleDateFormat(
-                                            "yyyy-MM-dd HH:mm:ss"
-                                        ).format(java.util.Date(it))
-                                    } ?: ""),
-                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    top.yukonga.miuix.kmp.basic.Text(
+                                        text = latest?.packageName ?: "",
+                                        style = textStyles.title3.copy(color = colorScheme.primary)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    top.yukonga.miuix.kmp.basic.Text(
+                                        text = "最新时间: " + (latest?.time?.let {
+                                            java.text.SimpleDateFormat(
+                                                "yyyy-MM-dd HH:mm:ss"
+                                            ).format(java.util.Date(it))
+                                        } ?: ""),
+                                        style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                    )
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    top.yukonga.miuix.kmp.basic.Text(
+                                        text = if (expanded) "收起" else "展开",
+                                        style = textStyles.body2.copy(color = colorScheme.primary)
+                                    )
+                                }
                                 Spacer(modifier = Modifier.height(8.dp))
-                                list.sortedByDescending { it.time }.forEach { record ->
-                                    NotificationCard(record)
+                                val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
+                                showList.forEach { record ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = (record.title ?: "(无标题)") + " ",
+                                            style = textStyles.body2.copy(color = colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                        )
+                                        top.yukonga.miuix.kmp.basic.Text(
+                                            text = record.text ?: "(无内容)",
+                                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                        )
+                                    }
+                                }
+                                if (!expanded && list.size > 3) {
+                                    top.yukonga.miuix.kmp.basic.Text(
+                                        text = "... 共${list.size}条，点击展开",
+                                        style = textStyles.body2.copy(color = colorScheme.outline)
+                                    )
                                 }
                             }
                         }
