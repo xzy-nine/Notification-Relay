@@ -32,13 +32,9 @@ import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 
 @Composable
-fun NotificationCard(record: NotificationRecord) {
+fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
-    val context = LocalContext.current
-    val (appName, appIcon) = remember(record.packageName) {
-        getAppNameAndIcon(context, record.packageName)
-    }
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         color = cardColorScheme.surface,
@@ -55,7 +51,7 @@ fun NotificationCard(record: NotificationRecord) {
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 top.yukonga.miuix.kmp.basic.Text(
-                    text = record.title ?: "(无标题)",
+                    text = appName,
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
             }
@@ -81,14 +77,14 @@ fun getAppNameAndIcon(context: android.content.Context, packageName: String?): P
         try {
             val pm = context.packageManager
             val appInfo = pm.getApplicationInfo(packageName, 0)
-            name = pm.getApplicationLabel(appInfo)?.toString() ?: packageName
+            name = pm.getApplicationLabel(appInfo).toString()
             val drawable = pm.getApplicationIcon(appInfo)
             icon = drawableToBitmap(drawable)
         } catch (_: Exception) {
             try {
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(context.packageName, 0)
-                name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
+                name = pm.getApplicationLabel(appInfo).toString()
                 val drawable = pm.getApplicationIcon(appInfo)
                 icon = drawableToBitmap(drawable)
             } catch (_: Exception) {
@@ -131,16 +127,16 @@ class NotificationHistoryFragment : Fragment() {
 fun NotificationHistoryScreen() {
     val context = LocalContext.current
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    // 包名到应用名和图标的缓存
+    val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
     // 设置系统状态栏字体颜色
     LaunchedEffect(isDarkTheme) {
         val window = (context as? android.app.Activity)?.window
         window?.let {
             val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
             if (!isDarkTheme) {
-                // 浅色模式，状态栏字体用深色
                 controller.isAppearanceLightStatusBars = true
             } else {
-                // 深色模式，状态栏字体用浅色
                 controller.isAppearanceLightStatusBars = false
             }
         }
@@ -153,7 +149,7 @@ fun NotificationHistoryScreen() {
     val notifications by remember(selectedDevice) {
         derivedStateOf {
             NotificationRepository.getNotificationsByDevice(selectedDevice)
-                .groupBy { Pair(it.packageName, it.key ?: "") }
+                .groupBy { Pair(it.packageName, it.key ) }
                 .map { (_, list) -> list.maxByOrNull { it.time }!! }
         }
     }
@@ -169,6 +165,14 @@ fun NotificationHistoryScreen() {
     }
     // 混合排序：单条和分组都按分组最新时间降序排列
     val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+
+    // 工具函数：获取并缓存应用名和图标
+    fun getCachedAppInfo(packageName: String?): Pair<String, android.graphics.Bitmap?> {
+        if (packageName == null) return "" to null
+        return appInfoCache.getOrPut(packageName) {
+            getAppNameAndIcon(context, packageName)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Card(
@@ -294,60 +298,14 @@ fun NotificationHistoryScreen() {
                         if (list.size <= 2) {
                             // 单条或少量分组，直接渲染每条
                             list.forEach { record ->
-                                NotificationCard(record)
+                                val (appName, appIcon) = getCachedAppInfo(record.packageName)
+                                NotificationCard(record, appName, appIcon)
                             }
                         } else {
                             // 多条分组，分组卡片
                             val latest = list.maxByOrNull { it.time }
                             var expanded by remember { mutableStateOf(false) }
-                            val (appName, appIcon) = remember(latest?.packageName) {
-                                var name = latest?.packageName ?: ""
-                                var icon: android.graphics.Bitmap? = null
-                                try {
-                                    latest?.packageName?.let { pkg ->
-                                        val pm = context.packageManager
-                                        val appInfo = pm.getApplicationInfo(pkg, 0)
-                                        name = pm.getApplicationLabel(appInfo)?.toString() ?: pkg
-                                        val drawable = pm.getApplicationIcon(appInfo)
-                                        if (drawable is android.graphics.drawable.BitmapDrawable) {
-                                            icon = drawable.bitmap
-                                        } else {
-                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                drawable.intrinsicWidth.coerceAtLeast(1),
-                                                drawable.intrinsicHeight.coerceAtLeast(1),
-                                                android.graphics.Bitmap.Config.ARGB_8888
-                                            )
-                                            val canvas = android.graphics.Canvas(bmp)
-                                            drawable.setBounds(0, 0, canvas.width, canvas.height)
-                                            drawable.draw(canvas)
-                                            icon = bmp
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    try {
-                                        val pm = context.packageManager
-                                        val appInfo = pm.getApplicationInfo(context.packageName, 0)
-                                        name = pm.getApplicationLabel(appInfo)?.toString() ?: context.packageName
-                                        val drawable = pm.getApplicationIcon(appInfo)
-                                        if (drawable is android.graphics.drawable.BitmapDrawable) {
-                                            icon = drawable.bitmap
-                                        } else {
-                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                drawable.intrinsicWidth.coerceAtLeast(1),
-                                                drawable.intrinsicHeight.coerceAtLeast(1),
-                                                android.graphics.Bitmap.Config.ARGB_8888
-                                            )
-                                            val canvas = android.graphics.Canvas(bmp)
-                                            drawable.setBounds(0, 0, canvas.width, canvas.height)
-                                            drawable.draw(canvas)
-                                            icon = bmp
-                                        }
-                                    } catch (_: Exception) {
-                                        icon = null
-                                    }
-                                }
-                                name to icon
-                            }
+                            val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -394,6 +352,7 @@ fun NotificationHistoryScreen() {
                                     val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
                                     if (!expanded) {
                                         showList.forEachIndexed { idx, record ->
+                                            val (appNameItem, appIconItem) = getCachedAppInfo(record.packageName)
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically
@@ -429,7 +388,8 @@ fun NotificationHistoryScreen() {
                                         }
                                     } else {
                                         list.sortedByDescending { it.time }.forEach { record ->
-                                            NotificationCard(record)
+                                            val (appName, appIcon) = getCachedAppInfo(record.packageName)
+                                            NotificationCard(record, appName, appIcon)
                                         }
                                     }
                                 }
