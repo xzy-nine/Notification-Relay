@@ -129,7 +129,7 @@ object NotificationRepository {
         notifications.removeAll { it.key == key }
         notifications.add(0, record)
         // 持久化逻辑已暂时注释
-        // syncToCache(context)
+        syncToCache(context)
     }
     val notifications: SnapshotStateList<NotificationRecord> = mutableStateListOf()
 
@@ -190,23 +190,22 @@ object NotificationRepository {
      * 将当前通知列表同步到本地缓存
      */
     private fun syncToCache(context: Context) {
-        // 持久化逻辑已暂时注释
-        // try {
-        //     val store = NotifyRelayStoreProvider.getInstance(context)
-        //     val entities = notifications.map {
-        //         NotificationRecordEntity(
-        //             key = it.key,
-        //             packageName = it.packageName,
-        //             title = it.title,
-        //             text = it.text,
-        //             time = it.time,
-        //             device = it.device
-        //         )
-        //     }
-        //     runBlocking { store.writeAll(entities) }
-        // } catch (e: Exception) {
-        //     android.util.Log.e("NotifyRelay", "通知保存到缓存失败", e)
-        // }
+        try {
+            val store = NotifyRelayStoreProvider.getInstance(context)
+            val entities = notifications.map {
+                NotificationRecordEntity(
+                    key = it.key,
+                    packageName = it.packageName,
+                    title = it.title,
+                    text = it.text,
+                    time = it.time,
+                    device = it.device
+                )
+            }
+            runBlocking { store.writeAll(entities) }
+        } catch (e: Exception) {
+            android.util.Log.e("NotifyRelay", "通知保存到缓存失败", e)
+        }
     }
 
     /**
