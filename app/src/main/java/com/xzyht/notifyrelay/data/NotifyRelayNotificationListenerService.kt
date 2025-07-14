@@ -29,12 +29,26 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val NOTIFY_ID = 1001
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // android.util.Log.i("NotifyRelay", "[NotifyListener] onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}, postTime=${sbn.postTime}") // 调试日志已注释
+        // 过滤本应用自身通知
+        if (sbn.packageName == applicationContext.packageName) return
+        // 过滤持久化通知（ongoing/persistent）
+        if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) return
+        // 过滤优先级为无的通知（IMPORTANCE_NONE）
+        val channelId = sbn.notification.channelId
+        if (channelId != null) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = nm.getNotificationChannel(channelId)
+            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return
+        }
+        // 过滤空标题和空内容
+        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
+        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+        if (title.isNullOrBlank() || text.isNullOrBlank()) return
         // 使用协程在后台处理通知，提升实时性且不阻塞主线程
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}") // 调试日志已注释
+                // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=$title, text=$text") // 调试日志已注释
             } catch (e: Exception) {
                 // android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e) // 调试日志已注释
             }
@@ -60,9 +74,20 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             // android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}") // 调试日志已注释
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
+                    // 过滤本应用自身通知
+                    if (sbn.packageName == applicationContext.packageName) continue
+                    // 过滤持久化通知
+                    if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) continue
+                    // 过滤优先级为无的通知（IMPORTANCE_NONE）
+                    val channelId = sbn.notification.channelId
+                    if (channelId != null) {
+                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        val channel = nm.getNotificationChannel(channelId)
+                        if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) continue
+                    }
                     val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
                     val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-                    if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
+                    if (title.isNullOrBlank() || text.isNullOrBlank()) continue // 过滤无标题或无内容
                     try {
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
                         // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=$title, text=$text") // 调试日志已注释
@@ -85,9 +110,20 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (actives != null) {
                     // android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}") // 调试日志已注释
                     for (sbn in actives) {
+                        // 过滤本应用自身通知
+                        if (sbn.packageName == applicationContext.packageName) continue
+                        // 过滤持久化通知
+                        if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) continue
+                        // 过滤优先级为无的通知（IMPORTANCE_NONE）
+                        val channelId = sbn.notification.channelId
+                        if (channelId != null) {
+                            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            val channel = nm.getNotificationChannel(channelId)
+                            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) continue
+                        }
                         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
                         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-                        if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
+                        if (title.isNullOrBlank() || text.isNullOrBlank()) continue // 过滤无标题或无内容
                         try {
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
                             // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=$title, text=$text") // 已不再需要，注释保留
