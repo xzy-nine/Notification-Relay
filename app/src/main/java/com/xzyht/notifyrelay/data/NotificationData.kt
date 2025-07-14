@@ -128,6 +128,18 @@ object NotificationRepository {
         // syncToCache(context)
     }
     val notifications: SnapshotStateList<NotificationRecord> = mutableStateListOf()
+
+    /**
+     * 兼容 Bundle 字段类型，支持 CharSequence/SpannableString 自动转 String
+     */
+    fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
+        val value = bundle.get(key)
+        return when (value) {
+            is String -> value
+            is CharSequence -> value.toString()
+            else -> null
+        }
+    }
     var currentDevice: String = "本机"
     val deviceList = listOf("本机")
     private var maxNotificationsPerDevice: Int = 100

@@ -34,7 +34,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
+                android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
             } catch (e: Exception) {
                 android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e)
             }
@@ -62,7 +62,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 for (sbn in actives) {
                     try {
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
+                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (active) error", e)
                     }
@@ -84,7 +84,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     for (sbn in actives) {
                         try {
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
+                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (timer) error", e)
                         }
