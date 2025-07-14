@@ -4,6 +4,7 @@ import com.xzyht.notifyrelay.data.NotificationRepository
 import com.xzyht.notifyrelay.data.NotificationRecord
 import android.os.Bundle
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,7 +38,7 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
     val cardColorScheme = MiuixTheme.colorScheme
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        color = cardColorScheme.surface,
+        color = cardColorScheme.surfaceContainerHighest,
         cornerRadius = 8.dp
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -174,14 +175,29 @@ fun NotificationHistoryScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // 顶部分组与操作按钮始终显示
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "通知历史",
-                style = textStyles.title2.copy(color = colorScheme.onBackground)
-            )
-            Row {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    if (isLandscape) {
+        // 横屏布局：左侧设备与操作，右侧通知区域（通知区尽可能大）
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .padding(0.dp)
+        ) {
+            // 左侧设备与操作区，缩小权重
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1.5f)
+                    .background(colorScheme.surface)
+                    .padding(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 16.dp)
+            ) {
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = "通知历史",
+                    style = textStyles.title2.copy(color = colorScheme.primary)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 deviceList.forEach { device ->
                     Button(
                         onClick = {
@@ -190,7 +206,188 @@ fun NotificationHistoryScreen() {
                         },
                         colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
                         else ButtonDefaults.buttonColors(),
-                        enabled = true // 设备切换始终可用
+                        enabled = true
+                    ) {
+                        top.yukonga.miuix.kmp.basic.Text(
+                            text = device,
+                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        try {
+                            NotificationRepository.clearDeviceHistory(selectedDevice, context)
+                        } catch (e: Exception) {
+                            android.util.Log.e("NotifyRelay", "清除历史异常", e)
+                            android.widget.Toast.makeText(
+                                context,
+                                "清除失败: ${e.message}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(),
+                    enabled = notifications.isNotEmpty()
+                ) {
+                    top.yukonga.miuix.kmp.basic.Text(
+                        text = "清除",
+                        style = textStyles.body2.copy(color = colorScheme.onBackground)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                // 调试信息已注释
+                // top.yukonga.miuix.kmp.basic.Text(
+                //     text = "通知分组后数量: ${notifications.size}",
+                //     style = textStyles.body2.copy(color = colorScheme.primary)
+                // )
+                if (notifications.isEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    top.yukonga.miuix.kmp.basic.Text(
+                        text = "暂无通知",
+                        style = textStyles.body1.copy(color = colorScheme.onBackground)
+                    )
+                }
+            }
+            // 右侧通知区域，扩展权重（背景色与主背景一致，无需重复设置）
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(3.5f)
+                    .background(colorScheme.surface)
+                    .padding(start = 0.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
+            ) {
+                if (notifications.isNotEmpty()) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(mixedList) { list ->
+                            if (list.size <= 2) {
+                                list.forEach { record ->
+                                    val (appName, appIcon) = getCachedAppInfo(record.packageName)
+                                    NotificationCard(record, appName, appIcon)
+                                }
+                            } else {
+                                val latest = list.maxByOrNull { it.time }
+                                var expanded by remember { mutableStateOf(false) }
+                                val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                        .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
+                                    color = colorScheme.surfaceContainer,
+                                    cornerRadius = 12.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = if (expanded)
+                                                Modifier.fillMaxWidth().clickable { expanded = false }
+                                            else Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            if (appIcon != null) {
+                                                Image(
+                                                    bitmap = appIcon.asImageBitmap(),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                            }
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = appName,
+                                                style = textStyles.title3.copy(color = colorScheme.onBackground)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = "最新时间: " + (latest?.time?.let {
+                                                    java.text.SimpleDateFormat(
+                                                        "yyyy-MM-dd HH:mm:ss"
+                                                    ).format(java.util.Date(it))
+                                                } ?: ""),
+                                                style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                            )
+                                            Spacer(modifier = Modifier.weight(1f))
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = if (expanded) "收起" else "展开",
+                                                style = textStyles.body2.copy(color = colorScheme.primary)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
+                                        if (!expanded) {
+                                            showList.forEachIndexed { idx, record ->
+                                                val (appNameItem, appIconItem) = getCachedAppInfo(record.packageName)
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                        text = record.title ?: "(无标题)",
+                                                        style = textStyles.body2.copy(
+                                                            color = androidx.compose.ui.graphics.Color(0xFF0066B2),
+                                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                        ),
+                                                        modifier = Modifier.weight(0.4f)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                        text = record.text ?: "(无内容)",
+                                                        style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                                        modifier = Modifier.weight(0.6f)
+                                                    )
+                                                }
+                                                if (idx < showList.lastIndex) {
+                                                    Divider(
+                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                        color = colorScheme.outline,
+                                                        thickness = 1.dp
+                                                    )
+                                                }
+                                            }
+                                            if (list.size > 3) {
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = "... 共${list.size}条，点击展开",
+                                                    style = textStyles.body2.copy(color = colorScheme.outline)
+                                                )
+                                            }
+                                        } else {
+                                            list.sortedByDescending { it.time }.forEach { record ->
+                                                val (appName, appIcon) = getCachedAppInfo(record.packageName)
+                                                NotificationCard(record, appName, appIcon)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // 竖屏布局：设备与操作区在顶部，通知区域在下方
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .padding(16.dp)
+        ) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "通知历史",
+                style = textStyles.title2.copy(color = colorScheme.onBackground)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                deviceList.forEach { device ->
+                    Button(
+                        onClick = {
+                            selectedDevice = device
+                            NotificationRepository.currentDevice = device
+                        },
+                        colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
+                        else ButtonDefaults.buttonColors(),
+                        enabled = true
                     ) {
                         top.yukonga.miuix.kmp.basic.Text(
                             text = device,
@@ -213,7 +410,7 @@ fun NotificationHistoryScreen() {
                         }
                     },
                     colors = ButtonDefaults.buttonColors(),
-                    enabled = notifications.isNotEmpty() // 空时禁用
+                    enabled = notifications.isNotEmpty()
                 ) {
                     top.yukonga.miuix.kmp.basic.Text(
                         text = "清除",
@@ -222,12 +419,13 @@ fun NotificationHistoryScreen() {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            // 调试输出分组后通知数量
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "通知分组后数量: ${notifications.size}",
-                style = textStyles.body2.copy(color = colorScheme.primary)
-            )
+            // 调试信息已注释
+            // top.yukonga.miuix.kmp.basic.Text(
+            //     text = "通知分组后数量: ${notifications.size}",
+            //     style = textStyles.body2.copy(color = colorScheme.primary)
+            // )
             if (notifications.isEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
                 top.yukonga.miuix.kmp.basic.Text(
                     text = "暂无通知",
                     style = textStyles.body1.copy(color = colorScheme.onBackground)
@@ -236,13 +434,11 @@ fun NotificationHistoryScreen() {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(mixedList) { list ->
                         if (list.size <= 2) {
-                            // 单条或少量分组，直接渲染每条
                             list.forEach { record ->
                                 val (appName, appIcon) = getCachedAppInfo(record.packageName)
                                 NotificationCard(record, appName, appIcon)
                             }
                         } else {
-                            // 多条分组，分组卡片
                             val latest = list.maxByOrNull { it.time }
                             var expanded by remember { mutableStateOf(false) }
                             val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
