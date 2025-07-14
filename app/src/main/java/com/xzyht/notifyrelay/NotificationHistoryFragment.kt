@@ -49,12 +49,12 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
             val pkg = record.packageName
             var opened = false
             if (!pkg.isNullOrEmpty()) {
+                var canOpen = false
+                var intent: android.content.Intent? = null
                 try {
-                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    intent = context.packageManager.getLaunchIntentForPackage(pkg)
                     if (intent != null) {
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        opened = true
+                        canOpen = true
                     } else {
                         val now = System.currentTimeMillis()
                         if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
@@ -69,16 +69,57 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
                         ToastDebounce.lastToastTime = now
                     }
                 }
-            }
-            // 仅在成功打开应用时显示通知标题和内容
-            if (opened) {
-                val title = record.title ?: "(无标题)"
-                val text = record.text ?: "(无内容)"
-                // 延长显示时间，LENGTH_LONG*2
-                val toast = android.widget.Toast.makeText(context, "$title\n$text", android.widget.Toast.LENGTH_LONG)
-                toast.show()
-                // 再次 show 一次，模拟更长时间
-                android.os.Handler(context.mainLooper).postDelayed({ toast.show() }, 2000)
+                // 仅在即将跳转前显示通知标题和内容
+                if (canOpen) {
+                    // 发送高优先级悬浮通知
+                    val title = record.title ?: "(无标题)"
+                    val text = record.text ?: "(无内容)"
+                    val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    val channelId = "notifyrelay_temp"
+                    // 创建通知渠道（兼容API 26+）
+                    if (android.os.Build.VERSION.SDK_INT >= 26) {
+                        if (notificationManager.getNotificationChannel(channelId) == null) {
+                            val channel = android.app.NotificationChannel(channelId, "临时通知", android.app.NotificationManager.IMPORTANCE_HIGH)
+                            channel.description = "NotifyRelay临时悬浮通知"
+                            channel.enableLights(true)
+                            channel.lightColor = android.graphics.Color.BLUE
+                            channel.enableVibration(false)
+                            channel.setSound(null, null)
+                            channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                            channel.setShowBadge(false)
+                            channel.importance = android.app.NotificationManager.IMPORTANCE_HIGH
+                            channel.setBypassDnd(true)
+                            notificationManager.createNotificationChannel(channel)
+                        }
+                    }
+                    val builder = if (android.os.Build.VERSION.SDK_INT >= 26) {
+                        android.app.Notification.Builder(context, channelId)
+                    } else {
+                        android.app.Notification.Builder(context)
+                    }
+                    builder.setContentTitle(title)
+                        .setContentText(text)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setPriority(android.app.Notification.PRIORITY_MAX)
+                        .setCategory(android.app.Notification.CATEGORY_MESSAGE)
+                        .setAutoCancel(true)
+                        .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                        .setOngoing(false)
+                    // 设置应用图标
+                    if (appIcon != null) {
+                        val iconBitmap = appIcon
+                        builder.setLargeIcon(iconBitmap)
+                    }
+                    // 发送通知，ID用当前时间戳
+                    val notifyId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
+                    notificationManager.notify(notifyId, builder.build())
+                    // 2.5秒后自动销毁通知
+                    android.os.Handler(context.mainLooper).postDelayed({
+                        notificationManager.cancel(notifyId)
+                    }, 2500)
+                    intent!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                }
             }
         },
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
