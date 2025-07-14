@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.data
 
 import android.app.Notification
+// android.app.ServiceInfo 仅在 API 33+，此处直接用常量值 1073741824（FOREGROUND_SERVICE_TYPE_SPECIAL_USE）
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -28,47 +29,47 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val NOTIFY_ID = 1001
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        android.util.Log.d("NotifyRelay", "onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}")
+        android.util.Log.i("NotifyRelay", "[NotifyListener] onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}, postTime=${sbn.postTime}")
         // 使用协程在后台处理通知，提升实时性且不阻塞主线程
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                android.util.Log.d("NotifyRelay", "addNotification success: key=${sbn.key}")
+                android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
             } catch (e: Exception) {
-                android.util.Log.e("NotifyRelay", "addNotification error", e)
+                android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e)
             }
         }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        android.util.Log.i("NotifyRelay", "NotificationListenerService connected")
+        android.util.Log.i("NotifyRelay", "[NotifyListener] onListenerConnected")
         // 检查监听服务是否启用
         val enabledListeners = android.provider.Settings.Secure.getString(
             applicationContext.contentResolver,
             "enabled_notification_listeners"
         )
         val isEnabled = enabledListeners?.contains(applicationContext.packageName) == true
-        android.util.Log.i("NotifyRelay", "Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
+        android.util.Log.i("NotifyRelay", "[NotifyListener] Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
         if (!isEnabled) {
-            android.util.Log.w("NotifyRelay", "NotificationListenerService 未被系统启用，无法获取通知！")
+            android.util.Log.w("NotifyRelay", "[NotifyListener] NotificationListenerService 未被系统启用，无法获取通知！")
         }
         // 启动时同步所有活跃通知到历史，后台处理
         val actives = activeNotifications
         if (actives != null) {
-            android.util.Log.d("NotifyRelay", "activeNotifications size=${actives.size}")
+            android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
                     try {
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        android.util.Log.d("NotifyRelay", "addNotification (active) success: key=${sbn.key}")
+                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
                     } catch (e: Exception) {
-                        android.util.Log.e("NotifyRelay", "addNotification (active) error", e)
+                        android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (active) error", e)
                     }
                 }
             }
         } else {
-            android.util.Log.w("NotifyRelay", "activeNotifications is null")
+            android.util.Log.w("NotifyRelay", "[NotifyListener] activeNotifications is null")
         }
         // 启动前台服务，保证后台存活
         startForegroundService()
@@ -79,17 +80,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 delay(5000) // 每5秒拉取一次
                 val actives = activeNotifications
                 if (actives != null) {
-                    android.util.Log.d("NotifyRelay", "定时拉取 activeNotifications size=${actives.size}")
+                    android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}")
                     for (sbn in actives) {
                         try {
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            android.util.Log.d("NotifyRelay", "addNotification (timer) success: key=${sbn.key}")
+                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=${sbn.notification.extras.getString("android.title")}, text=${sbn.notification.extras.getString("android.text")}")
                         } catch (e: Exception) {
-                            android.util.Log.e("NotifyRelay", "addNotification (timer) error", e)
+                            android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (timer) error", e)
                         }
                     }
                 } else {
-                    android.util.Log.w("NotifyRelay", "定时拉取 activeNotifications is null")
+                    android.util.Log.w("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications is null")
                 }
             }
         }
@@ -116,7 +117,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .build()
-        startForeground(NOTIFY_ID, notification)
+        // Android 12+ 必须指定前台服务类型，否则会崩溃
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // 1073741824 = FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            startForeground(
+                NOTIFY_ID,
+                notification,
+                1073741824
+            )
+        } else {
+            startForeground(NOTIFY_ID, notification)
+        }
     }
 
     // 保留通知历史，不做移除处理
