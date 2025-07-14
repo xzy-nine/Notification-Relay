@@ -107,8 +107,16 @@ object NotificationRepository {
     fun addNotification(sbn: StatusBarNotification, context: Context) {
         val notification = sbn.notification
         val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
-        val title = notification.extras.getString(Notification.EXTRA_TITLE)
-        val text = notification.extras.getString(Notification.EXTRA_TEXT)
+        fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
+            val value = bundle.get(key)
+            return when (value) {
+                is String -> value
+                is CharSequence -> value.toString()
+                else -> null
+            }
+        }
+        val title = getStringCompat(notification.extras, Notification.EXTRA_TITLE)
+        val text = getStringCompat(notification.extras, Notification.EXTRA_TEXT)
         val time = sbn.postTime
         val packageName = sbn.packageName
         val device = "本机"

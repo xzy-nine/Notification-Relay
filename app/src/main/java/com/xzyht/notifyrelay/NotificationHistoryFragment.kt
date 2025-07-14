@@ -1,8 +1,7 @@
 package com.xzyht.notifyrelay
 
 import com.xzyht.notifyrelay.data.NotificationRepository
-
-import android.graphics.BitmapFactory
+import com.xzyht.notifyrelay.data.NotificationRecord
 import android.os.Bundle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -28,9 +27,36 @@ import androidx.compose.foundation.clickable
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.xzyht.notifyrelay.R
-
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
+
+@Composable
+fun NotificationCard(record: NotificationRecord) {
+    val notificationTextStyles = MiuixTheme.textStyles
+    val cardColorScheme = MiuixTheme.colorScheme
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        color = cardColorScheme.surface,
+        cornerRadius = 8.dp
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = record.title ?: "(无标题)",
+                style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            top.yukonga.miuix.kmp.basic.Text(
+                text = record.text ?: "(无内容)",
+                style = notificationTextStyles.body1.copy(color = cardColorScheme.onBackground)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            top.yukonga.miuix.kmp.basic.Text(
+                text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(record.time)),
+                style = notificationTextStyles.body2.copy(color = cardColorScheme.outline)
+            )
+        }
+    }
+}
 
 class NotificationHistoryFragment : Fragment() {
     override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, savedInstanceState: Bundle?): android.view.View? {
@@ -55,30 +81,30 @@ fun NotificationHistoryScreen() {
             val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
             if (!isDarkTheme) {
                 // 浅色模式，状态栏字体用深色
-                controller?.isAppearanceLightStatusBars = true
+                controller.isAppearanceLightStatusBars = true
             } else {
                 // 深色模式，状态栏字体用浅色
-                controller?.isAppearanceLightStatusBars = false
+                controller.isAppearanceLightStatusBars = false
             }
         }
     }
-    // 页面初始化时同步通知历史
     LaunchedEffect(Unit) {
         NotificationRepository.init(context)
     }
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
-    var notifications by remember {
-        mutableStateOf(
+    val notifications by remember(selectedDevice) {
+        derivedStateOf {
             NotificationRepository.getNotificationsByDevice(selectedDevice)
                 .groupBy { Pair(it.packageName, it.key ?: "") }
                 .map { (_, list) -> list.maxByOrNull { it.time }!! }
-        )
+        }
     }
     val textStyles = MiuixTheme.textStyles
     val colorScheme = MiuixTheme.colorScheme
     val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
-    val listenerEnabled = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.contains(context.packageName) == true
+    val enabledListeners = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+    val listenerEnabled = enabledListeners?.contains(context.packageName) == true
     android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
     val grouped = notifications.groupBy { it.packageName }
     val groupList = grouped.entries.map { (_, list) ->
@@ -105,7 +131,8 @@ fun NotificationHistoryScreen() {
                 Button(
                     onClick = {
                         // 跳转系统通知监听设置
-                        val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        val intent =
+                            android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
                         context.startActivity(intent)
                     },
                     colors = if (listenerEnabled) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors(),
@@ -120,11 +147,16 @@ fun NotificationHistoryScreen() {
                     Spacer(modifier = Modifier.width(8.dp))
                     top.yukonga.miuix.kmp.basic.Text(
                         text = if (listenerEnabled) "通知监听服务已启用" else "通知监听服务未启用",
-                        style = textStyles.body2.copy(color = if (listenerEnabled) colorScheme.primary else Color(0xFFF44336))
+                        style = textStyles.body2.copy(
+                            color = if (listenerEnabled) colorScheme.primary else Color(
+                                0xFFF44336
+                            )
+                        )
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                val permIcon = if (notificationPermission) MiuixIcons.Basic.Check else Icons.Filled.Warning
+                val permIcon =
+                    if (notificationPermission) MiuixIcons.Basic.Check else Icons.Filled.Warning
                 top.yukonga.miuix.kmp.basic.Icon(
                     imageVector = permIcon,
                     contentDescription = null,
@@ -134,7 +166,11 @@ fun NotificationHistoryScreen() {
                 Spacer(modifier = Modifier.width(8.dp))
                 top.yukonga.miuix.kmp.basic.Text(
                     text = if (notificationPermission) "通知权限已授权" else "通知权限未授权",
-                    style = textStyles.body2.copy(color = if (notificationPermission) colorScheme.primary else Color(0xFFF44336))
+                    style = textStyles.body2.copy(
+                        color = if (notificationPermission) colorScheme.primary else Color(
+                            0xFFF44336
+                        )
+                    )
                 )
             }
         }
@@ -150,9 +186,6 @@ fun NotificationHistoryScreen() {
                         onClick = {
                             selectedDevice = device
                             NotificationRepository.currentDevice = device
-                            notifications = NotificationRepository.getNotificationsByDevice(selectedDevice)
-                                .groupBy { Pair(it.packageName, it.key ?: "") }
-                                .map { (_, list) -> list.maxByOrNull { it.time }!! }
                         },
                         colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
                         else ButtonDefaults.buttonColors(),
@@ -169,12 +202,13 @@ fun NotificationHistoryScreen() {
                     onClick = {
                         try {
                             NotificationRepository.clearDeviceHistory(selectedDevice, context)
-                            notifications = NotificationRepository.getNotificationsByDevice(selectedDevice)
-                                .groupBy { Pair(it.packageName, it.key ?: "") }
-                                .map { (_, list) -> list.maxByOrNull { it.time }!! }
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay", "清除历史异常", e)
-                            android.widget.Toast.makeText(context, "清除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(
+                                context,
+                                "清除失败: ${e.message}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(),
@@ -186,19 +220,51 @@ fun NotificationHistoryScreen() {
                     )
                 }
             }
-        Spacer(modifier = Modifier.height(16.dp))
-        if (notifications.isEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            // 调试输出分组后通知数量
             top.yukonga.miuix.kmp.basic.Text(
-                text = "暂无通知",
-                style = textStyles.body1.copy(color = colorScheme.onBackground)
+                text = "通知分组后数量: ${notifications.size}",
+                style = textStyles.body2.copy(color = colorScheme.primary)
             )
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                // ...existing code...
-                items(multiGroups) { list ->
-                    // ...existing code...
-                }
-                // ...existing code...
+            if (notifications.isEmpty()) {
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = "暂无通知",
+                    style = textStyles.body1.copy(color = colorScheme.onBackground)
+                )
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    // 渲染单条/少量分组（<=2条）
+                    items(singleList) { record ->
+                        NotificationCard(record)
+                    }
+                    // 渲染多条分组（>2条），分组块以分组最新时间排序
+                    items(multiGroups) { list ->
+                        val latest = list.maxByOrNull { it.time }
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            color = colorScheme.surfaceContainer,
+                            cornerRadius = 12.dp
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = latest?.packageName ?: "",
+                                    style = textStyles.title3.copy(color = colorScheme.primary)
+                                )
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = "最新时间: " + (latest?.time?.let {
+                                        java.text.SimpleDateFormat(
+                                            "yyyy-MM-dd HH:mm:ss"
+                                        ).format(java.util.Date(it))
+                                    } ?: ""),
+                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                list.sortedByDescending { it.time }.forEach { record ->
+                                    NotificationCard(record)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
