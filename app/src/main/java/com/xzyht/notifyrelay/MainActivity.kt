@@ -77,6 +77,8 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun MainAppFragment() {
     var selectedTab by remember { mutableStateOf(0) }
+    // fragmentContainerId 只生成一次，保证切换时 id 不变
+    val fragmentContainerId = remember { android.view.View.generateViewId() }
     val items = listOf(
         NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
@@ -97,7 +99,7 @@ fun MainAppFragment() {
         ) {
             when (selectedTab) {
                 0 -> DeviceForwardScreen()
-                1 -> NotificationHistoryFragmentView()
+                1 -> NotificationHistoryFragmentView(fragmentContainerId)
             }
         }
     }
@@ -113,21 +115,18 @@ fun DeviceForwardScreen() {
 }
 
 @Composable
-fun NotificationHistoryFragmentView() {
+fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
     val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
     val fragmentTag = "NotificationHistoryFragment"
-    val fragmentContainerId = remember { mutableStateOf(android.view.View.generateViewId()) }
-
     AndroidView(
         factory = { context ->
             val frameLayout = android.widget.FrameLayout(context)
-            frameLayout.id = fragmentContainerId.value
+            frameLayout.id = fragmentContainerId
             fragmentManager?.let { fm ->
-                if (fm.findFragmentByTag(fragmentTag) == null) {
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
+                // 每次都 replace，保证 fragment attach
+                fm.beginTransaction()
+                    .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
+                    .commitAllowingStateLoss()
             }
             frameLayout
         },

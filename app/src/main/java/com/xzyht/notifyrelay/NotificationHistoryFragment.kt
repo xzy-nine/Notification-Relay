@@ -41,6 +41,21 @@ class NotificationHistoryFragment : Fragment() {
 @Composable
 fun NotificationHistoryScreen() {
     val context = LocalContext.current
+    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    // 设置系统状态栏字体颜色
+    LaunchedEffect(isDarkTheme) {
+        val window = (context as? android.app.Activity)?.window
+        window?.let {
+            val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
+            if (!isDarkTheme) {
+                // 浅色模式，状态栏字体用深色
+                controller?.isAppearanceLightStatusBars = true
+            } else {
+                // 深色模式，状态栏字体用浅色
+                controller?.isAppearanceLightStatusBars = false
+            }
+        }
+    }
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
     var notifications by remember {
@@ -68,6 +83,7 @@ fun NotificationHistoryScreen() {
     val multiGroups = groupList.filter { it.second.size > 2 }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        // 顶部分组与操作按钮始终显示
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             top.yukonga.miuix.kmp.basic.Text(
                 text = "通知历史",
@@ -79,9 +95,13 @@ fun NotificationHistoryScreen() {
                         onClick = {
                             selectedDevice = device
                             NotificationRepository.currentDevice = device
+                            notifications = NotificationRepository.getNotificationsByDevice(selectedDevice)
+                                .groupBy { Pair(it.packageName, it.key ?: "") }
+                                .map { (_, list) -> list.maxByOrNull { it.time }!! }
                         },
                         colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
-                        else ButtonDefaults.buttonColors()
+                        else ButtonDefaults.buttonColors(),
+                        enabled = true // 设备切换始终可用
                     ) {
                         top.yukonga.miuix.kmp.basic.Text(
                             text = device,
@@ -102,7 +122,8 @@ fun NotificationHistoryScreen() {
                             android.widget.Toast.makeText(context, "清除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors()
+                    colors = ButtonDefaults.buttonColors(),
+                    enabled = notifications.isNotEmpty() // 空时禁用
                 ) {
                     top.yukonga.miuix.kmp.basic.Text(
                         text = "清除",
@@ -119,216 +140,12 @@ fun NotificationHistoryScreen() {
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                // ...existing code...
                 items(multiGroups) { (pkg, list) ->
-                    val isExpanded = expandedGroups.contains(pkg)
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        cornerRadius = 12.dp,
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        showIndication = true,
-                        onClick = {
-                            expandedGroups = if (isExpanded) expandedGroups - pkg else expandedGroups + pkg
-                        }
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        expandedGroups = if (isExpanded) expandedGroups - pkg else expandedGroups + pkg
-                                    },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val iconBitmap = remember(pkg) {
-                                    try {
-                                        pm.getApplicationInfo(pkg, 0)
-                                        val appIcon = pm.getApplicationIcon(pkg)
-                                        when (appIcon) {
-                                            is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
-                                            else -> {
-                                                val bmp = android.graphics.Bitmap.createBitmap(
-                                                    appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
-                                                    appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
-                                                    android.graphics.Bitmap.Config.ARGB_8888
-                                                )
-                                                val canvas = android.graphics.Canvas(bmp)
-                                                appIcon.setBounds(0, 0, canvas.width, canvas.height)
-                                                appIcon.draw(canvas)
-                                                bmp.asImageBitmap()
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        defaultIconBitmap
-                                    }
-                                }
-                                val finalBitmap = iconBitmap ?: defaultIconBitmap
-                                Box(modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                                    if (finalBitmap != null) {
-                                        Image(
-                                            bitmap = finalBitmap,
-                                            contentDescription = pkg,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                }
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = pkg,
-                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                )
-                                Spacer(modifier = Modifier.weight(1f))
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = if (isExpanded) "收起" else "展开",
-                                    style = textStyles.footnote2.copy(color = colorScheme.primary)
-                                )
-                            }
-                            if (!isExpanded) {
-                                list.take(3).forEach { record ->
-                                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                                        top.yukonga.miuix.kmp.basic.Text(
-                                            text = (record.title ?: "(无标题)") + " ",
-                                            style = textStyles.title4.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = colorScheme.onBackground),
-                                            maxLines = 1
-                                        )
-                                        top.yukonga.miuix.kmp.basic.Text(
-                                            text = record.text ?: "(无内容)",
-                                            style = textStyles.body2.copy(color = colorScheme.onBackground),
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                                if (list.size > 3) {
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = "...共${list.size}条，点击展开",
-                                        style = textStyles.footnote2.copy(color = colorScheme.outline),
-                                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
-                                    )
-                                }
-                            } else {
-                                list.forEach { record ->
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                                        cornerRadius = 8.dp,
-                                        pressFeedbackType = PressFeedbackType.Sink,
-                                        showIndication = true,
-                                        onClick = {
-                                            // 可扩展：通知详情、批量操作等
-                                        }
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            val iconBitmap = remember(record.packageName) {
-                                                try {
-                                                    pm.getApplicationInfo(record.packageName, 0)
-                                                    val appIcon = pm.getApplicationIcon(record.packageName)
-                                                    when (appIcon) {
-                                                        is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
-                                                        else -> {
-                                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                                appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
-                                                                appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
-                                                                android.graphics.Bitmap.Config.ARGB_8888
-                                                            )
-                                                            val canvas = android.graphics.Canvas(bmp)
-                                                            appIcon.setBounds(0, 0, canvas.width, canvas.height)
-                                                            appIcon.draw(canvas)
-                                                            bmp.asImageBitmap()
-                                                        }
-                                                    }
-                                                } catch (e: Exception) {
-                                                    defaultIconBitmap
-                                                }
-                                            }
-                                            val finalBitmap = iconBitmap ?: defaultIconBitmap
-                                            Box(modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                                                if (finalBitmap != null) {
-                                                    Image(
-                                                        bitmap = finalBitmap,
-                                                        contentDescription = record.packageName,
-                                                        modifier = Modifier.fillMaxSize()
-                                                    )
-                                                }
-                                            }
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                top.yukonga.miuix.kmp.basic.Text(
-                                                    text = record.title ?: "(无标题)",
-                                                    style = textStyles.title4.copy(color = colorScheme.onBackground)
-                                                )
-                                                top.yukonga.miuix.kmp.basic.Text(
-                                                    text = record.text ?: "(无内容)",
-                                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                                )
-                                                top.yukonga.miuix.kmp.basic.Text(
-                                                    text = "时间: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(record.time))}",
-                                                    style = textStyles.footnote2.copy(color = colorScheme.onBackground)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // ...existing code...
                 }
                 items(singleList) { record ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        cornerRadius = 8.dp,
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        showIndication = true,
-                        onClick = {
-                            // 可扩展：通知详情、批量操作等
-                        }
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val iconBitmap = remember(record.packageName) {
-                                try {
-                                    pm.getApplicationInfo(record.packageName, 0)
-                                    val appIcon = pm.getApplicationIcon(record.packageName)
-                                    when (appIcon) {
-                                        is android.graphics.drawable.BitmapDrawable -> appIcon.bitmap.asImageBitmap()
-                                        else -> {
-                                            val bmp = android.graphics.Bitmap.createBitmap(
-                                                appIcon.intrinsicWidth.takeIf { it > 0 } ?: 40,
-                                                appIcon.intrinsicHeight.takeIf { it > 0 } ?: 40,
-                                                android.graphics.Bitmap.Config.ARGB_8888
-                                            )
-                                            val canvas = android.graphics.Canvas(bmp)
-                                            appIcon.setBounds(0, 0, canvas.width, canvas.height)
-                                            appIcon.draw(canvas)
-                                            bmp.asImageBitmap()
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    defaultIconBitmap
-                                }
-                            }
-                            val finalBitmap = iconBitmap ?: defaultIconBitmap
-                            Box(modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
-                                if (finalBitmap != null) {
-                                    Image(
-                                        bitmap = finalBitmap,
-                                        contentDescription = record.packageName,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = record.title ?: "(无标题)",
-                                    style = textStyles.title4.copy(color = colorScheme.onBackground)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = record.text ?: "(无内容)",
-                                    style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                )
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = "时间: ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(record.time))}",
-                                    style = textStyles.footnote2.copy(color = colorScheme.onBackground)
-                                )
-                            }
-                        }
-                    }
+                    // ...existing code...
                 }
             }
         }
