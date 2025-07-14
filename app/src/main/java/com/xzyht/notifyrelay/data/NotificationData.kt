@@ -108,7 +108,7 @@ object NotificationRepository {
         val notification = sbn.notification
         val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
         fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
-            val value = bundle.get(key)
+            val value = bundle.getString(key) ?: bundle.getCharSequence(key)
             return when (value) {
                 is String -> value
                 is CharSequence -> value.toString()
@@ -141,7 +141,7 @@ object NotificationRepository {
      * 兼容 Bundle 字段类型，支持 CharSequence/SpannableString 自动转 String
      */
     fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
-        val value = bundle.get(key)
+        val value = bundle.getString(key) ?: bundle.getCharSequence(key)
         return when (value) {
             is String -> value
             is CharSequence -> value.toString()
