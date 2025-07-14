@@ -241,19 +241,34 @@ fun NotificationHistoryScreen() {
                     items(multiGroups) { list ->
                         val latest = list.maxByOrNull { it.time }
                         var expanded by remember { mutableStateOf(false) }
+                        // 获取应用名称
+                        val appName = remember(latest?.packageName) {
+                            try {
+                                latest?.packageName?.let { pkg ->
+                                    val pm = context.packageManager
+                                    val appInfo = pm.getApplicationInfo(pkg, 0)
+                                    pm.getApplicationLabel(appInfo)?.toString() ?: pkg
+                                } ?: ""
+                            } catch (e: Exception) {
+                                latest?.packageName ?: ""
+                            }
+                        }
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .clickable { expanded = !expanded }, // 整个块可点击
                             color = colorScheme.surfaceContainer,
                             cornerRadius = 12.dp
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     top.yukonga.miuix.kmp.basic.Text(
-                                        text = latest?.packageName ?: "",
-                                        style = textStyles.title3.copy(color = colorScheme.primary)
+                                        text = appName,
+                                        style = textStyles.title3.copy(color = colorScheme.onBackground)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     top.yukonga.miuix.kmp.basic.Text(
@@ -272,26 +287,45 @@ fun NotificationHistoryScreen() {
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
-                                showList.forEach { record ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+                                if (!expanded) {
+                                    showList.forEachIndexed { idx, record ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = record.title ?: "(无标题)",
+                                                style = textStyles.body2.copy(
+                                                    color = androidx.compose.ui.graphics.Color(0xFF0066B2),
+                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                ),
+                                                modifier = Modifier.weight(0.4f)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = record.text ?: "(无内容)",
+                                                style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                                modifier = Modifier.weight(0.6f)
+                                            )
+                                        }
+                                        if (idx < showList.lastIndex) {
+                                            Divider(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                color = colorScheme.outline,
+                                                thickness = 1.dp
+                                            )
+                                        }
+                                    }
+                                    if (list.size > 3) {
                                         top.yukonga.miuix.kmp.basic.Text(
-                                            text = (record.title ?: "(无标题)") + " ",
-                                            style = textStyles.body2.copy(color = colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                                        )
-                                        top.yukonga.miuix.kmp.basic.Text(
-                                            text = record.text ?: "(无内容)",
-                                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                            text = "... 共${list.size}条，点击展开",
+                                            style = textStyles.body2.copy(color = colorScheme.outline)
                                         )
                                     }
-                                }
-                                if (!expanded && list.size > 3) {
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = "... 共${list.size}条，点击展开",
-                                        style = textStyles.body2.copy(color = colorScheme.outline)
-                                    )
+                                } else {
+                                    list.sortedByDescending { it.time }.forEach { record ->
+                                        NotificationCard(record)
+                                    }
                                 }
                             }
                         }
