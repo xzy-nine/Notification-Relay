@@ -17,11 +17,11 @@ import kotlinx.coroutines.launch
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
-        android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onCreate")
+        // android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onCreate") // 调试日志已注释
     }
 
     override fun onBind(intent: android.content.Intent?): android.os.IBinder? {
-        android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onBind: intent=$intent")
+        // android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onBind: intent=$intent") // 调试日志已注释
         return super.onBind(intent)
     }
     private var foregroundJob: Job? = null
@@ -29,35 +29,35 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val NOTIFY_ID = 1001
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        android.util.Log.i("NotifyRelay", "[NotifyListener] onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}, postTime=${sbn.postTime}")
+        // android.util.Log.i("NotifyRelay", "[NotifyListener] onNotificationPosted: key=${sbn.key}, package=${sbn.packageName}, id=${sbn.id}, postTime=${sbn.postTime}") // 调试日志已注释
         // 使用协程在后台处理通知，提升实时性且不阻塞主线程
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
+                // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}") // 调试日志已注释
             } catch (e: Exception) {
-                android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e)
+                // android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e) // 调试日志已注释
             }
         }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        android.util.Log.i("NotifyRelay", "[NotifyListener] onListenerConnected")
+        // android.util.Log.i("NotifyRelay", "[NotifyListener] onListenerConnected") // 调试日志已注释
         // 检查监听服务是否启用
         val enabledListeners = android.provider.Settings.Secure.getString(
             applicationContext.contentResolver,
             "enabled_notification_listeners"
         )
         val isEnabled = enabledListeners?.contains(applicationContext.packageName) == true
-        android.util.Log.i("NotifyRelay", "[NotifyListener] Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
+        // android.util.Log.i("NotifyRelay", "[NotifyListener] Listener enabled: $isEnabled, enabledListeners=$enabledListeners") // 调试日志已注释
         if (!isEnabled) {
             android.util.Log.w("NotifyRelay", "[NotifyListener] NotificationListenerService 未被系统启用，无法获取通知！")
         }
         // 启动时同步所有活跃通知到历史，后台处理
         val actives = activeNotifications
         if (actives != null) {
-            android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}")
+            // android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}") // 调试日志已注释
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
                     val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
@@ -65,7 +65,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
                     try {
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=$title, text=$text")
+                        // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=$title, text=$text") // 调试日志已注释
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (active) error", e)
                     }
@@ -83,14 +83,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 delay(5000) // 每5秒拉取一次
                 val actives = activeNotifications
                 if (actives != null) {
-                    android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}")
+                    // android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}") // 调试日志已注释
                     for (sbn in actives) {
                         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
                         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
                         if (title.isNullOrBlank() && text.isNullOrBlank()) continue // 过滤无标题无内容
                         try {
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=$title, text=$text")
+                            // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=$title, text=$text") // 已不再需要，注释保留
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (timer) error", e)
                         }

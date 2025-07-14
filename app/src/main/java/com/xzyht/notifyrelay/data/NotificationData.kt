@@ -108,12 +108,8 @@ object NotificationRepository {
         val notification = sbn.notification
         val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
         fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
-            val value = bundle.getString(key) ?: bundle.getCharSequence(key)
-            return when (value) {
-                is String -> value
-                is CharSequence -> value.toString()
-                else -> null
-            }
+            val value = bundle.getCharSequence(key)
+            return value?.toString()
         }
         val title = getStringCompat(notification.extras, Notification.EXTRA_TITLE)
         val text = getStringCompat(notification.extras, Notification.EXTRA_TEXT)
