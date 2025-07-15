@@ -48,7 +48,6 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
         onClick = {
             // 跳转到对应应用主界面
             val pkg = record.packageName
-            var opened = false
             if (!pkg.isNullOrEmpty()) {
                 var canOpen = false
                 var intent: android.content.Intent? = null
@@ -77,39 +76,31 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     val text = record.text ?: "(无内容)"
                     val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                     val channelId = "notifyrelay_temp"
-                    // 创建通知渠道（兼容API 26+）
-                    if (android.os.Build.VERSION.SDK_INT >= 26) {
-                        if (notificationManager.getNotificationChannel(channelId) == null) {
-                            val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH)
-                            channel.description = "应用内跳转指示通知"
-                            channel.enableLights(true)
-                            channel.lightColor = android.graphics.Color.BLUE
-                            channel.enableVibration(false)
-                            channel.setSound(null, null)
-                            channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                            channel.setShowBadge(false)
-                            channel.importance = android.app.NotificationManager.IMPORTANCE_HIGH
-                            channel.setBypassDnd(true)
-                            notificationManager.createNotificationChannel(channel)
-                        }
+                    // 仅支持 API 26+，不再兼容旧版
+                    if (notificationManager.getNotificationChannel(channelId) == null) {
+                        val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH)
+                        channel.description = "应用内跳转指示通知"
+                        channel.enableLights(true)
+                        channel.lightColor = android.graphics.Color.BLUE
+                        channel.enableVibration(false)
+                        channel.setSound(null, null)
+                        channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                        channel.setShowBadge(false)
+                        channel.importance = android.app.NotificationManager.IMPORTANCE_HIGH
+                        channel.setBypassDnd(true)
+                        notificationManager.createNotificationChannel(channel)
                     }
-                    val builder = if (android.os.Build.VERSION.SDK_INT >= 26) {
-                        android.app.Notification.Builder(context, channelId)
-                    } else {
-                        android.app.Notification.Builder(context)
-                    }
+                    val builder = android.app.Notification.Builder(context, channelId)
                     builder.setContentTitle(title)
                         .setContentText(text)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
-                        .setPriority(android.app.Notification.PRIORITY_MAX)
                         .setCategory(android.app.Notification.CATEGORY_MESSAGE)
                         .setAutoCancel(true)
                         .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
                         .setOngoing(false)
                     // 设置应用图标
                     if (appIcon != null) {
-                        val iconBitmap = appIcon
-                        builder.setLargeIcon(iconBitmap)
+                        builder.setLargeIcon(appIcon)
                     }
                     // 发送通知，ID用当前时间戳
                     val notifyId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
@@ -243,17 +234,16 @@ fun NotificationHistoryScreen() {
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
     // 设置系统状态栏字体颜色和背景色
+    @android.annotation.SuppressLint("ObsoleteSdkInt")
     LaunchedEffect(isDarkTheme) {
         val window = (context as? android.app.Activity)?.window
         window?.let {
-            val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
-            if (!isDarkTheme) {
-                controller.isAppearanceLightStatusBars = true
-            } else {
-                controller.isAppearanceLightStatusBars = false
+            val decorView = it.decorView
+            // 统一使用 WindowInsetsControllerCompat 设置状态栏字体颜色
+            androidx.core.view.WindowInsetsControllerCompat(it, decorView).isAppearanceLightStatusBars = !isDarkTheme
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                it.statusBarColor = colorScheme.background.toArgb()
             }
-            // 设置状态栏背景色与页面主背景色一致
-            it.statusBarColor = colorScheme.background.toArgb()
         }
     }
     LaunchedEffect(Unit) {
@@ -379,7 +369,7 @@ fun NotificationHistoryScreen() {
                                             )
                                         }
                                         if (idx < showList.lastIndex) {
-                                            Divider(
+                                            top.yukonga.miuix.kmp.basic.HorizontalDivider(
                                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                                 color = colorScheme.outline,
                                                 thickness = 1.dp
