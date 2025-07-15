@@ -446,22 +446,27 @@ fun NotificationHistoryScreen() {
             }
             // 悬浮清除按钮
             if (notifications.isNotEmpty()) {
-                // TODO: 临时措施，长按清除按钮跳转引导页更改权限，后续删除（onLongClick块）
+                // TODO: 临时措施，长按清除按钮跳转引导页更改权限，后续删除（onLongPress块）
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                    Button(
+                    Card(
+                        modifier = Modifier.padding(24.dp),
+                        color = colorScheme.primary,
+                        cornerRadius = 24.dp,
+                        pressFeedbackType = PressFeedbackType.Sink,
+                        showIndication = true,
                         onClick = clearHistory,
-                        onLongClick = {
+                        onLongPress = {
                             // 跳转到引导页 GuideActivity
                             val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
+                            intent.putExtra("fromInternal", true)
                             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             context.startActivity(intent)
-                        },
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.padding(24.dp)
+                        }
                     ) {
                         top.yukonga.miuix.kmp.basic.Text(
                             text = "清除",
-                            style = textStyles.body2.copy(color = colorScheme.onPrimary)
+                            style = textStyles.body2.copy(color = colorScheme.onPrimary),
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                         )
                     }
                 }
@@ -619,15 +624,27 @@ fun NotificationHistoryScreen() {
             }
             // 悬浮清除按钮
             if (notifications.isNotEmpty()) {
+                // TODO: 临时措施，长按清除按钮跳转引导页更改权限，后续删除（onLongPress块）
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                    Button(
+                    Card(
+                        modifier = Modifier.padding(24.dp),
+                        color = colorScheme.primary,
+                        cornerRadius = 24.dp,
+                        pressFeedbackType = PressFeedbackType.Sink,
+                        showIndication = true,
                         onClick = clearHistory,
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.padding(24.dp)
+                        onLongPress = {
+                            // 跳转到引导页 GuideActivity
+                            val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
+                            intent.putExtra("fromInternal", true)
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(intent)
+                        }
                     ) {
                         top.yukonga.miuix.kmp.basic.Text(
                             text = "清除",
-                            style = textStyles.body2.copy(color = colorScheme.onPrimary)
+                            style = textStyles.body2.copy(color = colorScheme.onPrimary),
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                         )
                     }
                 }

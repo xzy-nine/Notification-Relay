@@ -34,8 +34,9 @@ class GuideActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("notifyrelay_prefs", Context.MODE_PRIVATE)
         val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
-        // 优化：仅首次启动或未完成必要权限时进入引导页，否则直接进入主界面（不渲染引导页）
-        if (checkAllPermissions(this) && !isFirstLaunch) {
+        val fromInternal = intent.getBooleanExtra("fromInternal", false)
+        // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
+        if (!fromInternal && checkAllPermissions(this) && !isFirstLaunch) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
@@ -214,9 +215,9 @@ fun GuideScreen(onContinue: () -> Unit) {
                         Switch(
                             checked = hasFloatNotification,
                             onCheckedChange = {
-                                showToast("请在系统设置-应用管理-悬浮窗权限中允许本应用悬浮通知")
-                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                showToast("请在系统设置-通知-通知分组中管理本应用的通知分组")
+                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                                 context.startActivity(intent)
                             },
                             enabled = true
