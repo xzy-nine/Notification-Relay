@@ -40,7 +40,7 @@ class DeviceForwardFragment : Fragment() {
                 DeviceForwardScreen()
             }
         }
-}
+    }
 
 @Composable
 fun DeviceForwardScreen() {
@@ -57,33 +57,19 @@ fun DeviceForwardScreen() {
     val discoveredDevices = remember { mutableStateOf(listOf<com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager.DiscoveredDevice>()) }
 
     // 初始化设备发现与 PIN 弹窗回调
-    LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
         DeviceConnectionManager.init(context) { pinCode ->
             remotePin = pinCode
             showRemotePinDialog.value = true
         }
     }
     // 定时刷新已发现设备列表
-    LaunchedEffect(isConnected.value) {
+    androidx.compose.runtime.LaunchedEffect(isConnected.value) {
         while (!isConnected.value) {
             discoveredDevices.value = DeviceConnectionManager.getDiscoveredDevices()
             kotlinx.coroutines.delay(2000)
         }
     }
-    Scaffold(
-        topBar = {
-            SmallTopAppBar(title = "设备与转发设置")
-        },
-        content = { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colorScheme.background)
-                    .padding(paddingValues)
-                    .padding(16.dp)
-            ) {
-                // PIN弹窗触发按钮
-                Button(
     Scaffold(
         topBar = {
             SmallTopAppBar(title = "设备与转发设置")
@@ -247,3 +233,5 @@ fun DeviceForwardScreen() {
             }
         }
     )
+}
+}

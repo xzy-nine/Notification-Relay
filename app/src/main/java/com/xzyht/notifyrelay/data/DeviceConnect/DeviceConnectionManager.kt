@@ -105,8 +105,15 @@ object DeviceConnectionManager {
                         val name = resolved.serviceName
                         val host = resolved.host.hostAddress ?: ""
                         val port = resolved.port
-                        val pubKey = resolved.getAttribute("pubKey") ?: ""
-                        val pinCode = resolved.getAttribute("pin") ?: ""
+                        // Android 官方 API 没有 getAttribute/txtRecords，API 33+ 可用 getAttributes
+                        val (pubKey, pinCode) = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            val attr = resolved.attributes
+                            val pk = attr["pubKey"]?.toString() ?: ""
+                            val pin = attr["pin"]?.toString() ?: ""
+                            pk to pin
+                        } else {
+                            "" to ""
+                        }
                         // 过滤自身
                         if (name != getDeviceName(context!!)) {
                             discoveredDevices.add(DiscoveredDevice(name, host, port, pubKey, pinCode))
@@ -155,11 +162,11 @@ object DeviceConnectionManager {
 
     /** WebSocket 连接与心跳 */
     private fun connectWebSocket() {
-        val ctx = context ?: return
+        if (context == null) return
         val client = OkHttpClient.Builder()
             .pingInterval(HEARTBEAT_INTERVAL, TimeUnit.MILLISECONDS)
             .build()
-        val request = Request.Builder().url(wsUrl).build()
+        val request = Request.Builder().url(wsUrl.orEmpty()).build()
         ws = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 isConnected = true
@@ -167,7 +174,7 @@ object DeviceConnectionManager {
                 // 交换密钥对
                 keyPair = generateKeyPair()
                 val pubKeyStr = keyPair?.public?.encoded?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-                val handshake = mapOf("type" to "handshake", "pin" to pin, "pubKey" to pubKeyStr)
+                val handshake = mapOf("type" to "handshake", "pin" to pin.orEmpty(), "pubKey" to pubKeyStr.orEmpty())
                 webSocket.send(gson.toJson(handshake))
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
