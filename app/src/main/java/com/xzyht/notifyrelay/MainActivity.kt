@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -78,7 +79,7 @@ class MainActivity : FragmentActivity() {
 
 @Composable
 fun MainAppFragment() {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
     // fragmentContainerId 只生成一次，保证切换时 id 不变
     val fragmentContainerId = remember { android.view.View.generateViewId() }
     val items = listOf(
