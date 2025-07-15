@@ -113,11 +113,11 @@ object DeviceConnectionManager {
                         val selfHost = try { java.net.InetAddress.getLocalHost().hostAddress } catch (_: Exception) { null }
                         val selfPort = 8080 // 与注册服务端口保持一致
                         android.util.Log.d("DeviceDiscovery", "发现设备: name=$name, host=$host, port=$port, uuid=$uuid, selfUuid=$selfUuid, selfHost=$selfHost, selfPort=$selfPort")
-                        // 用uuid过滤掉自己，若uuid异常则用host/port过滤
-                        val isSelf = (uuid.isNotBlank() && uuid == selfUuid) ||
-                            (selfHost != null && host == selfHost && port == selfPort)
-                        if (!isSelf && uuid.isNotBlank()) {
-                            discoveredDevices.add(DiscoveredDevice(name, host, port, uuid, "", ""))
+                        // 用 uuid 过滤掉自己设备，且去重
+                        if (uuid.isNotBlank() && uuid != selfUuid) {
+                            if (discoveredDevices.none { it.uuid == uuid }) {
+                                discoveredDevices.add(DiscoveredDevice(name, host, port, uuid, "", ""))
+                            }
                         }
                     }
                     override fun onResolveFailed(serviceInfo: android.net.nsd.NsdServiceInfo, errorCode: Int) {}

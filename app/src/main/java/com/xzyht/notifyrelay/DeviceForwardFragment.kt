@@ -128,7 +128,9 @@ fun DeviceForwardScreen() {
                                 style = textStyles.body2.copy(color = colorScheme.outline)
                             )
                         } else {
-                            discoveredDevices.value.forEach { device ->
+                            // UI层保险去重
+                            val uniqueDevices = discoveredDevices.value.distinctBy { it.uuid }
+                            uniqueDevices.forEach { device ->
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
