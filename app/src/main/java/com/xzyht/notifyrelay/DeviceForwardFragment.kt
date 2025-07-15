@@ -28,6 +28,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 // Miuix 主题库优先，部分基础布局用 Compose 官方包
 import com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class DeviceForwardFragment : Fragment() {
     override fun onCreateView(
@@ -52,6 +56,15 @@ fun DeviceForwardScreen() {
     val context = LocalContext.current
     var deviceName by remember { mutableStateOf(DeviceConnectionManager.getDeviceName(context)) }
     val deviceUUID = remember { DeviceConnectionManager.getDeviceUUID(context) }
+    // 发现设备列表状态
+    val discoveredDevicesFlow = remember { DeviceConnectionManager.discoveredDevicesFlow }
+    val discoveredDevices by discoveredDevicesFlow.collectAsState()
+    // 连接状态监听
+    LaunchedEffect(Unit) {
+        DeviceConnectionManager.onConnectionChanged = { connected ->
+            isConnected.value = connected
+        }
+    }
     Scaffold(
         topBar = {
             SmallTopAppBar(title = "设备与转发设置")
@@ -114,7 +127,7 @@ fun DeviceForwardScreen() {
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                // 已发现设备列表（占位）
+                // 已发现设备列表
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,13 +136,27 @@ fun DeviceForwardScreen() {
                 ) {
                     Column {
                         Text(
-                            text = "已发现设备（占位）",
+                            text = "已发现设备",
                             style = textStyles.body2.copy(color = colorScheme.onBackground)
                         )
-                        Text(
-                            text = "暂无设备发现功能，后续扩展",
-                            style = textStyles.body2.copy(color = colorScheme.outline)
-                        )
+                        if (discoveredDevices.isEmpty()) {
+                            Text(
+                                text = "暂无可连接设备",
+                                style = textStyles.body2.copy(color = colorScheme.outline)
+                            )
+                        } else {
+                            discoveredDevices.forEach { device ->
+                                Button(
+                                    onClick = {
+                                        DeviceConnectionManager.connectToDevice(device.endpointId, pin)
+                                    },
+                                    enabled = !isConnected.value,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    Text("连接: ${device.name}")
+                                }
+                            }
+                        }
                     }
                 }
             }
