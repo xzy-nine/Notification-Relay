@@ -58,6 +58,7 @@ object DeviceConnectionManager {
         val name: String,
         val host: String,
         val port: Int,
+        val uuid: String,
         val pubKey: String,
         val pin: String
     )
@@ -71,20 +72,16 @@ object DeviceConnectionManager {
         registerLocalService()
         discoverServices()
     }
-    /** 注册本地 mDNS 服务，广播设备名、公钥、PIN */
+    /** 注册本地 mDNS 服务，广播设备名 */
     private fun registerLocalService() {
         val ctx = context ?: return
-        val keyPair = generateKeyPair()
-        this.keyPair = keyPair
-        val pubKeyStr = android.util.Base64.encodeToString(keyPair.public.encoded, android.util.Base64.NO_WRAP)
-        val pinCode = (100000..999999).random().toString()
-        pin = pinCode
+        val uuid = getDeviceUUID(ctx)
         val serviceInfo = android.net.nsd.NsdServiceInfo().apply {
             serviceName = getDeviceName(ctx)
             serviceType = SERVICE_TYPE
             port = 8080 // 占位，实际应为 WebSocket 服务端口
-            setAttribute("pubKey", pubKeyStr)
-            setAttribute("pin", pinCode)
+            setAttribute("uuid", uuid)
+            // 不广播公钥和PIN，防止中间人攻击
         }
         nsdManager?.registerService(serviceInfo, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, object : android.net.nsd.NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: android.net.nsd.NsdServiceInfo) {
@@ -105,26 +102,39 @@ object DeviceConnectionManager {
                         val name = resolved.serviceName
                         val host = resolved.host.hostAddress ?: ""
                         val port = resolved.port
-                        // Android 官方 API 没有 getAttribute/txtRecords，API 33+ 可用 getAttributes
-                        val (pubKey, pinCode) = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                            val attr = resolved.attributes
-                            val pk = attr["pubKey"]?.toString() ?: ""
-                            val pin = attr["pin"]?.toString() ?: ""
-                            pk to pin
-                        } else {
-                            "" to ""
-                        }
-                        // 过滤自身
-                        if (name != getDeviceName(context!!)) {
-                            discoveredDevices.add(DiscoveredDevice(name, host, port, pubKey, pinCode))
-                            // 被发现方弹窗显示 PIN
-                            onPinReceived?.invoke(pinCode)
+                        val attr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) resolved.attributes else emptyMap<String, Any>()
+                        val uuidRaw = attr["uuid"]
+                        val uuid = when (uuidRaw) {
+                            is ByteArray -> try { String(uuidRaw, Charsets.UTF_8) } catch (_: Exception) { "" }
+                            is String -> uuidRaw
+                            else -> uuidRaw?.toString() ?: ""
+                        }.trim()
+                        val selfUuid = getDeviceUUID(context!!)
+                        val selfHost = try { java.net.InetAddress.getLocalHost().hostAddress } catch (_: Exception) { null }
+                        val selfPort = 8080 // 与注册服务端口保持一致
+                        android.util.Log.d("DeviceDiscovery", "发现设备: name=$name, host=$host, port=$port, uuid=$uuid, selfUuid=$selfUuid, selfHost=$selfHost, selfPort=$selfPort")
+                        // 用uuid过滤掉自己，若uuid异常则用host/port过滤
+                        val isSelf = (uuid.isNotBlank() && uuid == selfUuid) ||
+                            (selfHost != null && host == selfHost && port == selfPort)
+                        if (!isSelf && uuid.isNotBlank()) {
+                            discoveredDevices.add(DiscoveredDevice(name, host, port, uuid, "", ""))
                         }
                     }
                     override fun onResolveFailed(serviceInfo: android.net.nsd.NsdServiceInfo, errorCode: Int) {}
                 })
             }
-            override fun onServiceLost(serviceInfo: android.net.nsd.NsdServiceInfo) {}
+            override fun onServiceLost(serviceInfo: android.net.nsd.NsdServiceInfo) {
+                val attr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) serviceInfo.attributes else emptyMap<String, Any>()
+                val uuidRaw = attr["uuid"]
+                val lostUuid = when (uuidRaw) {
+                    is ByteArray -> try { String(uuidRaw, Charsets.UTF_8) } catch (_: Exception) { "" }
+                    is String -> uuidRaw
+                    else -> uuidRaw?.toString() ?: ""
+                }.trim()
+                if (lostUuid.isNotBlank()) {
+                    discoveredDevices.removeAll { it.uuid == lostUuid }
+                }
+            }
             override fun onDiscoveryStarted(serviceType: String) {}
             override fun onDiscoveryStopped(serviceType: String) {}
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
@@ -144,8 +154,12 @@ object DeviceConnectionManager {
         startForegroundService()
         connectWebSocket()
     }
-    /** 获取已发现设备列表 */
-    fun getDiscoveredDevices(): List<DiscoveredDevice> = discoveredDevices.toList()
+    /** 获取已发现设备列表（过滤掉本机设备） */
+    fun getDiscoveredDevices(): List<DiscoveredDevice> {
+        val ctx = context ?: return emptyList()
+        val selfUuid = getDeviceUUID(ctx)
+        return discoveredDevices.filter { it.uuid != selfUuid }
+    }
 
     /** 设置被发现方 PIN 弹窗回调 */
     fun setOnPinReceived(callback: (String) -> Unit) {

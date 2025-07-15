@@ -129,30 +129,34 @@ fun DeviceForwardScreen() {
                             )
                         } else {
                             discoveredDevices.value.forEach { device ->
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .background(colorScheme.surfaceContainer, shape = RoundedCornerShape(6.dp))
+                                        .padding(10.dp)
                                         .clickable {
                                             showPinDialog.value = true
                                             pin = device.pin
                                         }
-                                        .padding(vertical = 8.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = "名称: ${device.name}", style = textStyles.body2)
-                                        Text(text = "PIN: ${device.pin}", style = textStyles.body2.copy(color = colorScheme.outline))
-                                    }
+                                    Text(text = "名称: ${device.name}", style = textStyles.body2)
+                                    Text(text = "主机: ${device.host}", style = textStyles.body2)
+                                    Text(text = "端口: ${device.port}", style = textStyles.body2)
+                                    Text(text = "UUID: ${device.uuid}", style = textStyles.body2.copy(color = colorScheme.outline))
+                                    Text(text = "PIN: ${device.pin}", style = textStyles.body2.copy(color = colorScheme.outline))
+                                    Text(text = "公钥: ${device.pubKey}", style = textStyles.body2.copy(color = colorScheme.outline))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Button(
                                         onClick = {
                                             showPinDialog.value = true
                                             pin = device.pin
                                         },
-                                        modifier = Modifier
-                                            .height(36.dp)
+                                        modifier = Modifier.height(36.dp)
                                     ) {
                                         Text("连接")
                                     }
                                 }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
                     }
