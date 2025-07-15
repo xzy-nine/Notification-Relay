@@ -137,9 +137,10 @@ object NotificationRepository {
      * 兼容 Bundle 字段类型，支持 CharSequence/SpannableString 自动转 String
      */
     fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
-        val value = bundle.getString(key) ?: bundle.getCharSequence(key)
+        val value = bundle.get(key)
         return when (value) {
             is String -> value
+            is android.text.SpannableString -> value.toString()
             is CharSequence -> value.toString()
             else -> null
         }
