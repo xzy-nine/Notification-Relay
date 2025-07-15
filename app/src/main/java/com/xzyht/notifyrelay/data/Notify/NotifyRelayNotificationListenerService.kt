@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.data
+package com.xzyht.notifyrelay.data.Notify
 
 import android.app.Notification
 // android.app.ServiceInfo 仅在 API 33+，此处直接用常量值 1073741824（FOREGROUND_SERVICE_TYPE_SPECIAL_USE）

@@ -1,6 +1,6 @@
 package com.xzyht.notifyrelay
 
-import com.xzyht.notifyrelay.data.NotificationRepository
+import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 import com.xzyht.notifyrelay.data.NotificationRecord
 import android.os.Bundle
 import androidx.compose.foundation.Image

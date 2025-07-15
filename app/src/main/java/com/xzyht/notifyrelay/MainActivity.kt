@@ -1,6 +1,6 @@
 package com.xzyht.notifyrelay
 
-import com.xzyht.notifyrelay.data.NotificationRepository
+import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 
 import android.os.Bundle
 import androidx.compose.ui.viewinterop.AndroidView
@@ -77,7 +77,7 @@ class MainActivity : FragmentActivity() {
 
     // 检查通知监听权限
     private fun isNotificationListenerEnabled(): Boolean {
-        val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.data.NotifyRelayNotificationListenerService")
+        val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService")
         val flat = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
         return flat?.contains(cn.flattenToString()) == true
     }
