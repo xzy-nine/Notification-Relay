@@ -7,11 +7,26 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import androidx.compose.foundation.background
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalContext
+// Miuix 主题库优先，部分基础布局用 Compose 官方包
+import com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager
 
 class DeviceForwardFragment : Fragment() {
     override fun onCreateView(
@@ -21,39 +36,136 @@ class DeviceForwardFragment : Fragment() {
     ): View {
         return ComposeView(requireContext()).apply {
             setContent {
-                val textStyles = MiuixTheme.textStyles
-                val colorScheme = MiuixTheme.colorScheme
-                Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(colorScheme.background)
-                            .padding(16.dp)
+                DeviceForwardScreen()
+            }
+        }
+}
+
+@Composable
+fun DeviceForwardScreen() {
+    val textStyles = MiuixTheme.textStyles
+    val colorScheme = MiuixTheme.colorScheme
+    var pin by remember { mutableStateOf("") }
+    val isConnected = remember { mutableStateOf(false) }
+    val showPinDialog = remember { mutableStateOf(false) }
+    val deviceName = DeviceConnectionManager.getDeviceName(LocalContext.current)
+    val deviceUUID = DeviceConnectionManager.getDeviceUUID(LocalContext.current)
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(title = "设备与转发设置")
+        },
+        content = { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colorScheme.background)
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            ) {
+                // PIN弹窗触发按钮
+                Button(
+                    onClick = { showPinDialog.value = true },
+                    enabled = !isConnected.value,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("连接设备")
+                }
+                if (isConnected.value) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            DeviceConnectionManager.stopConnection()
+                            isConnected.value = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primary)
                     ) {
+                        Text("断开连接")
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                // 连接状态与本机信息
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
                         Text(
-                            text = "设备与转发设置",
-                            style = textStyles.title2.copy(color = colorScheme.onBackground)
+                            text = if (isConnected.value) "已连接" else "未连接",
+                            style = textStyles.body1.copy(color = if (isConnected.value) colorScheme.primary else colorScheme.outline)
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(colorScheme.surfaceContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                                .padding(16.dp)
-                        ) {
-                            Text(
-                                text = "设备发现、连接、转发规则、黑名单管理等功能待实现",
-                                style = textStyles.body2.copy(color = colorScheme.outline)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "暂无设备",
-                            style = textStyles.body1.copy(color = colorScheme.onBackground)
+                            text = "本机名称: $deviceName",
+                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                        )
+                        Text(
+                            text = "本机UUID: $deviceUUID",
+                            style = textStyles.body2.copy(color = colorScheme.outline)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                // 已发现设备列表（占位）
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "已发现设备（占位）",
+                            style = textStyles.body2.copy(color = colorScheme.onBackground)
+                        )
+                        Text(
+                            text = "暂无设备发现功能，后续扩展",
+                            style = textStyles.body2.copy(color = colorScheme.outline)
                         )
                     }
                 }
             }
+            // PIN弹窗
+            if (showPinDialog.value) {
+                SuperDialog(
+                    show = showPinDialog,
+                    title = "输入PIN码",
+                    onDismissRequest = { showPinDialog.value = false }
+                ) {
+                    Column {
+                        TextField(
+                            value = pin,
+                            onValueChange = { pin = it },
+                            label = "输入PIN码",
+                            useLabelAsPlaceholder = true,
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                DeviceConnectionManager.startConnectionService(pin)
+                                isConnected.value = true
+                                showPinDialog.value = false
+                            },
+                            enabled = pin.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("确认连接")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { showPinDialog.value = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("取消")
+                        }
+                    }
+                }
+            }
         }
+    )
     }
 }
