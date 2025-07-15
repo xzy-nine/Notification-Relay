@@ -12,8 +12,11 @@ import androidx.core.app.NotificationCompat
 import com.xzyht.notifyrelay.data.Notify.NotificationRecord
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 import kotlinx.coroutines.*
-import com.google.android.gms.nearby.Nearby
-import com.google.android.gms.nearby.connection.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import okio.ByteString
 import java.io.File
 import java.security.KeyPair
@@ -32,12 +35,9 @@ import com.google.gson.Gson
 object DeviceConnectionManager {
     private val gson = Gson()
     private val deviceInfoFileName = "device_info.json"
-    private var connectionsClient: ConnectionsClient? = null
-    private var advertising = false
-    private var discovering = false
-    private var connectedEndpointId: String? = null
-    private var connectionLifecycleCallback: ConnectionLifecycleCallback? = null
-    private var payloadCallback: PayloadCallback? = null
+    private val wsUrl = "ws://192.168.1.100:8080/notifyrelay" // 占位，实际应为发现的设备地址
+    private var ws: WebSocket? = null
+    private var wsJob: Job? = null
     private var context: Context? = null
     private var keyPair: KeyPair? = null
     private var remotePublicKey: PublicKey? = null
@@ -51,116 +51,63 @@ object DeviceConnectionManager {
     /** 初始化连接管理器 */
     fun init(ctx: Context) {
         context = ctx.applicationContext
-        connectionsClient = Nearby.getConnectionsClient(ctx)
         loadDeviceInfo()
     }
 
-    /** 启动设备发现与连接服务（前台） */
+    /** 启动 WebSocket 长连接服务（前台） */
     fun startConnectionService(pinInput: String) {
         pin = pinInput
         if (context == null) return
         startForegroundService()
-        startAdvertising()
-        startDiscovery()
+        connectWebSocket()
     }
 
     /** 关闭连接 */
     fun stopConnection() {
-        connectionsClient?.stopAdvertising()
-        connectionsClient?.stopDiscovery()
-        connectedEndpointId?.let { connectionsClient?.disconnectFromEndpoint(it) }
-        advertising = false
-        discovering = false
+        wsJob?.cancel()
+        ws?.close(1000, "Manual disconnect")
         isConnected = false
         stopForegroundService()
     }
 
-    /** Nearby 广播自身，允许其他设备发现 */
-    private fun startAdvertising() {
-        if (advertising) return
+    /** WebSocket 连接与心跳 */
+    private fun connectWebSocket() {
         val ctx = context ?: return
-        val deviceName = getDeviceName(ctx)
-        connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
-            override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-                // 自动接受连接
-                connectionsClient?.acceptConnection(endpointId, getPayloadCallback())
+        val client = OkHttpClient.Builder()
+            .pingInterval(HEARTBEAT_INTERVAL, TimeUnit.MILLISECONDS)
+            .build()
+        val request = Request.Builder().url(wsUrl).build()
+        ws = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                isConnected = true
+                lastHeartbeat = System.currentTimeMillis()
+                // 交换密钥对
+                keyPair = generateKeyPair()
+                val pubKeyStr = keyPair?.public?.encoded?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+                val handshake = mapOf("type" to "handshake", "pin" to pin, "pubKey" to pubKeyStr)
+                webSocket.send(gson.toJson(handshake))
             }
-            override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-                if (result.status.isSuccess) {
-                    isConnected = true
-                    connectedEndpointId = endpointId
-                    lastHeartbeat = System.currentTimeMillis()
-                    keyPair = generateKeyPair()
-                    val pubKeyStr = keyPair?.public?.encoded?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
-                    val handshake = mapOf("type" to "handshake", "pin" to pin, "pubKey" to pubKeyStr)
-                    sendPayload(endpointId, gson.toJson(handshake))
-                }
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                handleMessage(text)
             }
-            override fun onDisconnected(endpointId: String) {
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                // 仅支持文本 JSON
+            }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 isConnected = false
-                connectedEndpointId = null
             }
-        }
-        connectionsClient?.startAdvertising(
-            deviceName,
-            "com.xzyht.notifyrelay",
-            connectionLifecycleCallback!!,
-            AdvertisingOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
-        )?.addOnSuccessListener { advertising = true }
-         ?.addOnFailureListener { advertising = false }
-    }
-
-    /** Nearby 发现其他设备 */
-    private fun startDiscovery() {
-        if (discovering) return
-        val ctx = context ?: return
-        connectionsClient?.startDiscovery(
-            "com.xzyht.notifyrelay",
-            object : EndpointDiscoveryCallback() {
-                override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-                    // 自动请求连接
-                    connectionsClient?.requestConnection(getDeviceName(ctx), endpointId, getConnectionLifecycleCallback())
-                }
-                override fun onEndpointLost(endpointId: String) {}
-            },
-            DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build()
-        )?.addOnSuccessListener { discovering = true }
-         ?.addOnFailureListener { discovering = false }
-    }
-
-    private fun getConnectionLifecycleCallback(): ConnectionLifecycleCallback {
-        return connectionLifecycleCallback ?: object : ConnectionLifecycleCallback() {
-            override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-                connectionsClient?.acceptConnection(endpointId, getPayloadCallback())
-            }
-            override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-                if (result.status.isSuccess) {
-                    isConnected = true
-                    connectedEndpointId = endpointId
-                }
-            }
-            override fun onDisconnected(endpointId: String) {
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 isConnected = false
-                connectedEndpointId = null
+            }
+        })
+        // 心跳协程
+        wsJob?.cancel()
+        wsJob = CoroutineScope(Dispatchers.Default).launch {
+            while (isConnected) {
+                delay(HEARTBEAT_INTERVAL)
+                ws?.send(gson.toJson(mapOf("type" to "heartbeat")))
             }
         }
-    }
-
-    private fun getPayloadCallback(): PayloadCallback {
-        return payloadCallback ?: object : PayloadCallback() {
-            override fun onPayloadReceived(endpointId: String, payload: Payload) {
-                if (payload.type == Payload.Type.BYTES) {
-                    val text = payload.asBytes()?.toString(Charsets.UTF_8) ?: return
-                    handleMessage(text)
-                }
-            }
-            override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {}
-        }
-    }
-
-    /** 发送数据到远程设备 */
-    private fun sendPayload(endpointId: String, text: String) {
-        connectionsClient?.sendPayload(endpointId, Payload.fromBytes(text.toByteArray()))
     }
 
     /** 处理收到的消息 */
@@ -193,11 +140,11 @@ object DeviceConnectionManager {
 
     /** 发送通知到远程设备 */
     fun sendNotification(record: NotificationRecord) {
-        if (!isConnected || remotePublicKey == null || connectedEndpointId == null) return
+        if (!isConnected || remotePublicKey == null) return
         val json = gson.toJson(record)
         val encrypted = encryptWithPublicKey(json, remotePublicKey!!)
         val msg = mapOf("type" to "notification", "data" to encrypted)
-        sendPayload(connectedEndpointId!!, gson.toJson(msg))
+        ws?.send(gson.toJson(msg))
     }
 
     /** 生成密钥对 */
