@@ -1,7 +1,7 @@
 package com.xzyht.notifyrelay
 
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
-import com.xzyht.notifyrelay.data.NotificationRecord
+import com.xzyht.notifyrelay.data.Notify.NotificationRecord
 import android.os.Bundle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -40,7 +40,7 @@ object ToastDebounce {
 }
 
 @Composable
-fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
+fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     val context = LocalContext.current
@@ -347,7 +347,7 @@ fun NotificationHistoryScreen() {
                                 if (list.size <= 2) {
                                     list.forEach { record ->
                                         val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                                        NotificationCard(record, appName, appIcon)
+                                        NotificationCard(record as com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName, appIcon)
                                     }
                                 } else {
                                     val latest = list.maxByOrNull { it.time }
@@ -436,7 +436,7 @@ fun NotificationHistoryScreen() {
                                             } else {
                                                 list.sortedByDescending { it.time }.forEach { record ->
                                                     val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                                                    NotificationCard(record, appName, appIcon)
+                                                    NotificationCard(record as com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName, appIcon)
                                                 }
                                             }
                                         }
@@ -526,7 +526,7 @@ fun NotificationHistoryScreen() {
                             if (list.size <= 2) {
                                 list.forEach { record ->
                                     val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                                    NotificationCard(record, appName, appIcon)
+                                    NotificationCard(record as com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName, appIcon)
                                 }
                             } else {
                                 val latest = list.maxByOrNull { it.time }
@@ -615,7 +615,7 @@ fun NotificationHistoryScreen() {
                                         } else {
                                             list.sortedByDescending { it.time }.forEach { record ->
                                                 val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                                                NotificationCard(record, appName, appIcon)
+                                                NotificationCard(record as com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName, appIcon)
                                             }
                                         }
                                     }
