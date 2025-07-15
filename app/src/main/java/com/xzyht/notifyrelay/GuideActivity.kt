@@ -207,36 +207,40 @@ fun GuideScreen(onContinue: () -> Unit) {
                             enabled = true
                         )
                     }
-                    // 可选权限：临时通知分组悬浮通知
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("临时通知分组悬浮通知 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
+                        Text("临时通知分组设置 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = hasFloatNotification,
-                            onCheckedChange = {
+                        Button(
+                            onClick = {
                                 showToast("请在系统设置-通知-通知分组中管理本应用的通知分组")
                                 val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                                 intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                                 context.startActivity(intent)
                             },
-                            enabled = true
-                        )
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 32.dp)
+                                .padding(horizontal = 8.dp)
+                        ) {
+                            Text("管理通知分组", fontSize = 14.sp)
+                        }
                     }
-                    // 可选权限：开发者选项-停用屏幕共享保护
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("开发者选项-停用屏幕共享保护 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = hasDevScreenShareProtectOff,
-                            onCheckedChange = {
+                        Button(
+                            onClick = {
                                 showToast("请在开发者选项中启用'停用屏幕共享保护'以获得更好体验")
                                 val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
                                 context.startActivity(intent)
                             },
-                            enabled = true
-                        )
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 32.dp)
+                                .padding(horizontal = 8.dp)
+                        ) {
+                            Text("设置屏幕共享保护", fontSize = 14.sp)
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
