@@ -126,10 +126,11 @@ object DeviceConnectionManager {
             "notification" -> {
                 // 收到通知转发
                 val recordJson = msg["data"] as? String ?: return
+                val deviceName = msg["deviceName"] as? String ?: "远程设备"
                 val record = gson.fromJson(recordJson, NotificationRecord::class.java)
                 NotificationRepository.notifications.removeAll { it.key == record.key }
-                NotificationRepository.notifications.add(0, record.copy(device = "远程"))
-            NotificationRepository.syncToCache(ctx) // Ensure this method is public
+                NotificationRepository.notifications.add(0, record.copy(device = deviceName))
+                NotificationRepository.syncToCache(ctx)
             }
             "heartbeat" -> {
                 lastHeartbeat = System.currentTimeMillis()

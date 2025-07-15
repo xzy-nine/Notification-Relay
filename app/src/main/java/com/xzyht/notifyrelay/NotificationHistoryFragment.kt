@@ -142,6 +142,19 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     text = appName,
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                if (record.device.isNotBlank()) {
+                    Card(
+                        modifier = Modifier.height(20.dp),
+                        color = if (record.device != NotificationRepository.getDeviceName(context)) cardColorScheme.primaryContainer else cardColorScheme.surfaceContainerLow
+                    ) {
+                        top.yukonga.miuix.kmp.basic.Text(
+                            text = record.device,
+                            style = notificationTextStyles.labelSmall.copy(color = cardColorScheme.onPrimaryContainer),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
             top.yukonga.miuix.kmp.basic.Text(
@@ -302,6 +315,7 @@ fun NotificationHistoryScreen() {
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     deviceList.forEach { device ->
+                        val isRemote = device != NotificationRepository.getDeviceName(context)
                         Button(
                             onClick = {
                                 selectedDevice = device
@@ -311,10 +325,16 @@ fun NotificationHistoryScreen() {
                             else ButtonDefaults.buttonColors(),
                             enabled = true
                         ) {
-                            top.yukonga.miuix.kmp.basic.Text(
-                                text = device,
-                                style = textStyles.body2.copy(color = colorScheme.onBackground)
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isRemote) {
+                                    Icon(MiuixIcons.Device, contentDescription = "远程设备", tint = colorScheme.primary)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = device,
+                                    style = textStyles.body2.copy(color = if (isRemote) colorScheme.primary else colorScheme.onBackground)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
