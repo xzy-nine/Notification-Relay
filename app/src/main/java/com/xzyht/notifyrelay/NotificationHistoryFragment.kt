@@ -80,8 +80,8 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     // 创建通知渠道（兼容API 26+）
                     if (android.os.Build.VERSION.SDK_INT >= 26) {
                         if (notificationManager.getNotificationChannel(channelId) == null) {
-                            val channel = android.app.NotificationChannel(channelId, "临时通知", android.app.NotificationManager.IMPORTANCE_HIGH)
-                            channel.description = "NotifyRelay临时悬浮通知"
+                            val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH)
+                            channel.description = "应用内跳转指示通知"
                             channel.enableLights(true)
                             channel.lightColor = android.graphics.Color.BLUE
                             channel.enableVibration(false)
@@ -248,7 +248,7 @@ fun NotificationHistoryScreen() {
     val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
     val enabledListeners = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
     val listenerEnabled = enabledListeners?.contains(context.packageName) == true
-    android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
+    // android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
     val grouped = notifications.groupBy { it.packageName }
     val groupList = grouped.entries.map { (_, list) ->
         list.sortedByDescending { it.time }
