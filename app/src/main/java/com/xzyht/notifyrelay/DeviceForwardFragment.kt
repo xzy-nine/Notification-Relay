@@ -49,9 +49,27 @@ fun DeviceForwardScreen() {
     var pin by remember { mutableStateOf("") }
     val isConnected = remember { mutableStateOf(false) }
     val showPinDialog = remember { mutableStateOf(false) }
+    val showRemotePinDialog = remember { mutableStateOf(false) }
+    var remotePin by remember { mutableStateOf("") }
     val context = LocalContext.current
     var deviceName by remember { mutableStateOf(DeviceConnectionManager.getDeviceName(context)) }
     val deviceUUID = remember { DeviceConnectionManager.getDeviceUUID(context) }
+    val discoveredDevices = remember { mutableStateOf(listOf<com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager.DiscoveredDevice>()) }
+
+    // 初始化设备发现与 PIN 弹窗回调
+    LaunchedEffect(Unit) {
+        DeviceConnectionManager.init(context) { pinCode ->
+            remotePin = pinCode
+            showRemotePinDialog.value = true
+        }
+    }
+    // 定时刷新已发现设备列表
+    LaunchedEffect(isConnected.value) {
+        while (!isConnected.value) {
+            discoveredDevices.value = DeviceConnectionManager.getDiscoveredDevices()
+            kotlinx.coroutines.delay(2000)
+        }
+    }
     Scaffold(
         topBar = {
             SmallTopAppBar(title = "设备与转发设置")
@@ -66,26 +84,18 @@ fun DeviceForwardScreen() {
             ) {
                 // PIN弹窗触发按钮
                 Button(
-                    onClick = { showPinDialog.value = true },
-                    enabled = !isConnected.value,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("连接设备")
-                }
-                if (isConnected.value) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            DeviceConnectionManager.stopConnection()
-                            isConnected.value = false
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primary)
-                    ) {
-                        Text("断开连接")
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+    Scaffold(
+        topBar = {
+            SmallTopAppBar(title = "设备与转发设置")
+        },
+        content = { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colorScheme.background)
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            ) {
                 // 连接状态与本机信息
                 Box(
                     modifier = Modifier
@@ -114,7 +124,7 @@ fun DeviceForwardScreen() {
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                // 已发现设备列表（占位）
+                // 已发现设备列表
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,17 +133,59 @@ fun DeviceForwardScreen() {
                 ) {
                     Column {
                         Text(
-                            text = "已发现设备（占位）",
+                            text = "已发现设备",
                             style = textStyles.body2.copy(color = colorScheme.onBackground)
                         )
-                        Text(
-                            text = "暂无设备发现功能，后续扩展",
-                            style = textStyles.body2.copy(color = colorScheme.outline)
-                        )
+                        if (discoveredDevices.value.isEmpty()) {
+                            Text(
+                                text = "暂无设备发现",
+                                style = textStyles.body2.copy(color = colorScheme.outline)
+                            )
+                        } else {
+                            discoveredDevices.value.forEach { device ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            showPinDialog.value = true
+                                            pin = device.pin
+                                        }
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = "名称: ${device.name}", style = textStyles.body2)
+                                        Text(text = "PIN: ${device.pin}", style = textStyles.body2.copy(color = colorScheme.outline))
+                                    }
+                                    Button(
+                                        onClick = {
+                                            showPinDialog.value = true
+                                            pin = device.pin
+                                        },
+                                        modifier = Modifier
+                                            .height(36.dp)
+                                    ) {
+                                        Text("连接")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                if (isConnected.value) {
+                    Button(
+                        onClick = {
+                            DeviceConnectionManager.stopConnection()
+                            isConnected.value = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primary)
+                    ) {
+                        Text("断开连接")
                     }
                 }
             }
-            // PIN弹窗
+            // 连接方输入 PIN 弹窗
             if (showPinDialog.value) {
                 SuperDialog(
                     show = showPinDialog,
@@ -152,8 +204,11 @@ fun DeviceForwardScreen() {
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
-                                DeviceConnectionManager.startConnectionService(pin)
-                                isConnected.value = true
+                                val device = discoveredDevices.value.find { it.pin == pin }
+                                if (device != null) {
+                                    DeviceConnectionManager.startConnectionService(pin, device)
+                                    isConnected.value = true
+                                }
                                 showPinDialog.value = false
                             },
                             enabled = pin.isNotBlank(),
@@ -171,7 +226,24 @@ fun DeviceForwardScreen() {
                     }
                 }
             }
+            // 被发现方弹窗显示 PIN
+            if (showRemotePinDialog.value) {
+                SuperDialog(
+                    show = showRemotePinDialog,
+                    title = "被发现方PIN码",
+                    onDismissRequest = { showRemotePinDialog.value = false }
+                ) {
+                    Column {
+                        Text(text = "请告知连接方此PIN码: $remotePin", style = textStyles.body1)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { showRemotePinDialog.value = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("关闭")
+                        }
+                    }
+                }
+            }
         }
     )
-    }
-}
