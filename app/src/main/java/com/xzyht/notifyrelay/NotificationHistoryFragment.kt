@@ -134,19 +134,7 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                if (record.device.isNotBlank()) {
-                    val currentDevice = com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager.getDeviceName(context)
-                    Card(
-                        modifier = Modifier.height(20.dp),
-                        color = if (record.device != currentDevice) cardColorScheme.primaryContainer else cardColorScheme.surfaceContainer
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Text(
-                            text = record.device,
-                            style = notificationTextStyles.body2.copy(color = cardColorScheme.onPrimaryContainer),
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                }
+                // ...设备名标识已移除...
             }
             Spacer(modifier = Modifier.height(4.dp))
             top.yukonga.miuix.kmp.basic.Text(
@@ -234,7 +222,6 @@ fun NotificationHistoryScreen() {
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
     // 设置系统状态栏字体颜色和背景色
-    @android.annotation.SuppressLint("ObsoleteSdkInt")
     LaunchedEffect(isDarkTheme) {
         val window = (context as? android.app.Activity)?.window
         window?.let {
@@ -242,6 +229,9 @@ fun NotificationHistoryScreen() {
             // 统一使用 WindowInsetsControllerCompat 设置状态栏字体颜色
             androidx.core.view.WindowInsetsControllerCompat(it, decorView).isAppearanceLightStatusBars = !isDarkTheme
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                // statusBarColor 已废弃，推荐使用 WindowInsetsControllerCompat 控制外观
+                // 但 Miuix 主题要求背景色一致，暂保留设置
+                @Suppress("DEPRECATION")
                 it.statusBarColor = colorScheme.background.toArgb()
             }
         }
@@ -249,10 +239,6 @@ fun NotificationHistoryScreen() {
     LaunchedEffect(Unit) {
         NotificationRepository.init(context)
     }
-    val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
-    val enabledListeners = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-    val listenerEnabled = enabledListeners?.contains(context.packageName) == true
-    // android.util.Log.i("NotifyRelay", "NotificationHistoryScreen 权限状态: POST_NOTIFICATIONS=$notificationPermission, ListenerEnabled=$listenerEnabled")
     val grouped = notifications.groupBy { it.packageName }
     val groupList = grouped.entries.map { (_, list) ->
         list.sortedByDescending { it.time }
@@ -270,7 +256,6 @@ fun NotificationHistoryScreen() {
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    // ...existing code...
     val clearHistory: () -> Unit = {
         try {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
@@ -307,7 +292,7 @@ fun NotificationHistoryScreen() {
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
                                 .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
-                            color = colorScheme.surfaceContainer,
+                            color = colorScheme.surfaceContainerHighest,
                             cornerRadius = 12.dp
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -348,7 +333,6 @@ fun NotificationHistoryScreen() {
                                 val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
                                 if (!expanded) {
                                     showList.forEachIndexed { idx, record ->
-                                        val (appNameItem, appIconItem) = getCachedAppInfo(record.packageName)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
@@ -384,8 +368,8 @@ fun NotificationHistoryScreen() {
                                     }
                                 } else {
                                     list.sortedByDescending { it.time }.forEach { record ->
-                                        val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                                        NotificationCard(record, appName, appIcon)
+                                        val (appName1, appIcon1) = getCachedAppInfo(record.packageName)
+                                        NotificationCard(record, appName1, appIcon1)
                                     }
                                 }
                             }
