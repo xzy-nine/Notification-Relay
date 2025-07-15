@@ -64,6 +64,9 @@ dependencies {
     implementation("androidx.datastore:datastore:1.0.0")
     // Gson 用于通知历史 JSON 文件读写
     implementation("com.google.code.gson:gson:2.10.1")
+    // OkHttp & Okio 用于 WebSocket 和 IO
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okio:okio:3.7.0")
     implementation(project(":miuix-main:miuix"))
 }
 

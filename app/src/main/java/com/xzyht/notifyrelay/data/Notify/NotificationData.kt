@@ -190,7 +190,7 @@ object NotificationRepository {
     /**
      * 将当前通知列表同步到本地缓存
      */
-    private fun syncToCache(context: Context) {
+    internal fun syncToCache(context: Context) {
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val entities = notifications.map {
