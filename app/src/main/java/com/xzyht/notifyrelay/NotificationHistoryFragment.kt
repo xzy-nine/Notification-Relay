@@ -401,8 +401,8 @@ fun NotificationHistoryScreen() {
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     deviceList.forEach { device ->
-                        val currentDevice = com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager.getDeviceName(context)
-                        val isRemote = device != currentDevice
+                        // 直接判断是否为当前选中设备，无需DeviceConnectionManager
+                        val isRemote = selectedDevice != device
                         Button(
                             onClick = {
                                 selectedDevice = device
