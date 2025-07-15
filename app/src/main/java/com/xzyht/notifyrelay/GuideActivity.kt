@@ -81,6 +81,7 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasFloatNotification by remember { mutableStateOf(false) }
     var hasDevScreenShareProtectOff by remember { mutableStateOf(false) }
 
+    var hasBluetoothConnect by remember { mutableStateOf(false) }
     // Toast工具
     fun showToast(msg: String) {
         android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
@@ -134,6 +135,10 @@ fun GuideScreen(onContinue: () -> Unit) {
             value == 1
         } catch (_: Exception) { false }
         permissionsGranted = hasNotification && canQueryApps && hasPost
+        // 检查蓝牙连接权限（Android 12+）
+        hasBluetoothConnect = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else true
         showCheck = permissionsGranted
     }
 
@@ -180,7 +185,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         Switch(
                             checked = canQueryApps,
                             onCheckedChange = {
-                                showToast("请在应用信息页面的权限管理中允许访问应用列表/使用情况")
+                                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                                 intent.data = android.net.Uri.parse("package:" + context.packageName)
                                 context.startActivity(intent)
@@ -202,6 +207,25 @@ fun GuideScreen(onContinue: () -> Unit) {
                                     )
                                 } else {
                                     showToast("请在系统设置中开启通知权限")
+                                }
+                            },
+                            enabled = true
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("蓝牙连接权限 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = hasBluetoothConnect,
+                            onCheckedChange = {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                    (context as? Activity)?.requestPermissions(
+                                        arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), 1001
+                                    )
+                                    showToast("开启后可优化设备发现速度，并以设备实际名称而非型号作为设备名")
+                                } else {
+                                    showToast("当前系统无需蓝牙连接权限")
                                 }
                             },
                             enabled = true
@@ -249,16 +273,17 @@ fun GuideScreen(onContinue: () -> Unit) {
                         onContinue()
                     } else {
                         val missing = buildList {
-                            if (!hasNotification) add("通知访问权限")
-                            if (!canQueryApps) add("应用列表权限")
-                            if (!hasPost) add("通知发送权限")
+                            if (!hasNotification) add("获取通知访问权限")
+                            if (!canQueryApps) add("获取应用列表权限")
+                            if (!hasPost) add("获取通知发送权限")
+                            if (!hasBluetoothConnect) add("获取蓝牙连接权限")
                         }.joinToString(", ")
                         if (missing.isNotEmpty()) {
                             showToast("请先授权: $missing")
                         }
                     }
                 }) {
-                    Text(if (permissionsGranted) "进入应用" else "请先完成必要权限的授权")
+                    Text(if (permissionsGranted) "进入应用" else "请先完成必要权限授权")
                 }
             }
         }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.clickable
 // Miuix 主题库优先，部分基础布局用 Compose 官方包
 import com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager
 
@@ -48,8 +49,9 @@ fun DeviceForwardScreen() {
     var pin by remember { mutableStateOf("") }
     val isConnected = remember { mutableStateOf(false) }
     val showPinDialog = remember { mutableStateOf(false) }
-    val deviceName = DeviceConnectionManager.getDeviceName(LocalContext.current)
-    val deviceUUID = DeviceConnectionManager.getDeviceUUID(LocalContext.current)
+    val context = LocalContext.current
+    var deviceName by remember { mutableStateOf(DeviceConnectionManager.getDeviceName(context)) }
+    val deviceUUID = remember { DeviceConnectionManager.getDeviceUUID(context) }
     Scaffold(
         topBar = {
             SmallTopAppBar(title = "设备与转发设置")
@@ -90,6 +92,10 @@ fun DeviceForwardScreen() {
                         .fillMaxWidth()
                         .background(colorScheme.surfaceContainer, shape = RoundedCornerShape(8.dp))
                         .padding(16.dp)
+                        .clickable {
+                            val name = DeviceConnectionManager.getDeviceName(context)
+                            deviceName = name
+                        }
                 ) {
                     Column {
                         Text(

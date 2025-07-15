@@ -233,12 +233,57 @@ object DeviceConnectionManager {
 
     // 设备发现、连接、转发规则、黑名单管理等功能待实现
     // TODO: 设备发现与连接、转发规则、黑名单管理等功能占位
-    /** 获取设备名称，优先 Settings.Secure.DEVICE_NAME，兜底 Build.MODEL */
+    /** 获取设备名称，优先本机蓝牙名称，其次 Settings.Secure.DEVICE_NAME，兜底 Build.MODEL，并输出获取来源日志 */
     fun getDeviceName(ctx: Context): String {
-        val name = try {
-            android.provider.Settings.Secure.getString(ctx.contentResolver, "device_name")
-        } catch (_: Exception) { null }
-        return name ?: android.os.Build.MODEL ?: "Unknown"
+        var source = "Unknown"
+        var result: String? = null
+        // 优先获取蓝牙名称
+        val bluetoothName = try {
+            val adapterClass = Class.forName("android.bluetooth.BluetoothAdapter")
+            val getDefaultAdapter = adapterClass.getMethod("getDefaultAdapter")
+            val adapter = getDefaultAdapter.invoke(null)
+            if (adapter != null) {
+                val isEnabled = adapterClass.getMethod("isEnabled").invoke(adapter) as? Boolean ?: false
+                if (isEnabled) {
+                    val name = adapterClass.getMethod("getName").invoke(adapter) as? String
+                    if (!name.isNullOrBlank()) {
+                        source = "Bluetooth"
+                        result = name
+                        android.util.Log.d("DeviceName", "来源: $source, 名称: $name")
+                        return name
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            android.util.Log.d("DeviceName", "蓝牙名称获取异常: ${e.message}")
+            null
+        }
+        // 其次 Settings.Secure.DEVICE_NAME
+        val deviceName = try {
+            val name = android.provider.Settings.Secure.getString(ctx.contentResolver, "device_name")
+            if (!name.isNullOrBlank()) {
+                source = "System"
+                result = name
+                android.util.Log.d("DeviceName", "来源: $source, 名称: $name")
+            }
+            name
+        } catch (e: Exception) {
+            android.util.Log.d("DeviceName", "系统名称获取异常: ${e.message}")
+            null
+        }
+        if (!bluetoothName.isNullOrBlank()) {
+            source = "Bluetooth"
+            result = bluetoothName
+        } else if (!deviceName.isNullOrBlank()) {
+            source = "System"
+            result = deviceName
+        } else {
+            source = "Model"
+            result = android.os.Build.MODEL ?: "Unknown"
+        }
+        android.util.Log.d("DeviceName", "最终来源: $source, 名称: $result")
+        return result ?: "Unknown"
     }
 
     /** 获取设备唯一标识符（UUID），存储时不以名称或型号作为标识符 */
