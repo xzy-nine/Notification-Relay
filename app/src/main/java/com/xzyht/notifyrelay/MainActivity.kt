@@ -18,6 +18,9 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,11 +54,20 @@ class MainActivity : FragmentActivity() {
         }
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
+
         // 使用 Fragment 管理主页面和通知历史页面
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
             MiuixTheme(colors = colors) {
+                val window = this@MainActivity.window
+                val colorScheme = MiuixTheme.colorScheme
+                // 状态栏背景色与页面背景色完全一致（background）
+                SideEffect {
+                    window.statusBarColor = colorScheme.background.toArgb()
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    controller.isAppearanceLightStatusBars = !isDarkTheme
+                }
                 MainAppFragment()
             }
         }
@@ -86,6 +98,7 @@ fun MainAppFragment() {
         NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
     )
+    val colorScheme = MiuixTheme.colorScheme
     Scaffold(
         bottomBar = {
             NavigationBar(
@@ -93,11 +106,13 @@ fun MainAppFragment() {
                 selected = selectedTab,
                 onClick = { selectedTab = it }
             )
-        }
+        },
+        containerColor = colorScheme.background
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(colorScheme.background)
                 .padding(paddingValues)
         ) {
             when (selectedTab) {
@@ -111,30 +126,62 @@ fun MainAppFragment() {
 @Composable
 fun DeviceForwardScreen() {
     val textStyles = MiuixTheme.textStyles
-    top.yukonga.miuix.kmp.basic.Text(
-        text = "设备与转发设置页",
-        style = textStyles.body1
-    )
+    val colorScheme = MiuixTheme.colorScheme
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .padding(16.dp)
+        ) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "设备与转发设置",
+                style = textStyles.title2.copy(color = colorScheme.onBackground)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            // 设备列表与操作区（占位，后续补充实际内容）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colorScheme.surfaceContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                    .padding(16.dp)
+            ) {
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = "设备发现、连接、转发规则、黑名单管理等功能待实现",
+                    style = textStyles.body2.copy(color = colorScheme.outline)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            // 占位：暂无设备
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "暂无设备",
+                style = textStyles.body1.copy(color = colorScheme.onBackground)
+            )
+        }
+    }
 }
 
 @Composable
 fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
+    val colorScheme = MiuixTheme.colorScheme
     val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
     val fragmentTag = "NotificationHistoryFragment"
-    AndroidView(
-        factory = { context ->
-            val frameLayout = android.widget.FrameLayout(context)
-            frameLayout.id = fragmentContainerId
-            fragmentManager?.let { fm ->
-                // 每次都 replace，保证 fragment attach
-                fm.beginTransaction()
-                    .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
-                    .commitAllowingStateLoss()
-            }
-            frameLayout
-        },
-        update = { }
-    )
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    // 每次都 replace，保证 fragment attach
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
+    }
 }
 @Preview(showBackground = true)
 @Composable

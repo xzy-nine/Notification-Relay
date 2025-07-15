@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.*
@@ -212,25 +213,8 @@ class NotificationHistoryFragment : Fragment() {
 
 @Composable
 fun NotificationHistoryScreen() {
-    val context = LocalContext.current
-    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-    // 包名到应用名和图标的缓存
-    val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
-    // 设置系统状态栏字体颜色
-    LaunchedEffect(isDarkTheme) {
-        val window = (context as? android.app.Activity)?.window
-        window?.let {
-            val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
-            if (!isDarkTheme) {
-                controller.isAppearanceLightStatusBars = true
-            } else {
-                controller.isAppearanceLightStatusBars = false
-            }
-        }
-    }
-    LaunchedEffect(Unit) {
-        NotificationRepository.init(context)
-    }
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val deviceList = NotificationRepository.deviceList
     val notifications by remember(selectedDevice) {
@@ -240,8 +224,27 @@ fun NotificationHistoryScreen() {
                 .map { (_, list) -> list.maxByOrNull { it.time }!! }
         }
     }
-    val textStyles = MiuixTheme.textStyles
-    val colorScheme = MiuixTheme.colorScheme
+    val context = LocalContext.current
+    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    // 包名到应用名和图标的缓存
+    val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
+    // 设置系统状态栏字体颜色和背景色
+    LaunchedEffect(isDarkTheme) {
+        val window = (context as? android.app.Activity)?.window
+        window?.let {
+            val controller = androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
+            if (!isDarkTheme) {
+                controller.isAppearanceLightStatusBars = true
+            } else {
+                controller.isAppearanceLightStatusBars = false
+            }
+            // 设置状态栏背景色与页面主背景色一致
+            it.statusBarColor = colorScheme.background.toArgb()
+        }
+    }
+    LaunchedEffect(Unit) {
+        NotificationRepository.init(context)
+    }
     val notificationPermission = context.checkSelfPermission("android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
     val enabledListeners = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
     val listenerEnabled = enabledListeners?.contains(context.packageName) == true
@@ -290,7 +293,7 @@ fun NotificationHistoryScreen() {
                     modifier = Modifier
                         .fillMaxHeight()
                         .weight(1.5f)
-                        .background(colorScheme.surface)
+                        .background(colorScheme.background)
                         .padding(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 16.dp)
                 ) {
                     top.yukonga.miuix.kmp.basic.Text(
@@ -335,7 +338,7 @@ fun NotificationHistoryScreen() {
                     modifier = Modifier
                         .fillMaxHeight()
                         .weight(3.5f)
-                        .background(colorScheme.surface)
+                        .background(colorScheme.background)
                         .padding(start = 0.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
                 ) {
                     if (notifications.isNotEmpty()) {
