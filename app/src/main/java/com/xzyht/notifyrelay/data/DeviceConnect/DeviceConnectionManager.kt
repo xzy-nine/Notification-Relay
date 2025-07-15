@@ -41,7 +41,9 @@ object DeviceConnectionManager {
     private var context: Context? = null
     private var keyPair: KeyPair? = null
     private var remotePublicKey: PublicKey? = null
-    private var pin: String? = null
+    private var pin: String? = null // 本地生成的PIN
+    private var pinTimestamp: Long = 0L // PIN生成时间戳
+    private val PIN_TIMEOUT = 60_000L // 1分钟
     private var isConnected = false
     private var lastHeartbeat = 0L
     private val HEARTBEAT_INTERVAL = 10_000L // 10秒
@@ -69,6 +71,7 @@ object DeviceConnectionManager {
         onPinReceived = onPin
         loadDeviceInfo()
         nsdManager = ctx.getSystemService(Context.NSD_SERVICE) as? android.net.nsd.NsdManager
+        generatePin() // 初始化时生成PIN
         registerLocalService()
         discoverServices()
     }
@@ -86,11 +89,30 @@ object DeviceConnectionManager {
         nsdManager?.registerService(serviceInfo, android.net.nsd.NsdManager.PROTOCOL_DNS_SD, object : android.net.nsd.NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: android.net.nsd.NsdServiceInfo) {
                 registeredServiceInfo = serviceInfo
+                // 注册后弹窗展示PIN
+                pin?.let { onPinReceived?.invoke(it) }
             }
             override fun onRegistrationFailed(serviceInfo: android.net.nsd.NsdServiceInfo, errorCode: Int) {}
             override fun onServiceUnregistered(serviceInfo: android.net.nsd.NsdServiceInfo) {}
             override fun onUnregistrationFailed(serviceInfo: android.net.nsd.NsdServiceInfo, errorCode: Int) {}
         })
+    }
+    /** 随机生成PIN码（6位数字），并记录生成时间 */
+    private fun generatePin() {
+        val random = SecureRandom()
+        val pinValue = (100000 + random.nextInt(900000)).toString()
+        pin = pinValue
+        pinTimestamp = System.currentTimeMillis()
+    }
+    /** 校验PIN是否有效（未超时且匹配） */
+    private fun isPinValid(input: String?): Boolean {
+        val now = System.currentTimeMillis()
+        return input != null && pin != null && input == pin && (now - pinTimestamp) <= PIN_TIMEOUT
+    }
+    /** 客户端校验服务端PIN（用于双向校验） */
+    private fun isRemotePinValid(remotePin: String?): Boolean {
+        val now = System.currentTimeMillis()
+        return remotePin != null && (now - pinTimestamp) <= PIN_TIMEOUT
     }
 
     /** 发现同网段设备，保存设备信息 */
@@ -144,8 +166,13 @@ object DeviceConnectionManager {
 
     /** 启动 WebSocket 长连接服务（前台），连接已发现设备 */
     fun startConnectionService(pinInput: String, device: DiscoveredDevice? = null) {
-        pin = pinInput
         if (context == null) return
+        // 客户端校验本地PIN是否超时
+        if (!isRemotePinValid(pinInput)) {
+            android.widget.Toast.makeText(context, "PIN码已超时，请重新获取", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        pin = pinInput // 记录连接方输入的PIN
         // 连接指定设备
         if (device != null) {
             wsUrl = "ws://${device.host}:${device.port}/notifyrelay"
@@ -183,16 +210,16 @@ object DeviceConnectionManager {
         val request = Request.Builder().url(wsUrl.orEmpty()).build()
         ws = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                isConnected = true
+                // 客户端发起握手，带PIN
+                isConnected = false // 先不设为true，待校验通过
                 lastHeartbeat = System.currentTimeMillis()
-                // 交换密钥对
                 keyPair = generateKeyPair()
                 val pubKeyStr = keyPair?.public?.encoded?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
                 val handshake = mapOf("type" to "handshake", "pin" to pin.orEmpty(), "pubKey" to pubKeyStr.orEmpty())
                 webSocket.send(gson.toJson(handshake))
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(text)
+                handleMessage(text, webSocket)
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
                 // 仅支持文本 JSON
@@ -214,18 +241,31 @@ object DeviceConnectionManager {
         }
     }
 
-    /** 处理收到的消息 */
-    private fun handleMessage(text: String) {
+    /** 处理收到的消息（支持双向PIN校验） */
+    private fun handleMessage(text: String, webSocket: WebSocket? = null) {
         val ctx = context ?: return
         val msg = gson.fromJson(text, Map::class.java)
         when (msg["type"]) {
             "handshake" -> {
-                // 对方发来公钥，完成密钥交换
+                // 对方发来公钥和PIN，完成密钥交换和PIN校验
                 val remotePubKeyStr = msg["pubKey"] as? String
-                if (remotePubKeyStr != null) {
-                    remotePublicKey = decodePublicKey(remotePubKeyStr)
-                    saveDeviceInfo(msg)
+                val remotePin = msg["pin"] as? String
+                // 服务端校验PIN
+                if (!isPinValid(remotePin)) {
+                    // PIN校验失败，拒绝连接
+                    webSocket?.close(4001, "PIN码错误或超时")
+                    android.util.Log.d("DeviceConnect", "PIN校验失败，连接拒绝")
+                    return
                 }
+                // 客户端校验服务端PIN（双向）
+                if (!isRemotePinValid(pin)) {
+                    webSocket?.close(4002, "服务端PIN超时")
+                    android.util.Log.d("DeviceConnect", "服务端PIN超时，连接拒绝")
+                    return
+                }
+                remotePublicKey = if (remotePubKeyStr != null) decodePublicKey(remotePubKeyStr) else null
+                saveDeviceInfo(msg)
+                isConnected = true // 校验通过才设为true
             }
             "notification" -> {
                 // 收到通知转发

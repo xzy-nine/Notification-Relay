@@ -13,7 +13,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,8 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
-// Miuix 主题库优先，部分基础布局用 Compose 官方包
-import com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager
 
 class DeviceForwardFragment : Fragment() {
     override fun onCreateView(
@@ -48,25 +46,37 @@ fun DeviceForwardScreen() {
     val colorScheme = MiuixTheme.colorScheme
     var pin by remember { mutableStateOf("") }
     val isConnected = remember { mutableStateOf(false) }
-    val showPinDialog = remember { mutableStateOf(false) }
-    val showRemotePinDialog = remember { mutableStateOf(false) }
     var remotePin by remember { mutableStateOf("") }
     val context = LocalContext.current
     var deviceName by remember { mutableStateOf(DeviceConnectionManager.getDeviceName(context)) }
     val deviceUUID = remember { DeviceConnectionManager.getDeviceUUID(context) }
     val discoveredDevices = remember { mutableStateOf(listOf<com.xzyht.notifyrelay.data.DeviceConnect.DeviceConnectionManager.DiscoveredDevice>()) }
 
-    // 初始化设备发现与 PIN 弹窗回调
+    // 初始化设备发现与 PIN 展示回调
     androidx.compose.runtime.LaunchedEffect(Unit) {
         DeviceConnectionManager.init(context) { pinCode ->
             remotePin = pinCode
-            showRemotePinDialog.value = true
         }
     }
-    // 定时刷新已发现设备列表
+    // 定时刷新已发现设备列表和PIN有效性
     androidx.compose.runtime.LaunchedEffect(isConnected.value) {
         while (!isConnected.value) {
             discoveredDevices.value = DeviceConnectionManager.getDiscoveredDevices()
+            // 检查PIN是否超时，超时则刷新PIN
+            val pinValid = try {
+                val method = DeviceConnectionManager::class.java.getDeclaredMethod("isRemotePinValid", String::class.java)
+                method.isAccessible = true
+                method.invoke(DeviceConnectionManager, remotePin) as Boolean
+            } catch (_: Exception) { true }
+            if (!pinValid) {
+                // 刷新PIN（服务端）
+                try {
+                    val genMethod = DeviceConnectionManager::class.java.getDeclaredMethod("generatePin")
+                    genMethod.isAccessible = true
+                    genMethod.invoke(DeviceConnectionManager)
+                } catch (_: Exception) {}
+                remotePin = ""
+            }
             kotlinx.coroutines.delay(2000)
         }
     }
@@ -107,6 +117,13 @@ fun DeviceForwardScreen() {
                             text = "本机UUID: $deviceUUID",
                             style = textStyles.body2.copy(color = colorScheme.outline)
                         )
+                        if (!isConnected.value && remotePin.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "本机PIN码: $remotePin (1分钟内有效)",
+                                style = textStyles.body2.copy(color = colorScheme.primary)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -137,7 +154,6 @@ fun DeviceForwardScreen() {
                                         .background(colorScheme.surfaceContainer, shape = RoundedCornerShape(6.dp))
                                         .padding(10.dp)
                                         .clickable {
-                                            showPinDialog.value = true
                                             pin = device.pin
                                         }
                                 ) {
@@ -150,7 +166,6 @@ fun DeviceForwardScreen() {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Button(
                                         onClick = {
-                                            showPinDialog.value = true
                                             pin = device.pin
                                         },
                                         modifier = Modifier.height(36.dp)
@@ -174,66 +189,6 @@ fun DeviceForwardScreen() {
                         colors = ButtonDefaults.buttonColors(color = MiuixTheme.colorScheme.primary)
                     ) {
                         Text("断开连接")
-                    }
-                }
-            }
-            // 连接方输入 PIN 弹窗
-            if (showPinDialog.value) {
-                SuperDialog(
-                    show = showPinDialog,
-                    title = "输入PIN码",
-                    onDismissRequest = { showPinDialog.value = false }
-                ) {
-                    Column {
-                        TextField(
-                            value = pin,
-                            onValueChange = { pin = it },
-                            label = "输入PIN码",
-                            useLabelAsPlaceholder = true,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                val device = discoveredDevices.value.find { it.pin == pin }
-                                if (device != null) {
-                                    DeviceConnectionManager.startConnectionService(pin, device)
-                                    isConnected.value = true
-                                }
-                                showPinDialog.value = false
-                            },
-                            enabled = pin.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("确认连接")
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { showPinDialog.value = false },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("取消")
-                        }
-                    }
-                }
-            }
-            // 被发现方弹窗显示 PIN
-            if (showRemotePinDialog.value) {
-                SuperDialog(
-                    show = showRemotePinDialog,
-                    title = "被发现方PIN码",
-                    onDismissRequest = { showRemotePinDialog.value = false }
-                ) {
-                    Column {
-                        Text(text = "请告知连接方此PIN码: $remotePin", style = textStyles.body1)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = { showRemotePinDialog.value = false },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("关闭")
-                        }
                     }
                 }
             }
