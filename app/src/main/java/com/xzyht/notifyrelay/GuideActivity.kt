@@ -9,7 +9,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons // 可选，若用 Material Icons
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
@@ -76,8 +76,9 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasUsage by remember { mutableStateOf(false) }
     var hasPost by remember { mutableStateOf(false) }
     var canQueryApps by remember { mutableStateOf(false) }
-    val prefs = context.getSharedPreferences("notifyrelay_prefs", Context.MODE_PRIVATE)
-    val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
+    // 可选权限状态
+    var hasFloatNotification by remember { mutableStateOf(false) }
+    var hasDevScreenShareProtectOff by remember { mutableStateOf(false) }
 
     // Toast工具
     fun showToast(msg: String) {
@@ -122,6 +123,15 @@ fun GuideScreen(onContinue: () -> Unit) {
         } catch (e: Exception) {
             canQueryApps = false
         }
+        // 检查悬浮通知权限（临时通知分组）
+        hasFloatNotification = try {
+            android.provider.Settings.canDrawOverlays(context)
+        } catch (_: Exception) { false }
+        // 检查开发者选项-停用屏幕共享保护
+        hasDevScreenShareProtectOff = try {
+            val value = android.provider.Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
+            value == 1
+        } catch (_: Exception) { false }
         permissionsGranted = hasNotification && canQueryApps && hasPost
         showCheck = permissionsGranted
     }
@@ -148,6 +158,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 // 权限状态列表
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    // ...existing code...
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("通知访问权限", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -191,6 +202,37 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 } else {
                                     showToast("请在系统设置中开启通知权限")
                                 }
+                            },
+                            enabled = true
+                        )
+                    }
+                    // 可选权限：临时通知分组悬浮通知
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("临时通知分组悬浮通知 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = hasFloatNotification,
+                            onCheckedChange = {
+                                showToast("请在系统设置-应用管理-悬浮窗权限中允许本应用悬浮通知")
+                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                context.startActivity(intent)
+                            },
+                            enabled = true
+                        )
+                    }
+                    // 可选权限：开发者选项-停用屏幕共享保护
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("开发者选项-停用屏幕共享保护 (可选)", fontSize = 16.sp, color = Color(0xFF888888))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = hasDevScreenShareProtectOff,
+                            onCheckedChange = {
+                                showToast("请在开发者选项中启用'停用屏幕共享保护'以获得更好体验")
+                                val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                                context.startActivity(intent)
                             },
                             enabled = true
                         )
@@ -267,7 +309,7 @@ fun checkAllPermissions(context: Context): Boolean {
     } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
 
     // 检查应用列表权限
-    var canQueryApps = false
+    var canQueryApps: Boolean
     try {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(0)
