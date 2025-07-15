@@ -64,6 +64,8 @@ class MainActivity : FragmentActivity() {
                 val colorScheme = MiuixTheme.colorScheme
                 // 状态栏背景色与页面背景色完全一致（background）
                 SideEffect {
+                    @Suppress("DEPRECATION")
+                    // TODO: 替换更优的状态栏着色方案，避免使用已废弃API
                     window.statusBarColor = colorScheme.background.toArgb()
                     val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
@@ -116,7 +118,7 @@ fun MainAppFragment() {
                 .padding(paddingValues)
         ) {
             when (selectedTab) {
-                0 -> DeviceForwardScreen()
+                0 -> DeviceForwardFragmentView(fragmentContainerId)
                 1 -> NotificationHistoryFragmentView(fragmentContainerId)
             }
         }
@@ -124,40 +126,24 @@ fun MainAppFragment() {
 }
 
 @Composable
-fun DeviceForwardScreen() {
-    val textStyles = MiuixTheme.textStyles
+fun DeviceForwardFragmentView(fragmentContainerId: Int) {
     val colorScheme = MiuixTheme.colorScheme
+    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
+    val fragmentTag = "DeviceForwardFragment"
     Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colorScheme.background)
-                .padding(16.dp)
-        ) {
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "设备与转发设置",
-                style = textStyles.title2.copy(color = colorScheme.onBackground)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            // 设备列表与操作区（占位，后续补充实际内容）
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colorScheme.surfaceContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                    .padding(16.dp)
-            ) {
-                top.yukonga.miuix.kmp.basic.Text(
-                    text = "设备发现、连接、转发规则、黑名单管理等功能待实现",
-                    style = textStyles.body2.copy(color = colorScheme.outline)
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            // 占位：暂无设备
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "暂无设备",
-                style = textStyles.body1.copy(color = colorScheme.onBackground)
-            )
-        }
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceForwardFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
     }
 }
 
