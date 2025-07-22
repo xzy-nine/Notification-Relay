@@ -14,6 +14,8 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
+import android.content.SharedPreferences
+import kotlinx.coroutines.delay
 import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
@@ -50,10 +52,24 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private var serviceInfo: ServiceInfo? = null
     private val serviceType = "_notifyrelay._tcp.local."
     private val serviceName: String = Build.MODEL ?: "NotifyRelayDevice"
-    private val uuid: String = UUID.randomUUID().toString()
+    private val uuid: String
     private val listenPort: Int = 23333 // 可根据实际情况动态分配
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
+    private val prefs: SharedPreferences = context.getSharedPreferences("notifyrelay_prefs", android.content.Context.MODE_PRIVATE)
+    private val deviceLastSeen = mutableMapOf<String, Long>() // uuid -> last seen timestamp
+
+    init {
+        val saved = prefs.getString("device_uuid", null)
+        if (saved != null) {
+            uuid = saved
+        } else {
+            val newUuid = UUID.randomUUID().toString()
+            prefs.edit().putString("device_uuid", newUuid).apply()
+            uuid = newUuid
+        }
+        startOfflineDeviceCleaner()
+    }
 
     // 发现设备（JmDNS注册与监听）
     fun startDiscovery() {
@@ -93,8 +109,17 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         jmDNS?.requestServiceInfo(event.type, event.name, true)
                     }
                     override fun serviceRemoved(event: ServiceEvent) {
-                        val name = event.info.getPropertyString("uuid") ?: event.info.name
-                        _devices.value = _devices.value.filterNot { it.uuid == name }
+                        val uuid = event.info.getPropertyString("uuid")
+                        val name = event.info.name
+                        Log.d("NotifyRelay", "serviceRemoved: uuid=$uuid, name=$name")
+                        if (uuid != null) {
+                            _devices.value = _devices.value.filterNot { it.uuid == uuid }
+                            deviceLastSeen.remove(uuid)
+                        } else {
+                            // 兜底：用 name 移除
+                            _devices.value = _devices.value.filterNot { it.uuid == name }
+                            deviceLastSeen.remove(name)
+                        }
                     }
                     override fun serviceResolved(event: ServiceEvent) {
                         val info = event.info
@@ -102,12 +127,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         val displayName = info.getPropertyString("displayName") ?: info.name
                         val ip = info.inetAddresses.firstOrNull()?.hostAddress ?: return
                         val port = info.port
+                        Log.d("NotifyRelay", "serviceResolved: uuid=$uuid, displayName=$displayName, ip=$ip, port=$port")
                         if (uuid == this@DeviceConnectionManager.uuid) return // 跳过本机
                         val device = DeviceInfo(uuid, displayName, ip, port)
-                        // 先过滤掉所有本机和同 uuid 设备，再追加新设备，保证唯一且无本机
-                        _devices.value = (_devices.value
-                            .filter { it.uuid != this@DeviceConnectionManager.uuid && it.uuid != uuid }
-                            + device)
+                        // 只过滤同 uuid 设备，保证唯一
+                        _devices.value = (_devices.value.filter { it.uuid != uuid } + device)
+                        deviceLastSeen[uuid] = System.currentTimeMillis()
                     }
                 })
 
@@ -115,6 +140,22 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 startServer()
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    // 定时清理离线设备
+    private fun startOfflineDeviceCleaner() {
+        coroutineScope.launch {
+            while (true) {
+                delay(15_000) // 15秒检查一次
+                val now = System.currentTimeMillis()
+                val timeout = 30_000 // 30秒未响应视为离线
+                val toRemove = deviceLastSeen.filter { now - it.value > timeout }.keys
+                if (toRemove.isNotEmpty()) {
+                    _devices.value = _devices.value.filterNot { it.uuid in toRemove }
+                    toRemove.forEach { deviceLastSeen.remove(it) }
+                }
             }
         }
     }

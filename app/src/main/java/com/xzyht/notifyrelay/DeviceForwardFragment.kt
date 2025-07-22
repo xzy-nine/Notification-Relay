@@ -46,7 +46,8 @@ fun DeviceForwardScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceConnectionManager(context) }
-    val devices by deviceManager.devices.collectAsState()
+    val devicesRaw by deviceManager.devices.collectAsState()
+    val devices = remember(devicesRaw) { devicesRaw.filter { it.uuid != deviceManager.javaClass.getDeclaredField("uuid").apply { isAccessible = true }.get(deviceManager) } }
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var chatInput by remember { mutableStateOf("") }
