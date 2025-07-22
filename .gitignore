@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 忽略lancomm源码文件夹（外部依赖，仅本地使用）
+lancomm/

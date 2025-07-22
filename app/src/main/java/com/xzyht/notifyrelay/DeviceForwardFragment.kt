@@ -46,20 +46,22 @@ fun DeviceForwardScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceConnectionManager(context) }
-    val devicesRaw by deviceManager.devices.collectAsState()
-    val devices = remember(devicesRaw) { devicesRaw.filter { it.uuid != deviceManager.javaClass.getDeclaredField("uuid").apply { isAccessible = true }.get(deviceManager) } }
+    val devices by deviceManager.devices.collectAsState()
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    var connectError by remember { mutableStateOf<String?>(null) }
     var chatInput by remember { mutableStateOf("") }
     var chatHistory by remember { mutableStateOf(listOf<String>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    var isConnecting by remember { mutableStateOf(false) }
 
-    // 用于接收消息的回调，实际项目建议用事件流
+    // 启动设备发现
     LaunchedEffect(Unit) {
         deviceManager.startDiscovery()
     }
 
-    // 简单地将onNotificationDataReceived挂钩到UI
+    // 复刻lancomm事件监听风格，Compose事件流监听消息
     DisposableEffect(Unit) {
         val oldHandler = deviceManager.onNotificationDataReceived
         deviceManager.onNotificationDataReceived = { data ->
@@ -106,6 +108,11 @@ fun DeviceForwardScreen() {
                 androidx.compose.foundation.layout.Box(Modifier.weight(2f).fillMaxSize().background(colorScheme.surface)) {
                     androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
                         Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
+                        if (isConnecting) {
+                            Text("正在连接...", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
+                        } else if (connectedDevice != null) {
+                            Text("已连接: ${connectedDevice?.displayName}", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
+                        }
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
                             items(chatHistory) { msg ->
                                 Text(msg, style = textStyles.body2)
@@ -144,12 +151,32 @@ fun DeviceForwardScreen() {
                     confirmButton = {
                         TextButton(onClick = {
                             connectingDevice = showConfirmDialog
+                            isConnecting = true
                             showConfirmDialog = null
-                            connectingDevice?.let { deviceManager.connectToDevice(it) }
+                            connectingDevice?.let { device ->
+                                deviceManager.connectToDevice(device) { success, error ->
+                                    isConnecting = false
+                                    if (success) {
+                                        connectedDevice = device
+                                    } else {
+                                        connectError = error ?: "连接失败"
+                                    }
+                                }
+                            }
                         }) { Text("确认") }
                     },
                     dismissButton = {
                         TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
+                    }
+                )
+            }
+            if (connectError != null) {
+                AlertDialog(
+                    onDismissRequest = { connectError = null },
+                    title = { Text("连接失败") },
+                    text = { Text(connectError ?: "未知错误") },
+                    confirmButton = {
+                        TextButton(onClick = { connectError = null }) { Text("确定") }
                     }
                 )
             }
@@ -254,11 +281,25 @@ fun DeviceForwardScreen() {
                         TextButton(onClick = {
                             connectingDevice = showConfirmDialog
                             showConfirmDialog = null
-                            connectingDevice?.let { deviceManager.connectToDevice(it) }
+                            connectingDevice?.let { device ->
+                                deviceManager.connectToDevice(device) { success, error ->
+                                    if (!success) connectError = error ?: "连接失败"
+                                }
+                            }
                         }) { Text("确认") }
                     },
                     dismissButton = {
                         TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
+                    }
+                )
+            }
+            if (connectError != null) {
+                AlertDialog(
+                    onDismissRequest = { connectError = null },
+                    title = { Text("连接失败") },
+                    text = { Text(connectError ?: "未知错误") },
+                    confirmButton = {
+                        TextButton(onClick = { connectError = null }) { Text("确定") }
                     }
                 )
             }

@@ -32,32 +32,21 @@ data class DeviceInfo(
 
 class DeviceConnectionManager(private val context: android.content.Context) {
     /**
-     * 通知数据回调。UI 层可自定义赋值，若为 null 则调用默认实现。
+     * 设备发现/连接/数据发送/接收，全部本地实现。
      */
     var onNotificationDataReceived: ((String) -> Unit)? = null
-    // 设备列表
     private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
-    // 只暴露非本机设备列表
-    val devices: StateFlow<List<DeviceInfo>> = object : StateFlow<List<DeviceInfo>> {
-        override val value: List<DeviceInfo>
-            get() = _devices.value.filter { it.uuid != this@DeviceConnectionManager.uuid }
-        override suspend fun collect(collector: kotlinx.coroutines.flow.FlowCollector<List<DeviceInfo>>) = _devices.collect {
-            collector.emit(it.filter { d -> d.uuid != this@DeviceConnectionManager.uuid })
-        }
-        override val replayCache: List<List<DeviceInfo>>
-            get() = _devices.replayCache.map { list -> list.filter { it.uuid != this@DeviceConnectionManager.uuid } }
-    }
-
-    private var jmDNS: JmDNS? = null
-    private var serviceInfo: ServiceInfo? = null
-    private val serviceType = "_notifyrelay._tcp.local."
-    private val serviceName: String = Build.MODEL ?: "NotifyRelayDevice"
+    val devices: StateFlow<List<DeviceInfo>> = _devices
     private val uuid: String
-    private val listenPort: Int = 23333 // 可根据实际情况动态分配
+    private val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
     private val prefs: SharedPreferences = context.getSharedPreferences("notifyrelay_prefs", android.content.Context.MODE_PRIVATE)
-    private val deviceLastSeen = mutableMapOf<String, Long>() // uuid -> last seen timestamp
+    private val deviceLastSeen = mutableMapOf<String, Long>()
+    // 广播发现线程
+    private var broadcastThread: Thread? = null
+    // 监听线程
+    private var listenThread: Thread? = null
 
     init {
         val saved = prefs.getString("device_uuid", null)
@@ -70,87 +59,69 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
         startOfflineDeviceCleaner()
     }
-
-    // 发现设备（JmDNS注册与监听）
     fun startDiscovery() {
-        coroutineScope.launch {
-            try {
-                if (jmDNS == null) {
-                    // 绑定到本机局域网IP，避免 0.0.0.0
-                    val wifiManager = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
-                    val ip = wifiManager?.connectionInfo?.ipAddress ?: 0
-                    if (ip == 0) {
-                        // 未连接 WiFi，无法发现设备
-                        Log.d("NotifyRelay", "未连接 WiFi，跳过 JmDNS 初始化")
-                        return@launch
+        // 启动UDP广播线程，定期广播本机信息
+        if (broadcastThread == null) {
+            broadcastThread = Thread {
+                try {
+                    val socket = java.net.DatagramSocket()
+                    val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${android.os.Build.MODEL}:${listenPort}").toByteArray()
+                    val group = java.net.InetAddress.getByName("255.255.255.255")
+                    while (true) {
+                        val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
+                        socket.send(packet)
+                        Thread.sleep(3000)
                     }
-                    val ipBytes = byteArrayOf(
-                        (ip and 0xff).toByte(),
-                        (ip shr 8 and 0xff).toByte(),
-                        (ip shr 16 and 0xff).toByte(),
-                        (ip shr 24 and 0xff).toByte()
-                    )
-                    val hostAddress = InetAddress.getByAddress(ipBytes)
-                    Log.d("NotifyRelay", "本机IP: ${hostAddress.hostAddress}")
-                    jmDNS = JmDNS.create(hostAddress)
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-                // 注册本机服务，name 只用设备名，不拼接 uuid，uuid 通过属性传递
-                serviceInfo = ServiceInfo.create(
-                    serviceType,
-                    serviceName,
-                    listenPort,
-                    "uuid=$uuid,displayName=$serviceName"
-                )
-                jmDNS?.registerService(serviceInfo)
-
-                // 监听其他设备
-                jmDNS?.addServiceListener(serviceType, object : ServiceListener {
-                    override fun serviceAdded(event: ServiceEvent) {
-                        jmDNS?.requestServiceInfo(event.type, event.name, true)
-                    }
-                    override fun serviceRemoved(event: ServiceEvent) {
-                        val uuid = event.info.getPropertyString("uuid")
-                        val name = event.info.name
-                        Log.d("NotifyRelay", "serviceRemoved: uuid=$uuid, name=$name")
-                        if (uuid != null) {
-                            _devices.value = _devices.value.filterNot { it.uuid == uuid }
-                            deviceLastSeen.remove(uuid)
-                        } else {
-                            // 兜底：用 name 移除
-                            _devices.value = _devices.value.filterNot { it.uuid == name }
-                            deviceLastSeen.remove(name)
+            }
+            broadcastThread?.isDaemon = true
+            broadcastThread?.start()
+        }
+        // 启动UDP监听线程，发现其他设备
+        if (listenThread == null) {
+            listenThread = Thread {
+                try {
+                    val socket = java.net.DatagramSocket(23334)
+                    val buf = ByteArray(256)
+                    while (true) {
+                        val packet = java.net.DatagramPacket(buf, buf.size)
+                        socket.receive(packet)
+                        val msg = String(packet.data, 0, packet.length)
+                        if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
+                            val parts = msg.split(":")
+                            if (parts.size >= 4) {
+                                val uuid = parts[1]
+                                val displayName = parts[2]
+                                val port = parts[3].toIntOrNull() ?: 23333
+                                val ip = packet.address.hostAddress
+                                if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid) {
+                                    val device = DeviceInfo(uuid, displayName, ip, port)
+                                    _devices.value = (_devices.value.filter { it.uuid != uuid } + device)
+                                    deviceLastSeen[uuid] = System.currentTimeMillis()
+                                }
+                            }
                         }
                     }
-                    override fun serviceResolved(event: ServiceEvent) {
-                        val info = event.info
-                        val uuid = info.getPropertyString("uuid") ?: return // 没有 uuid 属性直接跳过
-                        val displayName = info.getPropertyString("displayName") ?: info.name
-                        val ip = info.inetAddresses.firstOrNull()?.hostAddress ?: return
-                        val port = info.port
-                        Log.d("NotifyRelay", "serviceResolved: uuid=$uuid, displayName=$displayName, ip=$ip, port=$port")
-                        if (uuid == this@DeviceConnectionManager.uuid) return // 跳过本机
-                        val device = DeviceInfo(uuid, displayName, ip, port)
-                        // 只过滤同 uuid 设备，保证唯一
-                        _devices.value = (_devices.value.filter { it.uuid != uuid } + device)
-                        deviceLastSeen[uuid] = System.currentTimeMillis()
-                    }
-                })
-
-                // 启动TCP服务监听
-                startServer()
-            } catch (e: Exception) {
-                e.printStackTrace()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
+            listenThread?.isDaemon = true
+            listenThread?.start()
         }
+        // 启动TCP服务监听
+        startServer()
     }
 
     // 定时清理离线设备
     private fun startOfflineDeviceCleaner() {
         coroutineScope.launch {
             while (true) {
-                delay(15_000) // 15秒检查一次
+                delay(15_000)
                 val now = System.currentTimeMillis()
-                val timeout = 30_000 // 30秒未响应视为离线
+                val timeout = 30_000
                 val toRemove = deviceLastSeen.filter { now - it.value > timeout }.keys
                 if (toRemove.isNotEmpty()) {
                     _devices.value = _devices.value.filterNot { it.uuid in toRemove }
@@ -160,17 +131,17 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
     }
 
-    // 连接设备，首次需确认，后续可自动
-    fun connectToDevice(device: DeviceInfo) {
-        // 实际弹窗确认逻辑应在UI层实现，这里仅建立连接
+    // 连接设备
+    fun connectToDevice(device: DeviceInfo, callback: ((Boolean, String?) -> Unit)? = null) {
         coroutineScope.launch {
             try {
                 val socket = Socket(device.ip, device.port)
-                // 可在此处保存socket以便后续复用
-                // 预留加密扩展点
+                // 可扩展握手/认证协议
                 socket.close()
+                callback?.invoke(true, null)
             } catch (e: Exception) {
                 e.printStackTrace()
+                callback?.invoke(false, e.message)
             }
         }
     }
@@ -181,7 +152,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             try {
                 val socket = Socket(device.ip, device.port)
                 val writer = OutputStreamWriter(socket.getOutputStream())
-                // 预留加密扩展点
                 writer.write(data + "\n")
                 writer.flush()
                 writer.close()
@@ -193,12 +163,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     // 接收通知数据
-    /**
-     * 默认通知数据处理。若未设置回调则调用此方法。
-     */
-    open fun handleNotificationData(data: String) {
-        // 这里可将数据分发到通知历史等模块，预留加密扩展点
-        // TODO: 实际业务处理
+    fun handleNotificationData(data: String) {
         Log.d("NotifyRelay", "收到通知数据: $data")
     }
 
