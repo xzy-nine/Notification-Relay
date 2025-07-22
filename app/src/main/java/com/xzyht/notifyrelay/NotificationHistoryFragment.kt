@@ -317,8 +317,8 @@ fun NotificationHistoryScreen() {
                 items(mixedList) { list ->
                     if (list.size <= 2) {
                         list.forEach { record ->
-                            val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                            NotificationCard(record, appName, appIcon)
+                            val (_, appIcon) = getCachedAppInfo(record.packageName)
+                            NotificationCard(record, record.title ?: "(无标题)", appIcon)
                         }
                     } else {
                         val latest = list.maxByOrNull { it.time }
