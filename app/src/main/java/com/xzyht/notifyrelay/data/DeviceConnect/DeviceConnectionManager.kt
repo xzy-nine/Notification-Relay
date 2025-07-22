@@ -22,13 +22,40 @@ import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
 import android.util.Log
 
-
 data class DeviceInfo(
     val uuid: String,
     val displayName: String, // 前端显示名，优先蓝牙名，其次型号
     val ip: String,
     val port: Int
 )
+
+object DeviceConnectionManagerUtil {
+    // 工具：构造 json 格式的通知数据
+    fun buildNotificationJson(packageName: String, title: String?, text: String?, time: Long): String {
+        val json = org.json.JSONObject()
+        json.put("packageName", packageName)
+        json.put("title", title ?: "")
+        json.put("text", text ?: "")
+        json.put("time", time)
+        return json.toString()
+    }
+
+    // 静态缓存，便于 UI 查询 uuid->displayName
+    private val globalDeviceNameCache = mutableMapOf<String, String>()
+    fun updateGlobalDeviceName(uuid: String, displayName: String) {
+        synchronized(globalDeviceNameCache) {
+            globalDeviceNameCache[uuid] = displayName
+        }
+    }
+    fun getDisplayNameByUuid(uuid: String?): String {
+        if (uuid == null) return "未知设备"
+        if (uuid == "本机") return "本机"
+        synchronized(globalDeviceNameCache) {
+            return globalDeviceNameCache[uuid] ?: uuid
+        }
+    }
+}
+
 
 data class AuthInfo(
     val publicKey: String,
@@ -205,6 +232,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     synchronized(deviceInfoCache) {
                                         deviceInfoCache[uuid] = device
                                     }
+                                    // 更新全局缓存
+                                    DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
                                     coroutineScope.launch {
                                         updateDeviceList()
                                     }
@@ -344,6 +373,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 发送通知数据（加密）
     fun sendNotificationData(device: DeviceInfo, data: String) {
+        // data 必须为 json 字符串，包含 packageName, title, text, time
         coroutineScope.launch {
             try {
                 val auth = authenticatedDevices[device.uuid]
@@ -355,7 +385,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val writer = OutputStreamWriter(socket.getOutputStream())
                 // 加密数据
                 val encryptedData = xorEncryptDecrypt(data, auth.sharedSecret)
-                val payload = "DATA:${uuid}:${localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                // 标记 json
+                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${auth.sharedSecret}:${encryptedData}"
                 writer.write(payload + "\n")
                 writer.flush()
                 writer.close()
@@ -367,7 +398,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     // 接收通知数据（解密）
-    fun handleNotificationData(data: String, sharedSecret: String? = null) {
+    fun handleNotificationData(data: String, sharedSecret: String? = null, remoteUuid: String? = null) {
         Log.d("NotifyRelay", "收到通知数据: $data")
         val decrypted = if (sharedSecret != null) {
             try {
@@ -377,48 +408,31 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 data
             }
         } else data
-        // 发送原样安卓通知
+        // 只处理 json 格式
         try {
-            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-            mainHandler.post {
-                try {
-                    val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                    val channelId = "notifyrelay_channel"
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        val channel = android.app.NotificationChannel(
-                            channelId,
-                            "NotifyRelay",
-                            android.app.NotificationManager.IMPORTANCE_HIGH // 提高重要性
-                        ).apply {
-                            enableVibration(true)
-                            vibrationPattern = longArrayOf(0, 200, 100, 200)
-                            setShowBadge(true)
-                            description = "设备通知转发"
-                        }
-                        notificationManager.createNotificationChannel(channel)
-                    }
-                    val builder = android.app.Notification.Builder(context, channelId)
-                        .setContentTitle("NotifyRelay 消息")
-                        .setContentText(decrypted)
-                        .setStyle(android.app.Notification.BigTextStyle().bigText(decrypted))
-                        .setSmallIcon(android.R.drawable.ic_dialog_info)
-                        .setAutoCancel(true)
-                        .setShowWhen(true)
-                        .setWhen(System.currentTimeMillis())
-                    Log.d("NotifyRelay", "准备发送系统通知")
-                    val notificationId = (System.currentTimeMillis() and 0x7FFFFFFF).toInt() // 保证正数且不溢出
-                    notificationManager.notify(notificationId, builder.build())
-                    Log.d("NotifyRelay", "系统通知已调用")
-                } catch (e: SecurityException) {
-                    Log.e("NotifyRelay", "发送系统通知失败，可能缺少通知权限: ${e.message}")
-                } catch (e: Exception) {
-                    Log.d("NotifyRelay", "发送系统通知失败: ${e.message}")
+            if (remoteUuid != null) {
+                val json = org.json.JSONObject(decrypted)
+                val pkg = json.optString("packageName")
+                val title = json.optString("title")
+                val text = json.optString("text")
+                val time = json.optLong("time", System.currentTimeMillis())
+                // 尝试获取设备名并更新缓存（如有）
+                val displayName = DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid)
+                if (displayName != null && displayName != remoteUuid) {
+                    DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
-                onNotificationDataReceived?.invoke(decrypted)
+                val repoClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationRepository")
+                val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
+                addMethod.invoke(null, pkg, title, text, time, remoteUuid, context)
+                // 强制刷新设备列表和UI
+                val scanMethod = repoClass.getDeclaredMethod("scanDeviceList", android.content.Context::class.java)
+                scanMethod.invoke(null, context)
             }
         } catch (e: Exception) {
-            onNotificationDataReceived?.invoke(decrypted)
+            Log.e("NotifyRelay", "存储远程通知失败: ${e.message}")
         }
+        // 不再直接发系统通知，由 UI 层渲染
+        onNotificationDataReceived?.invoke(decrypted)
     }
 
     // 启动TCP服务监听，接收其他设备的通知
@@ -496,8 +510,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         reader.close()
                                         client.close()
                                     }
-                                } else if (line.startsWith("DATA:")) {
+                                } else if (line.startsWith("DATA:") || line.startsWith("DATA_JSON:")) {
                                     // 数据包，校验认证
+                                    val isJson = line.startsWith("DATA_JSON:")
                                     val parts = line.split(":", limit = 5)
                                     if (parts.size >= 5) {
                                         val remoteUuid = parts[1]
@@ -506,8 +521,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         val payload = parts[4]
                                         val auth = authenticatedDevices[remoteUuid]
                                         if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            // 解密数据
-                                            handleNotificationData(payload, sharedSecret)
+                                            // 解密数据并存储，传递 remoteUuid
+                                            handleNotificationData(payload, sharedSecret, remoteUuid)
                                         } else {
                                             if (auth == null) {
                                                 Log.d("NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
@@ -523,7 +538,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     reader.close()
                                     client.close()
                                 } else {
-                                    Log.d("NotifyRelay", "未知请求")
+                                    Log.d("NotifyRelay", "未知请求: $line")
                                     reader.close()
                                     client.close()
                                 }

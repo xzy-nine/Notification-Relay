@@ -221,7 +221,14 @@ fun DeviceForwardScreen(
                         onSend = {
                             val dev = selectedDevice
                             if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
-                                deviceManager.sendNotificationData(dev, chatInput)
+                                // 手动输入也包装为json
+                                val payload = com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.buildNotificationJson(
+                                    "manual", // 或 "chat"
+                                    "手动消息",
+                                    chatInput,
+                                    System.currentTimeMillis()
+                                )
+                                deviceManager.sendNotificationData(dev, payload)
                                 chatHistory = chatHistory + "发送: $chatInput"
                                 chatInput = ""
                             }

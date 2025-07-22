@@ -48,7 +48,42 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification success: key=${sbn.key}, title=$title, text=$text") // 调试日志已注释
+                // ===== 新增：自动转发到所有已认证设备 =====
+                try {
+                    // 获取全局 DeviceConnectionManager 实例（与 DeviceForwardFragment 保持一致）
+                    val deviceManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
+                    // 反射获取认证设备表
+                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                    field.isAccessible = true
+                    @Suppress("UNCHECKED_CAST")
+                    val authedMap = field.get(deviceManager) as? Map<String, *>
+                    if (authedMap != null) {
+                        for ((uuid, auth) in authedMap) {
+                            // 跳过本机
+                            val myUuidField = deviceManager.javaClass.getDeclaredField("uuid")
+                            myUuidField.isAccessible = true
+                            val myUuid = myUuidField.get(deviceManager) as? String
+                            if (uuid == myUuid) continue
+                            // 获取设备信息
+                            val infoMethod = deviceManager.javaClass.getDeclaredMethod("getDeviceInfo", String::class.java)
+                            infoMethod.isAccessible = true
+                            val deviceInfo = infoMethod.invoke(deviceManager, uuid) as? com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+                            if (deviceInfo != null) {
+                                // 组装转发内容（统一用json）
+                                val payload = com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.buildNotificationJson(
+                                    sbn.packageName,
+                                    title,
+                                    text,
+                                    sbn.postTime
+                                )
+                                deviceManager.sendNotificationData(deviceInfo, payload)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("NotifyRelay", "自动转发通知到远程设备失败", e)
+                }
+                // ===== END =====
             } catch (e: Exception) {
                 // android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e) // 调试日志已注释
             }

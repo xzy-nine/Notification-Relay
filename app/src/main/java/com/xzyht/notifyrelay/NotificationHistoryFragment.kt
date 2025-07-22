@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay
 
+import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 import com.xzyht.notifyrelay.data.Notify.NotificationRecord
 import android.os.Bundle
@@ -209,15 +210,49 @@ fun NotificationHistoryScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
-    val deviceList = NotificationRepository.deviceList
-    val notifications by remember(selectedDevice) {
-        derivedStateOf {
-            NotificationRepository.getNotificationsByDevice(selectedDevice)
-                .groupBy { Pair(it.packageName, it.key ) }
-                .map { (_, list) -> list.maxByOrNull { it.time }!! }
-        }
-    }
     val context = LocalContext.current
+    val deviceList = remember { mutableStateListOf<String>() }
+    // uuid->displayName 映射
+    fun getDeviceDisplayName(uuid: String): String {
+        return com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
+    }
+    // 自动刷新设备列表
+    LaunchedEffect(Unit) {
+        NotificationRepository.scanDeviceList(context)
+        deviceList.clear()
+        deviceList.addAll(NotificationRepository.deviceList)
+        android.util.Log.i("NotifyRelay", "[NotificationHistoryScreen] deviceList loaded: ${NotificationRepository.deviceList}")
+    }
+    // 切换设备时自动从本地json加载历史
+    val notifications = remember { mutableStateListOf<com.xzyht.notifyrelay.data.Notify.NotificationRecord>() }
+    LaunchedEffect(selectedDevice) {
+        NotificationRepository.currentDevice = selectedDevice
+        NotificationRepository.init(context)
+        val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
+        // 只读取对应设备的json：本机->local.json，远程->uuid.json
+        val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
+        val history = store.getAll(fileKey)
+        notifications.clear()
+        // 只显示该json内全部通知（每个json只存一个设备的通知）
+        notifications.addAll(history.map {
+            com.xzyht.notifyrelay.data.Notify.NotificationRecord(
+                key = it.key,
+                packageName = it.packageName,
+                title = it.title,
+                text = it.text,
+                time = it.time,
+                device = it.device
+            )
+        })
+        android.util.Log.i("NotifyRelay", "[NotificationHistoryScreen] selectedDevice=$selectedDevice, fileKey=$fileKey, loaded history.size=${notifications.size}")
+    }
+    val grouped = notifications.groupBy { it.packageName }
+    val groupList = grouped.entries.map { (_, list) ->
+        list.sortedByDescending { it.time }
+    }
+    // 混合排序：单条和分组都按分组最新时间降序排列
+    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+    // val context = LocalContext.current // 删除重复声明，避免冲突
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
@@ -239,12 +274,6 @@ fun NotificationHistoryScreen() {
     LaunchedEffect(Unit) {
         NotificationRepository.init(context)
     }
-    val grouped = notifications.groupBy { it.packageName }
-    val groupList = grouped.entries.map { (_, list) ->
-        list.sortedByDescending { it.time }
-    }
-    // 混合排序：单条和分组都按分组最新时间降序排列
-    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
 
     // 工具函数：获取并缓存应用名和图标
     fun getCachedAppInfo(packageName: String?): Pair<String, android.graphics.Bitmap?> {
@@ -259,6 +288,14 @@ fun NotificationHistoryScreen() {
     val clearHistory: () -> Unit = {
         try {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
+            notifications.clear() // 清空通知列表
+            appInfoCache.clear() // 清空应用信息缓存
+            // 修正：同步清理本地json文件内容
+            val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
+            val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
+            kotlinx.coroutines.runBlocking {
+                store.clearByDevice(fileKey)
+            }
         } catch (e: Exception) {
             android.util.Log.e("NotifyRelay", "清除历史异常", e)
             android.widget.Toast.makeText(
@@ -401,7 +438,6 @@ fun NotificationHistoryScreen() {
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     deviceList.forEach { device ->
-                        // 直接判断是否为当前选中设备，无需DeviceConnectionManager
                         val isRemote = selectedDevice != device
                         Button(
                             onClick = {
@@ -413,9 +449,8 @@ fun NotificationHistoryScreen() {
                             enabled = true
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // 不显示远程设备图标
                                 top.yukonga.miuix.kmp.basic.Text(
-                                    text = device,
+                                    text = getDeviceDisplayName(device),
                                     style = textStyles.body2.copy(color = if (isRemote) colorScheme.primary else colorScheme.onBackground)
                                 )
                             }
@@ -499,7 +534,7 @@ fun NotificationHistoryScreen() {
                             enabled = true
                         ) {
                             top.yukonga.miuix.kmp.basic.Text(
-                                text = device,
+                                text = getDeviceDisplayName(device),
                                 style = textStyles.body2.copy(color = colorScheme.onBackground)
                             )
                         }
