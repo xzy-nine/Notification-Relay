@@ -79,10 +79,8 @@ fun DeviceForwardScreen(
     loadAuthedUuids: () -> Set<String>,
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
-    // 新增：认证成功后立即更新authedDeviceUuids并保存
-    var authedDeviceUuids by rememberSaveable {
-        mutableStateOf(loadAuthedUuids())
-    }
+    // 认证设备uuid集合（用于本地存储，实际渲染用deviceManager.devices）
+    var authedDeviceUuids by rememberSaveable { mutableStateOf(loadAuthedUuids()) }
     fun addAuthedDevice(uuid: String) {
         if (!authedDeviceUuids.contains(uuid)) {
             val newSet = authedDeviceUuids + uuid
@@ -110,11 +108,11 @@ fun DeviceForwardScreen(
                 }
             }
         }
-        onDispose {
-            deviceManager.onHandshakeRequest = oldHandshake
-        }
+        onDispose { deviceManager.onHandshakeRequest = oldHandshake }
     }
-    val devices by deviceManager.devices.collectAsState()
+    val deviceMap by deviceManager.devices.collectAsState()
+    val devices = deviceMap.values.map { it.first }
+    val deviceStates = deviceMap.mapValues { it.value.second }
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectError by rememberSaveable { mutableStateOf<String?>(null) }
@@ -127,9 +125,7 @@ fun DeviceForwardScreen(
     var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
 
     // 启动设备发现
-    LaunchedEffect(Unit) {
-        deviceManager.startDiscovery()
-    }
+    LaunchedEffect(Unit) { deviceManager.startDiscovery() }
 
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     DisposableEffect(Unit) {
@@ -138,12 +134,10 @@ fun DeviceForwardScreen(
             chatHistory = chatHistory + "收到: $data"
             oldHandler?.invoke(data)
         }
-        onDispose {
-            deviceManager.onNotificationDataReceived = oldHandler
-        }
+        onDispose { deviceManager.onNotificationDataReceived = oldHandler }
     }
     // 认证状态监听（简单轮询，实际可用回调）
-    LaunchedEffect(devices) {
+    LaunchedEffect(deviceMap) {
         // 这里直接反射拿到DeviceConnectionManager的认证表
         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
         field.isAccessible = true
@@ -166,6 +160,8 @@ fun DeviceForwardScreen(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
+    fun isAuthed(uuid: String) = authedDeviceUuids.contains(uuid)
+
     if (isLandscape) {
         // 横屏：原有左右分栏
         Box(
@@ -176,12 +172,11 @@ fun DeviceForwardScreen(
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxSize()) {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                            val isAuthed = authedDeviceUuids.contains(device.uuid)
+                            val isAuthed = isAuthed(device.uuid)
+                            val isOnline = deviceStates[device.uuid] == true
                             DeviceItem(
                                 device = device,
-                                onConnect = {
-                                    showConfirmDialog = device
-                                },
+                                onConnect = { showConfirmDialog = device },
                                 onSelect = {
                                     selectedDevice = device
                                     android.widget.Toast.makeText(
@@ -191,7 +186,9 @@ fun DeviceForwardScreen(
                                     ).show()
                                 },
                                 selected = selectedDevice?.uuid == device.uuid,
-                                showConnect = !isAuthed
+                                showConnect = !isAuthed,
+                                isOnline = isOnline,
+                                isAuthed = isAuthed
                             )
                         }
                     }
@@ -224,13 +221,13 @@ fun DeviceForwardScreen(
                             Button(
                                 onClick = {
                                     val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank() && authedDeviceUuids.contains(dev.uuid)) {
+                                    if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
                                         deviceManager.sendNotificationData(dev, chatInput)
                                         chatHistory = chatHistory + "发送: $chatInput"
                                         chatInput = ""
                                     }
                                 },
-                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { authedDeviceUuids.contains(it) } == true,
+                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
                                 modifier = Modifier.align(Alignment.CenterVertically)
                             ) {
                                 Text("发送")
@@ -358,7 +355,8 @@ fun DeviceForwardScreen(
                         modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = 8.dp)
                     ) {
                         items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                            val isAuthed = authedDeviceUuids.contains(device.uuid)
+                            val isAuthed = isAuthed(device.uuid)
+                            val isOnline = deviceStates[device.uuid] == true
                             androidx.compose.foundation.layout.Column(
                                 modifier = Modifier.padding(end = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -385,6 +383,9 @@ fun DeviceForwardScreen(
                                     ) {
                                         Text("连接")
                                     }
+                                }
+                                if (isAuthed && !isOnline) {
+                                    Text("(离线)", color = colorScheme.outline, style = textStyles.body2)
                                 }
                             }
                         }
@@ -420,13 +421,13 @@ fun DeviceForwardScreen(
                             Button(
                                 onClick = {
                                     val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank() && authedDeviceUuids.contains(dev.uuid)) {
+                                    if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
                                         deviceManager.sendNotificationData(dev, chatInput)
                                         chatHistory = chatHistory + "发送: $chatInput"
                                         chatInput = ""
                                     }
                                 },
-                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { authedDeviceUuids.contains(it) } == true,
+                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
                                 modifier = Modifier.align(Alignment.CenterVertically)
                             ) {
                                 Text("发送")
@@ -531,19 +532,27 @@ fun DeviceItem(
     onConnect: () -> Unit,
     onSelect: () -> Unit = {},
     selected: Boolean = false,
-    showConnect: Boolean = true
+    showConnect: Boolean = true,
+    isOnline: Boolean = true,
+    isAuthed: Boolean = false
 ) {
     val colorScheme = MiuixTheme.colorScheme
+    val textColor = if (!isOnline && isAuthed) colorScheme.outline else colorScheme.primary
+    val bgColor = when {
+        selected -> colorScheme.primaryContainer
+        !isOnline && isAuthed -> colorScheme.surfaceVariant
+        else -> colorScheme.surface
+    }
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (selected) colorScheme.primaryContainer else colorScheme.surface)
+            .background(bgColor)
             .clickable { onSelect() },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = device.displayName,
-            style = MiuixTheme.textStyles.body1.copy(color = colorScheme.primary),
+            text = device.displayName + if (!isOnline && isAuthed) " (离线)" else "",
+            style = MiuixTheme.textStyles.body1.copy(color = textColor),
             modifier = Modifier.weight(1f).padding(16.dp)
         )
         if (showConnect) {

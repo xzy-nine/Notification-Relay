@@ -37,6 +37,44 @@ data class AuthInfo(
 )
 
 class DeviceConnectionManager(private val context: android.content.Context) {
+    // 设备信息缓存，解决未认证设备无法显示详细信息问题
+    private val deviceInfoCache = mutableMapOf<String, DeviceInfo>()
+    // 持久化认证设备表的key
+    private val PREFS_AUTHED_DEVICES = "authed_devices_json"
+
+    // 加载已认证设备
+    private fun loadAuthedDevices() {
+        val json = prefs.getString(PREFS_AUTHED_DEVICES, null) ?: return
+        try {
+            val arr = org.json.JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val uuid = obj.getString("uuid")
+                val publicKey = obj.getString("publicKey")
+                val sharedSecret = obj.getString("sharedSecret")
+                val isAccepted = obj.optBoolean("isAccepted", true)
+                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted)
+            }
+        } catch (_: Exception) {}
+    }
+
+    // 保存已认证设备
+    private fun saveAuthedDevices() {
+        try {
+            val arr = org.json.JSONArray()
+            for ((uuid, auth) in authenticatedDevices) {
+                if (auth.isAccepted) {
+                    val obj = org.json.JSONObject()
+                    obj.put("uuid", uuid)
+                    obj.put("publicKey", auth.publicKey)
+                    obj.put("sharedSecret", auth.sharedSecret)
+                    obj.put("isAccepted", auth.isAccepted)
+                    arr.put(obj)
+                }
+            }
+            prefs.edit().putString(PREFS_AUTHED_DEVICES, arr.toString()).apply()
+        } catch (_: Exception) {}
+    }
     /**
      * 新增：服务端握手请求回调，UI层应监听此回调并弹窗确认，参数为请求设备uuid/displayName/公钥，回调参数true=同意，false=拒绝
      */
@@ -45,8 +83,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      * 设备发现/连接/数据发送/接收，全部本地实现。
      */
     var onNotificationDataReceived: ((String) -> Unit)? = null
-    private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
-    val devices: StateFlow<List<DeviceInfo>> = _devices
+    private val _devices = MutableStateFlow<Map<String, Pair<DeviceInfo, Boolean>>>(emptyMap())
+    /**
+     * 设备状态流：key为uuid，value为(DeviceInfo, isOnline)
+     * 只要认证过的设备会一直保留，未认证设备3秒未发现则消失
+     */
+    val devices: StateFlow<Map<String, Pair<DeviceInfo, Boolean>>> = _devices
     private val uuid: String
     // 认证设备表，key为uuid
     private val authenticatedDevices = mutableMapOf<String, AuthInfo>()
@@ -85,6 +127,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
         // 私钥可临时
         localPrivateKey = UUID.randomUUID().toString().replace("-", "")
+        loadAuthedDevices()
         startOfflineDeviceCleaner()
     }
     fun startDiscovery() {
@@ -126,8 +169,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                 val ip = packet.address.hostAddress
                                 if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid) {
                                     val device = DeviceInfo(uuid, displayName, ip, port)
-                                    _devices.value = (_devices.value.filter { it.uuid != uuid } + device)
                                     deviceLastSeen[uuid] = System.currentTimeMillis()
+                                    synchronized(deviceInfoCache) {
+                                        deviceInfoCache[uuid] = device
+                                    }
+                                    coroutineScope.launch {
+                                        updateDeviceList()
+                                    }
                                 }
                             }
                         }
@@ -143,20 +191,50 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         startServer()
     }
 
-    // 定时清理离线设备
+    // 统一设备状态管理：3秒未发现未认证设备直接移除，已认证设备置灰
     private fun startOfflineDeviceCleaner() {
         coroutineScope.launch {
             while (true) {
-                delay(15_000)
-                val now = System.currentTimeMillis()
-                val timeout = 30_000
-                val toRemove = deviceLastSeen.filter { now - it.value > timeout }.keys
-                if (toRemove.isNotEmpty()) {
-                    _devices.value = _devices.value.filterNot { it.uuid in toRemove }
-                    toRemove.forEach { deviceLastSeen.remove(it) }
+                delay(1000)
+                updateDeviceList()
+            }
+        }
+    }
+
+    private fun updateDeviceList() {
+        val now = System.currentTimeMillis()
+        val authed = synchronized(authenticatedDevices) { authenticatedDevices.keys.toSet() }
+        val allUuids = (deviceLastSeen.keys + authed).toSet()
+        val newMap = mutableMapOf<String, Pair<DeviceInfo, Boolean>>()
+        val unauthedTimeout = 30_000L // 未认证设备保留30秒
+        for (uuid in allUuids) {
+            val lastSeen = deviceLastSeen[uuid]
+            val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
+            if (auth != null) {
+                // 已认证设备，离线也保留
+                val isOnline = lastSeen != null && now - lastSeen <= 3000L
+                val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, "已认证设备", "", listenPort)
+                newMap[uuid] = info to isOnline
+            } else {
+                // 未认证设备，30秒未发现则移除
+                val isOnline = lastSeen != null && now - lastSeen <= unauthedTimeout
+                if (isOnline) {
+                    val info = getDeviceInfo(uuid)
+                    if (info != null) newMap[uuid] = info to true
+                } else {
+                    deviceLastSeen.remove(uuid)
                 }
             }
         }
+        _devices.value = newMap
+    }
+
+    private fun getDeviceInfo(uuid: String): DeviceInfo? {
+        // 优先从缓存取，取不到再从已展示的设备流取
+        synchronized(deviceInfoCache) {
+            deviceInfoCache[uuid]?.let { return it }
+        }
+        return _devices.value[uuid]?.first
     }
 
     // 连接设备
@@ -189,6 +267,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         synchronized(authenticatedDevices) {
                             authenticatedDevices.remove(device.uuid)
                             authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true)
+                            saveAuthedDevices()
                         }
                         callback?.invoke(true, null)
                     } else {
@@ -266,7 +345,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     if (parts.size >= 3) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
-                                        val remoteDevice = _devices.value.find { it.uuid == remoteUuid } ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress ?: "", client.port)
+                                        val remoteDevice = _devices.value[remoteUuid]?.first ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress ?: "", client.port)
                                         // 通过回调通知UI弹窗确认
                                         val handshakeHandler = onHandshakeRequest
                                         if (handshakeHandler != null) {
@@ -280,6 +359,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                                 synchronized(authenticatedDevices) {
                                                     authenticatedDevices.remove(remoteUuid)
                                                     authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true)
+                                                    saveAuthedDevices()
                                                 }
                                                 } else {
                                                     synchronized(rejectedDevices) {
