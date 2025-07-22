@@ -67,6 +67,8 @@ dependencies {
     // OkHttp & Okio 用于 WebSocket 和 IO
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okio:okio:3.7.0")
+    // 局域网设备发现 jmdns
+    implementation("org.jmdns:jmdns:3.5.7")
     implementation(project(":miuix-main:miuix"))
 }
 
