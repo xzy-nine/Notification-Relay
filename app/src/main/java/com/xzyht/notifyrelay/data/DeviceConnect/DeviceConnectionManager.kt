@@ -18,6 +18,7 @@ import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
+import android.util.Log
 
 
 data class DeviceInfo(
@@ -59,18 +60,22 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             try {
                 if (jmDNS == null) {
-                    // 绑定到本机局域网IP
-                    val wifiManager = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
-                    val ip = wifiManager.connectionInfo.ipAddress
-                    val hostAddress = InetAddress.getByName(
-                        String.format(
-                            "%d.%d.%d.%d",
-                            ip and 0xff,
-                            ip shr 8 and 0xff,
-                            ip shr 16 and 0xff,
-                            ip shr 24 and 0xff
-                        )
+                    // 绑定到本机局域网IP，避免 0.0.0.0
+                    val wifiManager = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                    val ip = wifiManager?.connectionInfo?.ipAddress ?: 0
+                    if (ip == 0) {
+                        // 未连接 WiFi，无法发现设备
+                        Log.d("NotifyRelay", "未连接 WiFi，跳过 JmDNS 初始化")
+                        return@launch
+                    }
+                    val ipBytes = byteArrayOf(
+                        (ip and 0xff).toByte(),
+                        (ip shr 8 and 0xff).toByte(),
+                        (ip shr 16 and 0xff).toByte(),
+                        (ip shr 24 and 0xff).toByte()
                     )
+                    val hostAddress = InetAddress.getByAddress(ipBytes)
+                    Log.d("NotifyRelay", "本机IP: ${hostAddress.hostAddress}")
                     jmDNS = JmDNS.create(hostAddress)
                 }
                 // 注册本机服务，name 只用设备名，不拼接 uuid，uuid 通过属性传递
@@ -153,7 +158,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     open fun handleNotificationData(data: String) {
         // 这里可将数据分发到通知历史等模块，预留加密扩展点
         // TODO: 实际业务处理
-        println("收到通知数据: $data")
+        Log.d("NotifyRelay", "收到通知数据: $data")
     }
 
     // 启动TCP服务监听，接收其他设备的通知
