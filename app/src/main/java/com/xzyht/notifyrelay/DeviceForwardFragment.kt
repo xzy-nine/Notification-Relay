@@ -21,9 +21,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+import androidx.compose.ui.graphics.Color
 
 
 class DeviceForwardFragment : Fragment() {
@@ -86,6 +88,24 @@ fun DeviceForwardScreen(
             val newSet = authedDeviceUuids + uuid
             authedDeviceUuids = newSet
             saveAuthedUuids(newSet)
+        }
+    }
+    // 新增：删除已认证设备
+    fun removeAuthedDevice(uuid: String) {
+        if (authedDeviceUuids.contains(uuid)) {
+            val newSet = authedDeviceUuids - uuid
+            authedDeviceUuids = newSet
+            saveAuthedUuids(newSet)
+            // 反射移除DeviceConnectionManager的认证表项
+            val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+            field.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val map = field.get(deviceManager) as? MutableMap<String, *>
+            map?.remove(uuid)
+            // 同步保存
+            val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+            saveMethod.isAccessible = true
+            saveMethod.invoke(deviceManager)
         }
     }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -162,181 +182,58 @@ fun DeviceForwardScreen(
 
     fun isAuthed(uuid: String) = authedDeviceUuids.contains(uuid)
 
-    if (isLandscape) {
-        // 横屏：原有左右分栏
-        Box(
-            modifier = Modifier.fillMaxSize().background(colorScheme.background)
-        ) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(colorScheme.background)
+    ) {
+        if (isLandscape) {
+            // 横屏：设备列表左侧（1/3），聊天区右侧（2/3），聊天区显示聊天测试框
             androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
-                // 设备列表
-                androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxSize()) {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                            val isAuthed = isAuthed(device.uuid)
-                            val isOnline = deviceStates[device.uuid] == true
-                            DeviceItem(
-                                device = device,
-                                onConnect = { showConfirmDialog = device },
-                                onSelect = {
-                                    selectedDevice = device
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "UUID: ${device.uuid}",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                selected = selectedDevice?.uuid == device.uuid,
-                                showConnect = !isAuthed,
-                                isOnline = isOnline,
-                                isAuthed = isAuthed
-                            )
-                        }
-                    }
-                    // 被拒绝设备管理按钮
-                    androidx.compose.material3.TextButton(onClick = { showRejectedDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                        Text("管理被拒绝设备", color = colorScheme.primary)
-                    }
+                androidx.compose.foundation.layout.Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .padding(12.dp)
+                ) {
+                    DeviceListPanel(
+                        devices = devices,
+                        rejectedDeviceUuids = rejectedDeviceUuids,
+                        deviceStates = deviceStates,
+                        selectedDevice = selectedDevice,
+                        isAuthed = ::isAuthed,
+                        onSelect = { selectedDevice = it },
+                        onConnect = { showConfirmDialog = it },
+                        onRemove = { removeAuthedDevice(it) },
+                        onManageRejected = { showRejectedDialog = true },
+                        context = context
+                    )
                 }
-                // 聊天框
-                androidx.compose.foundation.layout.Box(Modifier.weight(2f).fillMaxSize().background(colorScheme.surface)) {
-                    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-                        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
-                        if (isConnecting) {
-                            Text("正在连接...", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
-                        } else if (connectedDevice != null) {
-                            Text("已连接: ${connectedDevice?.displayName}", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
-                        }
-                        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
-                            items(chatHistory) { msg ->
-                                Text(msg, style = textStyles.body2)
+                androidx.compose.foundation.layout.Box(
+                    Modifier
+                        .weight(2f)
+                        .fillMaxSize()
+                        .padding(12.dp)
+                        .background(colorScheme.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                ) {
+                    ChatPanel(
+                        chatHistory = chatHistory,
+                        chatInput = chatInput,
+                        onInputChange = { chatInput = it },
+                        onSend = {
+                            val dev = selectedDevice
+                            if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
+                                deviceManager.sendNotificationData(dev, chatInput)
+                                chatHistory = chatHistory + "发送: $chatInput"
+                                chatInput = ""
                             }
-                        }
-                        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
-                            androidx.compose.material3.OutlinedTextField(
-                                value = chatInput,
-                                onValueChange = { chatInput = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("输入消息...") }
-                            )
-                            Button(
-                                onClick = {
-                                    val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
-                                        deviceManager.sendNotificationData(dev, chatInput)
-                                        chatHistory = chatHistory + "发送: $chatInput"
-                                        chatInput = ""
-                                    }
-                                },
-                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            ) {
-                                Text("发送")
-                            }
-                        }
-                    }
+                        },
+                        canSend = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
+                        isConnecting = isConnecting,
+                        connectedDevice = connectedDevice
+                    )
                 }
             }
-            // 服务端握手弹窗
-            if (pendingHandshake != null) {
-                val (dev, pubKey) = pendingHandshake!!
-                AlertDialog(
-                    onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
-                    title = { Text("有设备请求连接") },
-                    text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            handshakeCallback?.invoke(true)
-                            pendingHandshake = null
-                            handshakeCallback = null
-                        }) { Text("允许") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            handshakeCallback?.invoke(false)
-                            pendingHandshake = null
-                            handshakeCallback = null
-                        }) { Text("拒绝") }
-                    }
-                )
-            }
-            // 被拒绝设备管理弹窗
-            if (showRejectedDialog) {
-                AlertDialog(
-                    onDismissRequest = { showRejectedDialog = false },
-                    title = { Text("被拒绝的设备") },
-                    text = {
-                        if (rejectedDeviceUuids.isEmpty()) Text("无被拒绝设备")
-                        else LazyColumn {
-                            items(devices.filter { rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(device.displayName, Modifier.weight(1f))
-                                    TextButton(onClick = {
-                                        // 反射移除
-                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                        rejField.isAccessible = true
-                                        @Suppress("UNCHECKED_CAST")
-                                        val set = rejField.get(deviceManager) as? MutableSet<String>
-                                        set?.remove(device.uuid)
-                                        showRejectedDialog = false
-                                    }) { Text("移除") }
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showRejectedDialog = false }) { Text("关闭") }
-                    }
-                )
-            }
-            if (showConfirmDialog != null) {
-                AlertDialog(
-                    onDismissRequest = { showConfirmDialog = null },
-                    title = { Text("连接确认") },
-                    text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            connectingDevice = showConfirmDialog
-                            isConnecting = true
-                            showConfirmDialog = null
-                            connectingDevice?.let { device ->
-                                deviceManager.connectToDevice(device) { success, error ->
-                                    isConnecting = false
-                                    if (success) {
-                                        connectedDevice = device
-                                        addAuthedDevice(device.uuid)
-                                    } else {
-                                        connectError = error ?: "连接失败"
-                                        // 认证被拒绝，刷新rejectedDeviceUuids
-                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                        rejField.isAccessible = true
-                                        @Suppress("UNCHECKED_CAST")
-                                        rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
-                                    }
-                                }
-                            }
-                        }) { Text("确认") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
-                    }
-                )
-            }
-            if (connectError != null) {
-                AlertDialog(
-                    onDismissRequest = { connectError = null },
-                    title = { Text("连接失败") },
-                    text = { Text(connectError ?: "未知错误") },
-                    confirmButton = {
-                        TextButton(onClick = { connectError = null }) { Text("确定") }
-                    }
-                )
-            }
-        }
-    } else {
-        // 竖屏：设备列表横排在顶部，聊天区在下方
-        Box(
-            modifier = Modifier.fillMaxSize().background(colorScheme.background)
-        ) {
+        } else {
+            // 竖屏：设备列表横排在顶部，聊天区在下方
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier.fillMaxSize().background(colorScheme.background).padding(16.dp)
             ) {
@@ -344,184 +241,141 @@ fun DeviceForwardScreen(
                     text = "设备与转发",
                     style = textStyles.title2.copy(color = colorScheme.onBackground)
                 )
-                // 设备按钮区固定高度为1/5，超出可横向滚动
                 val deviceBarWeight = 0.2f
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(deviceBarWeight)
                 ) {
-                    androidx.compose.foundation.lazy.LazyRow(
-                        modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = 8.dp)
-                    ) {
-                        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                            val isAuthed = isAuthed(device.uuid)
-                            val isOnline = deviceStates[device.uuid] == true
-                            androidx.compose.foundation.layout.Column(
-                                modifier = Modifier.padding(end = 12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Button(
-                                    onClick = {
-                                        selectedDevice = device
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "UUID: ${device.uuid}",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    },
-                                    enabled = true,
-                                    colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer) else androidx.compose.material3.ButtonDefaults.buttonColors()
-                                ) {
-                                    Text(device.displayName, style = textStyles.body2.copy(color = colorScheme.primary))
-                                }
-                                if (!isAuthed) {
-                                    Button(
-                                        onClick = { showConfirmDialog = device },
-                                        enabled = true,
-                                        modifier = Modifier.padding(top = 4.dp)
-                                    ) {
-                                        Text("连接")
-                                    }
-                                }
-                                if (isAuthed && !isOnline) {
-                                    Text("(离线)", color = colorScheme.outline, style = textStyles.body2)
-                                }
-                            }
-                        }
-                        // 被拒绝设备管理按钮
-                        item {
-                            androidx.compose.material3.TextButton(onClick = { showRejectedDialog = true }, modifier = Modifier.padding(top = 8.dp)) {
-                                Text("管理被拒绝设备", color = colorScheme.primary)
-                            }
-                        }
-                    }
+                    DeviceRowPanel(
+                        devices = devices,
+                        rejectedDeviceUuids = rejectedDeviceUuids,
+                        deviceStates = deviceStates,
+                        selectedDevice = selectedDevice,
+                        isAuthed = ::isAuthed,
+                        onSelect = { selectedDevice = it },
+                        onConnect = { showConfirmDialog = it },
+                        onRemove = { removeAuthedDevice(it) },
+                        onManageRejected = { showRejectedDialog = true },
+                        context = context
+                    )
                 }
-                // 聊天区占据剩余空间
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f - deviceBarWeight)
                         .background(colorScheme.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
                 ) {
-                    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
-                        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
-                        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
-                            items(chatHistory) { msg ->
-                                Text(msg, style = textStyles.body2)
+                    ChatPanel(
+                        chatHistory = chatHistory,
+                        chatInput = chatInput,
+                        onInputChange = { chatInput = it },
+                        onSend = {
+                            val dev = selectedDevice
+                            if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
+                                deviceManager.sendNotificationData(dev, chatInput)
+                                chatHistory = chatHistory + "发送: $chatInput"
+                                chatInput = ""
                             }
-                        }
-                        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
-                            androidx.compose.material3.OutlinedTextField(
-                                value = chatInput,
-                                onValueChange = { chatInput = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("输入消息...") }
-                            )
-                            Button(
-                                onClick = {
-                                    val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank() && isAuthed(dev.uuid)) {
-                                        deviceManager.sendNotificationData(dev, chatInput)
-                                        chatHistory = chatHistory + "发送: $chatInput"
-                                        chatInput = ""
-                                    }
-                                },
-                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            ) {
-                                Text("发送")
-                            }
-                        }
-                    }
+                        },
+                        canSend = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { isAuthed(it) } == true,
+                        isConnecting = isConnecting,
+                        connectedDevice = connectedDevice
+                    )
                 }
             }
-            // 服务端握手弹窗
-            if (pendingHandshake != null) {
-                val (dev, pubKey) = pendingHandshake!!
-                AlertDialog(
-                    onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
-                    title = { Text("有设备请求连接") },
-                    text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            handshakeCallback?.invoke(true)
-                            pendingHandshake = null
-                            handshakeCallback = null
-                        }) { Text("允许") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            handshakeCallback?.invoke(false)
-                            pendingHandshake = null
-                            handshakeCallback = null
-                        }) { Text("拒绝") }
+        }
+        // 公共弹窗区域
+        if (pendingHandshake != null) {
+            val (dev, pubKey) = pendingHandshake!!
+            AlertDialog(
+                onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
+                title = { Text("有设备请求连接") },
+                text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        handshakeCallback?.invoke(true)
+                        pendingHandshake = null
+                        handshakeCallback = null
+                    }) { Text("允许") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        handshakeCallback?.invoke(false)
+                        pendingHandshake = null
+                        handshakeCallback = null
+                    }) { Text("拒绝") }
+                }
+            )
+        }
+        if (showRejectedDialog) {
+            AlertDialog(
+                onDismissRequest = { showRejectedDialog = false },
+                title = { Text("被拒绝的设备") },
+                text = {
+                    if (rejectedDeviceUuids.isEmpty()) Text("无被拒绝设备")
+                    else LazyColumn {
+                        items(devices.filter { rejectedDeviceUuids.contains(it.uuid) }) { device ->
+                            androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(device.displayName, Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                    rejField.isAccessible = true
+                                    @Suppress("UNCHECKED_CAST")
+                                    val set = rejField.get(deviceManager) as? MutableSet<String>
+                                    set?.remove(device.uuid)
+                                    showRejectedDialog = false
+                                }) { Text("移除") }
+                            }
+                        }
                     }
-                )
-            }
-            // 被拒绝设备管理弹窗
-            if (showRejectedDialog) {
-                AlertDialog(
-                    onDismissRequest = { showRejectedDialog = false },
-                    title = { Text("被拒绝的设备") },
-                    text = {
-                        if (rejectedDeviceUuids.isEmpty()) Text("无被拒绝设备")
-                        else LazyColumn {
-                            items(devices.filter { rejectedDeviceUuids.contains(it.uuid) }) { device ->
-                                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(device.displayName, Modifier.weight(1f))
-                                    TextButton(onClick = {
-                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                        rejField.isAccessible = true
-                                        @Suppress("UNCHECKED_CAST")
-                                        val set = rejField.get(deviceManager) as? MutableSet<String>
-                                        set?.remove(device.uuid)
-                                        showRejectedDialog = false
-                                    }) { Text("移除") }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRejectedDialog = false }) { Text("关闭") }
+                }
+            )
+        }
+        if (showConfirmDialog != null) {
+            AlertDialog(
+                onDismissRequest = { showConfirmDialog = null },
+                title = { Text("连接确认") },
+                text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        connectingDevice = showConfirmDialog
+                        isConnecting = true
+                        showConfirmDialog = null
+                        connectingDevice?.let { device ->
+                            deviceManager.connectToDevice(device) { success, error ->
+                                isConnecting = false
+                                if (success) {
+                                    connectedDevice = device
+                                    addAuthedDevice(device.uuid)
+                                } else {
+                                    connectError = error ?: "连接失败"
+                                    val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                    rejField.isAccessible = true
+                                    @Suppress("UNCHECKED_CAST")
+                                    rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
                                 }
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showRejectedDialog = false }) { Text("关闭") }
-                    }
-                )
-            }
-            if (showConfirmDialog != null) {
-                AlertDialog(
-                    onDismissRequest = { showConfirmDialog = null },
-                    title = { Text("连接确认") },
-                    text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            connectingDevice = showConfirmDialog
-                            showConfirmDialog = null
-                            connectingDevice?.let { device ->
-                                deviceManager.connectToDevice(device) { success, error ->
-                                    if (success) {
-                                        addAuthedDevice(device.uuid)
-                                    } else {
-                                        connectError = error ?: "连接失败"
-                                    }
-                                }
-                            }
-                        }) { Text("确认") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
-                    }
-                )
-            }
-            if (connectError != null) {
-                AlertDialog(
-                    onDismissRequest = { connectError = null },
-                    title = { Text("连接失败") },
-                    text = { Text(connectError ?: "未知错误") },
-                    confirmButton = {
-                        TextButton(onClick = { connectError = null }) { Text("确定") }
-                    }
-                )
-            }
+                    }) { Text("确认") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
+                }
+            )
+        }
+        if (connectError != null) {
+            AlertDialog(
+                onDismissRequest = { connectError = null },
+                title = { Text("连接失败") },
+                text = { Text(connectError ?: "未知错误") },
+                confirmButton = {
+                    TextButton(onClick = { connectError = null }) { Text("确定") }
+                }
+            )
         }
     }
 }
@@ -531,12 +385,14 @@ fun DeviceItem(
     device: DeviceInfo,
     onConnect: () -> Unit,
     onSelect: () -> Unit = {},
+    onRemove: (() -> Unit)? = null,
     selected: Boolean = false,
     showConnect: Boolean = true,
     isOnline: Boolean = true,
     isAuthed: Boolean = false
 ) {
     val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
     val textColor = if (!isOnline && isAuthed) colorScheme.outline else colorScheme.primary
     val bgColor = when {
         selected -> colorScheme.primaryContainer
@@ -545,19 +401,201 @@ fun DeviceItem(
     }
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
-            .fillMaxSize()
-            .background(bgColor)
+            .fillMaxWidth()
+            .background(bgColor, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
             .clickable { onSelect() },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = device.displayName + if (!isOnline && isAuthed) " (离线)" else "",
-            style = MiuixTheme.textStyles.body1.copy(color = textColor),
+            style = textStyles.body1.copy(color = textColor),
             modifier = Modifier.weight(1f).padding(16.dp)
         )
         if (showConnect) {
-            Button(onClick = onConnect, modifier = Modifier.padding(end = 8.dp)) {
-                Text("连接")
+            Button(
+                onClick = onConnect,
+                modifier = Modifier.padding(end = 8.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary)
+            ) {
+                Text("连接", color = colorScheme.onPrimary)
+            }
+        }
+        // 删除按钮：仅在选中且已认证时显示
+        if (isAuthed && selected && onRemove != null) {
+            Button(
+                onClick = onRemove,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.Red),
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
+                Text("删除", color = colorScheme.onPrimary)
+            }
+        }
+    }
+}
+
+@Composable
+fun DeviceListPanel(
+    devices: List<DeviceInfo>,
+    rejectedDeviceUuids: Set<String>,
+    deviceStates: Map<String, Boolean>,
+    selectedDevice: DeviceInfo?,
+    isAuthed: (String) -> Boolean,
+    onSelect: (DeviceInfo) -> Unit,
+    onConnect: (DeviceInfo) -> Unit,
+    onRemove: (String) -> Unit,
+    onManageRejected: () -> Unit,
+    context: android.content.Context
+) {
+    val colorScheme = MiuixTheme.colorScheme
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
+            val authed = isAuthed(device.uuid)
+            val isOnline = deviceStates[device.uuid] == true
+            DeviceItem(
+                device = device,
+                onConnect = { onConnect(device) },
+                onSelect = {
+                    onSelect(device)
+                    android.widget.Toast.makeText(
+                        context,
+                        "UUID: ${device.uuid}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onRemove = if (authed && selectedDevice?.uuid == device.uuid) { { onRemove(device.uuid) } } else null,
+                selected = selectedDevice?.uuid == device.uuid,
+                showConnect = !authed,
+                isOnline = isOnline,
+                isAuthed = authed
+            )
+        }
+        item {
+            TextButton(
+                onClick = onManageRejected,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentWidth(Alignment.End)
+                    .padding(8.dp)
+            ) {
+                Text("管理被拒绝设备", color = colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+fun DeviceRowPanel(
+    devices: List<DeviceInfo>,
+    rejectedDeviceUuids: Set<String>,
+    deviceStates: Map<String, Boolean>,
+    selectedDevice: DeviceInfo?,
+    isAuthed: (String) -> Boolean,
+    onSelect: (DeviceInfo) -> Unit,
+    onConnect: (DeviceInfo) -> Unit,
+    onRemove: (String) -> Unit,
+    onManageRejected: () -> Unit,
+    context: android.content.Context
+) {
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = 8.dp)
+    ) {
+        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
+            val authed = isAuthed(device.uuid)
+            val isOnline = deviceStates[device.uuid] == true
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.padding(end = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = {
+                        onSelect(device)
+                        android.widget.Toast.makeText(
+                            context,
+                            "UUID: ${device.uuid}",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    enabled = true,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.surface)
+                ) {
+                    Text(device.displayName, style = textStyles.body2.copy(color = colorScheme.primary))
+                }
+                if (!authed) {
+                    Button(
+                        onClick = { onConnect(device) },
+                        enabled = true,
+                        modifier = Modifier.padding(top = 4.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary)
+                    ) {
+                        Text("连接", color = colorScheme.onPrimary)
+                    }
+                }
+                if (authed && !isOnline) {
+                    Text("(离线)", color = colorScheme.outline, style = textStyles.body2)
+                }
+                if (authed && selectedDevice?.uuid == device.uuid) {
+                    Button(
+                        onClick = { onRemove(device.uuid) },
+                        modifier = Modifier.padding(top = 2.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("删除", color = colorScheme.onPrimary)
+                    }
+                }
+            }
+        }
+        item {
+            TextButton(onClick = onManageRejected, modifier = Modifier.padding(top = 8.dp)) {
+                Text("管理被拒绝设备", color = colorScheme.primary)
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatPanel(
+    chatHistory: List<String>,
+    chatInput: String,
+    onInputChange: (String) -> Unit,
+    onSend: () -> Unit,
+    canSend: Boolean,
+    isConnecting: Boolean,
+    connectedDevice: DeviceInfo?
+) {
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
+        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
+        if (isConnecting) {
+            Text("正在连接...", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
+        } else if (connectedDevice != null) {
+            Text("已连接: ${connectedDevice.displayName}", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
+        }
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
+            items(chatHistory) { msg ->
+                Text(msg, style = textStyles.body2)
+            }
+        }
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
+            androidx.compose.material3.OutlinedTextField(
+                value = chatInput,
+                onValueChange = onInputChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("输入消息...") }
+            )
+            Button(
+                onClick = onSend,
+                enabled = canSend,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            ) {
+                Text("发送")
             }
         }
     }

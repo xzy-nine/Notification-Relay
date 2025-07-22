@@ -131,14 +131,24 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         startOfflineDeviceCleaner()
     }
     fun startDiscovery() {
+        // 优先获取蓝牙设备名，获取不到则用型号
+        fun getLocalDisplayName(): String {
+            return try {
+                val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+                if (!name.isNullOrEmpty()) name else android.os.Build.MODEL
+            } catch (_: Exception) {
+                android.os.Build.MODEL
+            }
+        }
         // 启动UDP广播线程，定期广播本机信息
         if (broadcastThread == null) {
             broadcastThread = Thread {
                 try {
                     val socket = java.net.DatagramSocket()
-                    val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${android.os.Build.MODEL}:${listenPort}").toByteArray()
+                    val displayName = getLocalDisplayName()
                     val group = java.net.InetAddress.getByName("255.255.255.255")
                     while (true) {
+                        val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
                         val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
                         socket.send(packet)
                         Thread.sleep(3000)
