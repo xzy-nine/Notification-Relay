@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,7 +25,35 @@ import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
 
+
 class DeviceForwardFragment : Fragment() {
+    // 认证通过设备持久化key
+    private val PREFS_NAME = "notifyrelay_device_prefs"
+    private val KEY_AUTHED_UUIDS = "authed_device_uuids"
+
+    companion object {
+        // 全局单例，保证同一进程内所有页面共享同一个 deviceManager
+        @Volatile
+        private var sharedDeviceManager: DeviceConnectionManager? = null
+        fun getDeviceManager(context: android.content.Context): DeviceConnectionManager {
+            return sharedDeviceManager ?: synchronized(this) {
+                sharedDeviceManager ?: DeviceConnectionManager(context.applicationContext).also { sharedDeviceManager = it }
+            }
+        }
+    }
+
+    // 加载已认证设备uuid集合
+    fun loadAuthedUuids(): Set<String> {
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, 0)
+        return prefs.getStringSet(KEY_AUTHED_UUIDS, emptySet()) ?: emptySet()
+    }
+
+    // 保存已认证设备uuid集合
+    fun saveAuthedUuids(uuids: Set<String>) {
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, 0)
+        prefs.edit().putStringSet(KEY_AUTHED_UUIDS, uuids).apply()
+    }
+
     override fun onCreateView(
         inflater: android.view.LayoutInflater,
         container: android.view.ViewGroup?,
@@ -33,7 +62,11 @@ class DeviceForwardFragment : Fragment() {
         return ComposeView(requireContext()).apply {
             setContent {
                 MiuixTheme {
-                    DeviceForwardScreen()
+                    DeviceForwardScreen(
+                        getDeviceManager(requireContext()),
+                        loadAuthedUuids = { loadAuthedUuids() },
+                        saveAuthedUuids = { saveAuthedUuids(it) }
+                    )
                 }
             }
         }
@@ -41,16 +74,19 @@ class DeviceForwardFragment : Fragment() {
 }
 
 @Composable
-fun DeviceForwardScreen() {
+fun DeviceForwardScreen(
+    deviceManager: DeviceConnectionManager,
+    loadAuthedUuids: () -> Set<String>,
+    saveAuthedUuids: (Set<String>) -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    val deviceManager = remember { DeviceConnectionManager(context) }
     // 服务端握手请求弹窗
     var pendingHandshake by remember { mutableStateOf<Pair<DeviceInfo, String>?>(null) }
     var handshakeCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
     // 被拒绝设备管理弹窗
-    var showRejectedDialog by remember { mutableStateOf(false) }
+    var showRejectedDialog by rememberSaveable { mutableStateOf(false) }
     // 监听服务端握手请求，弹窗确认
     DisposableEffect(Unit) {
         deviceManager.onHandshakeRequest = { device, pubKey, cb ->
@@ -64,16 +100,18 @@ fun DeviceForwardScreen() {
     val devices by deviceManager.devices.collectAsState()
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
-    var connectError by remember { mutableStateOf<String?>(null) }
-    var chatInput by remember { mutableStateOf("") }
-    var chatHistory by remember { mutableStateOf(listOf<String>()) }
+    var connectError by rememberSaveable { mutableStateOf<String?>(null) }
+    var chatInput by rememberSaveable { mutableStateOf("") }
+    var chatHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
-    var isConnecting by remember { mutableStateOf(false) }
+    var isConnecting by rememberSaveable { mutableStateOf(false) }
     // 认证通过设备uuid集合
-    var authedDeviceUuids by remember { mutableStateOf(setOf<String>()) }
+    var authedDeviceUuids by rememberSaveable {
+        mutableStateOf(loadAuthedUuids())
+    }
     // 被拒绝设备uuid集合
-    var rejectedDeviceUuids by remember { mutableStateOf(setOf<String>()) }
+    var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
 
     // 启动设备发现
     LaunchedEffect(Unit) {
@@ -98,10 +136,14 @@ fun DeviceForwardScreen() {
         field.isAccessible = true
         @Suppress("UNCHECKED_CAST")
         val map = field.get(deviceManager) as? Map<String, *>
-        authedDeviceUuids = map?.filter { (it.value as? Any)?.let { v ->
+        val newAuthed = map?.filter { (it.value as? Any)?.let { v ->
             val isAccepted = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }.getBoolean(v)
             isAccepted
         } == true }?.keys?.toSet() ?: emptySet()
+        if (newAuthed != authedDeviceUuids) {
+            authedDeviceUuids = newAuthed
+            saveAuthedUuids(newAuthed)
+        }
         val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
         rejField.isAccessible = true
         @Suppress("UNCHECKED_CAST")
