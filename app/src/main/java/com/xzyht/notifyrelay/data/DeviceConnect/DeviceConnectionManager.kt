@@ -31,7 +31,16 @@ class DeviceConnectionManager {
     var onNotificationDataReceived: ((String) -> Unit)? = null
     // 设备列表
     private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
-    val devices: StateFlow<List<DeviceInfo>> = _devices
+    // 只暴露非本机设备列表
+    val devices: StateFlow<List<DeviceInfo>> = object : StateFlow<List<DeviceInfo>> {
+        override val value: List<DeviceInfo>
+            get() = _devices.value.filter { it.uuid != this@DeviceConnectionManager.uuid }
+        override suspend fun collect(collector: kotlinx.coroutines.flow.FlowCollector<List<DeviceInfo>>) = _devices.collect {
+            collector.emit(it.filter { d -> d.uuid != this@DeviceConnectionManager.uuid })
+        }
+        override val replayCache: List<List<DeviceInfo>>
+            get() = _devices.replayCache.map { list -> list.filter { it.uuid != this@DeviceConnectionManager.uuid } }
+    }
 
     private var jmDNS: JmDNS? = null
     private var serviceInfo: ServiceInfo? = null
@@ -49,10 +58,10 @@ class DeviceConnectionManager {
                 if (jmDNS == null) {
                     jmDNS = JmDNS.create()
                 }
-                // 注册本机服务
+                // 注册本机服务，name 只用设备名，不拼接 uuid，uuid 通过属性传递
                 serviceInfo = ServiceInfo.create(
                     serviceType,
-                    "$serviceName-$uuid",
+                    serviceName,
                     listenPort,
                     "uuid=$uuid,displayName=$serviceName"
                 )
@@ -69,16 +78,16 @@ class DeviceConnectionManager {
                     }
                     override fun serviceResolved(event: ServiceEvent) {
                         val info = event.info
-                        val uuid = info.getPropertyString("uuid") ?: info.name
+                        val uuid = info.getPropertyString("uuid") ?: return // 没有 uuid 属性直接跳过
                         val displayName = info.getPropertyString("displayName") ?: info.name
                         val ip = info.inetAddresses.firstOrNull()?.hostAddress ?: return
                         val port = info.port
                         if (uuid == this@DeviceConnectionManager.uuid) return // 跳过本机
                         val device = DeviceInfo(uuid, displayName, ip, port)
-                        // 去重添加
-                        if (_devices.value.none { it.uuid == uuid }) {
-                            _devices.value = _devices.value + device
-                        }
+                        // 先过滤掉所有本机和同 uuid 设备，再追加新设备，保证唯一且无本机
+                        _devices.value = (_devices.value
+                            .filter { it.uuid != this@DeviceConnectionManager.uuid && it.uuid != uuid }
+                            + device)
                     }
                 })
 

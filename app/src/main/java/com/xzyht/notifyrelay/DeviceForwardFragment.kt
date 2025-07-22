@@ -42,7 +42,9 @@ class DeviceForwardFragment : Fragment() {
 
 @Composable
 fun DeviceForwardScreen() {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceConnectionManager() }
     val devices by deviceManager.devices.collectAsState()
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -68,79 +70,197 @@ fun DeviceForwardScreen() {
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(colorScheme.background)
-    ) {
-        // 设备列表和聊天框左右分栏
-        androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
-            // 设备列表
-            androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxSize()) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(devices) { device ->
-                        DeviceItem(
-                            device = device,
-                            onConnect = {
-                                showConfirmDialog = device
-                            },
-                            onSelect = {
-                                selectedDevice = device
-                            },
-                            selected = selectedDevice?.uuid == device.uuid
-                        )
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        // 横屏：原有左右分栏
+        Box(
+            modifier = Modifier.fillMaxSize().background(colorScheme.background)
+        ) {
+            androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                // 设备列表
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxSize()) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(devices) { device ->
+                            DeviceItem(
+                                device = device,
+                                onConnect = {
+                                    showConfirmDialog = device
+                                },
+                                onSelect = {
+                                    selectedDevice = device
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "UUID: ${device.uuid}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                selected = selectedDevice?.uuid == device.uuid
+                            )
+                        }
+                    }
+                }
+                // 聊天框
+                androidx.compose.foundation.layout.Box(Modifier.weight(2f).fillMaxSize().background(colorScheme.surface)) {
+                    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+                        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
+                        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            items(chatHistory) { msg ->
+                                Text(msg, style = textStyles.body2)
+                            }
+                        }
+                        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = chatInput,
+                                onValueChange = { chatInput = it },
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("输入消息...") }
+                            )
+                            Button(
+                                onClick = {
+                                    val dev = selectedDevice
+                                    if (dev != null && chatInput.isNotBlank()) {
+                                        deviceManager.sendNotificationData(dev, chatInput)
+                                        chatHistory = chatHistory + "发送: $chatInput"
+                                        chatInput = ""
+                                    }
+                                },
+                                enabled = selectedDevice != null && chatInput.isNotBlank(),
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            ) {
+                                Text("发送")
+                            }
+                        }
                     }
                 }
             }
-            // 聊天框
-            androidx.compose.foundation.layout.Box(Modifier.weight(2f).fillMaxSize().background(colorScheme.surface)) {
-                androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
-                    Text("聊天测试", style = MiuixTheme.textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
-                    LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
-                        items(chatHistory) { msg ->
-                            Text(msg, style = MiuixTheme.textStyles.body2)
-                        }
+            if (showConfirmDialog != null) {
+                AlertDialog(
+                    onDismissRequest = { showConfirmDialog = null },
+                    title = { Text("连接确认") },
+                    text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            connectingDevice = showConfirmDialog
+                            showConfirmDialog = null
+                            connectingDevice?.let { deviceManager.connectToDevice(it) }
+                        }) { Text("确认") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
                     }
-                    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = chatInput,
-                            onValueChange = { chatInput = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("输入消息...") }
-                        )
-                        Button(
-                            onClick = {
-                                val dev = selectedDevice
-                                if (dev != null && chatInput.isNotBlank()) {
-                                    deviceManager.sendNotificationData(dev, chatInput)
-                                    chatHistory = chatHistory + "发送: $chatInput"
-                                    chatInput = ""
-                                }
-                            },
-                            enabled = selectedDevice != null && chatInput.isNotBlank(),
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        ) {
-                            Text("发送")
-                        }
-                    }
-                }
+                )
             }
         }
-
-        if (showConfirmDialog != null) {
-            AlertDialog(
-                onDismissRequest = { showConfirmDialog = null },
-                title = { Text("连接确认") },
-                text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        connectingDevice = showConfirmDialog
-                        showConfirmDialog = null
-                        connectingDevice?.let { deviceManager.connectToDevice(it) }
-                    }) { Text("确认") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
+    } else {
+        // 竖屏：设备列表横排在顶部，聊天区在下方
+        Box(
+            modifier = Modifier.fillMaxSize().background(colorScheme.background)
+        ) {
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().background(colorScheme.background).padding(16.dp)
+            ) {
+                Text(
+                    text = "设备与转发",
+                    style = textStyles.title2.copy(color = colorScheme.onBackground)
+                )
+                // 设备按钮区固定高度为1/5，超出可横向滚动
+                val deviceBarWeight = 0.2f
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(deviceBarWeight)
+                ) {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = 8.dp)
+                    ) {
+                        items(devices) { device ->
+                            androidx.compose.foundation.layout.Column(
+                                modifier = Modifier.padding(end = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Button(
+                                    onClick = {
+                                        selectedDevice = device
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "UUID: ${device.uuid}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    enabled = true,
+                                    colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer) else androidx.compose.material3.ButtonDefaults.buttonColors()
+                                ) {
+                                    Text(device.displayName, style = textStyles.body2.copy(color = colorScheme.primary))
+                                }
+                                Button(
+                                    onClick = { showConfirmDialog = device },
+                                    enabled = true,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text("连接")
+                                }
+                            }
+                        }
+                    }
                 }
-            )
+                // 聊天区占据剩余空间
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f - deviceBarWeight)
+                        .background(colorScheme.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                ) {
+                    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
+                        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
+                        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            items(chatHistory) { msg ->
+                                Text(msg, style = textStyles.body2)
+                            }
+                        }
+                        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth()) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = chatInput,
+                                onValueChange = { chatInput = it },
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("输入消息...") }
+                            )
+                            Button(
+                                onClick = {
+                                    val dev = selectedDevice
+                                    if (dev != null && chatInput.isNotBlank()) {
+                                        deviceManager.sendNotificationData(dev, chatInput)
+                                        chatHistory = chatHistory + "发送: $chatInput"
+                                        chatInput = ""
+                                    }
+                                },
+                                enabled = selectedDevice != null && chatInput.isNotBlank(),
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            ) {
+                                Text("发送")
+                            }
+                        }
+                    }
+                }
+            }
+            if (showConfirmDialog != null) {
+                AlertDialog(
+                    onDismissRequest = { showConfirmDialog = null },
+                    title = { Text("连接确认") },
+                    text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            connectingDevice = showConfirmDialog
+                            showConfirmDialog = null
+                            connectingDevice?.let { deviceManager.connectToDevice(it) }
+                        }) { Text("确认") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
+                    }
+                )
+            }
         }
     }
 }
