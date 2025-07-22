@@ -167,7 +167,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                 val displayName = parts[2]
                                 val port = parts[3].toIntOrNull() ?: 23333
                                 val ip = packet.address.hostAddress
-                                if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid) {
+                                if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid && !ip.isNullOrEmpty()) {
                                     val device = DeviceInfo(uuid, displayName, ip, port)
                                     deviceLastSeen[uuid] = System.currentTimeMillis()
                                     synchronized(deviceInfoCache) {
@@ -375,7 +375,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     if (parts.size >= 3) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
-                                        val remoteDevice = _devices.value[remoteUuid]?.first ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress ?: "", client.port)
+                                        val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                                        val remoteDevice = _devices.value[remoteUuid]?.first ?: DeviceInfo(
+                                            remoteUuid,
+                                            "未知设备",
+                                            ip,
+                                            client.port
+                                        )
                                         // 通过回调通知UI弹窗确认
                                         val handshakeHandler = onHandshakeRequest
                                         if (handshakeHandler != null) {
