@@ -37,6 +37,28 @@ data class AuthInfo(
 )
 
 class DeviceConnectionManager(private val context: android.content.Context) {
+    /**
+     * 停止所有后台线程和网络服务，释放资源，供 Service onDestroy 调用
+     */
+    fun stopAll() {
+        try {
+            // 停止UDP广播线程
+            broadcastThread?.interrupt()
+            broadcastThread = null
+        } catch (_: Exception) {}
+        try {
+            // 停止UDP监听线程
+            listenThread?.interrupt()
+            listenThread = null
+        } catch (_: Exception) {}
+        try {
+            // 关闭TCP服务端口
+            serverSocket?.close()
+            serverSocket = null
+        } catch (_: Exception) {}
+        // 其他清理（如定时任务）
+        // coroutineScope.cancel() 不建议直接调用，避免影响外部协程
+    }
     // 设备信息缓存，解决未认证设备无法显示详细信息问题
     private val deviceInfoCache = mutableMapOf<String, DeviceInfo>()
     // 持久化认证设备表的key
@@ -355,14 +377,46 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 data
             }
         } else data
-        // 保证 UI 层能收到消息：主线程分发
+        // 发送原样安卓通知
         try {
             val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
             mainHandler.post {
+                try {
+                    val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    val channelId = "notifyrelay_channel"
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        val channel = android.app.NotificationChannel(
+                            channelId,
+                            "NotifyRelay",
+                            android.app.NotificationManager.IMPORTANCE_HIGH // 提高重要性
+                        ).apply {
+                            enableVibration(true)
+                            vibrationPattern = longArrayOf(0, 200, 100, 200)
+                            setShowBadge(true)
+                            description = "设备通知转发"
+                        }
+                        notificationManager.createNotificationChannel(channel)
+                    }
+                    val builder = android.app.Notification.Builder(context, channelId)
+                        .setContentTitle("NotifyRelay 消息")
+                        .setContentText(decrypted)
+                        .setStyle(android.app.Notification.BigTextStyle().bigText(decrypted))
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setAutoCancel(true)
+                        .setShowWhen(true)
+                        .setWhen(System.currentTimeMillis())
+                    Log.d("NotifyRelay", "准备发送系统通知")
+                    val notificationId = (System.currentTimeMillis() and 0x7FFFFFFF).toInt() // 保证正数且不溢出
+                    notificationManager.notify(notificationId, builder.build())
+                    Log.d("NotifyRelay", "系统通知已调用")
+                } catch (e: SecurityException) {
+                    Log.e("NotifyRelay", "发送系统通知失败，可能缺少通知权限: ${e.message}")
+                } catch (e: Exception) {
+                    Log.d("NotifyRelay", "发送系统通知失败: ${e.message}")
+                }
                 onNotificationDataReceived?.invoke(decrypted)
             }
         } catch (e: Exception) {
-            // fallback: 直接调用
             onNotificationDataReceived?.invoke(decrypted)
         }
     }

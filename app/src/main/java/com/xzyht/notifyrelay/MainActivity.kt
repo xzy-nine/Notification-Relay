@@ -2,6 +2,9 @@ package com.xzyht.notifyrelay
 
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 
+import android.content.Intent
+import com.xzyht.notifyrelay.service.DeviceConnectionService
+
 import android.os.Bundle
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
@@ -34,6 +37,8 @@ class MainActivity : FragmentActivity() {
                 val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
                 startActivity(intent)
             }
+            // 启动前台服务，保持设备在线（推荐统一调用 Service 的静态方法）
+            DeviceConnectionService.start(this)
             // 检查通知发送权限（Android 13+）
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
