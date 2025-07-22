@@ -53,8 +53,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 被拒绝设备表
     private val rejectedDevices = mutableSetOf<String>()
     // 本地密钥对（简单字符串模拟，实际应用可用RSA/ECDH等）
-    private val localPublicKey = UUID.randomUUID().toString().replace("-", "")
-    private val localPrivateKey = UUID.randomUUID().toString().replace("-", "")
+    private val localPublicKey: String
+    private val localPrivateKey: String
     private val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
@@ -66,14 +66,25 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private var listenThread: Thread? = null
 
     init {
-        val saved = prefs.getString("device_uuid", null)
-        if (saved != null) {
-            uuid = saved
+        val savedUuid = prefs.getString("device_uuid", null)
+        if (savedUuid != null) {
+            uuid = savedUuid
         } else {
             val newUuid = UUID.randomUUID().toString()
             prefs.edit().putString("device_uuid", newUuid).apply()
             uuid = newUuid
         }
+        // 公钥持久化
+        val savedPub = prefs.getString("device_pubkey", null)
+        if (savedPub != null) {
+            localPublicKey = savedPub
+        } else {
+            val newPub = UUID.randomUUID().toString().replace("-", "")
+            prefs.edit().putString("device_pubkey", newPub).apply()
+            localPublicKey = newPub
+        }
+        // 私钥可临时
+        localPrivateKey = UUID.randomUUID().toString().replace("-", "")
         startOfflineDeviceCleaner()
     }
     fun startDiscovery() {
@@ -170,8 +181,15 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     if (parts.size >= 3) {
                         val remotePubKey = parts[2]
                         // 简单生成共享密钥（实际应用应用DH等）
-                        val sharedSecret = (localPublicKey + remotePubKey).take(32)
-                        authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true)
+                        val sharedSecret = if (localPublicKey < remotePubKey)
+                            (localPublicKey + remotePubKey).take(32)
+                        else
+                            (remotePubKey + localPublicKey).take(32)
+                        // 先移除旧的认证表项
+                        synchronized(authenticatedDevices) {
+                            authenticatedDevices.remove(device.uuid)
+                            authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true)
+                        }
                         callback?.invoke(true, null)
                     } else {
                         callback?.invoke(false, "认证响应格式错误")
@@ -203,8 +221,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 }
                 val socket = Socket(device.ip, device.port)
                 val writer = OutputStreamWriter(socket.getOutputStream())
-                // 发送数据时带上认证信息
-                val payload = "DATA:${uuid}:${auth.publicKey}:${auth.sharedSecret}:${data}"
+                // 发送数据时 publicKey 字段应为本机公钥
+                val payload = "DATA:${uuid}:${localPublicKey}:${auth.sharedSecret}:${data}"
                 writer.write(payload + "\n")
                 writer.flush()
                 writer.close()
@@ -218,6 +236,16 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 接收通知数据
     fun handleNotificationData(data: String) {
         Log.d("NotifyRelay", "收到通知数据: $data")
+        // 保证 UI 层能收到消息：主线程分发
+        try {
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            mainHandler.post {
+                onNotificationDataReceived?.invoke(data)
+            }
+        } catch (e: Exception) {
+            // fallback: 直接调用
+            onNotificationDataReceived?.invoke(data)
+        }
     }
 
     // 启动TCP服务监听，接收其他设备的通知
@@ -240,23 +268,38 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         val remotePubKey = parts[2]
                                         val remoteDevice = _devices.value.find { it.uuid == remoteUuid } ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress ?: "", client.port)
                                         // 通过回调通知UI弹窗确认
-                                        onHandshakeRequest?.invoke(remoteDevice, remotePubKey) { accepted ->
-                                            coroutineScope.launch {
-                                                val writer = OutputStreamWriter(client.getOutputStream())
+                                        val handshakeHandler = onHandshakeRequest
+                                        if (handshakeHandler != null) {
+                                            handshakeHandler.invoke(remoteDevice, remotePubKey) { accepted ->
+                                                // 关键修复：无论回调在何线程，先同步写入认证表
                                                 if (accepted) {
-                                                    val sharedSecret = (localPublicKey + remotePubKey).take(32)
+                                                val sharedSecret = if (localPublicKey < remotePubKey)
+                                                    (localPublicKey + remotePubKey).take(32)
+                                                else
+                                                    (remotePubKey + localPublicKey).take(32)
+                                                synchronized(authenticatedDevices) {
+                                                    authenticatedDevices.remove(remoteUuid)
                                                     authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true)
-                                                    writer.write("ACCEPT:${uuid}:${localPublicKey}\n")
-                                                } else {
-                                                    rejectedDevices.add(remoteUuid)
-                                                    writer.write("REJECT:${uuid}\n")
                                                 }
-                                                writer.flush()
-                                                writer.close()
-                                                reader.close()
-                                                client.close()
+                                                } else {
+                                                    synchronized(rejectedDevices) {
+                                                        rejectedDevices.add(remoteUuid)
+                                                    }
+                                                }
+                                                coroutineScope.launch {
+                                                    val writer = OutputStreamWriter(client.getOutputStream())
+                                                    if (accepted) {
+                                                        writer.write("ACCEPT:${uuid}:${localPublicKey}\n")
+                                                    } else {
+                                                        writer.write("REJECT:${uuid}\n")
+                                                    }
+                                                    writer.flush()
+                                                    writer.close()
+                                                    reader.close()
+                                                    client.close()
+                                                }
                                             }
-                                        } ?: run {
+                                        } else {
                                             // 若无回调，默认拒绝
                                             val writer = OutputStreamWriter(client.getOutputStream())
                                             writer.write("REJECT:${uuid}\n")
@@ -282,10 +325,19 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         val sharedSecret = parts[3]
                                         val payload = parts[4]
                                         val auth = authenticatedDevices[remoteUuid]
-                                        if (auth != null && auth.publicKey == remotePubKey && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            onNotificationDataReceived?.invoke(payload) ?: handleNotificationData(payload)
+                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
+                                            // 只要 uuid、sharedSecret、isAccepted 匹配即可
+                                            handleNotificationData(payload)
                                         } else {
-                                            Log.d("NotifyRelay", "认证失败，拒绝处理数据")
+                                            if (auth == null) {
+                                                Log.d("NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
+                                            } else {
+                                                val reason = buildString {
+                                                    if (auth.sharedSecret != sharedSecret) append("sharedSecret不匹配; ")
+                                                    if (!auth.isAccepted) append("isAccepted=false; ")
+                                                }
+                                                Log.d("NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
+                                            }
                                         }
                                     }
                                     reader.close()

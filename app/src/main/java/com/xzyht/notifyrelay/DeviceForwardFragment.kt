@@ -79,6 +79,17 @@ fun DeviceForwardScreen(
     loadAuthedUuids: () -> Set<String>,
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
+    // 新增：认证成功后立即更新authedDeviceUuids并保存
+    var authedDeviceUuids by rememberSaveable {
+        mutableStateOf(loadAuthedUuids())
+    }
+    fun addAuthedDevice(uuid: String) {
+        if (!authedDeviceUuids.contains(uuid)) {
+            val newSet = authedDeviceUuids + uuid
+            authedDeviceUuids = newSet
+            saveAuthedUuids(newSet)
+        }
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
@@ -87,14 +98,20 @@ fun DeviceForwardScreen(
     var handshakeCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
     // 被拒绝设备管理弹窗
     var showRejectedDialog by rememberSaveable { mutableStateOf(false) }
-    // 监听服务端握手请求，弹窗确认
+    // 监听服务端握手请求，弹窗确认，并在同意时同步认证集合
     DisposableEffect(Unit) {
+        val oldHandshake = deviceManager.onHandshakeRequest
         deviceManager.onHandshakeRequest = { device, pubKey, cb ->
             pendingHandshake = device to pubKey
-            handshakeCallback = cb
+            handshakeCallback = { accepted ->
+                cb(accepted)
+                if (accepted) {
+                    addAuthedDevice(device.uuid)
+                }
+            }
         }
         onDispose {
-            deviceManager.onHandshakeRequest = null
+            deviceManager.onHandshakeRequest = oldHandshake
         }
     }
     val devices by deviceManager.devices.collectAsState()
@@ -106,10 +123,6 @@ fun DeviceForwardScreen(
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var isConnecting by rememberSaveable { mutableStateOf(false) }
-    // 认证通过设备uuid集合
-    var authedDeviceUuids by rememberSaveable {
-        mutableStateOf(loadAuthedUuids())
-    }
     // 被拒绝设备uuid集合
     var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
 
@@ -293,6 +306,7 @@ fun DeviceForwardScreen(
                                     isConnecting = false
                                     if (success) {
                                         connectedDevice = device
+                                        addAuthedDevice(device.uuid)
                                     } else {
                                         connectError = error ?: "连接失败"
                                         // 认证被拒绝，刷新rejectedDeviceUuids
@@ -483,7 +497,11 @@ fun DeviceForwardScreen(
                             showConfirmDialog = null
                             connectingDevice?.let { device ->
                                 deviceManager.connectToDevice(device) { success, error ->
-                                    if (!success) connectError = error ?: "连接失败"
+                                    if (success) {
+                                        addAuthedDevice(device.uuid)
+                                    } else {
+                                        connectError = error ?: "连接失败"
+                                    }
                                 }
                             }
                         }) { Text("确认") }
