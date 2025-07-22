@@ -45,7 +45,7 @@ fun DeviceForwardScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    val deviceManager = remember { DeviceConnectionManager() }
+    val deviceManager = remember { DeviceConnectionManager(context) }
     val devices by deviceManager.devices.collectAsState()
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }

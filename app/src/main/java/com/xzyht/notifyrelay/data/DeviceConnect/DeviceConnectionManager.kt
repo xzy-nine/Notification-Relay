@@ -1,4 +1,7 @@
+
 package com.xzyht.notifyrelay.data.deviceconnect
+
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +18,7 @@ import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
-import android.os.Build
+
 
 data class DeviceInfo(
     val uuid: String,
@@ -24,7 +27,7 @@ data class DeviceInfo(
     val port: Int
 )
 
-class DeviceConnectionManager {
+class DeviceConnectionManager(private val context: android.content.Context) {
     /**
      * 通知数据回调。UI 层可自定义赋值，若为 null 则调用默认实现。
      */
@@ -56,7 +59,19 @@ class DeviceConnectionManager {
         coroutineScope.launch {
             try {
                 if (jmDNS == null) {
-                    jmDNS = JmDNS.create()
+                    // 绑定到本机局域网IP
+                    val wifiManager = context.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                    val ip = wifiManager.connectionInfo.ipAddress
+                    val hostAddress = InetAddress.getByName(
+                        String.format(
+                            "%d.%d.%d.%d",
+                            ip and 0xff,
+                            ip shr 8 and 0xff,
+                            ip shr 16 and 0xff,
+                            ip shr 24 and 0xff
+                        )
+                    )
+                    jmDNS = JmDNS.create(hostAddress)
                 }
                 // 注册本机服务，name 只用设备名，不拼接 uuid，uuid 通过属性传递
                 serviceInfo = ServiceInfo.create(
