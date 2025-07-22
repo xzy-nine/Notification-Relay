@@ -289,7 +289,28 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
     }
 
-    // 发送通知数据
+    // 简单对称加密（XOR），仅用于示例，实际应用请替换为安全算法
+    private fun xorEncryptDecrypt(input: String, key: String): String {
+        val keyBytes = key.toByteArray()
+        val inputBytes = input.toByteArray()
+        val output = ByteArray(inputBytes.size)
+        for (i in inputBytes.indices) {
+            output[i] = (inputBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+        }
+        return android.util.Base64.encodeToString(output, android.util.Base64.NO_WRAP)
+    }
+
+    private fun xorDecrypt(input: String, key: String): String {
+        val keyBytes = key.toByteArray()
+        val inputBytes = android.util.Base64.decode(input, android.util.Base64.NO_WRAP)
+        val output = ByteArray(inputBytes.size)
+        for (i in inputBytes.indices) {
+            output[i] = (inputBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
+        }
+        return String(output)
+    }
+
+    // 发送通知数据（加密）
     fun sendNotificationData(device: DeviceInfo, data: String) {
         coroutineScope.launch {
             try {
@@ -300,8 +321,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 }
                 val socket = Socket(device.ip, device.port)
                 val writer = OutputStreamWriter(socket.getOutputStream())
-                // 发送数据时 publicKey 字段应为本机公钥
-                val payload = "DATA:${uuid}:${localPublicKey}:${auth.sharedSecret}:${data}"
+                // 加密数据
+                val encryptedData = xorEncryptDecrypt(data, auth.sharedSecret)
+                val payload = "DATA:${uuid}:${localPublicKey}:${auth.sharedSecret}:${encryptedData}"
                 writer.write(payload + "\n")
                 writer.flush()
                 writer.close()
@@ -312,18 +334,26 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
     }
 
-    // 接收通知数据
-    fun handleNotificationData(data: String) {
+    // 接收通知数据（解密）
+    fun handleNotificationData(data: String, sharedSecret: String? = null) {
         Log.d("NotifyRelay", "收到通知数据: $data")
+        val decrypted = if (sharedSecret != null) {
+            try {
+                xorDecrypt(data, sharedSecret)
+            } catch (e: Exception) {
+                Log.d("NotifyRelay", "解密失败: ${e.message}")
+                data
+            }
+        } else data
         // 保证 UI 层能收到消息：主线程分发
         try {
             val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
             mainHandler.post {
-                onNotificationDataReceived?.invoke(data)
+                onNotificationDataReceived?.invoke(decrypted)
             }
         } catch (e: Exception) {
             // fallback: 直接调用
-            onNotificationDataReceived?.invoke(data)
+            onNotificationDataReceived?.invoke(decrypted)
         }
     }
 
@@ -406,8 +436,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         val payload = parts[4]
                                         val auth = authenticatedDevices[remoteUuid]
                                         if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            // 只要 uuid、sharedSecret、isAccepted 匹配即可
-                                            handleNotificationData(payload)
+                                            // 解密数据
+                                            handleNotificationData(payload, sharedSecret)
                                         } else {
                                             if (auth == null) {
                                                 Log.d("NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
