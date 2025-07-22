@@ -46,6 +46,21 @@ fun DeviceForwardScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceConnectionManager(context) }
+    // 服务端握手请求弹窗
+    var pendingHandshake by remember { mutableStateOf<Pair<DeviceInfo, String>?>(null) }
+    var handshakeCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    // 被拒绝设备管理弹窗
+    var showRejectedDialog by remember { mutableStateOf(false) }
+    // 监听服务端握手请求，弹窗确认
+    DisposableEffect(Unit) {
+        deviceManager.onHandshakeRequest = { device, pubKey, cb ->
+            pendingHandshake = device to pubKey
+            handshakeCallback = cb
+        }
+        onDispose {
+            deviceManager.onHandshakeRequest = null
+        }
+    }
     val devices by deviceManager.devices.collectAsState()
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -55,6 +70,10 @@ fun DeviceForwardScreen() {
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var isConnecting by remember { mutableStateOf(false) }
+    // 认证通过设备uuid集合
+    var authedDeviceUuids by remember { mutableStateOf(setOf<String>()) }
+    // 被拒绝设备uuid集合
+    var rejectedDeviceUuids by remember { mutableStateOf(setOf<String>()) }
 
     // 启动设备发现
     LaunchedEffect(Unit) {
@@ -72,6 +91,22 @@ fun DeviceForwardScreen() {
             deviceManager.onNotificationDataReceived = oldHandler
         }
     }
+    // 认证状态监听（简单轮询，实际可用回调）
+    LaunchedEffect(devices) {
+        // 这里直接反射拿到DeviceConnectionManager的认证表
+        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val map = field.get(deviceManager) as? Map<String, *>
+        authedDeviceUuids = map?.filter { (it.value as? Any)?.let { v ->
+            val isAccepted = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }.getBoolean(v)
+            isAccepted
+        } == true }?.keys?.toSet() ?: emptySet()
+        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+        rejField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
+    }
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -85,7 +120,8 @@ fun DeviceForwardScreen() {
                 // 设备列表
                 androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxSize()) {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(devices) { device ->
+                        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
+                            val isAuthed = authedDeviceUuids.contains(device.uuid)
                             DeviceItem(
                                 device = device,
                                 onConnect = {
@@ -99,9 +135,14 @@ fun DeviceForwardScreen() {
                                         android.widget.Toast.LENGTH_SHORT
                                     ).show()
                                 },
-                                selected = selectedDevice?.uuid == device.uuid
+                                selected = selectedDevice?.uuid == device.uuid,
+                                showConnect = !isAuthed
                             )
                         }
+                    }
+                    // 被拒绝设备管理按钮
+                    androidx.compose.material3.TextButton(onClick = { showRejectedDialog = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
+                        Text("管理被拒绝设备", color = colorScheme.primary)
                     }
                 }
                 // 聊天框
@@ -128,13 +169,13 @@ fun DeviceForwardScreen() {
                             Button(
                                 onClick = {
                                     val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank()) {
+                                    if (dev != null && chatInput.isNotBlank() && authedDeviceUuids.contains(dev.uuid)) {
                                         deviceManager.sendNotificationData(dev, chatInput)
                                         chatHistory = chatHistory + "发送: $chatInput"
                                         chatInput = ""
                                     }
                                 },
-                                enabled = selectedDevice != null && chatInput.isNotBlank(),
+                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { authedDeviceUuids.contains(it) } == true,
                                 modifier = Modifier.align(Alignment.CenterVertically)
                             ) {
                                 Text("发送")
@@ -142,6 +183,58 @@ fun DeviceForwardScreen() {
                         }
                     }
                 }
+            }
+            // 服务端握手弹窗
+            if (pendingHandshake != null) {
+                val (dev, pubKey) = pendingHandshake!!
+                AlertDialog(
+                    onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
+                    title = { Text("有设备请求连接") },
+                    text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            handshakeCallback?.invoke(true)
+                            pendingHandshake = null
+                            handshakeCallback = null
+                        }) { Text("允许") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            handshakeCallback?.invoke(false)
+                            pendingHandshake = null
+                            handshakeCallback = null
+                        }) { Text("拒绝") }
+                    }
+                )
+            }
+            // 被拒绝设备管理弹窗
+            if (showRejectedDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRejectedDialog = false },
+                    title = { Text("被拒绝的设备") },
+                    text = {
+                        if (rejectedDeviceUuids.isEmpty()) Text("无被拒绝设备")
+                        else LazyColumn {
+                            items(devices.filter { rejectedDeviceUuids.contains(it.uuid) }) { device ->
+                                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(device.displayName, Modifier.weight(1f))
+                                    TextButton(onClick = {
+                                        // 反射移除
+                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                        rejField.isAccessible = true
+                                        @Suppress("UNCHECKED_CAST")
+                                        val set = rejField.get(deviceManager) as? MutableSet<String>
+                                        set?.remove(device.uuid)
+                                        showRejectedDialog = false
+                                    }) { Text("移除") }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showRejectedDialog = false }) { Text("关闭") }
+                    }
+                )
             }
             if (showConfirmDialog != null) {
                 AlertDialog(
@@ -160,6 +253,11 @@ fun DeviceForwardScreen() {
                                         connectedDevice = device
                                     } else {
                                         connectError = error ?: "连接失败"
+                                        // 认证被拒绝，刷新rejectedDeviceUuids
+                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                        rejField.isAccessible = true
+                                        @Suppress("UNCHECKED_CAST")
+                                        rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
                                     }
                                 }
                             }
@@ -203,7 +301,8 @@ fun DeviceForwardScreen() {
                     androidx.compose.foundation.lazy.LazyRow(
                         modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = 8.dp)
                     ) {
-                        items(devices) { device ->
+                        items(devices.filter { !rejectedDeviceUuids.contains(it.uuid) }) { device ->
+                            val isAuthed = authedDeviceUuids.contains(device.uuid)
                             androidx.compose.foundation.layout.Column(
                                 modifier = Modifier.padding(end = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -222,13 +321,21 @@ fun DeviceForwardScreen() {
                                 ) {
                                     Text(device.displayName, style = textStyles.body2.copy(color = colorScheme.primary))
                                 }
-                                Button(
-                                    onClick = { showConfirmDialog = device },
-                                    enabled = true,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                ) {
-                                    Text("连接")
+                                if (!isAuthed) {
+                                    Button(
+                                        onClick = { showConfirmDialog = device },
+                                        enabled = true,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    ) {
+                                        Text("连接")
+                                    }
                                 }
+                            }
+                        }
+                        // 被拒绝设备管理按钮
+                        item {
+                            androidx.compose.material3.TextButton(onClick = { showRejectedDialog = true }, modifier = Modifier.padding(top = 8.dp)) {
+                                Text("管理被拒绝设备", color = colorScheme.primary)
                             }
                         }
                     }
@@ -257,13 +364,13 @@ fun DeviceForwardScreen() {
                             Button(
                                 onClick = {
                                     val dev = selectedDevice
-                                    if (dev != null && chatInput.isNotBlank()) {
+                                    if (dev != null && chatInput.isNotBlank() && authedDeviceUuids.contains(dev.uuid)) {
                                         deviceManager.sendNotificationData(dev, chatInput)
                                         chatHistory = chatHistory + "发送: $chatInput"
                                         chatInput = ""
                                     }
                                 },
-                                enabled = selectedDevice != null && chatInput.isNotBlank(),
+                                enabled = selectedDevice != null && chatInput.isNotBlank() && selectedDevice?.uuid?.let { authedDeviceUuids.contains(it) } == true,
                                 modifier = Modifier.align(Alignment.CenterVertically)
                             ) {
                                 Text("发送")
@@ -271,6 +378,57 @@ fun DeviceForwardScreen() {
                         }
                     }
                 }
+            }
+            // 服务端握手弹窗
+            if (pendingHandshake != null) {
+                val (dev, pubKey) = pendingHandshake!!
+                AlertDialog(
+                    onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
+                    title = { Text("有设备请求连接") },
+                    text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            handshakeCallback?.invoke(true)
+                            pendingHandshake = null
+                            handshakeCallback = null
+                        }) { Text("允许") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            handshakeCallback?.invoke(false)
+                            pendingHandshake = null
+                            handshakeCallback = null
+                        }) { Text("拒绝") }
+                    }
+                )
+            }
+            // 被拒绝设备管理弹窗
+            if (showRejectedDialog) {
+                AlertDialog(
+                    onDismissRequest = { showRejectedDialog = false },
+                    title = { Text("被拒绝的设备") },
+                    text = {
+                        if (rejectedDeviceUuids.isEmpty()) Text("无被拒绝设备")
+                        else LazyColumn {
+                            items(devices.filter { rejectedDeviceUuids.contains(it.uuid) }) { device ->
+                                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(device.displayName, Modifier.weight(1f))
+                                    TextButton(onClick = {
+                                        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                        rejField.isAccessible = true
+                                        @Suppress("UNCHECKED_CAST")
+                                        val set = rejField.get(deviceManager) as? MutableSet<String>
+                                        set?.remove(device.uuid)
+                                        showRejectedDialog = false
+                                    }) { Text("移除") }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showRejectedDialog = false }) { Text("关闭") }
+                    }
+                )
             }
             if (showConfirmDialog != null) {
                 AlertDialog(
@@ -312,7 +470,8 @@ fun DeviceItem(
     device: DeviceInfo,
     onConnect: () -> Unit,
     onSelect: () -> Unit = {},
-    selected: Boolean = false
+    selected: Boolean = false,
+    showConnect: Boolean = true
 ) {
     val colorScheme = MiuixTheme.colorScheme
     androidx.compose.foundation.layout.Row(
@@ -327,8 +486,10 @@ fun DeviceItem(
             style = MiuixTheme.textStyles.body1.copy(color = colorScheme.primary),
             modifier = Modifier.weight(1f).padding(16.dp)
         )
-        Button(onClick = onConnect, modifier = Modifier.padding(end = 8.dp)) {
-            Text("连接")
+        if (showConnect) {
+            Button(onClick = onConnect, modifier = Modifier.padding(end = 8.dp)) {
+                Text("连接")
+            }
         }
     }
 }
