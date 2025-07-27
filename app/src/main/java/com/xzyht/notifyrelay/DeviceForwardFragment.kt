@@ -78,66 +78,16 @@ fun DeviceForwardScreen(
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectError by rememberSaveable { mutableStateOf<String?>(null) }
-    // 认证设备uuid集合（用于本地存储，实际渲染用deviceManager.devices）
-    // 本地管理认证设备uuid集合
-    var authedDeviceUuids by rememberSaveable { mutableStateOf(loadAuthedUuids()) }
-    // 添加认证设备
-    fun addAuthedDevice(uuid: String) {
-        if (!authedDeviceUuids.contains(uuid)) {
-            val newSet = authedDeviceUuids + uuid
-            authedDeviceUuids = newSet
-            saveAuthedUuids(newSet)
-        }
-    }
-    // 移除认证设备
-    fun removeAuthedDevice(uuid: String) {
-        if (authedDeviceUuids.contains(uuid)) {
-            val newSet = authedDeviceUuids - uuid
-            authedDeviceUuids = newSet
-            saveAuthedUuids(newSet)
-        }
-    }
-    // 设备认证、删除等逻辑交由DeviceListFragment统一管理
+    // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    // 服务端握手请求弹窗
-    var pendingHandshake by remember { mutableStateOf<Pair<DeviceInfo, String>?>(null) }
-    var handshakeCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
-    // 监听服务端握手请求，弹窗确认，并在同意时同步认证集合
-    DisposableEffect(Unit) {
-        val oldHandshake = deviceManager.onHandshakeRequest
-        deviceManager.onHandshakeRequest = { device, pubKey, cb ->
-            pendingHandshake = device to pubKey
-            handshakeCallback = { accepted ->
-                cb(accepted)
-                if (accepted) {
-                    addAuthedDevice(device.uuid)
-                }
-            }
-        }
-        onDispose { deviceManager.onHandshakeRequest = oldHandshake }
-    }
     // 聊天区相关状态
     var chatInput by rememberSaveable { mutableStateOf("") }
     var chatHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
-    var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    // 只监听全局选中设备
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
-    LaunchedEffect(selectedDeviceState.value) {
-        selectedDevice = selectedDeviceState.value
-    }
-    var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
-    var isConnecting by rememberSaveable { mutableStateOf(false) }
-    val deviceMap by deviceManager.devices.collectAsState()
-    val devices = deviceMap.values.map { it.first }
-    var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
-    // 认证状态监听（简单轮询，实际可用回调）
-    LaunchedEffect(deviceMap) {
-        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-        rejField.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
-    }
+    val selectedDevice = selectedDeviceState.value
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     DisposableEffect(Unit) {
         val oldHandler = deviceManager.onNotificationDataReceived
@@ -150,12 +100,6 @@ fun DeviceForwardScreen(
     // 聊天区UI
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
-        val connected = connectedDevice
-        if (isConnecting) {
-            Text("正在连接...", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
-        } else if (connected != null) {
-            Text("已连接: ${connected.displayName}", color = colorScheme.primary, modifier = Modifier.align(Alignment.CenterHorizontally).padding(8.dp))
-        }
         LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
             items(chatHistory) { msg ->
                 Text(msg, style = textStyles.body2)
@@ -184,70 +128,6 @@ fun DeviceForwardScreen(
                 Text("发送")
             }
         }
-    }
-    // 公共弹窗区域
-    if (pendingHandshake != null) {
-        val (dev, pubKey) = pendingHandshake!!
-        AlertDialog(
-            onDismissRequest = { pendingHandshake = null; handshakeCallback?.invoke(false); handshakeCallback = null },
-            title = { Text("有设备请求连接") },
-            text = { Text("设备：${dev.displayName}\nIP: ${dev.ip}\n公钥: $pubKey\n是否允许连接？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    handshakeCallback?.invoke(true)
-                    pendingHandshake = null
-                    handshakeCallback = null
-                }) { Text("允许") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    handshakeCallback?.invoke(false)
-                    pendingHandshake = null
-                    handshakeCallback = null
-                }) { Text("拒绝") }
-            }
-        )
-    }
-    if (showConfirmDialog != null) {
-        AlertDialog(
-            onDismissRequest = { showConfirmDialog = null },
-            title = { Text("连接确认") },
-            text = { Text("是否连接到设备：${showConfirmDialog?.displayName}？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    connectingDevice = showConfirmDialog
-                    isConnecting = true
-                    showConfirmDialog = null
-                    connectingDevice?.let { device ->
-                        deviceManager.connectToDevice(device) { success, error ->
-                            isConnecting = false
-                            if (success) {
-                                connectedDevice = device
-                            } else {
-                                connectError = error ?: "连接失败"
-                                val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                rejField.isAccessible = true
-                                @Suppress("UNCHECKED_CAST")
-                                rejectedDeviceUuids = rejField.get(deviceManager) as? Set<String> ?: emptySet()
-                            }
-                        }
-                    }
-                }) { Text("确认") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = null }) { Text("取消") }
-            }
-        )
-    }
-    if (connectError != null) {
-        AlertDialog(
-            onDismissRequest = { connectError = null },
-            title = { Text("连接失败") },
-            text = { Text(connectError ?: "未知错误") },
-            confirmButton = {
-                TextButton(onClick = { connectError = null }) { Text("确定") }
-            }
-        )
     }
 }
 }

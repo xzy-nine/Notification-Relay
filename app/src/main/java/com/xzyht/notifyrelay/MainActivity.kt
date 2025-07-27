@@ -28,35 +28,17 @@ import androidx.compose.foundation.background
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 权限检查，未授权则跳转引导页
+        // 权限检查，未授权则跳转引导页，等待返回后再判断
         if (!checkAllPermissions(this)) {
             android.widget.Toast.makeText(this, "请先授权所有必要权限！", android.widget.Toast.LENGTH_SHORT).show()
-            // 检查通知监听权限
-            if (!isNotificationListenerEnabled()) {
-                android.widget.Toast.makeText(this, "请在系统设置中授权通知访问权限！", android.widget.Toast.LENGTH_LONG).show()
-                val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                startActivity(intent)
-            }
-            // 启动前台服务，保持设备在线（推荐统一调用 Service 的静态方法）
-            DeviceConnectionService.start(this)
-            // 检查通知发送权限（Android 13+）
-            if (android.os.Build.VERSION.SDK_INT >= 33) {
-                if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 1001)
-                }
-            }
-            // 检查应用使用情况权限
-            if (!isUsageStatsEnabled()) {
-                android.widget.Toast.makeText(this, "请在系统设置中授权应用使用情况访问权限！", android.widget.Toast.LENGTH_LONG).show()
-                val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                startActivity(intent)
-            }
-            val intent = android.content.Intent(this, GuideActivity::class.java)
+            val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
-            startActivity(intent)
-            finish()
+            // 使用 startActivityForResult 兼容老版本，或 ActivityResultLauncher（如已迁移）
+            startActivityForResult(intent, 2001)
             return
         }
+        // 权限检查通过后再启动前台服务，保证设备发现线程正常
+        DeviceConnectionService.start(this)
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
 
@@ -76,6 +58,14 @@ class MainActivity : FragmentActivity() {
                 }
                 MainAppFragment()
             }
+        }
+    }
+
+    // 授权页返回后重新检查权限
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 2001) {
+            recreate() // 重新触发 onCreate 检查权限
         }
     }
 
@@ -170,6 +160,8 @@ fun MainAppFragment() {
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
     )
     val colorScheme = MiuixTheme.colorScheme
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     Scaffold(
         bottomBar = {
             NavigationBar(
@@ -180,30 +172,60 @@ fun MainAppFragment() {
         },
         containerColor = colorScheme.background
     ) { paddingValues ->
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colorScheme.background)
-                .padding(paddingValues)
-        ) {
-            // 设备列表区域，独立Fragment
-            Box(
+        if (isLandscape) {
+            Row(
                 modifier = Modifier
-                    .width(220.dp)
-                    .fillMaxHeight()
+                    .fillMaxSize()
                     .background(colorScheme.background)
+                    .padding(paddingValues)
             ) {
-                DeviceListFragmentView(fragmentContainerId + 100)
+                // 横屏：设备列表侧边栏
+                Box(
+                    modifier = Modifier
+                        .width(220.dp)
+                        .fillMaxHeight()
+                        .background(colorScheme.background)
+                ) {
+                    DeviceListFragmentView(fragmentContainerId + 100)
+                }
+                // 内容区
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    when (selectedTab) {
+                        0 -> DeviceForwardFragmentView(fragmentContainerId)
+                        1 -> NotificationHistoryFragmentView(fragmentContainerId)
+                    }
+                }
             }
-            // 内容区，tab切换
-            Box(
+        } else {
+            // 竖屏：设备列表顶部横排
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                    .fillMaxSize()
+                    .background(colorScheme.background)
+                    .padding(paddingValues)
             ) {
-                when (selectedTab) {
-                    0 -> DeviceForwardFragmentView(fragmentContainerId)
-                    1 -> NotificationHistoryFragmentView(fragmentContainerId)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(colorScheme.background)
+                ) {
+                    DeviceListFragmentView(fragmentContainerId + 100)
+                }
+                // 内容区
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    when (selectedTab) {
+                        0 -> DeviceForwardFragmentView(fragmentContainerId)
+                        1 -> NotificationHistoryFragmentView(fragmentContainerId)
+                    }
                 }
             }
         }
@@ -213,7 +235,6 @@ fun MainAppFragment() {
 fun MainAppPreview() {
     MiuixTheme {
         MainAppFragment()
-    }
-}
-// 文件末尾补全 class MainActivity 的闭合大括号
+     }
+  }
 }

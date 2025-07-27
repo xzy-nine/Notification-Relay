@@ -194,17 +194,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .build()
-        // Android 12+ 必须指定前台服务类型，否则会崩溃
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            // 1073741824 = FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            startForeground(
-                NOTIFY_ID,
-                notification,
-                1073741824
-            )
-        } else {
-            startForeground(NOTIFY_ID, notification)
-        }
+        // Android 12+ 及以上不再指定特殊前台服务类型，避免权限崩溃
+        startForeground(NOTIFY_ID, notification)
     }
 
     // 保留通知历史，不做移除处理

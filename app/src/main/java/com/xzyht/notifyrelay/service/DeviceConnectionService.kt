@@ -26,7 +26,8 @@ class DeviceConnectionService : Service() {
     }
     override fun onCreate() {
         super.onCreate()
-        connectionManager = DeviceConnectionManager(applicationContext)
+        // 保证全局唯一实例，UI和Service同步
+        connectionManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
         connectionManager.startDiscovery()
         startForegroundServiceNotification()
     }
