@@ -14,6 +14,7 @@ import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
@@ -183,34 +184,67 @@ fun DeviceListScreen() {
         ) {
             // 认证设备和本机、未认证设备统一按钮逻辑
             allDevices.forEach { device: DeviceInfo? ->
-                Button(
-                    onClick = { onSelectDevice(device) },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = when {
-                        device == null && selectedDevice == null -> androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary)
-                        device == null -> androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
-                        selectedDevice?.uuid == device.uuid && authedDeviceUuids.contains(device.uuid) -> androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary)
-                        authedDeviceUuids.contains(device.uuid) -> androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
-                        else -> androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.surface)
-                    }
-                ) {
-                    val isOnline = device?.let { deviceStates[it.uuid] == true } ?: true
-                    Text(
-                        text = when {
-                            device == null -> "本机"
-                            !authedDeviceUuids.contains(device.uuid) -> device.displayName + if (!isOnline) " (离线)" else ""
-                            else -> device.displayName + if (!isOnline) " (离线)" else ""
-                        },
-                        style = textStyles.body2.copy(
-                            color = when {
-                                device == null && selectedDevice == null -> colorScheme.onPrimary
-                                device == null -> colorScheme.primary
-                                selectedDevice?.uuid == device.uuid && authedDeviceUuids.contains(device.uuid) -> colorScheme.onPrimary
-                                authedDeviceUuids.contains(device.uuid) -> colorScheme.primary
-                                else -> colorScheme.primary
-                            }
+                // 横屏下后续补充删除按钮
+                if (device == null) {
+                    Button(
+                        onClick = { onSelectDevice(null) },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = if (selectedDevice == null) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
+                    ) {
+                        Text(
+                            text = "本机",
+                            style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary)
                         )
-                    )
+                    }
+                } else if (authedDeviceUuids.contains(device.uuid)) {
+                    val isOnline = deviceStates[device.uuid] == true
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Button(
+                            onClick = { onSelectDevice(device) },
+                            modifier = Modifier.weight(1f),
+                            colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
+                        ) {
+                            Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary))
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(
+                            onClick = {
+                                // 删除已认证设备并持久化
+                                val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                                field.isAccessible = true
+                                val map = field.get(deviceManager) as? MutableMap<String, *>
+                                map?.remove(device.uuid)
+                                // 持久化
+                                val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+                                saveMethod.isAccessible = true
+                                saveMethod.invoke(deviceManager)
+                                authedDeviceUuids = map?.filter { entry ->
+                                    val v = entry.value
+                                    v?.let {
+                                        val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                        isAcceptedField.getBoolean(v)
+                                    } ?: false
+                                }?.keys?.toSet() ?: emptySet()
+                                // 删除后选中本机
+                                selectedDevice = null
+                                GlobalSelectedDeviceHolder.selectedDevice = null
+                            },
+                        ) {
+                            Text("删除", style = textStyles.body2.copy(color = Color.Red))
+                        }
+                    }
+                } else {
+                    val isOnline = deviceStates[device.uuid] == true
+                    Button(
+                        onClick = { onSelectDevice(device) },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.surface)
+                    ) {
+                        Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = colorScheme.primary))
+                    }
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -222,85 +256,101 @@ fun DeviceListScreen() {
             ) {
                 Text(
                     text = "查看已拒绝设备",
-                    style = textStyles.body2,
-                    color = colorScheme.secondary
+                    style = textStyles.body2.copy(color = colorScheme.secondary)
                 )
             }
         }
     } else {
-        // 竖屏：设备列表横排（顶部）
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .background(colorScheme.background)
-                    .padding(8.dp)
-            ) {
-                allDevices.forEach { device: DeviceInfo? ->
-                    if (device == null) {
-                        Button(
-                            onClick = { onSelectDevice(null) },
-                            modifier = Modifier.padding(end = 8.dp),
-                            colors = if (selectedDevice == null) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
-                        ) {
-                            Text("本机", style = textStyles.body2.copy(color = colorScheme.onPrimary.takeIf { selectedDevice == null } ?: colorScheme.primary))
-                        }
-                    } else if (authedDeviceUuids.contains(device.uuid)) {
-                        val isOnline = deviceStates[device.uuid] == true
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Button(
-                                onClick = { onSelectDevice(device) },
-                                modifier = Modifier,
-                                colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
-                            ) {
-                                Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = colorScheme.onPrimary.takeIf { selectedDevice?.uuid == device.uuid } ?: colorScheme.primary))
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            TextButton(
-                                onClick = {
-                                    // 删除已认证设备并持久化
-                                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                    field.isAccessible = true
-                                    val map = field.get(deviceManager) as? MutableMap<String, *>
-                                    map?.remove(device.uuid)
-                                    // 持久化
-                                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                    saveMethod.isAccessible = true
-                                    saveMethod.invoke(deviceManager)
-                                    authedDeviceUuids = map?.filter { entry ->
-                                        val v = entry.value
-                                        v?.let {
-                                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                            isAcceptedField.getBoolean(v)
-                                        } ?: false
-                                    }?.keys?.toSet() ?: emptySet()
-                                    // 删除后选中本机
-                                    selectedDevice = null
-                                    GlobalSelectedDeviceHolder.selectedDevice = null
-                                },
-                                modifier = Modifier,
-                            ) {
-                                Text("删除", style = textStyles.body2.copy(color = Color.Red))
-                            }
-                        }
-                    }
+        // 竖屏：所有按钮和“查看已拒绝设备”按钮横向排列并可左右滚动
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .background(colorScheme.background)
+                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 本机按钮
+            item {
+                Button(
+                    onClick = { onSelectDevice(null) },
+                    modifier = Modifier.padding(end = 8.dp),
+                    colors = if (selectedDevice == null) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
+                ) {
+                    Text("本机", style = textStyles.body2.copy(color = colorScheme.onPrimary.takeIf { selectedDevice == null } ?: colorScheme.primary))
                 }
-                // 未认证设备横排
-                unauthedDevices.forEach { device ->
-                    val isOnline = deviceStates[device.uuid] == true
+            }
+            // 已认证设备
+            items(allDevices.filterNotNull().filter { authedDeviceUuids.contains(it.uuid) }) { device ->
+                val isOnline = deviceStates[device.uuid] == true
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
                     Button(
                         onClick = { onSelectDevice(device) },
-                        modifier = Modifier.padding(end = 8.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.surface)
+                        modifier = Modifier,
+                        colors = if (selectedDevice?.uuid == device.uuid) androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primary) else androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.primaryContainer)
                     ) {
-                        Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = colorScheme.primary))
+                        Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = colorScheme.onPrimary.takeIf { selectedDevice?.uuid == device.uuid } ?: colorScheme.primary))
+                    }
+                    // 仅选中时显示删除按钮，节省空间
+                    if (selectedDevice?.uuid == device.uuid) {
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(
+                            onClick = {
+                                // 删除已认证设备并持久化
+                                val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                                field.isAccessible = true
+                                val map = field.get(deviceManager) as? MutableMap<String, *>
+                                map?.remove(device.uuid)
+                                // 持久化
+                                val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+                                saveMethod.isAccessible = true
+                                saveMethod.invoke(deviceManager)
+                                authedDeviceUuids = map?.filter { entry ->
+                                    val v = entry.value
+                                    v?.let {
+                                        val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                        isAcceptedField.getBoolean(v)
+                                    } ?: false
+                                }?.keys?.toSet() ?: emptySet()
+                                // 删除后选中本机
+                                selectedDevice = null
+                                GlobalSelectedDeviceHolder.selectedDevice = null
+                            },
+                            modifier = Modifier,
+                        ) {
+                            Text("删除", style = textStyles.body2.copy(color = Color.Red))
+                        }
                     }
                 }
-    // 新增：未认证设备连接弹窗（横竖屏都生效）
+            }
+            // 未认证设备
+            items(unauthedDevices) { device ->
+                val isOnline = deviceStates[device.uuid] == true
+                Button(
+                    onClick = { onSelectDevice(device) },
+                    modifier = Modifier.padding(end = 8.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.surface)
+                ) {
+                    Text(device.displayName + if (!isOnline) " (离线)" else "", style = textStyles.body2.copy(color = colorScheme.primary))
+                }
+            }
+            // 已拒绝设备按钮直接展示在横向列表最后
+            item {
+                Button(
+                    onClick = { showRejectedDialog = true },
+                    modifier = Modifier.padding(end = 8.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.secondaryContainer)
+                ) {
+                    Text("查看已拒绝设备", style = textStyles.body2.copy(color = colorScheme.secondary))
+                }
+            }
+        }
+    }
+
+    // 所有弹窗统一放在最外层，保证横竖屏都能弹出且不被遮挡
     if (showConnectDialog && pendingConnectDevice != null) {
         val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
         AlertDialog(
@@ -328,6 +378,21 @@ fun DeviceListScreen() {
                                 activity.runOnUiThread {
                                     android.widget.Toast.makeText(activity, "连接失败: $msg", android.widget.Toast.LENGTH_SHORT).show()
                                 }
+                            } else if (success) {
+                                // 认证成功，立即刷新UI侧已认证设备列表
+                                try {
+                                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                                    field.isAccessible = true
+                                    @Suppress("UNCHECKED_CAST")
+                                    val map = field.get(deviceManager) as? Map<String, *>
+                                    authedDeviceUuids = map?.filter { entry ->
+                                        val v = entry.value
+                                        v?.let {
+                                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                            isAcceptedField.getBoolean(v)
+                                        } ?: false
+                                    }?.keys?.toSet() ?: emptySet()
+                                } catch (_: Exception) {}
                             }
                         }
                     }
@@ -351,15 +416,15 @@ fun DeviceListScreen() {
         )
     }
 
-    // 新增：服务端握手请求弹窗（横竖屏都生效）
     if (showHandshakeDialog && pendingHandshakeRequest != null) {
         val req = pendingHandshakeRequest!!
         val device = req.device
         AlertDialog(
             onDismissRequest = {
+                // 先回调，后关闭弹窗，避免回调丢失
+                req.callback(false)
                 showHandshakeDialog = false
                 pendingHandshakeRequest = null
-                req.callback(false)
             },
             title = {
                 Text(
@@ -401,9 +466,28 @@ fun DeviceListScreen() {
             },
             confirmButton = {
                 TextButton(onClick = {
+                    // 先回调，后关闭弹窗，避免回调丢失
+                    req.callback(true)
                     showHandshakeDialog = false
                     pendingHandshakeRequest = null
-                    req.callback(true)
+                    // 强制刷新设备列表
+                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
+                    updateMethod.isAccessible = true
+                    updateMethod.invoke(deviceManager)
+                    // 立即刷新UI侧已认证设备列表
+                    try {
+                        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                        field.isAccessible = true
+                        @Suppress("UNCHECKED_CAST")
+                        val map = field.get(deviceManager) as? Map<String, *>
+                        authedDeviceUuids = map?.filter { entry ->
+                            val v = entry.value
+                            v?.let {
+                                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                isAcceptedField.getBoolean(v)
+                            } ?: false
+                        }?.keys?.toSet() ?: emptySet()
+                    } catch (_: Exception) {}
                 }) {
                     Text(
                         text = "同意",
@@ -414,9 +498,9 @@ fun DeviceListScreen() {
             },
             dismissButton = {
                 TextButton(onClick = {
+                    req.callback(false)
                     showHandshakeDialog = false
                     pendingHandshakeRequest = null
-                    req.callback(false)
                 }) {
                     Text(
                         text = "拒绝",
@@ -427,23 +511,7 @@ fun DeviceListScreen() {
             }
         )
     }
-            }
-            // 拒绝设备按钮
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Button(
-                    onClick = { showRejectedDialog = true },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = colorScheme.secondaryContainer)
-                ) {
-                    Text("查看已拒绝设备", style = textStyles.body2.copy(color = colorScheme.secondary))
-                }
-            }
-        }
-    }
 
-    // 拒绝设备弹窗
     if (showRejectedDialog) {
         AlertDialog(
             onDismissRequest = { showRejectedDialog = false },
