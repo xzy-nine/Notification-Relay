@@ -68,10 +68,10 @@ class NotificationRecordStore(private val context: Context) {
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
         val file = getFile(device)
         try {
-            android.util.Log.i("NotifyRelay", "[writeAll] path=${file.absolutePath}, device=$device, size=${list.size}")
+            // android.util.Log.i("NotifyRelay", "[writeAll] path=${file.absolutePath}, device=$device, size=${list.size}")
             file.writeText(gson.toJson(list))
         } catch (e: Exception) {
-            android.util.Log.e("NotifyRelay", "[writeAll] 写入失败: path=${file.absolutePath}, device=$device, error=${e.message}\n${e.stackTraceToString()}")
+            // android.util.Log.e("NotifyRelay", "[writeAll] 写入失败: path=${file.absolutePath}, device=$device, error=${e.message}\n${e.stackTraceToString()}")
             throw e
         }
     }
@@ -254,7 +254,7 @@ object NotificationRepository {
     internal fun syncToCache(context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        android.util.Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
+        // android.util.Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val entities = notifications.map {
