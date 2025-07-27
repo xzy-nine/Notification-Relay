@@ -99,7 +99,6 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun MainAppFragment() {
     var selectedTab by rememberSaveable { mutableStateOf(0) }
-    // fragmentContainerId 只生成一次，保证切换时 id 不变
     val fragmentContainerId = remember { android.view.View.generateViewId() }
     val items = listOf(
         NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
@@ -116,18 +115,55 @@ fun MainAppFragment() {
         },
         containerColor = colorScheme.background
     ) { paddingValues ->
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(colorScheme.background)
                 .padding(paddingValues)
         ) {
-            when (selectedTab) {
-                0 -> DeviceForwardFragmentView(fragmentContainerId)
-                1 -> NotificationHistoryFragmentView(fragmentContainerId)
+            // 设备列表区域，独立Fragment
+            Box(
+                modifier = Modifier
+                    .width(220.dp)
+                    .fillMaxHeight()
+                    .background(colorScheme.background)
+            ) {
+                DeviceListFragmentView(fragmentContainerId + 100)
+            }
+            // 内容区，tab切换
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                when (selectedTab) {
+                    0 -> DeviceForwardFragmentView(fragmentContainerId)
+                    1 -> NotificationHistoryFragmentView(fragmentContainerId)
+                }
             }
         }
     }
+@Composable
+fun DeviceListFragmentView(fragmentContainerId: Int) {
+    val colorScheme = MiuixTheme.colorScheme
+    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
+    val fragmentTag = "DeviceListFragment"
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceListFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
+    }
+}
 }
 
 @Composable

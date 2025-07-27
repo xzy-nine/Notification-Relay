@@ -209,31 +209,17 @@ class NotificationHistoryFragment : Fragment() {
 fun NotificationHistoryScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    var selectedDevice by remember { mutableStateOf(NotificationRepository.currentDevice) }
     val context = LocalContext.current
-    val deviceList = remember { mutableStateListOf<String>() }
-    // uuid->displayName 映射
-    fun getDeviceDisplayName(uuid: String): String {
-        return com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
-    }
-    // 自动刷新设备列表
-    LaunchedEffect(Unit) {
-        NotificationRepository.scanDeviceList(context)
-        deviceList.clear()
-        deviceList.addAll(NotificationRepository.deviceList)
-        android.util.Log.i("NotifyRelay", "[NotificationHistoryScreen] deviceList loaded: ${NotificationRepository.deviceList}")
-    }
-    // 切换设备时自动从本地json加载历史
+    // 设备选择逻辑交由DeviceListFragment统一管理，这里只读取当前设备
+    val selectedDevice = NotificationRepository.currentDevice
     val notifications = remember { mutableStateListOf<com.xzyht.notifyrelay.data.Notify.NotificationRecord>() }
     LaunchedEffect(selectedDevice) {
         NotificationRepository.currentDevice = selectedDevice
         NotificationRepository.init(context)
         val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
-        // 只读取对应设备的json：本机->local.json，远程->uuid.json
         val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
         val history = store.getAll(fileKey)
         notifications.clear()
-        // 只显示该json内全部通知（每个json只存一个设备的通知）
         notifications.addAll(history.map {
             com.xzyht.notifyrelay.data.Notify.NotificationRecord(
                 key = it.key,
@@ -417,168 +403,55 @@ fun NotificationHistoryScreen() {
         }
     }
 
-    if (isLandscape) {
-        Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colorScheme.background)
-                    .padding(0.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(1.5f)
-                        .background(colorScheme.background)
-                        .padding(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 16.dp)
-                ) {
-                    top.yukonga.miuix.kmp.basic.Text(
-                        text = "通知历史",
-                        style = textStyles.title2.copy(color = colorScheme.primary)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    deviceList.forEach { device ->
-                        val isRemote = selectedDevice != device
-                        Button(
-                            onClick = {
-                                selectedDevice = device
-                                NotificationRepository.currentDevice = device
-                            },
-                            colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
-                            else ButtonDefaults.buttonColors(),
-                            enabled = true
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                top.yukonga.miuix.kmp.basic.Text(
-                                    text = getDeviceDisplayName(device),
-                                    style = textStyles.body2.copy(color = if (isRemote) colorScheme.primary else colorScheme.onBackground)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    if (notifications.isEmpty()) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        top.yukonga.miuix.kmp.basic.Text(
-                            text = "暂无通知",
-                            style = textStyles.body1.copy(color = colorScheme.onBackground)
-                        )
-                    }
-                }
-                // 右侧通知区域，扩展权重（背景色与主背景一致，无需重复设置）
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .weight(3.5f)
-                        .background(colorScheme.background)
-                        .padding(start = 0.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
-                ) {
-                    NotificationListBlock(
-                        notifications = notifications,
-                        mixedList = mixedList,
-                        getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
-                    )
-                }
-            }
-            // 悬浮清除按钮
-            if (notifications.isNotEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                    Card(
-                        modifier = Modifier.padding(24.dp),
-                        color = colorScheme.primary,
-                        cornerRadius = 24.dp,
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        showIndication = true,
-                        onClick = clearHistory,
-                        onLongPress = {
-                            val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
-                            intent.putExtra("fromInternal", true)
-                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        }
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Text(
-                            text = "清除",
-                            style = textStyles.body2.copy(color = colorScheme.onPrimary),
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
-                    }
-                }
+    // 只显示通知列表和清除按钮
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .padding(16.dp)
+        ) {
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "通知历史",
+                style = textStyles.title2.copy(color = colorScheme.onBackground)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            if (notifications.isEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = "暂无通知",
+                    style = textStyles.body1.copy(color = colorScheme.onBackground)
+                )
+            } else {
+                NotificationListBlock(
+                    notifications = notifications,
+                    mixedList = mixedList,
+                    getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
+                )
             }
         }
-    } else {
-        // 竖屏布局：设备与操作区在顶部，通知区域在下方
-        Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colorScheme.background)
-                    .padding(16.dp)
-            ) {
-                top.yukonga.miuix.kmp.basic.Text(
-                    text = "通知历史",
-                    style = textStyles.title2.copy(color = colorScheme.onBackground)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    deviceList.forEach { device ->
-                        Button(
-                            onClick = {
-                                selectedDevice = device
-                                NotificationRepository.currentDevice = device
-                            },
-                            colors = if (selectedDevice == device) ButtonDefaults.buttonColorsPrimary()
-                            else ButtonDefaults.buttonColors(),
-                            enabled = true
-                        ) {
-                            top.yukonga.miuix.kmp.basic.Text(
-                                text = getDeviceDisplayName(device),
-                                style = textStyles.body2.copy(color = colorScheme.onBackground)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
+        // 悬浮清除按钮
+        if (notifications.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+                Card(
+                    modifier = Modifier.padding(24.dp),
+                    color = colorScheme.primary,
+                    cornerRadius = 24.dp,
+                    pressFeedbackType = PressFeedbackType.Sink,
+                    showIndication = true,
+                    onClick = clearHistory,
+                    onLongPress = {
+                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
+                        intent.putExtra("fromInternal", true)
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
                     }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                if (notifications.isEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                ) {
                     top.yukonga.miuix.kmp.basic.Text(
-                        text = "暂无通知",
-                        style = textStyles.body1.copy(color = colorScheme.onBackground)
+                        text = "清除",
+                        style = textStyles.body2.copy(color = colorScheme.onPrimary),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
                     )
-                } else {
-                    NotificationListBlock(
-                        notifications = notifications,
-                        mixedList = mixedList,
-                        getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
-                    )
-                }
-            }
-            // 悬浮清除按钮
-            if (notifications.isNotEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                    Card(
-                        modifier = Modifier.padding(24.dp),
-                        color = colorScheme.primary,
-                        cornerRadius = 24.dp,
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        showIndication = true,
-                        onClick = clearHistory,
-                        onLongPress = {
-                            val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
-                            intent.putExtra("fromInternal", true)
-                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        }
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Text(
-                            text = "清除",
-                            style = textStyles.body2.copy(color = colorScheme.onPrimary),
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
-                    }
                 }
             }
         }

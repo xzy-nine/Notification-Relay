@@ -82,32 +82,7 @@ fun DeviceForwardScreen(
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
     // 认证设备uuid集合（用于本地存储，实际渲染用deviceManager.devices）
-    var authedDeviceUuids by rememberSaveable { mutableStateOf(loadAuthedUuids()) }
-    fun addAuthedDevice(uuid: String) {
-        if (!authedDeviceUuids.contains(uuid)) {
-            val newSet = authedDeviceUuids + uuid
-            authedDeviceUuids = newSet
-            saveAuthedUuids(newSet)
-        }
-    }
-    // 新增：删除已认证设备
-    fun removeAuthedDevice(uuid: String) {
-        if (authedDeviceUuids.contains(uuid)) {
-            val newSet = authedDeviceUuids - uuid
-            authedDeviceUuids = newSet
-            saveAuthedUuids(newSet)
-            // 反射移除DeviceConnectionManager的认证表项
-            val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-            field.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val map = field.get(deviceManager) as? MutableMap<String, *>
-            map?.remove(uuid)
-            // 同步保存
-            val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-            saveMethod.isAccessible = true
-            saveMethod.invoke(deviceManager)
-        }
-    }
+    // 设备认证、删除等逻辑交由DeviceListFragment统一管理
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
