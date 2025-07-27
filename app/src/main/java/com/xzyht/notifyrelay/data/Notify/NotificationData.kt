@@ -113,6 +113,34 @@ object NotifyRelayStoreProvider {
 // 仓库对象，负责通知数据管理
 object NotificationRepository {
 
+    // 新增：通知历史 StateFlow，UI可订阅
+    private val _notificationHistoryFlow = kotlinx.coroutines.flow.MutableStateFlow<List<NotificationRecord>>(emptyList())
+    val notificationHistoryFlow: kotlinx.coroutines.flow.StateFlow<List<NotificationRecord>> get() = _notificationHistoryFlow
+
+    /**
+     * 主动刷新指定设备的通知历史并推送到StateFlow
+     */
+    fun notifyHistoryChanged(deviceKey: String, context: Context) {
+        // 只允许刷新 currentDevice 的内容，禁止外部刷新非 currentDevice
+        val realKey = currentDevice
+        try {
+            val store = NotifyRelayStoreProvider.getInstance(context)
+            val history = runBlocking { store.getAll(if (realKey == "本机") "local" else realKey) }
+            _notificationHistoryFlow.value = history.map {
+                NotificationRecord(
+                    key = it.key,
+                    packageName = it.packageName,
+                    title = it.title,
+                    text = it.text,
+                    time = it.time,
+                    device = it.device
+                )
+            }
+        } catch (e: Exception) {
+            _notificationHistoryFlow.value = emptyList()
+        }
+    }
+
     /**
      * 新增：以远程设备uuid存储转发通知
      */
@@ -153,6 +181,8 @@ object NotificationRepository {
         } catch (e: Exception) {
             android.util.Log.e("NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
         }
+        // 写入后主动推送变更
+        notifyHistoryChanged(device, context)
         android.util.Log.i("NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
     }
     /**
@@ -181,8 +211,10 @@ object NotificationRepository {
         // android.util.Log.i("NotifyRelay", "[addNotification] 本机, key=$key, title=$title, text=$text") // 已注释，避免干扰调试
         notifications.removeAll { it.key == key }
         notifications.add(0, record)
-        currentDevice = device
+        // 不再切换 currentDevice，仅刷新缓存和推送变更
         syncToCache(context)
+        // 写入后主动推送变更
+        notifyHistoryChanged(device, context)
         // android.util.Log.i("NotifyRelay", "[addNotification] after sync, notifications.size=${notifications.size}, currentDevice=$currentDevice") // 已注释，避免干扰调试
     }
     val notifications: SnapshotStateList<NotificationRecord> = mutableStateListOf()
@@ -238,6 +270,8 @@ object NotificationRepository {
     fun removeNotification(key: String, context: Context) {
         notifications.removeAll { it.key == key }
         syncToCache(context)
+        // 写入后主动推送变更
+        notifyHistoryChanged(currentDevice, context)
     }
 
     /**
@@ -246,6 +280,8 @@ object NotificationRepository {
     fun clearDeviceHistory(device: String, context: Context) {
         notifications.removeAll { it.device == device }
         syncToCache(context)
+        // 写入后主动推送变更
+        notifyHistoryChanged(device, context)
     }
 
     /**

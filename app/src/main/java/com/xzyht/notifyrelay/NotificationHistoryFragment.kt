@@ -213,33 +213,21 @@ fun NotificationHistoryScreen() {
     // 响应全局设备选中状态
     val selectedDeviceObj by com.xzyht.notifyrelay.GlobalSelectedDeviceHolder.current()
     val selectedDevice = selectedDeviceObj?.uuid ?: "本机"
-    val notifications = remember { mutableStateListOf<com.xzyht.notifyrelay.data.Notify.NotificationRecord>() }
+    // 切换设备时，先切换 currentDevice，再刷新 flow
     LaunchedEffect(selectedDevice) {
         NotificationRepository.currentDevice = selectedDevice
         NotificationRepository.init(context)
-        val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
-        val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
-        val history = store.getAll(fileKey)
-        notifications.clear()
-        notifications.addAll(history.map {
-            com.xzyht.notifyrelay.data.Notify.NotificationRecord(
-                key = it.key,
-                packageName = it.packageName,
-                title = it.title,
-                text = it.text,
-                time = it.time,
-                device = it.device
-            )
-        })
-        android.util.Log.i("NotifyRelay", "[NotificationHistoryScreen] selectedDevice=$selectedDevice, fileKey=$fileKey, loaded history.size=${notifications.size}")
+        NotificationRepository.notifyHistoryChanged(selectedDevice, context)
     }
+    // 订阅当前分组的通知历史
+    val notifications by NotificationRepository.notificationHistoryFlow.collectAsState()
+
     val grouped = notifications.groupBy { it.packageName }
     val groupList = grouped.entries.map { (_, list) ->
         list.sortedByDescending { it.time }
     }
     // 混合排序：单条和分组都按分组最新时间降序排列
     val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
-    // val context = LocalContext.current // 删除重复声明，避免冲突
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
@@ -251,8 +239,6 @@ fun NotificationHistoryScreen() {
             // 统一使用 WindowInsetsControllerCompat 设置状态栏字体颜色
             androidx.core.view.WindowInsetsControllerCompat(it, decorView).isAppearanceLightStatusBars = !isDarkTheme
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                // statusBarColor 已废弃，推荐使用 WindowInsetsControllerCompat 控制外观
-                // 但 Miuix 主题要求背景色一致，暂保留设置
                 @Suppress("DEPRECATION")
                 it.statusBarColor = colorScheme.background.toArgb()
             }
@@ -275,7 +261,6 @@ fun NotificationHistoryScreen() {
     val clearHistory: () -> Unit = {
         try {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
-            notifications.clear() // 清空通知列表
             appInfoCache.clear() // 清空应用信息缓存
             // 修正：同步清理本地json文件内容
             val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
@@ -283,6 +268,8 @@ fun NotificationHistoryScreen() {
             kotlinx.coroutines.runBlocking {
                 store.clearByDevice(fileKey)
             }
+            // 主动刷新 StateFlow
+            NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {
             android.util.Log.e("NotifyRelay", "清除历史异常", e)
             android.widget.Toast.makeText(
