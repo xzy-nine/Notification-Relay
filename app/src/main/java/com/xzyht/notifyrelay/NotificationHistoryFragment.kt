@@ -210,8 +210,9 @@ fun NotificationHistoryScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
-    // 设备选择逻辑交由DeviceListFragment统一管理，这里只读取当前设备
-    val selectedDevice = NotificationRepository.currentDevice
+    // 响应全局设备选中状态
+    val selectedDeviceObj by com.xzyht.notifyrelay.GlobalSelectedDeviceHolder.current()
+    val selectedDevice = selectedDeviceObj?.uuid ?: "本机"
     val notifications = remember { mutableStateListOf<com.xzyht.notifyrelay.data.Notify.NotificationRecord>() }
     LaunchedEffect(selectedDevice) {
         NotificationRepository.currentDevice = selectedDevice

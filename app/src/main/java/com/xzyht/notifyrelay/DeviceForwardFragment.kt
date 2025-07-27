@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+
+import com.xzyht.notifyrelay.GlobalSelectedDeviceHolder
 import androidx.compose.ui.graphics.Color
 
 
@@ -82,6 +84,24 @@ fun DeviceForwardScreen(
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
     // 认证设备uuid集合（用于本地存储，实际渲染用deviceManager.devices）
+    // 本地管理认证设备uuid集合
+    var authedDeviceUuids by rememberSaveable { mutableStateOf(loadAuthedUuids()) }
+    // 添加认证设备
+    fun addAuthedDevice(uuid: String) {
+        if (!authedDeviceUuids.contains(uuid)) {
+            val newSet = authedDeviceUuids + uuid
+            authedDeviceUuids = newSet
+            saveAuthedUuids(newSet)
+        }
+    }
+    // 移除认证设备
+    fun removeAuthedDevice(uuid: String) {
+        if (authedDeviceUuids.contains(uuid)) {
+            val newSet = authedDeviceUuids - uuid
+            authedDeviceUuids = newSet
+            saveAuthedUuids(newSet)
+        }
+    }
     // 设备认证、删除等逻辑交由DeviceListFragment统一管理
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
@@ -114,6 +134,10 @@ fun DeviceForwardScreen(
     var chatInput by rememberSaveable { mutableStateOf("") }
     var chatHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
     var selectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
+    val selectedDeviceState = GlobalSelectedDeviceHolder.current()
+    LaunchedEffect(selectedDeviceState.value) {
+        selectedDevice = selectedDeviceState.value
+    }
     var connectedDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var isConnecting by rememberSaveable { mutableStateOf(false) }
     // 被拒绝设备uuid集合
@@ -121,6 +145,10 @@ fun DeviceForwardScreen(
 
     // 启动设备发现
     LaunchedEffect(Unit) { deviceManager.startDiscovery() }
+    // 保证选中设备变更时同步到全局
+    LaunchedEffect(selectedDevice) {
+        GlobalSelectedDeviceHolder.selectedDevice = selectedDevice
+    }
 
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     DisposableEffect(Unit) {
@@ -175,9 +203,9 @@ fun DeviceForwardScreen(
                         deviceStates = deviceStates,
                         selectedDevice = selectedDevice,
                         isAuthed = ::isAuthed,
-                        onSelect = { selectedDevice = it },
-                        onConnect = { showConfirmDialog = it },
-                        onRemove = { removeAuthedDevice(it) },
+                        onSelect = { device: DeviceInfo -> selectedDevice = device },
+                        onConnect = { device: DeviceInfo -> showConfirmDialog = device },
+                        onRemove = { uuid: String -> removeAuthedDevice(uuid) },
                         onManageRejected = { showRejectedDialog = true },
                         context = context
                     )
@@ -235,9 +263,9 @@ fun DeviceForwardScreen(
                         deviceStates = deviceStates,
                         selectedDevice = selectedDevice,
                         isAuthed = ::isAuthed,
-                        onSelect = { selectedDevice = it },
-                        onConnect = { showConfirmDialog = it },
-                        onRemove = { removeAuthedDevice(it) },
+                        onSelect = { device: DeviceInfo -> selectedDevice = device },
+                        onConnect = { device: DeviceInfo -> showConfirmDialog = device },
+                        onRemove = { uuid: String -> removeAuthedDevice(uuid) },
                         onManageRejected = { showRejectedDialog = true },
                         context = context
                     )

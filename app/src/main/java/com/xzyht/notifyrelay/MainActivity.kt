@@ -60,7 +60,7 @@ class MainActivity : FragmentActivity() {
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
 
-        // 使用 Fragment 管理主页面和通知历史页面
+        // 仅使用 Compose 管理主页面和通知历史页面
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
@@ -70,7 +70,6 @@ class MainActivity : FragmentActivity() {
                 // 状态栏背景色与页面背景色完全一致（background）
                 SideEffect {
                     @Suppress("DEPRECATION")
-                    // TODO: 替换更优的状态栏着色方案，避免使用已废弃API
                     window.statusBarColor = colorScheme.background.toArgb()
                     val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
@@ -93,6 +92,72 @@ class MainActivity : FragmentActivity() {
         val appOps = getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
         val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), packageName)
         return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+}
+@Composable
+fun DeviceListFragmentView(fragmentContainerId: Int) {
+    val colorScheme = MiuixTheme.colorScheme
+    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
+    val fragmentTag = "DeviceListFragment"
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceListFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
+    }
+}
+
+@Composable
+fun DeviceForwardFragmentView(fragmentContainerId: Int) {
+    val colorScheme = MiuixTheme.colorScheme
+    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
+    val fragmentTag = "DeviceForwardFragment"
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceForwardFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
+    }
+}
+
+@Composable
+fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
+    val colorScheme = MiuixTheme.colorScheme
+    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
+    val fragmentTag = "NotificationHistoryFragment"
+    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
+        AndroidView(
+            factory = { context ->
+                val frameLayout = android.widget.FrameLayout(context)
+                frameLayout.id = fragmentContainerId
+                fragmentManager?.let { fm ->
+                    // 每次都 replace，保证 fragment attach
+                    fm.beginTransaction()
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
+                        .commitAllowingStateLoss()
+                }
+                frameLayout
+            },
+            update = { }
+        )
     }
 }
 
@@ -143,77 +208,12 @@ fun MainAppFragment() {
             }
         }
     }
-@Composable
-fun DeviceListFragmentView(fragmentContainerId: Int) {
-    val colorScheme = MiuixTheme.colorScheme
-    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
-    val fragmentTag = "DeviceListFragment"
-    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-        AndroidView(
-            factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
-                frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceListFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
-                frameLayout
-            },
-            update = { }
-        )
-    }
-}
-}
-
-@Composable
-fun DeviceForwardFragmentView(fragmentContainerId: Int) {
-    val colorScheme = MiuixTheme.colorScheme
-    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
-    val fragmentTag = "DeviceForwardFragment"
-    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-        AndroidView(
-            factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
-                frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceForwardFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
-                frameLayout
-            },
-            update = { }
-        )
-    }
-}
-
-@Composable
-fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
-    val colorScheme = MiuixTheme.colorScheme
-    val fragmentManager = (LocalContext.current as? FragmentActivity)?.supportFragmentManager
-    val fragmentTag = "NotificationHistoryFragment"
-    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-        AndroidView(
-            factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
-                frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    // 每次都 replace，保证 fragment attach
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
-                frameLayout
-            },
-            update = { }
-        )
-    }
-}
 @Preview(showBackground = true)
 @Composable
 fun MainAppPreview() {
     MiuixTheme {
         MainAppFragment()
     }
+}
+// 文件末尾补全 class MainActivity 的闭合大括号
 }
