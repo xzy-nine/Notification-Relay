@@ -348,6 +348,7 @@ fun NotificationHistoryScreen() {
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            // 修正：标题应为原始通知标题而非应用名
                                             top.yukonga.miuix.kmp.basic.Text(
                                                 text = record.title ?: "(无标题)",
                                                 style = textStyles.body2.copy(
@@ -380,7 +381,7 @@ fun NotificationHistoryScreen() {
                                 } else {
                                     list.sortedByDescending { it.time }.forEach { record ->
                                         val (appName1, appIcon1) = getCachedAppInfo(record.packageName)
-                                        NotificationCard(record, appName1, appIcon1)
+                                        NotificationCard(record, record.title ?: "(无标题)", appIcon1)
                                     }
                                 }
                             }
