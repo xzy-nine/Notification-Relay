@@ -36,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.TabRow
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -288,6 +289,9 @@ fun DeviceForwardScreen(
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
     android.util.Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
+    // TabRow相关状态
+    val tabTitles = listOf("通知过滤设置", "聊天测试")
+    var selectedTabIndex by remember { mutableStateOf(0) }
     // 连接弹窗与错误弹窗相关状态
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -555,33 +559,21 @@ fun DeviceForwardScreen(
             .background(colorScheme.background)
             .padding(12.dp)
     ) {
-        // 通知过滤设置卡片
-        androidx.compose.material3.Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp),
-            colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = colorScheme.surface
-            )
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(
-                    "通知过滤设置",
-                    style = textStyles.headline1,
-                    color = colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                androidx.compose.material3.IconButton(onClick = { filterExpanded = !filterExpanded }) {
-                    Icon(
-                        imageVector = MiuixIcons.Basic.ArrowRight,
-                        contentDescription = if (filterExpanded) "收起" else "展开",
-                        tint = colorScheme.onSurface
-                    )
-                }
-            }
-            androidx.compose.animation.AnimatedVisibility(visible = filterExpanded) {
-                Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                    // 包名等价功能总开关（文字在前，开关在后，增加下方间距）
+        TabRow(
+            tabs = tabTitles,
+            selectedTabIndex = selectedTabIndex,
+            onTabSelected = { selectedTabIndex = it },
+            modifier = Modifier.fillMaxWidth()
+        )
+        when (selectedTabIndex) {
+            0 -> {
+                // 通知过滤设置 Tab 内容
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    // 包名等价功能总开关
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
@@ -600,104 +592,112 @@ fun DeviceForwardScreen(
                             )
                         )
                     }
-                    // 合并组渲染（默认组+自定义组）
-    allGroups.forEachIndexed { idx, group ->
-        val groupEnabled = enablePackageGroupMapping
-        androidx.compose.material3.Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 2.dp)
-                .then(
-                    if (groupEnabled) Modifier.clickable {
-                        allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
-                    } else Modifier
-                ),
-            shape = androidx.compose.material3.MaterialTheme.shapes.small,
-            elevation = androidx.compose.material3.CardDefaults.cardElevation(1.dp),
-            colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = colorScheme.surfaceVariant
-            )
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    top.yukonga.miuix.kmp.basic.Checkbox(
-                        checked = allGroupEnabled[idx],
-                        onCheckedChange = { v ->
-                            allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
-                        },
-                        modifier = Modifier.size(20.dp),
-                        colors = top.yukonga.miuix.kmp.basic.CheckboxDefaults.checkboxColors(
-                            checkedBackgroundColor = colorScheme.primary,
-                            checkedForegroundColor = colorScheme.onPrimary,
-                            uncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
-                            uncheckedForegroundColor = colorScheme.outline,
-                            disabledCheckedBackgroundColor = colorScheme.surface,
-                            disabledUncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
-                            disabledCheckedForegroundColor = colorScheme.outline,
-                            disabledUncheckedForegroundColor = colorScheme.outline
-                        ),
-                        enabled = enablePackageGroupMapping
-                    )
-                    Text(
-                        if (idx < NotificationForwardConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-NotificationForwardConfig.defaultPackageGroups.size}",
-                        style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
-                        Button(
-                            onClick = { showAppPickerForGroup = true to idx },
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.size(24.dp),
-                            enabled = enablePackageGroupMapping
-                        ) {
-                            Text("+", style = textStyles.button)
-                        }
-                        Button(
-                            onClick = {
-                                allGroups = allGroups.toMutableList().apply { removeAt(idx) }
-                                allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
-                            },
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.size(24.dp).padding(start = 2.dp),
-                            enabled = enablePackageGroupMapping
-                        ) {
-                            Text("×", style = textStyles.button, color = colorScheme.primary)
-                        }
-                    }
-                }
-                // 包名自动换行显示
-                androidx.compose.foundation.layout.FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val pm = context.packageManager
-                    val installedPkgs = remember { pm.getInstalledApplications(0).map { it.packageName }.toSet() }
-                    group.forEach { pkg ->
-                        val isInstalled = installedPkgs.contains(pkg)
-                        val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                            if (icon is android.graphics.drawable.BitmapDrawable) {
-                                Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
+                    // 滚动区域：包名组配置
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                            .heightIn(max = 320.dp) // 限高，避免撑满整个屏幕
+                    ) {
+                        items(allGroups.size) { idx ->
+                            val group = allGroups[idx]
+                            val groupEnabled = enablePackageGroupMapping
+                            androidx.compose.material3.Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                                    .then(
+                                        if (groupEnabled) Modifier.clickable {
+                                            allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
+                                        } else Modifier
+                                    ),
+                                shape = androidx.compose.material3.MaterialTheme.shapes.small,
+                                elevation = androidx.compose.material3.CardDefaults.cardElevation(1.dp),
+                                colors = androidx.compose.material3.CardDefaults.cardColors(
+                                    containerColor = colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        top.yukonga.miuix.kmp.basic.Checkbox(
+                                            checked = allGroupEnabled[idx],
+                                            onCheckedChange = { v ->
+                                                allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
+                                            },
+                                            modifier = Modifier.size(20.dp),
+                                            colors = top.yukonga.miuix.kmp.basic.CheckboxDefaults.checkboxColors(
+                                                checkedBackgroundColor = colorScheme.primary,
+                                                checkedForegroundColor = colorScheme.onPrimary,
+                                                uncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
+                                                uncheckedForegroundColor = colorScheme.outline,
+                                                disabledCheckedBackgroundColor = colorScheme.surface,
+                                                disabledUncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
+                                                disabledCheckedForegroundColor = colorScheme.outline,
+                                                disabledUncheckedForegroundColor = colorScheme.outline
+                                            ),
+                                            enabled = enablePackageGroupMapping
+                                        )
+                                        Text(
+                                            if (idx < NotificationForwardConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-NotificationForwardConfig.defaultPackageGroups.size}",
+                                            style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                        Spacer(Modifier.weight(1f))
+                                        if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
+                                            Button(
+                                                onClick = { showAppPickerForGroup = true to idx },
+                                                contentPadding = PaddingValues(0.dp),
+                                                modifier = Modifier.size(24.dp),
+                                                enabled = enablePackageGroupMapping
+                                            ) {
+                                                Text("+", style = textStyles.button)
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    allGroups = allGroups.toMutableList().apply { removeAt(idx) }
+                                                    allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
+                                                },
+                                                contentPadding = PaddingValues(0.dp),
+                                                modifier = Modifier.size(24.dp).padding(start = 2.dp),
+                                                enabled = enablePackageGroupMapping
+                                            ) {
+                                                Text("×", style = textStyles.button, color = colorScheme.primary)
+                                            }
+                                        }
+                                    }
+                                    // 包名自动换行显示
+                                    androidx.compose.foundation.layout.FlowRow(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        val pm = context.packageManager
+                                        val installedPkgs = remember { pm.getInstalledApplications(0).map { it.packageName }.toSet() }
+                                        group.forEach { pkg ->
+                                            val isInstalled = installedPkgs.contains(pkg)
+                                            val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+                                                if (icon is android.graphics.drawable.BitmapDrawable) {
+                                                    Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
+                                                }
+                                                Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
                         }
                     }
-                }
-            }
-        }
-    }
                     // 添加新组按钮
-                Button(
-                    onClick = {
-                        allGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
-                        allGroupEnabled = allGroupEnabled.toMutableList().apply { add(true) }
-                    },
-                    modifier = Modifier.padding(vertical = 2.dp),
-                    enabled = enablePackageGroupMapping
-                ) {
-                    Text("添加新组", style = textStyles.button)
-                }
+                    Button(
+                        onClick = {
+                            allGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
+                            allGroupEnabled = allGroupEnabled.toMutableList().apply { add(true) }
+                        },
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        enabled = enablePackageGroupMapping
+                    ) {
+                        Text("添加新组", style = textStyles.button)
+                    }
                     // 应用选择弹窗
                     if (showAppPickerForGroup.first) {
                         val groupIdx = showAppPickerForGroup.second
@@ -782,7 +782,6 @@ fun DeviceForwardScreen(
                             textStyle = textStyles.body2
                         )
                     }
-                    // 对等模式Switch已移除，避免与FilterChip重复
                     // 延迟去重
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Switch(
@@ -826,35 +825,20 @@ fun DeviceForwardScreen(
                     }
                 }
             }
-        }
-
-        // 聊天区卡片
-        androidx.compose.material3.Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp),
-            colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = colorScheme.surface
-            )
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(
-                    "聊天测试",
-                    style = textStyles.headline1,
-                    color = colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                androidx.compose.material3.IconButton(onClick = { chatExpanded = !chatExpanded }) {
-                    Icon(
-                        imageVector = MiuixIcons.Basic.ArrowRight,
-                        contentDescription = if (chatExpanded) "收起" else "展开",
-                        tint = colorScheme.onSurface
-                    )
-                }
-            }
-            androidx.compose.animation.AnimatedVisibility(visible = chatExpanded) {
-                Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                    LazyColumn(modifier = Modifier.heightIn(max = 180.dp).fillMaxWidth().padding(horizontal = 8.dp)) {
+            1 -> {
+                // 聊天测试 Tab 内容
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 8.dp)
+                ) {
+                    // 填满剩余空间的聊天历史
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                    ) {
                         items(chatHistoryState.value) { msg ->
                             val isSend = msg.startsWith("发送:")
                             Row(
@@ -877,7 +861,12 @@ fun DeviceForwardScreen(
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    // 输入区始终底部
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
                         OutlinedTextField(
                             value = chatInput,
                             onValueChange = { chatInput = it },
@@ -918,11 +907,11 @@ fun DeviceForwardScreen(
                                 contentColor = colorScheme.onPrimary
                             )
                         ) {
-                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)
+                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)}
                         }
                     }
                 }
             }
         }
     }
-}}
+}
