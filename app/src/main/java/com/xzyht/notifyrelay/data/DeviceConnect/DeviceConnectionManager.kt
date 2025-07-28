@@ -60,7 +60,8 @@ object DeviceConnectionManagerUtil {
 data class AuthInfo(
     val publicKey: String,
     val sharedSecret: String,
-    val isAccepted: Boolean
+    val isAccepted: Boolean,
+    val displayName: String? = null // 新增：持久化设备名
 )
 
 class DeviceConnectionManager(private val context: android.content.Context) {
@@ -109,7 +110,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val publicKey = obj.getString("publicKey")
                 val sharedSecret = obj.getString("sharedSecret")
                 val isAccepted = obj.optBoolean("isAccepted", true)
-                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted)
+                val displayName = obj.optString("displayName", null)
+                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted, displayName)
+                // 新增：恢复设备名到缓存
+                if (!displayName.isNullOrEmpty()) {
+                    DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
+                }
             }
         } catch (_: Exception) {}
     }
@@ -125,6 +131,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     obj.put("publicKey", auth.publicKey)
                     obj.put("sharedSecret", auth.sharedSecret)
                     obj.put("isAccepted", auth.isAccepted)
+                    // 新增：持久化 displayName
+                    val name = auth.displayName ?: deviceInfoCache[uuid]?.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
+                    obj.put("displayName", name)
                     arr.put(obj)
                 }
             }
@@ -284,13 +293,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         val allUuids = (deviceLastSeen.keys + authed).toSet()
         val newMap = mutableMapOf<String, Pair<DeviceInfo, Boolean>>()
         val unauthedTimeout = 30_000L // 未认证设备保留30秒
+        val authedOfflineTimeout = 9_000L // 已认证设备离线阈值，放宽到9秒
         for (uuid in allUuids) {
             val lastSeen = deviceLastSeen[uuid]
             val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
             if (auth != null) {
                 // 已认证设备，离线也保留
-                val isOnline = lastSeen != null && now - lastSeen <= 3000L
-                val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, "已认证设备", "", listenPort)
+                val isOnline = lastSeen != null && now - lastSeen <= authedOfflineTimeout
+                val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, auth.displayName ?: "已认证设备", "", listenPort)
                 newMap[uuid] = info to isOnline
             } else {
                 // 未认证设备，30秒未发现则移除
@@ -303,8 +313,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 }
             }
         }
-        //Log.d("NotifyRelay", "[updateDeviceList] allUuids=$allUuids, newMap=${newMap.keys}")
-        //logDeviceCache("after_updateDeviceList")
         _devices.value = newMap
     }
 
@@ -312,6 +320,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 优先从缓存取，取不到再从已展示的设备流取
         synchronized(deviceInfoCache) {
             deviceInfoCache[uuid]?.let { return it }
+        }
+        // 新增：若为已认证设备，优先用认证表中的 displayName
+        val auth = authenticatedDevices[uuid]
+        if (auth != null) {
+            val name = auth.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
+            return DeviceInfo(uuid, name, "", listenPort)
         }
         return _devices.value[uuid]?.first
     }
@@ -345,7 +359,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         // 先移除旧的认证表项
                         synchronized(authenticatedDevices) {
                             authenticatedDevices.remove(device.uuid)
-                            authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true)
+                            authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true, device.displayName)
                             saveAuthedDevices()
                         }
                         callback?.invoke(true, null)
@@ -484,15 +498,15 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                             handshakeHandler.invoke(remoteDevice, remotePubKey) { accepted ->
                                                 // 关键修复：无论回调在何线程，先同步写入认证表
                                                 if (accepted) {
-                                                val sharedSecret = if (localPublicKey < remotePubKey)
-                                                    (localPublicKey + remotePubKey).take(32)
-                                                else
-                                                    (remotePubKey + localPublicKey).take(32)
-                                                synchronized(authenticatedDevices) {
-                                                    authenticatedDevices.remove(remoteUuid)
-                                                    authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true)
-                                                    saveAuthedDevices()
-                                                }
+                                                    val sharedSecret = if (localPublicKey < remotePubKey)
+                                                        (localPublicKey + remotePubKey).take(32)
+                                                    else
+                                                        (remotePubKey + localPublicKey).take(32)
+                                                    synchronized(authenticatedDevices) {
+                                                        authenticatedDevices.remove(remoteUuid)
+                                                        authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
+                                                        saveAuthedDevices()
+                                                    }
                                                 } else {
                                                     synchronized(rejectedDevices) {
                                                         rejectedDevices.add(remoteUuid)
