@@ -31,9 +31,10 @@ data class DeviceInfo(
 
 object DeviceConnectionManagerUtil {
     // 工具：构造 json 格式的通知数据
-    fun buildNotificationJson(packageName: String, title: String?, text: String?, time: Long): String {
+    fun buildNotificationJson(packageName: String, appName: String?, title: String?, text: String?, time: Long): String {
         val json = org.json.JSONObject()
         json.put("packageName", packageName)
+        json.put("appName", appName ?: packageName)
         json.put("title", title ?: "")
         json.put("text", text ?: "")
         json.put("time", time)

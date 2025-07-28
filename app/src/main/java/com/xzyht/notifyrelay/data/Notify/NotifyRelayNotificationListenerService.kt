@@ -62,6 +62,15 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 try {
                     // 获取全局 DeviceConnectionManager 实例（与 DeviceForwardFragment 保持一致）
                     val deviceManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
+                    // 获取应用名
+                    var appName: String? = null
+                    try {
+                        val pm = applicationContext.packageManager
+                        val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                        appName = pm.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {
+                        appName = sbn.packageName // 未安装时用包名兜底
+                    }
                     // 反射获取认证设备表
                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                     field.isAccessible = true
@@ -82,6 +91,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                                 // 组装转发内容（统一用json）
                                 val payload = com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.buildNotificationJson(
                                     sbn.packageName,
+                                    appName,
                                     title,
                                     text,
                                     sbn.postTime

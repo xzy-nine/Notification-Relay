@@ -45,6 +45,8 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     val context = LocalContext.current
+    // 优先用 record.appName
+    val displayAppName = record.appName ?: appName
     Surface(
         onClick = {
             // 跳转到对应应用主界面
@@ -131,7 +133,7 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 top.yukonga.miuix.kmp.basic.Text(
-                    text = appName,
+                    text = displayAppName,
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -322,7 +324,7 @@ fun NotificationHistoryScreen() {
                                         Spacer(modifier = Modifier.width(8.dp))
                                     }
                                     top.yukonga.miuix.kmp.basic.Text(
-                                        text = appName,
+                                        text = latest?.appName ?: appName,
                                         style = textStyles.title3.copy(color = colorScheme.onBackground)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))

@@ -28,6 +28,7 @@ data class NotificationAction(
 data class NotificationRecord(
     val key: String,
     val packageName: String,
+    val appName: String? = null, // 新增字段
     val title: String?,
     val text: String?,
     val time: Long,
@@ -40,6 +41,7 @@ data class NotificationRecord(
 data class NotificationRecordEntity(
     val key: String,
     val packageName: String,
+    val appName: String? = null, // 新增字段
     val title: String?,
     val text: String?,
     val time: Long,
@@ -130,6 +132,7 @@ object NotificationRepository {
                 NotificationRecord(
                     key = it.key,
                     packageName = it.packageName,
+                    appName = it.appName,
                     title = it.title,
                     text = it.text,
                     time = it.time,
@@ -153,25 +156,20 @@ object NotificationRepository {
             android.util.Log.w("NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
         }
         val key = (time.toString() + packageName + device)
-        val record = NotificationRecord(
-            key = key,
-            packageName = packageName,
-            title = title,
-            text = text,
-            time = time,
-            device = device
-        )
-        android.util.Log.i("NotifyRelay", "[addRemoteNotification] device=$device, key=$key, title=$title, text=$text")
-        // 只写入对应uuid的json，不影响本机或其他设备，不再写入全局内存
+        // 远程推送时应带上 appName，尝试从 text/title 里提取，或后续参数补充
+        var appName: String? = null
+        // 远程 json 应带有 appName 字段，后续解析时补充
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val fileKey = device // 远程设备uuid
             val oldList = runBlocking { store.getAll(fileKey) }.toMutableList()
             oldList.removeAll { it.key == key }
             // device 字段严格等于 fileKey，保证UI读取时一致
+            // 兼容远程 json 结构，appName 字段后续由解析补充
             oldList.add(0, NotificationRecordEntity(
                 key = key,
                 packageName = packageName,
+                appName = appName,
                 title = title,
                 text = text,
                 time = time,
@@ -200,22 +198,27 @@ object NotificationRepository {
         val time = sbn.postTime
         val packageName = sbn.packageName
         val device = "本机"
+        var appName: String? = null
+        try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            appName = pm.getApplicationLabel(appInfo).toString()
+        } catch (_: Exception) {
+            appName = packageName
+        }
         val record = NotificationRecord(
             key = key,
             packageName = packageName,
+            appName = appName,
             title = title,
             text = text,
             time = time,
             device = device
         )
-        // android.util.Log.i("NotifyRelay", "[addNotification] 本机, key=$key, title=$title, text=$text") // 已注释，避免干扰调试
         notifications.removeAll { it.key == key }
         notifications.add(0, record)
-        // 不再切换 currentDevice，仅刷新缓存和推送变更
         syncToCache(context)
-        // 写入后主动推送变更
         notifyHistoryChanged(device, context)
-        // android.util.Log.i("NotifyRelay", "[addNotification] after sync, notifications.size=${notifications.size}, currentDevice=$currentDevice") // 已注释，避免干扰调试
     }
     val notifications: SnapshotStateList<NotificationRecord> = mutableStateListOf()
 
@@ -294,6 +297,7 @@ object NotificationRepository {
                 NotificationRecordEntity(
                     key = it.key,
                     packageName = it.packageName,
+                    appName = it.appName,
                     title = it.title,
                     text = it.text,
                     time = it.time,
