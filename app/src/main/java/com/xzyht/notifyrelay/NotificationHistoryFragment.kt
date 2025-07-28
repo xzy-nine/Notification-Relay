@@ -45,7 +45,8 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     val context = LocalContext.current
-    // 优先用 record.appName
+    // 修正：单条通知卡片标题应为原始通知标题
+    val displayTitle = record.title ?: "(无标题)"
     val displayAppName = record.appName ?: appName
     Surface(
         onClick = {
@@ -132,12 +133,12 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
+                // 标题显示为原始通知标题
                 top.yukonga.miuix.kmp.basic.Text(
-                    text = displayAppName,
+                    text = displayTitle,
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                // ...设备名标识已移除...
             }
             Spacer(modifier = Modifier.height(4.dp))
             top.yukonga.miuix.kmp.basic.Text(
@@ -225,11 +226,17 @@ fun NotificationHistoryScreen() {
     val notifications by NotificationRepository.notificationHistoryFlow.collectAsState()
 
     val grouped = notifications.groupBy { it.packageName }
-    val groupList = grouped.entries.map { (_, list) ->
-        list.sortedByDescending { it.time }
+    val groupList = mutableListOf<List<NotificationRecord>>()
+    val singleList = mutableListOf<NotificationRecord>()
+    for ((_, list) in grouped) {
+        if (list.size >= 2) {
+            groupList.add(list.sortedByDescending { it.time })
+        } else {
+            singleList.addAll(list)
+        }
     }
-    // 混合排序：单条和分组都按分组最新时间降序排列
-    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+    // 混合排序：分组按分组最新时间降序，单条按时间降序，合并展示
+    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L } + singleList.sortedByDescending { it.time }.map { listOf(it) }
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
@@ -291,11 +298,11 @@ fun NotificationHistoryScreen() {
         if (notifications.isNotEmpty()) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(mixedList) { list ->
-                    if (list.size <= 2) {
-                        list.forEach { record ->
-                            val (_, appIcon) = getCachedAppInfo(record.packageName)
-                            NotificationCard(record, record.title ?: "(无标题)", appIcon)
-                        }
+                    if (list.size == 1) {
+                        val record = list[0]
+                        val (appName, appIcon) = getCachedAppInfo(record.packageName)
+                        // 单条通知标题应为原始通知标题（已修正）
+                        NotificationCard(record, record.title ?: "(无标题)", appIcon)
                     } else {
                         val latest = list.maxByOrNull { it.time }
                         var expanded by remember { mutableStateOf(false) }

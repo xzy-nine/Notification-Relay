@@ -212,6 +212,7 @@ object NotificationRepository {
             val value = bundle.getCharSequence(key)
             return value?.toString()
         }
+        // 保证 title 是实际通知标题
         val title = getStringCompat(notification.extras, Notification.EXTRA_TITLE)
         val text = getStringCompat(notification.extras, Notification.EXTRA_TEXT)
         val time = sbn.postTime
@@ -229,7 +230,7 @@ object NotificationRepository {
             key = key,
             packageName = packageName,
             appName = appName,
-            title = title,
+            title = title, // 这里始终用实际通知标题
             text = text,
             time = time,
             device = device
