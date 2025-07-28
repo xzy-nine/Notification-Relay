@@ -10,7 +10,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -21,6 +21,12 @@ import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
 import com.xzyht.notifyrelay.GlobalSelectedDeviceHolder
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.Icon
+import androidx.compose.runtime.saveable.rememberSaveable
+
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+
+import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
 
 
 class DeviceForwardFragment : Fragment() {
@@ -83,8 +89,13 @@ fun DeviceForwardScreen(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     // 聊天区相关状态
-    var chatInput by rememberSaveable { mutableStateOf("") }
-    var chatHistory by rememberSaveable { mutableStateOf(listOf<String>()) }
+    var chatInput by remember { mutableStateOf("") }
+    var chatExpanded by remember { mutableStateOf(false) }
+    val chatHistoryState = remember { mutableStateOf<List<String>>(emptyList()) }
+    // 聊天内容持久化到本地文件，应用退出前都保留
+    LaunchedEffect(context) {
+        chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+    }
     // 只监听全局选中设备
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
     val selectedDevice = selectedDeviceState.value
@@ -92,40 +103,83 @@ fun DeviceForwardScreen(
     DisposableEffect(Unit) {
         val oldHandler = deviceManager.onNotificationDataReceived
         deviceManager.onNotificationDataReceived = { data ->
-            chatHistory = chatHistory + "收到: $data"
+            com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: $data")
+            chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
             oldHandler?.invoke(data)
         }
         onDispose { deviceManager.onNotificationDataReceived = oldHandler }
     }
-    // 聊天区UI
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
-        Text("聊天测试", style = textStyles.headline1, modifier = Modifier.align(Alignment.CenterHorizontally))
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxSize()) {
-            items(chatHistory) { msg ->
-                Text(msg, style = textStyles.body2)
+    // 聊天区UI（可折叠）
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
+        androidx.compose.material3.Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.material3.MaterialTheme.shapes.medium,
+            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Text("聊天测试", style = textStyles.headline1, modifier = Modifier.weight(1f))
+                androidx.compose.material3.IconButton(onClick = { chatExpanded = !chatExpanded }) {
+                    val tintColor = colorScheme.onBackground
+                    Icon(
+                        imageVector = MiuixIcons.Basic.ArrowRight,
+                        contentDescription = if (chatExpanded) "收起" else "展开",
+                        tint = tintColor
+                    )
+                }
             }
-        }
-        Row(Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = chatInput,
-                onValueChange = { chatInput = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("输入消息...") }
-            )
-            Button(
-                onClick = {
-                    val dev = selectedDevice
-                    if (dev != null && chatInput.isNotBlank()) {
-                        // 发送消息
-                        deviceManager.sendNotificationData(dev, chatInput)
-                        chatHistory = chatHistory + "发送: $chatInput"
-                        chatInput = ""
+            androidx.compose.animation.AnimatedVisibility(visible = chatExpanded) {
+                Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    LazyColumn(modifier = Modifier.heightIn(max = 180.dp).fillMaxWidth().padding(horizontal = 8.dp)) {
+                        items(chatHistoryState.value) { msg ->
+                            val isSend = msg.startsWith("发送:")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = if (isSend) Arrangement.End else Arrangement.Start
+                            ) {
+                                androidx.compose.material3.Surface(
+                                    color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
+                                    shape = androidx.compose.material3.MaterialTheme.shapes.medium,
+                                    tonalElevation = 2.dp,
+                                    modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
+                                ) {
+                                    Text(
+                                        msg.removePrefix("发送:").removePrefix("收到:"),
+                                        style = textStyles.body2,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        color = colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
                     }
-                },
-                enabled = selectedDevice != null && chatInput.isNotBlank(),
-                modifier = Modifier.align(Alignment.CenterVertically)
-            ) {
-                Text("发送")
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        OutlinedTextField(
+                            value = chatInput,
+                            onValueChange = { chatInput = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("输入消息...") }
+                        )
+                        Button(
+                            onClick = {
+                                // 全部广播：遍历所有已认证设备
+                                val allDevices = deviceManager.devices.value.values.map { it.first }
+                                val sentAny = allDevices.isNotEmpty() && chatInput.isNotBlank()
+                                allDevices.forEach { dev ->
+                                    deviceManager.sendNotificationData(dev, chatInput)
+                                }
+                                if (sentAny) {
+                                    com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "发送: $chatInput")
+                                    chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                                    chatInput = ""
+                                }
+                            },
+                            enabled = deviceManager.devices.value.isNotEmpty() && chatInput.isNotBlank(),
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        ) {
+                            Text("发送")
+                        }
+                    }
+                }
             }
         }
     }
