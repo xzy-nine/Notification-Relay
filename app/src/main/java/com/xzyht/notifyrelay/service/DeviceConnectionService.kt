@@ -25,12 +25,21 @@ class DeviceConnectionService : Service() {
             }
         }
     }
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // 重新启动服务，防止被系统杀死
+        val restartIntent = Intent(applicationContext, DeviceConnectionService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            applicationContext.startForegroundService(restartIntent)
+        } else {
+            applicationContext.startService(restartIntent)
+        }
+    }
     override fun onCreate() {
         super.onCreate()
         // 保证全局唯一实例，UI和Service同步
         connectionManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
         connectionManager.startDiscovery()
-        startForegroundServiceNotification()
     }
 
     private fun startForegroundServiceNotification() {
@@ -42,8 +51,8 @@ class DeviceConnectionService : Service() {
             manager.createNotificationChannel(channel)
         }
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("通知转发服务运行中")
-            .setContentText("设备保持在线，支持通知转发")
+            .setContentTitle("通知转发运行中")
+            .setContentText("保证本设备的在线和通知的获取与转发")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .build()
@@ -51,6 +60,7 @@ class DeviceConnectionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForegroundServiceNotification() // 确保每次重启都恢复前台通知
         // 可根据需要处理命令
         return START_STICKY
     }

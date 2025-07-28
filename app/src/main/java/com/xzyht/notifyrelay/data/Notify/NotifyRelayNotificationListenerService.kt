@@ -15,6 +15,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
+    override fun onTaskRemoved(rootIntent: android.content.Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // 重新启动服务，防止被系统杀死
+        val restartIntent = android.content.Intent(applicationContext, NotifyRelayNotificationListenerService::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            applicationContext.startForegroundService(restartIntent)
+        } else {
+            applicationContext.startService(restartIntent)
+        }
+    }
     override fun onCreate() {
         super.onCreate()
         // android.util.Log.i("NotifyRelay", "NotifyRelayNotificationListenerService onCreate") // 调试日志已注释
