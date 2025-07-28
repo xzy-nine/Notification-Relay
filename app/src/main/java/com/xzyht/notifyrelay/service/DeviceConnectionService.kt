@@ -13,6 +13,7 @@ import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 
 class DeviceConnectionService : Service() {
     private lateinit var connectionManager: DeviceConnectionManager
+    private val NOTIFY_ID = 1001 // 与 NotifyRelayNotificationListenerService 保持一致
     // 可选：暴露静态方法方便外部启动服务
     companion object {
         fun start(context: Context) {
@@ -46,7 +47,7 @@ class DeviceConnectionService : Service() {
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .build()
-        startForeground(1, notification)
+        startForeground(NOTIFY_ID, notification)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

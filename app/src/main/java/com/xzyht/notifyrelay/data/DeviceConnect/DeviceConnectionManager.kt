@@ -207,9 +207,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
         // 启动UDP广播线程，定期广播本机信息
         if (broadcastThread == null) {
-            android.util.Log.d("NotifyRelay", "广播线程即将启动")
+            //android.util.Log.d("NotifyRelay", "广播线程即将启动")
             broadcastThread = Thread {
-                android.util.Log.d("NotifyRelay", "广播线程已启动")
+                //android.util.Log.d("NotifyRelay", "广播线程已启动")
                 try {
                     val socket = java.net.DatagramSocket()
                     val displayName = getLocalDisplayName()
@@ -218,7 +218,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
                         val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
                         socket.send(packet)
-                        android.util.Log.d("NotifyRelay", "已发送广播: NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}")
+                        //android.util.Log.d("NotifyRelay", "已发送广播: NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}")
                         Thread.sleep(3000)
                     }
                 } catch (e: Exception) {
@@ -230,9 +230,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
         // 启动UDP监听线程，发现其他设备
         if (listenThread == null) {
-            android.util.Log.d("NotifyRelay", "监听线程即将启动")
+            //android.util.Log.d("NotifyRelay", "监听线程即将启动")
             listenThread = Thread {
-                android.util.Log.d("NotifyRelay", "监听线程已启动")
+                //android.util.Log.d("NotifyRelay", "监听线程已启动")
                 try {
                     val socket = java.net.DatagramSocket(23334)
                     val buf = ByteArray(256)
@@ -240,8 +240,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         val packet = java.net.DatagramPacket(buf, buf.size)
                         socket.receive(packet)
                         val msg = String(packet.data, 0, packet.length)
-                        android.util.Log.d("NotifyRelay", "收到广播: $msg, ip=${packet.address.hostAddress}")
-                        //logDeviceCache("before_broadcast_handle")
+                        //android.util.Log.d("NotifyRelay", "收到广播: $msg, ip=${packet.address.hostAddress}")
+                        // logDeviceCache("before_broadcast_handle")
                         if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
                             val parts = msg.split(":")
                             if (parts.size >= 4) {
@@ -257,8 +257,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                 }
                                 // 更新全局缓存
                                 DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
-                                //Log.d("NotifyRelay", "[broadcast_handle] 新增/更新设备: $device")
-                                //logDeviceCache("after_broadcast_handle")
+                                // Log.d("NotifyRelay", "[broadcast_handle] 新增/更新设备: $device")
+                                // logDeviceCache("after_broadcast_handle")
                                 coroutineScope.launch {
                                     updateDeviceList()
                                 }

@@ -71,10 +71,10 @@ class DeviceListFragment : Fragment() {
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
     ): android.view.View? {
-        android.util.Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
+        // android.util.Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
-                android.util.Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
+                // android.util.Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
                 MiuixTheme {
                     DeviceListScreen()
                 }
@@ -118,8 +118,8 @@ fun DeviceListScreen() {
         }
     }
 
-    android.util.Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
-    android.util.Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
+    // android.util.Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
+    // android.util.Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
 
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {
