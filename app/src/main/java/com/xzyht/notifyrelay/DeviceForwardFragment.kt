@@ -22,18 +22,20 @@ import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
 import com.xzyht.notifyrelay.GlobalSelectedDeviceHolder
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.Icon
-
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-
 import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
-
 import androidx.compose.foundation.background
 import androidx.compose.material3.TextFieldDefaults
-
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalContext
+import top.yukonga.miuix.kmp.basic.Checkbox
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -44,19 +46,24 @@ object NotificationForwardConfig {
     private const val KEY_ENABLE_DEDUP = "enable_dedup"
     private const val KEY_ENABLE_PEER = "enable_peer"
 
-    // 默认包名等价组（不可编辑/删除，仅可关闭）
-    val defaultPackageGroups: List<Set<String>> = listOf(
-        setOf("tv.danmaku.bilibilihd", "tv.danmaku.bili"),
-        setOf("com.sina.weibo", "com.sina.weibog3", "com.weico.international", "com.sina.weibolite", "com.hengye.share", "com.caij.see"),
-        setOf("com.tencent.mobileqq", "com.tencent.tim")
+    // 包名等价功能总开关
+    var enablePackageGroupMapping: Boolean = true
+    // 默认包名等价组及其开关
+    val defaultPackageGroups: List<List<String>> = listOf(
+        listOf("tv.danmaku.bilibilihd", "tv.danmaku.bili"),
+        listOf("com.sina.weibo", "com.sina.weibog3", "com.weico.international", "com.sina.weibolite", "com.hengye.share", "com.caij.see"),
+        listOf("com.tencent.mobileqq", "com.tencent.tim")
     )
-    // 默认包名组启用状态
-    var enableDefaultPackageGroups: Boolean = true
-    // 用户自定义包名等价组
-    var customPackageGroups: List<Set<String>> = listOf()
+    var defaultGroupEnabled: MutableList<Boolean> = mutableListOf(true, true, true)
+    // 用户自定义包名等价组，每组为包名列表
+    var customPackageGroups: MutableList<MutableList<String>> = mutableListOf()
+    // 每个自定义组的开关
+    var customGroupEnabled: MutableList<Boolean> = mutableListOf()
     // 合并后的包名等价组
     val packageGroups: List<Set<String>>
-        get() = (if (enableDefaultPackageGroups) defaultPackageGroups else emptyList()) + customPackageGroups
+        get() = if (!enablePackageGroupMapping) emptyList()
+            else defaultPackageGroups.withIndex().filter { defaultGroupEnabled.getOrNull(it.index) == true }.map { it.value.toSet() } +
+                customPackageGroups.withIndex().filter { customGroupEnabled.getOrNull(it.index) == true }.map { it.value.toSet() }
     // 延迟去重开关
     var enableDeduplication: Boolean = true
     // 黑白名单模式："none"=无，"black"=黑名单，"white"=白名单，"peer"=对等
@@ -69,10 +76,21 @@ object NotificationForwardConfig {
     // 加载设置
     fun load(context: android.content.Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-        enableDefaultPackageGroups = prefs.getBoolean("enable_default_package_groups", true)
-        customPackageGroups = prefs.getStringSet(KEY_PACKAGE_GROUPS, null)?.mapNotNull {
-            it.split("|").map { s->s.trim() }.filter { s->s.isNotBlank() }.toSet().takeIf { set->set.isNotEmpty() }
-        } ?: listOf()
+        enablePackageGroupMapping = prefs.getBoolean("enable_package_group_mapping", true)
+        val defaultEnabled = prefs.getString("default_group_enabled", "1,1,1")!!.split(",").map { it == "1" }
+        defaultGroupEnabled = defaultEnabled.toMutableList().apply {
+            while (size < defaultPackageGroups.size) add(true)
+        }
+        val customGroups = prefs.getStringSet(KEY_PACKAGE_GROUPS, null)?.mapNotNull {
+            it.split("|").map { s->s.trim() }.filter { s->s.isNotBlank() }.toMutableList().takeIf { set->set.isNotEmpty() }
+        }?.toMutableList() ?: mutableListOf()
+        customPackageGroups = customGroups
+        val customEnabledStr = prefs.getString("custom_group_enabled", null)
+        customGroupEnabled = if (customEnabledStr != null) {
+            customEnabledStr.split(",").map { it == "1" }.toMutableList().apply {
+                while (size < customGroups.size) add(true)
+            }
+        } else MutableList(customGroups.size) { true }
         filterMode = prefs.getString(KEY_FILTER_MODE, "none") ?: "none"
         enableDeduplication = prefs.getBoolean(KEY_ENABLE_DEDUP, true)
         enablePeerMode = prefs.getBoolean(KEY_ENABLE_PEER, false)
@@ -85,7 +103,9 @@ object NotificationForwardConfig {
     fun save(context: android.content.Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, 0)
         prefs.edit()
-            .putBoolean("enable_default_package_groups", enableDefaultPackageGroups)
+            .putBoolean("enable_package_group_mapping", enablePackageGroupMapping)
+            .putString("default_group_enabled", defaultGroupEnabled.joinToString(",") { if (it) "1" else "0" })
+            .putString("custom_group_enabled", customGroupEnabled.joinToString(",") { if (it) "1" else "0" })
             .putStringSet(KEY_PACKAGE_GROUPS, customPackageGroups.map { it.joinToString("|") }.toSet())
             .putString(KEY_FILTER_MODE, filterMode)
             .putBoolean(KEY_ENABLE_DEDUP, enableDeduplication)
@@ -163,7 +183,7 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
                     if (it.device == "本机" && (now - it.time <= 10_000)) {
                         android.util.Log.d(
                             "NotifyRelay(狂鼠)",
-                            "remoteNotificationFilter: 本机历史检查 title=$title text=$text vs it.title=${it.title} it.text=${it.text} match=$match"
+                            "remoteNotificationFilter(狂鼠): 本机历史检查 title=$title text=$text vs it.title=${it.title} it.text=${it.text} match=$match"
                         )
                     }
                     match
@@ -276,6 +296,7 @@ fun DeviceForwardScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
+    val context2 = LocalContext.current
     // 聊天区相关状态
     var chatInput by remember { mutableStateOf("") }
     var chatExpanded by remember { mutableStateOf(false) }
@@ -510,9 +531,22 @@ fun DeviceForwardScreen(
     }
     var filterMode by remember { mutableStateOf(NotificationForwardConfig.filterMode) }
     var enableDedup by remember { mutableStateOf(NotificationForwardConfig.enableDeduplication) }
-    var enablePeer by remember { mutableStateOf(NotificationForwardConfig.enablePeerMode) }
-    var enableDefaultPackageGroups by remember { mutableStateOf(NotificationForwardConfig.enableDefaultPackageGroups) }
-    var customPackageGroupText by remember { mutableStateOf(NotificationForwardConfig.customPackageGroups.joinToString("\n") { it.joinToString(",") }) }
+    // 移除enablePeer的独立Switch，只用filterMode控制
+    var enablePackageGroupMapping by remember { mutableStateOf(NotificationForwardConfig.enablePackageGroupMapping) }
+    // 合并组：默认组+自定义组
+    var allGroups by remember {
+        mutableStateOf(
+            NotificationForwardConfig.defaultPackageGroups.map { it.toList() }.toMutableList() +
+            NotificationForwardConfig.customPackageGroups.map { it.toList() }.toMutableList()
+        )
+    }
+    var allGroupEnabled by remember {
+        mutableStateOf(
+            NotificationForwardConfig.defaultGroupEnabled.toList() + NotificationForwardConfig.customGroupEnabled.toList()
+        )
+    }
+    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
+    var appSearchQuery by remember { mutableStateOf("") }
     var filterListText by remember { mutableStateOf(NotificationForwardConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
     androidx.compose.foundation.layout.Column(
@@ -547,18 +581,17 @@ fun DeviceForwardScreen(
             }
             androidx.compose.animation.AnimatedVisibility(visible = filterExpanded) {
                 Column(Modifier.fillMaxWidth().padding(8.dp)) {
-                    // 包名等价组
-                    Text(
-                        "包名等价组(每行一组,逗号分隔):",
-                        style = textStyles.body2,
-                        color = colorScheme.onSurface
-                    )
-                    // 默认包名组开关和展示
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 包名等价功能总开关（文字在前，开关在后，增加下方间距）
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                    ) {
+                        Text("启用包名等价映射", style = textStyles.body2, color = colorScheme.onSurface)
+                        Spacer(modifier = Modifier.width(16.dp))
                         androidx.compose.material3.Switch(
-                            checked = enableDefaultPackageGroups,
-                            onCheckedChange = { enableDefaultPackageGroups = it },
-                            modifier = Modifier.padding(end = 4.dp),
+                            checked = enablePackageGroupMapping,
+                            onCheckedChange = { enablePackageGroupMapping = it },
+                            modifier = Modifier.size(width = 24.dp, height = 12.dp),
                             colors = androidx.compose.material3.SwitchDefaults.colors(
                                 checkedThumbColor = colorScheme.primary,
                                 uncheckedThumbColor = colorScheme.outline,
@@ -566,31 +599,150 @@ fun DeviceForwardScreen(
                                 uncheckedTrackColor = colorScheme.surface
                             )
                         )
-                        Text("启用默认包名组", style = textStyles.body2, color = colorScheme.onSurface)
                     }
-                    if (enableDefaultPackageGroups) {
-                        Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-                            NotificationForwardConfig.defaultPackageGroups.forEachIndexed { idx, group ->
-                                Text(
-                                    "默认组${idx+1}: " + group.joinToString(", "),
-                                    style = textStyles.body2,
-                                    color = colorScheme.onSurfaceSecondary,
-                                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
-                                )
-                            }
+                    // 合并组渲染（默认组+自定义组）
+    allGroups.forEachIndexed { idx, group ->
+        val groupEnabled = enablePackageGroupMapping
+        androidx.compose.material3.Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+                .then(
+                    if (groupEnabled) Modifier.clickable {
+                        allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
+                    } else Modifier
+                ),
+            shape = androidx.compose.material3.MaterialTheme.shapes.small,
+            elevation = androidx.compose.material3.CardDefaults.cardElevation(1.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = colorScheme.surfaceVariant
+            )
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    top.yukonga.miuix.kmp.basic.Checkbox(
+                        checked = allGroupEnabled[idx],
+                        onCheckedChange = { v ->
+                            allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
+                        },
+                        modifier = Modifier.size(20.dp),
+                        colors = top.yukonga.miuix.kmp.basic.CheckboxDefaults.checkboxColors(
+                            checkedBackgroundColor = colorScheme.primary,
+                            checkedForegroundColor = colorScheme.onPrimary,
+                            uncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
+                            uncheckedForegroundColor = colorScheme.outline,
+                            disabledCheckedBackgroundColor = colorScheme.surface,
+                            disabledUncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
+                            disabledCheckedForegroundColor = colorScheme.outline,
+                            disabledUncheckedForegroundColor = colorScheme.outline
+                        ),
+                        enabled = enablePackageGroupMapping
+                    )
+                    Text(
+                        if (idx < NotificationForwardConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-NotificationForwardConfig.defaultPackageGroups.size}",
+                        style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
+                        Button(
+                            onClick = { showAppPickerForGroup = true to idx },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(24.dp),
+                            enabled = enablePackageGroupMapping
+                        ) {
+                            Text("+", style = textStyles.button)
+                        }
+                        Button(
+                            onClick = {
+                                allGroups = allGroups.toMutableList().apply { removeAt(idx) }
+                                allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
+                            },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(24.dp).padding(start = 2.dp),
+                            enabled = enablePackageGroupMapping
+                        ) {
+                            Text("×", style = textStyles.button, color = colorScheme.primary)
                         }
                     }
-                    // 用户自定义包名组
-                    OutlinedTextField(
-                        value = customPackageGroupText,
-                        onValueChange = { customPackageGroupText = it },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        placeholder = {
-                            Text("com.a,com.b\ncom.c,com.d", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
-                        },
-                        colors = TextFieldDefaults.colors(),
-                        textStyle = textStyles.body2
-                    )
+                }
+                // 包名自动换行显示
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val pm = context.packageManager
+                    val installedPkgs = remember { pm.getInstalledApplications(0).map { it.packageName }.toSet() }
+                    group.forEach { pkg ->
+                        val isInstalled = installedPkgs.contains(pkg)
+                        val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+                            if (icon is android.graphics.drawable.BitmapDrawable) {
+                                Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
+                            }
+                            Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+                    // 添加新组按钮
+                Button(
+                    onClick = {
+                        allGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
+                        allGroupEnabled = allGroupEnabled.toMutableList().apply { add(true) }
+                    },
+                    modifier = Modifier.padding(vertical = 2.dp),
+                    enabled = enablePackageGroupMapping
+                ) {
+                    Text("添加新组", style = textStyles.button)
+                }
+                    // 应用选择弹窗
+                    if (showAppPickerForGroup.first) {
+                        val groupIdx = showAppPickerForGroup.second
+                        val pm = context.packageManager
+                        val allApps = remember { pm.getInstalledApplications(0).sortedBy { pm.getApplicationLabel(it).toString() } }
+                        val filteredApps = allApps.filter { appSearchQuery.isBlank() || pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName }
+                        AlertDialog(
+                            onDismissRequest = { showAppPickerForGroup = false to -1; appSearchQuery = "" },
+                            title = { Text("选择应用", style = textStyles.headline2) },
+                            text = {
+                                Column {
+                                    OutlinedTextField(
+                                        value = appSearchQuery,
+                                        onValueChange = { appSearchQuery = it },
+                                        label = { Text("搜索应用/包名", style = textStyles.body2) },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                        colors = TextFieldDefaults.colors(),
+                                        textStyle = textStyles.body2
+                                    )
+                                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                                        items(filteredApps) { appInfo ->
+                                            val pkg = appInfo.packageName
+                                            val label = pm.getApplicationLabel(appInfo).toString()
+                                            val icon = pm.getApplicationIcon(appInfo)
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable {
+                                                allGroups = allGroups.toMutableList().apply {
+                                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                                                }
+                                                showAppPickerForGroup = false to -1; appSearchQuery = ""
+                                            }.padding(4.dp)) {
+                                                if (icon is android.graphics.drawable.BitmapDrawable) {
+                                                    Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(22.dp))
+                                                }
+                                                Text(label, style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(start = 8.dp))
+                                                Text(pkg, style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(start = 8.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showAppPickerForGroup = false to -1; appSearchQuery = "" }) { Text("关闭", style = textStyles.button) }
+                            }
+                        )
+                    }
                     // 过滤模式
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("过滤模式:", style = textStyles.body2, color = colorScheme.onSurface)
@@ -630,21 +782,7 @@ fun DeviceForwardScreen(
                             textStyle = textStyles.body2
                         )
                     }
-                    // 对等模式
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Switch(
-                            checked = enablePeer,
-                            onCheckedChange = { enablePeer = it },
-                            modifier = Modifier.padding(end = 4.dp),
-                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                checkedThumbColor = colorScheme.primary,
-                                uncheckedThumbColor = colorScheme.outline,
-                                checkedTrackColor = colorScheme.primaryContainer,
-                                uncheckedTrackColor = colorScheme.surface
-                            )
-                        )
-                        Text("仅本机存在的应用可接收(对等模式)", style = textStyles.body2, color = colorScheme.onSurface)
-                    }
+                    // 对等模式Switch已移除，避免与FilterChip重复
                     // 延迟去重
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Switch(
@@ -663,12 +801,15 @@ fun DeviceForwardScreen(
                     // 应用按钮
                     Button(
                         onClick = {
-                            // 解析自定义包名组
-                            NotificationForwardConfig.enableDefaultPackageGroups = enableDefaultPackageGroups
-                            NotificationForwardConfig.customPackageGroups = customPackageGroupText.lines().filter { it.isNotBlank() }.map { it.split(",").map { s->s.trim() }.filter { it.isNotBlank() }.toSet() }.filter { it.isNotEmpty() }
+                            NotificationForwardConfig.enablePackageGroupMapping = enablePackageGroupMapping
+                            // 拆分allGroups和allGroupEnabled为默认组和自定义组
+                            val defaultSize = NotificationForwardConfig.defaultPackageGroups.size
+                            NotificationForwardConfig.defaultGroupEnabled = allGroupEnabled.take(defaultSize).toMutableList()
+                            NotificationForwardConfig.customGroupEnabled = allGroupEnabled.drop(defaultSize).toMutableList()
+                            NotificationForwardConfig.customPackageGroups = allGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
                             NotificationForwardConfig.filterMode = filterMode
                             NotificationForwardConfig.enableDeduplication = enableDedup
-                            NotificationForwardConfig.enablePeerMode = enablePeer
+                            NotificationForwardConfig.enablePeerMode = (filterMode == "peer")
                             NotificationForwardConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
                                 val arr = it.split(",", limit=2)
                                 arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
