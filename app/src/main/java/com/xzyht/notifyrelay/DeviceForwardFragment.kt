@@ -39,6 +39,182 @@ import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.TabRow
 
+@Composable
+fun AppPickerDialog(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onAppSelected: (String) -> Unit,
+    title: String = "选择应用"
+) {
+    if (!visible) return
+    val context = LocalContext.current
+    val pm = context.packageManager
+    var showSystemApps by remember { mutableStateOf(false) }
+    var appSearchQuery by remember { mutableStateOf("") }
+    // 异步加载应用列表，避免主线程阻塞导致弹窗延迟
+    var allApps by remember { mutableStateOf<List<android.content.pm.ApplicationInfo>>(emptyList()) }
+    val pmState = rememberUpdatedState(pm)
+    LaunchedEffect(Unit) {
+        // 立即异步加载
+        allApps = pmState.value.getInstalledApplications(0).sortedBy { pmState.value.getApplicationLabel(it).toString() }
+    }
+    val userApps = remember(allApps) {
+        allApps.filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 }
+    }
+    val displayApps = if (showSystemApps) allApps else userApps
+    val filteredApps = remember(appSearchQuery, displayApps) {
+        if (appSearchQuery.isBlank()) displayApps
+        else displayApps.filter {
+            pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName
+        }
+    }
+    val iconLabelCache = remember(allApps) {
+        val map = mutableMapOf<String, Pair<androidx.compose.ui.graphics.ImageBitmap?, String>>()
+        allApps.forEach { appInfo ->
+            val pkg = appInfo.packageName
+            val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
+            val iconBitmap = try {
+                val icon = pm.getApplicationIcon(appInfo)
+                when (icon) {
+                    is android.graphics.drawable.BitmapDrawable -> icon.bitmap.asImageBitmap()
+                    null -> null
+                    else -> {
+                        val width = icon.intrinsicWidth.takeIf { it > 0 } ?: 96
+                        val height = icon.intrinsicHeight.takeIf { it > 0 } ?: 96
+                        val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                        val canvas = android.graphics.Canvas(bitmap)
+                        icon.setBounds(0, 0, width, height)
+                        icon.draw(canvas)
+                        bitmap.asImageBitmap()
+                    }
+                }
+            } catch (_: Exception) { null }
+            map[pkg] = iconBitmap to label
+        }
+        map
+    }
+    val defaultAppIconBitmap = remember {
+        val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
+        if (drawable is android.graphics.drawable.BitmapDrawable) {
+            drawable.bitmap.asImageBitmap()
+        } else {
+            androidx.compose.ui.graphics.ImageBitmap(22, 22, androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888)
+        }
+    }
+    MiuixTheme {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { onDismiss(); appSearchQuery = "" },
+            title = {
+                Text(title, style = MiuixTheme.textStyles.headline2, color = MiuixTheme.colorScheme.onSurface)
+            },
+            text = {
+                if (allApps.isEmpty()) {
+                    // 动态加载提示
+                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                        Text("正在加载应用列表...", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                    }
+                } else {
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                        ) {
+                            androidx.compose.material3.Switch(
+                                checked = showSystemApps,
+                                onCheckedChange = { showSystemApps = it },
+                                modifier = Modifier.padding(end = 4.dp),
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedThumbColor = MiuixTheme.colorScheme.primary,
+                                    uncheckedThumbColor = MiuixTheme.colorScheme.outline,
+                                    checkedTrackColor = MiuixTheme.colorScheme.primaryContainer,
+                                    uncheckedTrackColor = MiuixTheme.colorScheme.surface
+                                )
+                            )
+                            Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                        }
+                        OutlinedTextField(
+                            value = appSearchQuery,
+                            onValueChange = { appSearchQuery = it },
+                            label = { Text("搜索应用/包名", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary) },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MiuixTheme.colorScheme.surface,
+                                unfocusedContainerColor = MiuixTheme.colorScheme.surface,
+                                focusedIndicatorColor = MiuixTheme.colorScheme.primary,
+                                unfocusedIndicatorColor = MiuixTheme.colorScheme.outline,
+                                cursorColor = MiuixTheme.colorScheme.primary
+                            ),
+                            textStyle = MiuixTheme.textStyles.body2
+                        )
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(filteredApps) { appInfo ->
+                                val pkg = appInfo.packageName
+                                val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onAppSelected(pkg)
+                                            appSearchQuery = ""
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (iconBitmap != null) {
+                                            Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                        } else {
+                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                        }
+                                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                                            Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                                            Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
+                                        }
+                                    }
+                                    androidx.compose.material3.Divider(
+                                        modifier = Modifier.padding(top = 8.dp),
+                                        color = MiuixTheme.colorScheme.dividerLine,
+                                        thickness = 0.7.dp
+                                    )
+                                }
+                            }
+                            if (appSearchQuery.isNotBlank() && filteredApps.none { it.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
+                                item {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onAppSelected(appSearchQuery)
+                                                appSearchQuery = ""
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 10.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                            Text(
+                                                "添加自定义包名：${appSearchQuery}",
+                                                style = MiuixTheme.textStyles.body2,
+                                                color = MiuixTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(start = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { onDismiss(); appSearchQuery = "" }) {
+                    Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
+                }
+            },
+            containerColor = MiuixTheme.colorScheme.surface,
+            tonalElevation = 4.dp
+        )
+    }
+}
+
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
     private const val PREFS_NAME = "notifyrelay_filter_prefs"
@@ -701,149 +877,20 @@ fun DeviceForwardScreen(
                     ) {
                         Text("添加新组", style = textStyles.button)
                     }
-                    // 应用选择弹窗
+                    // 应用选择弹窗（封装组件调用）
                     if (showAppPickerForGroup.first) {
                         val groupIdx = showAppPickerForGroup.second
-                        val pm = context.packageManager
-                        // 系统应用开关，默认隐藏
-                        var showSystemApps by remember { mutableStateOf(false) }
-                        // 缓存所有应用列表，避免每次 recomposition 都重新获取
-                        val allApps = remember {
-                            pm.getInstalledApplications(0).sortedBy { pm.getApplicationLabel(it).toString() }
-                        }
-                        // 过滤系统应用
-                        val userApps = remember(allApps) {
-                            allApps.filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 }
-                        }
-                        val displayApps = if (showSystemApps) allApps else userApps
-                        val filteredApps = remember(appSearchQuery, displayApps) {
-                            if (appSearchQuery.isBlank()) displayApps
-                            else displayApps.filter {
-                                pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName
-                            }
-                        }
-                        // 图标和label缓存，避免每项重复加载
-                        val iconLabelCache = remember(allApps) {
-                            val map = mutableMapOf<String, Pair<androidx.compose.ui.graphics.ImageBitmap?, String>>()
-                            allApps.forEach { appInfo ->
-                                val pkg = appInfo.packageName
-                                val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
-                                val iconBitmap = try {
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    when (icon) {
-                                        is android.graphics.drawable.BitmapDrawable -> icon.bitmap.asImageBitmap()
-                                        null -> null
-                                        else -> {
-                                            // 统一将所有Drawable绘制到Bitmap
-                                            val width = icon.intrinsicWidth.takeIf { it > 0 } ?: 96
-                                            val height = icon.intrinsicHeight.takeIf { it > 0 } ?: 96
-                                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                                            val canvas = android.graphics.Canvas(bitmap)
-                                            icon.setBounds(0, 0, width, height)
-                                            icon.draw(canvas)
-                                            bitmap.asImageBitmap()
-                                        }
-                                    }
-                                } catch (_: Exception) { null }
-                                map[pkg] = iconBitmap to label
-                            }
-                            map
-                        }
-                        // 默认图标缓存
-                        val defaultAppIconBitmap = remember {
-                            val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
-                            if (drawable is android.graphics.drawable.BitmapDrawable) {
-                                drawable.bitmap.asImageBitmap()
-                            } else {
-                                androidx.compose.ui.graphics.ImageBitmap(22, 22, androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888)
-                            }
-                        }
-                        // 适配 Miuix 主题色的弹窗，应用项内容自动换行+分割线
-                        MiuixTheme {
-                            androidx.compose.material3.AlertDialog(
-                                onDismissRequest = { showAppPickerForGroup = false to -1; appSearchQuery = "" },
-                                title = {
-                                    Text("选择应用", style = MiuixTheme.textStyles.headline2, color = MiuixTheme.colorScheme.onSurface)
-                                },
-                                text = {
-                                    Column {
-                                        // 系统应用显示开关
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                                        ) {
-                                            androidx.compose.material3.Switch(
-                                                checked = showSystemApps,
-                                                onCheckedChange = { showSystemApps = it },
-                                                modifier = Modifier.padding(end = 4.dp),
-                                                colors = androidx.compose.material3.SwitchDefaults.colors(
-                                                    checkedThumbColor = MiuixTheme.colorScheme.primary,
-                                                    uncheckedThumbColor = MiuixTheme.colorScheme.outline,
-                                                    checkedTrackColor = MiuixTheme.colorScheme.primaryContainer,
-                                                    uncheckedTrackColor = MiuixTheme.colorScheme.surface
-                                                )
-                                            )
-                                            Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                                        }
-                                        OutlinedTextField(
-                                            value = appSearchQuery,
-                                            onValueChange = { appSearchQuery = it },
-                                            label = { Text("搜索应用/包名", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary) },
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                            colors = TextFieldDefaults.colors(
-                                                focusedContainerColor = MiuixTheme.colorScheme.surface,
-                                                unfocusedContainerColor = MiuixTheme.colorScheme.surface,
-                                                focusedIndicatorColor = MiuixTheme.colorScheme.primary,
-                                                unfocusedIndicatorColor = MiuixTheme.colorScheme.outline,
-                                                cursorColor = MiuixTheme.colorScheme.primary
-                                            ),
-                                            textStyle = MiuixTheme.textStyles.body2
-                                        )
-                                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                                            items(filteredApps) { appInfo ->
-                                                val pkg = appInfo.packageName
-                                                val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable {
-                                                            allGroups = allGroups.toMutableList().apply {
-                                                                if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
-                                                            }
-                                                            showAppPickerForGroup = false to -1; appSearchQuery = ""
-                                                        }
-                                                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                                                ) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        if (iconBitmap != null) {
-                                                            Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                                        } else {
-                                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                                        }
-                                                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                                                            Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                                                            Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
-                                                        }
-                                                    }
-                                                    androidx.compose.material3.Divider(
-                                                        modifier = Modifier.padding(top = 8.dp),
-                                                        color = MiuixTheme.colorScheme.dividerLine,
-                                                        thickness = 0.7.dp
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = { showAppPickerForGroup = false to -1; appSearchQuery = "" }) {
-                                        Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
-                                    }
-                                },
-                                containerColor = MiuixTheme.colorScheme.surface,
-                                tonalElevation = 4.dp
-                            )
-                        }
+                        AppPickerDialog(
+                            visible = true,
+                            onDismiss = { showAppPickerForGroup = false to -1 },
+                            onAppSelected = { pkg ->
+                                allGroups = allGroups.toMutableList().apply {
+                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                                }
+                                showAppPickerForGroup = false to -1
+                            },
+                            title = "选择应用"
+                        )
                     }
                     // 过滤模式
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -868,21 +915,80 @@ fun DeviceForwardScreen(
                     }
                     // 黑白名单
                     if (filterMode == "black" || filterMode == "white") {
+                        var showFilterAppPicker by remember { mutableStateOf(false) }
+                        var pendingFilterPkg by remember { mutableStateOf<String?>(null) }
+                        var pendingKeyword by remember { mutableStateOf("") }
                         Text(
                             "${if (filterMode=="black")"黑" else "白"}名单(每行:包名,可选关键词):",
                             style = textStyles.body2,
                             color = colorScheme.onSurface
                         )
-                        OutlinedTextField(
-                            value = filterListText,
-                            onValueChange = { filterListText = it },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            placeholder = {
-                                Text("com.a,关键字\ncom.b", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
-                            },
-                            colors = TextFieldDefaults.colors(),
-                            textStyle = textStyles.body2
-                        )
+                        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = filterListText,
+                                onValueChange = { filterListText = it },
+                                modifier = Modifier.weight(1f),
+                                placeholder = {
+                                    Text("com.a,关键字\ncom.b", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
+                                },
+                                colors = TextFieldDefaults.colors(),
+                                textStyle = textStyles.body2
+                            )
+                            Button(
+                                onClick = { showFilterAppPicker = true },
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Text("添加包名", style = textStyles.button)
+                            }
+                        }
+                        if (showFilterAppPicker) {
+                            AppPickerDialog(
+                                visible = true,
+                                onDismiss = { showFilterAppPicker = false },
+                                onAppSelected = { pkg ->
+                                    pendingFilterPkg = pkg
+                                    pendingKeyword = ""
+                                    showFilterAppPicker = false
+                                },
+                                title = "选择包名"
+                            )
+                        }
+                        if (pendingFilterPkg != null) {
+                            androidx.compose.material3.AlertDialog(
+                                onDismissRequest = { pendingFilterPkg = null },
+                                title = { Text("为包名添加关键词(可选)", style = textStyles.headline2, color = colorScheme.onSurface) },
+                                text = {
+                                    Column {
+                                        Text(pendingFilterPkg!!, style = textStyles.body2, color = colorScheme.primary)
+                                        OutlinedTextField(
+                                            value = pendingKeyword,
+                                            onValueChange = { pendingKeyword = it },
+                                            label = { Text("关键词(可选)", style = textStyles.body2, color = colorScheme.onSurfaceSecondary) },
+                                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                            colors = TextFieldDefaults.colors(),
+                                            textStyle = textStyles.body2
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        // 追加到名单
+                                        val line = if (pendingKeyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + pendingKeyword.trim()
+                                        filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                        pendingFilterPkg = null
+                                    }) {
+                                        Text("确定", style = textStyles.button, color = colorScheme.primary)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { pendingFilterPkg = null }) {
+                                        Text("取消", style = textStyles.button)
+                                    }
+                                },
+                                containerColor = colorScheme.surface,
+                                tonalElevation = 4.dp
+                            )
+                        }
                     }
                     // 延迟去重
                     Row(verticalAlignment = Alignment.CenterVertically) {
