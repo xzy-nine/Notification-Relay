@@ -31,6 +31,9 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 
 import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
 
+import androidx.compose.foundation.background
+import androidx.compose.material3.TextFieldDefaults
+
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -498,60 +501,91 @@ fun DeviceForwardScreen(
     var packageGroupText by remember { mutableStateOf(NotificationForwardConfig.packageGroups.joinToString("\n") { it.joinToString(",") }) }
     var filterListText by remember { mutableStateOf(NotificationForwardConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
-    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colorScheme.background)
+            .padding(12.dp)
+    ) {
         // 通知过滤设置卡片
         androidx.compose.material3.Card(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp)
+            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = colorScheme.surface
+            )
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text("通知过滤设置", style = textStyles.headline1, modifier = Modifier.weight(1f))
+                Text(
+                    "通知过滤设置",
+                    style = textStyles.headline1,
+                    color = colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
                 androidx.compose.material3.IconButton(onClick = { filterExpanded = !filterExpanded }) {
-                    val tintColor = colorScheme.onBackground
                     Icon(
                         imageVector = MiuixIcons.Basic.ArrowRight,
                         contentDescription = if (filterExpanded) "收起" else "展开",
-                        tint = tintColor
+                        tint = colorScheme.onSurface
                     )
                 }
             }
             androidx.compose.animation.AnimatedVisibility(visible = filterExpanded) {
                 Column(Modifier.fillMaxWidth().padding(8.dp)) {
                     // 包名等价组
-                    Text("包名等价组(每行一组,逗号分隔):", style = textStyles.body2)
+                    Text(
+                        "包名等价组(每行一组,逗号分隔):",
+                        style = textStyles.body2,
+                        color = colorScheme.onSurface
+                    )
                     OutlinedTextField(
                         value = packageGroupText,
                         onValueChange = { packageGroupText = it },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                        placeholder = { Text("com.a,com.b\ncom.c,com.d") }
+                        placeholder = {
+                            Text("com.a,com.b\ncom.c,com.d", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
+                        },
+                        colors = TextFieldDefaults.colors(),
+                        textStyle = textStyles.body2
                     )
                     // 过滤模式
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("过滤模式:", style = textStyles.body2)
-                        androidx.compose.material3.DropdownMenu(
-                            expanded = false,
-                            onDismissRequest = {},
-                            modifier = Modifier.weight(1f)
-                        ) {}
+                        Text("过滤模式:", style = textStyles.body2, color = colorScheme.onSurface)
                         val modes = listOf("none" to "无", "black" to "黑名单", "white" to "白名单", "peer" to "对等")
                         modes.forEach { (value, label) ->
                             androidx.compose.material3.FilterChip(
                                 selected = filterMode == value,
                                 onClick = { filterMode = value },
-                                label = { Text(label) },
-                                modifier = Modifier.padding(horizontal = 2.dp)
+                                label = {
+                                    Text(label, style = textStyles.body2, color = if (filterMode == value) colorScheme.onPrimary else colorScheme.onSurface)
+                                },
+                                modifier = Modifier.padding(horizontal = 2.dp),
+                                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = colorScheme.primary,
+                                    containerColor = colorScheme.surface,
+                                    labelColor = colorScheme.onSurface,
+                                    selectedLabelColor = colorScheme.onPrimary
+                                )
                             )
                         }
                     }
                     // 黑白名单
                     if (filterMode == "black" || filterMode == "white") {
-                        Text("${if (filterMode=="black")"黑" else "白"}名单(每行:包名,可选关键词):", style = textStyles.body2)
+                        Text(
+                            "${if (filterMode=="black")"黑" else "白"}名单(每行:包名,可选关键词):",
+                            style = textStyles.body2,
+                            color = colorScheme.onSurface
+                        )
                         OutlinedTextField(
                             value = filterListText,
                             onValueChange = { filterListText = it },
                             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            placeholder = { Text("com.a,关键字\ncom.b") }
+                            placeholder = {
+                                Text("com.a,关键字\ncom.b", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
+                            },
+                            colors = TextFieldDefaults.colors(),
+                            textStyle = textStyles.body2
                         )
                     }
                     // 对等模式
@@ -559,21 +593,34 @@ fun DeviceForwardScreen(
                         androidx.compose.material3.Switch(
                             checked = enablePeer,
                             onCheckedChange = { enablePeer = it },
-                            modifier = Modifier.padding(end = 4.dp)
+                            modifier = Modifier.padding(end = 4.dp),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = colorScheme.primary,
+                                uncheckedThumbColor = colorScheme.outline,
+                                checkedTrackColor = colorScheme.primaryContainer,
+                                uncheckedTrackColor = colorScheme.surface
+                            )
                         )
-                        Text("仅本机存在的应用可接收(对等模式)", style = textStyles.body2)
+                        Text("仅本机存在的应用可接收(对等模式)", style = textStyles.body2, color = colorScheme.onSurface)
                     }
                     // 延迟去重
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         androidx.compose.material3.Switch(
                             checked = enableDedup,
                             onCheckedChange = { enableDedup = it },
-                            modifier = Modifier.padding(end = 4.dp)
+                            modifier = Modifier.padding(end = 4.dp),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = colorScheme.primary,
+                                uncheckedThumbColor = colorScheme.outline,
+                                checkedTrackColor = colorScheme.primaryContainer,
+                                uncheckedTrackColor = colorScheme.surface
+                            )
                         )
-                        Text("10秒内重复通知去重", style = textStyles.body2)
+                        Text("10秒内重复通知去重", style = textStyles.body2, color = colorScheme.onSurface)
                     }
                     // 应用按钮
-                    Button(onClick = {
+                    Button(
+                        onClick = {
                         // 解析包名组
                         NotificationForwardConfig.packageGroups = packageGroupText.lines().filter { it.isNotBlank() }.map { it.split(",").map { s->s.trim() }.filter { it.isNotBlank() }.toSet() }.filter { it.isNotEmpty() }
                         NotificationForwardConfig.filterMode = filterMode
@@ -584,8 +631,14 @@ fun DeviceForwardScreen(
                             arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
                         }
                         NotificationForwardConfig.save(context)
-                    }, modifier = Modifier.padding(top = 8.dp)) {
-                        Text("应用设置")
+                        },
+                        modifier = Modifier.padding(top = 8.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = colorScheme.primary,
+                            contentColor = colorScheme.onPrimary
+                        )
+                    ) {
+                        Text("应用设置", style = textStyles.button, color = colorScheme.onPrimary)
                     }
                 }
             }
@@ -595,16 +648,23 @@ fun DeviceForwardScreen(
         androidx.compose.material3.Card(
             modifier = Modifier.fillMaxWidth(),
             shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp)
+            elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = colorScheme.surface
+            )
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text("聊天测试", style = textStyles.headline1, modifier = Modifier.weight(1f))
+                Text(
+                    "聊天测试",
+                    style = textStyles.headline1,
+                    color = colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
                 androidx.compose.material3.IconButton(onClick = { chatExpanded = !chatExpanded }) {
-                    val tintColor = colorScheme.onBackground
                     Icon(
                         imageVector = MiuixIcons.Basic.ArrowRight,
                         contentDescription = if (chatExpanded) "收起" else "展开",
-                        tint = tintColor
+                        tint = colorScheme.onSurface
                     )
                 }
             }
@@ -627,7 +687,7 @@ fun DeviceForwardScreen(
                                         msg.removePrefix("发送:").removePrefix("收到:"),
                                         style = textStyles.body2,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        color = colorScheme.onSurface
+                                        color = if (isSend) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer
                                     )
                                 }
                             }
@@ -638,7 +698,11 @@ fun DeviceForwardScreen(
                             value = chatInput,
                             onValueChange = { chatInput = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("输入消息...") }
+                            placeholder = {
+                                Text("输入消息...", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
+                            },
+                            colors = TextFieldDefaults.colors(),
+                            textStyle = textStyles.body2
                         )
                         Button(
                             onClick = {
@@ -664,9 +728,13 @@ fun DeviceForwardScreen(
                                 }
                             },
                             enabled = deviceManager.devices.value.isNotEmpty() && chatInput.isNotBlank(),
-                            modifier = Modifier.align(Alignment.CenterVertically)
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = colorScheme.primary,
+                                contentColor = colorScheme.onPrimary
+                            )
                         ) {
-                            Text("发送")
+                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)
                         }
                     }
                 }
