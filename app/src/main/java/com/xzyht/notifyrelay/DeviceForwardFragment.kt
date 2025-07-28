@@ -44,8 +44,19 @@ object NotificationForwardConfig {
     private const val KEY_ENABLE_DEDUP = "enable_dedup"
     private const val KEY_ENABLE_PEER = "enable_peer"
 
-    // 包名等价组，每组内包名视为同一应用
-    var packageGroups: List<Set<String>> = listOf()
+    // 默认包名等价组（不可编辑/删除，仅可关闭）
+    val defaultPackageGroups: List<Set<String>> = listOf(
+        setOf("tv.danmaku.bilibilihd", "tv.danmaku.bili"),
+        setOf("com.sina.weibo", "com.sina.weibog3", "com.weico.international", "com.sina.weibolite", "com.hengye.share", "com.caij.see"),
+        setOf("com.tencent.mobileqq", "com.tencent.tim")
+    )
+    // 默认包名组启用状态
+    var enableDefaultPackageGroups: Boolean = true
+    // 用户自定义包名等价组
+    var customPackageGroups: List<Set<String>> = listOf()
+    // 合并后的包名等价组
+    val packageGroups: List<Set<String>>
+        get() = (if (enableDefaultPackageGroups) defaultPackageGroups else emptyList()) + customPackageGroups
     // 延迟去重开关
     var enableDeduplication: Boolean = true
     // 黑白名单模式："none"=无，"black"=黑名单，"white"=白名单，"peer"=对等
@@ -58,7 +69,8 @@ object NotificationForwardConfig {
     // 加载设置
     fun load(context: android.content.Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-        packageGroups = prefs.getStringSet(KEY_PACKAGE_GROUPS, null)?.mapNotNull {
+        enableDefaultPackageGroups = prefs.getBoolean("enable_default_package_groups", true)
+        customPackageGroups = prefs.getStringSet(KEY_PACKAGE_GROUPS, null)?.mapNotNull {
             it.split("|").map { s->s.trim() }.filter { s->s.isNotBlank() }.toSet().takeIf { set->set.isNotEmpty() }
         } ?: listOf()
         filterMode = prefs.getString(KEY_FILTER_MODE, "none") ?: "none"
@@ -73,7 +85,8 @@ object NotificationForwardConfig {
     fun save(context: android.content.Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, 0)
         prefs.edit()
-            .putStringSet(KEY_PACKAGE_GROUPS, packageGroups.map { it.joinToString("|") }.toSet())
+            .putBoolean("enable_default_package_groups", enableDefaultPackageGroups)
+            .putStringSet(KEY_PACKAGE_GROUPS, customPackageGroups.map { it.joinToString("|") }.toSet())
             .putString(KEY_FILTER_MODE, filterMode)
             .putBoolean(KEY_ENABLE_DEDUP, enableDeduplication)
             .putBoolean(KEY_ENABLE_PEER, enablePeerMode)
@@ -498,7 +511,8 @@ fun DeviceForwardScreen(
     var filterMode by remember { mutableStateOf(NotificationForwardConfig.filterMode) }
     var enableDedup by remember { mutableStateOf(NotificationForwardConfig.enableDeduplication) }
     var enablePeer by remember { mutableStateOf(NotificationForwardConfig.enablePeerMode) }
-    var packageGroupText by remember { mutableStateOf(NotificationForwardConfig.packageGroups.joinToString("\n") { it.joinToString(",") }) }
+    var enableDefaultPackageGroups by remember { mutableStateOf(NotificationForwardConfig.enableDefaultPackageGroups) }
+    var customPackageGroupText by remember { mutableStateOf(NotificationForwardConfig.customPackageGroups.joinToString("\n") { it.joinToString(",") }) }
     var filterListText by remember { mutableStateOf(NotificationForwardConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
     androidx.compose.foundation.layout.Column(
@@ -539,9 +553,37 @@ fun DeviceForwardScreen(
                         style = textStyles.body2,
                         color = colorScheme.onSurface
                     )
+                    // 默认包名组开关和展示
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Switch(
+                            checked = enableDefaultPackageGroups,
+                            onCheckedChange = { enableDefaultPackageGroups = it },
+                            modifier = Modifier.padding(end = 4.dp),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = colorScheme.primary,
+                                uncheckedThumbColor = colorScheme.outline,
+                                checkedTrackColor = colorScheme.primaryContainer,
+                                uncheckedTrackColor = colorScheme.surface
+                            )
+                        )
+                        Text("启用默认包名组", style = textStyles.body2, color = colorScheme.onSurface)
+                    }
+                    if (enableDefaultPackageGroups) {
+                        Column(Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                            NotificationForwardConfig.defaultPackageGroups.forEachIndexed { idx, group ->
+                                Text(
+                                    "默认组${idx+1}: " + group.joinToString(", "),
+                                    style = textStyles.body2,
+                                    color = colorScheme.onSurfaceSecondary,
+                                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    // 用户自定义包名组
                     OutlinedTextField(
-                        value = packageGroupText,
-                        onValueChange = { packageGroupText = it },
+                        value = customPackageGroupText,
+                        onValueChange = { customPackageGroupText = it },
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                         placeholder = {
                             Text("com.a,com.b\ncom.c,com.d", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
@@ -621,16 +663,17 @@ fun DeviceForwardScreen(
                     // 应用按钮
                     Button(
                         onClick = {
-                        // 解析包名组
-                        NotificationForwardConfig.packageGroups = packageGroupText.lines().filter { it.isNotBlank() }.map { it.split(",").map { s->s.trim() }.filter { it.isNotBlank() }.toSet() }.filter { it.isNotEmpty() }
-                        NotificationForwardConfig.filterMode = filterMode
-                        NotificationForwardConfig.enableDeduplication = enableDedup
-                        NotificationForwardConfig.enablePeerMode = enablePeer
-                        NotificationForwardConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
-                            val arr = it.split(",", limit=2)
-                            arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
-                        }
-                        NotificationForwardConfig.save(context)
+                            // 解析自定义包名组
+                            NotificationForwardConfig.enableDefaultPackageGroups = enableDefaultPackageGroups
+                            NotificationForwardConfig.customPackageGroups = customPackageGroupText.lines().filter { it.isNotBlank() }.map { it.split(",").map { s->s.trim() }.filter { it.isNotBlank() }.toSet() }.filter { it.isNotEmpty() }
+                            NotificationForwardConfig.filterMode = filterMode
+                            NotificationForwardConfig.enableDeduplication = enableDedup
+                            NotificationForwardConfig.enablePeerMode = enablePeer
+                            NotificationForwardConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
+                                val arr = it.split(",", limit=2)
+                                arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
+                            }
+                            NotificationForwardConfig.save(context)
                         },
                         modifier = Modifier.padding(top = 8.dp),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
