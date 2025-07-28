@@ -108,10 +108,10 @@ fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecor
                     // 发送通知，ID用当前时间戳
                     val notifyId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
                     notificationManager.notify(notifyId, builder.build())
-                    // 2.5秒后自动销毁通知
+                    // 5秒后自动销毁通知
                     android.os.Handler(context.mainLooper).postDelayed({
                         notificationManager.cancel(notifyId)
-                    }, 2500)
+                    }, 5000)
                     intent!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }
