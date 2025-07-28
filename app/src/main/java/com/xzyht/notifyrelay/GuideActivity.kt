@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.toArgb
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -41,10 +42,27 @@ class GuideActivity : ComponentActivity() {
             finish()
             return
         }
+        // 沉浸式虚拟键，内容延伸到手势提示线区域
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.decorView.systemUiVisibility =
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
             MiuixTheme(colors = colors) {
+                val colorScheme = MiuixTheme.colorScheme
+                // 适配底部导航栏颜色
+                SideEffect {
+                    window.navigationBarColor = colorScheme.background.toArgb()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        window.isNavigationBarContrastEnforced = false
+                        window.navigationBarDividerColor = colorScheme.background.toArgb()
+                    }
+                }
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
                     prefs.edit().putBoolean("isFirstLaunch", false).apply()
@@ -152,7 +170,9 @@ fun GuideScreen(onContinue: () -> Unit) {
     }
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
         Card(modifier = Modifier.padding(24.dp)) {
@@ -185,10 +205,42 @@ fun GuideScreen(onContinue: () -> Unit) {
                         Switch(
                             checked = canQueryApps,
                             onCheckedChange = {
-                                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                                intent.data = android.net.Uri.parse("package:" + context.packageName)
-                                context.startActivity(intent)
+                                // 动态申请应用列表权限，优先MIUI/澎湃等支持动态申请的系统
+                                try {
+                                    val isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
+                                        try {
+                                            val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
+                                            permissionInfo != null && permissionInfo.packageName == "com.lbe.security.miui"
+                                        } catch (_: Exception) { false }
+                                    if (isMiuiOrPengpai) {
+                                        // MIUI/澎湃等支持动态申请
+                                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                            (context as? Activity)?.let { act ->
+                                                androidx.core.app.ActivityCompat.requestPermissions(
+                                                    act,
+                                                    arrayOf("com.android.permission.GET_INSTALLED_APPS"),
+                                                    999
+                                                )
+                                                showToast("已请求应用列表权限，请在弹窗中允许")
+                                            } ?: run {
+                                                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                            }
+                                        } else {
+                                            showToast("已获得应用列表权限")
+                                        }
+                                    } else {
+                                        // 非MIUI/澎湃，无法动态弹窗，跳转系统设置
+                                        showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                        intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                        context.startActivity(intent)
+                                    }
+                                } catch (_: Exception) {
+                                    showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                    intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                    context.startActivity(intent)
+                                }
                             },
                             enabled = true
                         )
@@ -293,12 +345,15 @@ fun GuideScreen(onContinue: () -> Unit) {
 fun requestAllPermissions(activity: Activity) {
     // 判断是否为 MIUI/澎湃系统
     var isMiuiOrPengpai = false
-    try {
-        val permissionInfo = activity.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-        if (permissionInfo.packageName == "com.lbe.security.miui") {
-            isMiuiOrPengpai = true
-        }
-    } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
+    isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+    if (!isMiuiOrPengpai) {
+        try {
+            val permissionInfo = activity.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
+            if (permissionInfo.packageName == "com.lbe.security.miui") {
+                isMiuiOrPengpai = true
+            }
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
+    }
 
     // 通知访问权限
     val intentNotification = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
@@ -331,12 +386,15 @@ fun checkAllPermissions(context: Context): Boolean {
 
     // 判断是否为 MIUI/澎湃系统
     var isMiuiOrPengpai = false
-    try {
-        val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-        if (permissionInfo.packageName == "com.lbe.security.miui") {
-            isMiuiOrPengpai = true
-        }
-    } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
+    isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+    if (!isMiuiOrPengpai) {
+        try {
+            val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
+            if (permissionInfo.packageName == "com.lbe.security.miui") {
+                isMiuiOrPengpai = true
+            }
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
+    }
 
     // 检查应用列表权限
     var canQueryApps: Boolean

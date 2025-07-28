@@ -741,5 +741,4 @@ fun DeviceForwardScreen(
             }
         }
     }
-}
-                                    }
+}}
