@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
 import com.xzyht.notifyrelay.GlobalSelectedDeviceHolder
@@ -565,13 +566,16 @@ fun DeviceForwardScreen(
             onTabSelected = { selectedTabIndex = it },
             modifier = Modifier.fillMaxWidth()
         )
+        // 移除Spacer，改为内容区顶部padding
         when (selectedTabIndex) {
             0 -> {
-                // 通知过滤设置 Tab 内容
+                // 通知过滤设置 Tab 内容，支持整体上下滚动
+                val scrollState = androidx.compose.foundation.rememberScrollState()
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .verticalScroll(scrollState)
+                        .padding(top = 12.dp)
                 ) {
                     // 包名等价功能总开关
                     Row(
@@ -596,7 +600,6 @@ fun DeviceForwardScreen(
                     androidx.compose.foundation.lazy.LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f, fill = false)
                             .heightIn(max = 320.dp) // 限高，避免撑满整个屏幕
                     ) {
                         items(allGroups.size) { idx ->
@@ -702,46 +705,145 @@ fun DeviceForwardScreen(
                     if (showAppPickerForGroup.first) {
                         val groupIdx = showAppPickerForGroup.second
                         val pm = context.packageManager
-                        val allApps = remember { pm.getInstalledApplications(0).sortedBy { pm.getApplicationLabel(it).toString() } }
-                        val filteredApps = allApps.filter { appSearchQuery.isBlank() || pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName }
-                        AlertDialog(
-                            onDismissRequest = { showAppPickerForGroup = false to -1; appSearchQuery = "" },
-                            title = { Text("选择应用", style = textStyles.headline2) },
-                            text = {
-                                Column {
-                                    OutlinedTextField(
-                                        value = appSearchQuery,
-                                        onValueChange = { appSearchQuery = it },
-                                        label = { Text("搜索应用/包名", style = textStyles.body2) },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                        colors = TextFieldDefaults.colors(),
-                                        textStyle = textStyles.body2
-                                    )
-                                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                                        items(filteredApps) { appInfo ->
-                                            val pkg = appInfo.packageName
-                                            val label = pm.getApplicationLabel(appInfo).toString()
-                                            val icon = pm.getApplicationIcon(appInfo)
-                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable {
-                                                allGroups = allGroups.toMutableList().apply {
-                                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                        // 系统应用开关，默认隐藏
+                        var showSystemApps by remember { mutableStateOf(false) }
+                        // 缓存所有应用列表，避免每次 recomposition 都重新获取
+                        val allApps = remember {
+                            pm.getInstalledApplications(0).sortedBy { pm.getApplicationLabel(it).toString() }
+                        }
+                        // 过滤系统应用
+                        val userApps = remember(allApps) {
+                            allApps.filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 }
+                        }
+                        val displayApps = if (showSystemApps) allApps else userApps
+                        val filteredApps = remember(appSearchQuery, displayApps) {
+                            if (appSearchQuery.isBlank()) displayApps
+                            else displayApps.filter {
+                                pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName
+                            }
+                        }
+                        // 图标和label缓存，避免每项重复加载
+                        val iconLabelCache = remember(allApps) {
+                            val map = mutableMapOf<String, Pair<androidx.compose.ui.graphics.ImageBitmap?, String>>()
+                            allApps.forEach { appInfo ->
+                                val pkg = appInfo.packageName
+                                val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
+                                val iconBitmap = try {
+                                    val icon = pm.getApplicationIcon(appInfo)
+                                    when (icon) {
+                                        is android.graphics.drawable.BitmapDrawable -> icon.bitmap.asImageBitmap()
+                                        null -> null
+                                        else -> {
+                                            // 统一将所有Drawable绘制到Bitmap
+                                            val width = icon.intrinsicWidth.takeIf { it > 0 } ?: 96
+                                            val height = icon.intrinsicHeight.takeIf { it > 0 } ?: 96
+                                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                                            val canvas = android.graphics.Canvas(bitmap)
+                                            icon.setBounds(0, 0, width, height)
+                                            icon.draw(canvas)
+                                            bitmap.asImageBitmap()
+                                        }
+                                    }
+                                } catch (_: Exception) { null }
+                                map[pkg] = iconBitmap to label
+                            }
+                            map
+                        }
+                        // 默认图标缓存
+                        val defaultAppIconBitmap = remember {
+                            val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
+                            if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                drawable.bitmap.asImageBitmap()
+                            } else {
+                                androidx.compose.ui.graphics.ImageBitmap(22, 22, androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888)
+                            }
+                        }
+                        // 适配 Miuix 主题色的弹窗，应用项内容自动换行+分割线
+                        MiuixTheme {
+                            androidx.compose.material3.AlertDialog(
+                                onDismissRequest = { showAppPickerForGroup = false to -1; appSearchQuery = "" },
+                                title = {
+                                    Text("选择应用", style = MiuixTheme.textStyles.headline2, color = MiuixTheme.colorScheme.onSurface)
+                                },
+                                text = {
+                                    Column {
+                                        // 系统应用显示开关
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                                        ) {
+                                            androidx.compose.material3.Switch(
+                                                checked = showSystemApps,
+                                                onCheckedChange = { showSystemApps = it },
+                                                modifier = Modifier.padding(end = 4.dp),
+                                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                                    checkedThumbColor = MiuixTheme.colorScheme.primary,
+                                                    uncheckedThumbColor = MiuixTheme.colorScheme.outline,
+                                                    checkedTrackColor = MiuixTheme.colorScheme.primaryContainer,
+                                                    uncheckedTrackColor = MiuixTheme.colorScheme.surface
+                                                )
+                                            )
+                                            Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                                        }
+                                        OutlinedTextField(
+                                            value = appSearchQuery,
+                                            onValueChange = { appSearchQuery = it },
+                                            label = { Text("搜索应用/包名", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary) },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                            colors = TextFieldDefaults.colors(
+                                                focusedContainerColor = MiuixTheme.colorScheme.surface,
+                                                unfocusedContainerColor = MiuixTheme.colorScheme.surface,
+                                                focusedIndicatorColor = MiuixTheme.colorScheme.primary,
+                                                unfocusedIndicatorColor = MiuixTheme.colorScheme.outline,
+                                                cursorColor = MiuixTheme.colorScheme.primary
+                                            ),
+                                            textStyle = MiuixTheme.textStyles.body2
+                                        )
+                                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                                            items(filteredApps) { appInfo ->
+                                                val pkg = appInfo.packageName
+                                                val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            allGroups = allGroups.toMutableList().apply {
+                                                                if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                                                            }
+                                                            showAppPickerForGroup = false to -1; appSearchQuery = ""
+                                                        }
+                                                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        if (iconBitmap != null) {
+                                                            Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                                        } else {
+                                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                                        }
+                                                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                                                            Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                                                            Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
+                                                        }
+                                                    }
+                                                    androidx.compose.material3.Divider(
+                                                        modifier = Modifier.padding(top = 8.dp),
+                                                        color = MiuixTheme.colorScheme.dividerLine,
+                                                        thickness = 0.7.dp
+                                                    )
                                                 }
-                                                showAppPickerForGroup = false to -1; appSearchQuery = ""
-                                            }.padding(4.dp)) {
-                                                if (icon is android.graphics.drawable.BitmapDrawable) {
-                                                    Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(22.dp))
-                                                }
-                                                Text(label, style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(start = 8.dp))
-                                                Text(pkg, style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(start = 8.dp))
                                             }
                                         }
                                     }
-                                }
-                            },
-                            confirmButton = {
-                                TextButton(onClick = { showAppPickerForGroup = false to -1; appSearchQuery = "" }) { Text("关闭", style = textStyles.button) }
-                            }
-                        )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showAppPickerForGroup = false to -1; appSearchQuery = "" }) {
+                                        Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
+                                    }
+                                },
+                                containerColor = MiuixTheme.colorScheme.surface,
+                                tonalElevation = 4.dp
+                            )
+                        }
                     }
                     // 过滤模式
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -832,14 +934,29 @@ fun DeviceForwardScreen(
                         .fillMaxSize()
                         .padding(top = 8.dp)
                 ) {
-                    // 填满剩余空间的聊天历史
-                    LazyColumn(
+                    // 填满剩余空间的聊天历史，自动滚动到底部
+                    val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
+                    val chatList = chatHistoryState.value
+                    // 聊天内容变动时自动滚动到底部，首次进入直接定位
+                    var firstLoad by remember { mutableStateOf(true) }
+                    LaunchedEffect(chatList.size) {
+                        if (chatList.isNotEmpty()) {
+                            if (firstLoad) {
+                                listState.scrollToItem(chatList.lastIndex)
+                                firstLoad = false
+                            } else {
+                                listState.animateScrollToItem(chatList.lastIndex)
+                            }
+                        }
+                    }
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp)
                     ) {
-                        items(chatHistoryState.value) { msg ->
+                        items(chatList) { msg ->
                             val isSend = msg.startsWith("发送:")
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -907,11 +1024,11 @@ fun DeviceForwardScreen(
                                 contentColor = colorScheme.onPrimary
                             )
                         ) {
-                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)}
+                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)
                         }
                     }
                 }
             }
         }
     }
-}
+}}
