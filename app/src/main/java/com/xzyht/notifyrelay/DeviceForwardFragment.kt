@@ -143,13 +143,22 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
             try {
                 val localList = com.xzyht.notifyrelay.data.Notify.NotificationRepository.notifications
                 val localDup = localList.any {
-                    it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
+                    val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
+                    if (it.device == "本机" && (now - it.time <= 10_000)) {
+                        android.util.Log.d(
+                            "NotifyRelay(狂鼠)",
+                            "remoteNotificationFilter: 本机历史检查 title=$title text=$text vs it.title=${it.title} it.text=${it.text} match=$match"
+                        )
+                    }
+                    match
                 }
                 if (localDup) {
                     android.util.Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 去重命中 title=$title text=$text (本机历史)")
                     return DedupResult(true, false, mappedPkg, title, text, data)
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 本机历史去重检查异常", e)
+            }
             // 需延迟判断
             val result = DedupResult(false, true, mappedPkg, title, text, data)
             android.util.Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 需延迟判断 title=$title text=$text")
@@ -266,9 +275,8 @@ fun DeviceForwardScreen(
     val selectedDevice = selectedDeviceState.value
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     // 远程通知过滤与复刻到系统通知中心
-    DisposableEffect(Unit) {
-        val oldHandler = deviceManager.onNotificationDataReceived
-        deviceManager.onNotificationDataReceived = { data ->
+    val notificationCallback: (String) -> Unit = remember {
+        { data: String ->
             android.util.Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
             val result = remoteNotificationFilter(data, context)
             android.util.Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
@@ -374,7 +382,6 @@ fun DeviceForwardScreen(
                         com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
                         chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
                     }
-                    oldHandler?.invoke(data)
                 }
             } else {
                 // 立即决定
@@ -470,10 +477,12 @@ fun DeviceForwardScreen(
                     com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
                     chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
                 }
-                oldHandler?.invoke(data)
             }
         }
-        onDispose { deviceManager.onNotificationDataReceived = oldHandler }
+    }
+    DisposableEffect(deviceManager) {
+        deviceManager.registerOnNotificationDataReceived(notificationCallback)
+        onDispose { deviceManager.unregisterOnNotificationDataReceived(notificationCallback) }
     }
 
     // 聊天区UI+过滤设置（可折叠）
@@ -636,8 +645,17 @@ fun DeviceForwardScreen(
                                 // 全部广播：遍历所有已认证设备
                                 val allDevices = deviceManager.devices.value.values.map { it.first }
                                 val sentAny = allDevices.isNotEmpty() && chatInput.isNotBlank()
+                                // 构建标准 JSON
+                                val pkgName = context.packageName
+                                val json = org.json.JSONObject().apply {
+                                    put("packageName", pkgName)
+                                    put("appName", "NotifyRelay")
+                                    put("title", "聊天测试")
+                                    put("text", chatInput)
+                                    put("time", System.currentTimeMillis())
+                                }.toString()
                                 allDevices.forEach { dev ->
-                                    deviceManager.sendNotificationData(dev, chatInput)
+                                    deviceManager.sendNotificationData(dev, json)
                                 }
                                 if (sentAny) {
                                     com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "发送: $chatInput")

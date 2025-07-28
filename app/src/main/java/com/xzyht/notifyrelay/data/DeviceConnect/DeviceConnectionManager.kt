@@ -148,7 +148,21 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     /**
      * 设备发现/连接/数据发送/接收，全部本地实现。
      */
-    var onNotificationDataReceived: ((String) -> Unit)? = null
+    private val notificationDataReceivedCallbacks = mutableSetOf<(String) -> Unit>()
+
+    /**
+     * 注册通知数据接收回调
+     */
+    fun registerOnNotificationDataReceived(callback: (String) -> Unit) {
+        notificationDataReceivedCallbacks.add(callback)
+    }
+
+    /**
+     * 注销通知数据接收回调
+     */
+    fun unregisterOnNotificationDataReceived(callback: (String) -> Unit) {
+        notificationDataReceivedCallbacks.remove(callback)
+    }
     private val _devices = MutableStateFlow<Map<String, Pair<DeviceInfo, Boolean>>>(emptyMap())
     /**
      * 设备状态流：key为uuid，value为(DeviceInfo, isOnline)
@@ -465,7 +479,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             Log.e("NotifyRelay", "存储远程通知失败: ${e.message}")
         }
         // 不再直接发系统通知，由 UI 层渲染
-        onNotificationDataReceived?.invoke(decrypted)
+        notificationDataReceivedCallbacks.forEach { it.invoke(decrypted) }
     }
 
     // 启动TCP服务监听，接收其他设备的通知
