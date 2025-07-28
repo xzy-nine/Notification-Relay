@@ -110,7 +110,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val publicKey = obj.getString("publicKey")
                 val sharedSecret = obj.getString("sharedSecret")
                 val isAccepted = obj.optBoolean("isAccepted", true)
-                val displayName = obj.optString("displayName", null)
+                val displayName = obj.optString("displayName").takeIf { it.isNotEmpty() }
                 authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted, displayName)
                 // 新增：恢复设备名到缓存
                 if (!displayName.isNullOrEmpty()) {
@@ -450,7 +450,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val time = json.optLong("time", System.currentTimeMillis())
                 // 尝试获取设备名并更新缓存（如有）
                 val displayName = DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid)
-                if (displayName != null && displayName != remoteUuid) {
+                if (!displayName.isNullOrEmpty() && displayName != remoteUuid) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
                 val repoClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationRepository")

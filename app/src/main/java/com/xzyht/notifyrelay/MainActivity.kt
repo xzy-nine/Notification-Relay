@@ -26,6 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 
 class MainActivity : FragmentActivity() {
+    private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        // 授权页返回后重新检查权限
+        recreate()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 权限检查，未授权则跳转引导页，等待返回后再判断
@@ -33,8 +38,7 @@ class MainActivity : FragmentActivity() {
             android.widget.Toast.makeText(this, "请先授权所有必要权限！", android.widget.Toast.LENGTH_SHORT).show()
             val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
-            // 使用 startActivityForResult 兼容老版本，或 ActivityResultLauncher（如已迁移）
-            startActivityForResult(intent, 2001)
+            guideLauncher.launch(intent)
             return
         }
         // 权限检查通过后再启动前台服务，保证设备发现线程正常
@@ -61,13 +65,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // 授权页返回后重新检查权限
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 2001) {
-            recreate() // 重新触发 onCreate 检查权限
-        }
-    }
+    // onActivityResult 已废弃，已迁移到 Activity Result API
 
     // 检查通知监听权限
     private fun isNotificationListenerEnabled(): Boolean {

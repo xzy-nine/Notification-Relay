@@ -234,8 +234,15 @@ fun DeviceListScreen() {
                                 try {
                                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                     field.isAccessible = true
-                                    val map = field.get(deviceManager) as? MutableMap<String, *>
-                                    map?.remove(device.uuid)
+                                    val rawMap = field.get(deviceManager)
+                                    val safeMap = if (rawMap is MutableMap<*, *>) {
+                                        val m = mutableMapOf<String, Any?>()
+                                        for ((k, v) in rawMap) {
+                                            if (k is String) m[k] = v
+                                        }
+                                        m
+                                    } else mutableMapOf()
+                                    safeMap.remove(device.uuid)
                                     // 持久化认证状态
                                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                                     saveMethod.isAccessible = true
@@ -245,13 +252,12 @@ fun DeviceListScreen() {
                                     updateMethod.isAccessible = true
                                     updateMethod.invoke(deviceManager)
                                     // 立即刷新UI侧已认证设备列表
-                                    authedDeviceUuids = map?.filter { entry ->
-                                        val v = entry.value
+                                    authedDeviceUuids = safeMap.entries.filter { (k, v) ->
                                         v?.let {
                                             val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
                                             isAcceptedField.getBoolean(v)
                                         } ?: false
-                                    }?.keys?.toSet() ?: emptySet()
+                                    }.map { it.key }.toSet()
                                 } catch (_: Exception) {}
                                 selectedDevice = null
                                 GlobalSelectedDeviceHolder.selectedDevice = null
@@ -350,8 +356,11 @@ fun DeviceListScreen() {
                                 try {
                                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                     field.isAccessible = true
-                                    val map = field.get(deviceManager) as? MutableMap<String, *>
-                                    map?.remove(device.uuid)
+                                    val map = field.get(deviceManager)
+                                    if (map is MutableMap<*, *>) {
+                                        @Suppress("UNCHECKED_CAST")
+                                        (map as? MutableMap<String, *>)?.remove(device.uuid)
+                                    }
                                     // 持久化认证状态
                                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                                     saveMethod.isAccessible = true
@@ -361,7 +370,8 @@ fun DeviceListScreen() {
                                     updateMethod.isAccessible = true
                                     updateMethod.invoke(deviceManager)
                                     // 立即刷新UI侧已认证设备列表
-                                    authedDeviceUuids = map?.filter { entry ->
+                                    @Suppress("UNCHECKED_CAST")
+                                    authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
                                         val v = entry.value
                                         v?.let {
                                             val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
@@ -611,10 +621,14 @@ fun DeviceListScreen() {
                                         // 恢复设备（移除rejected）
                                         val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
                                         field.isAccessible = true
-                                        val set = field.get(deviceManager) as? MutableSet<String>
-                                        set?.remove(device.uuid)
+                                        val set = field.get(deviceManager)
+                                        if (set is MutableSet<*>) {
+                                            @Suppress("UNCHECKED_CAST")
+                                            (set as? MutableSet<String>)?.remove(device.uuid)
+                                        }
                                         // 触发刷新
-                                        rejectedDeviceUuids = set?.toSet() ?: emptySet()
+                                        @Suppress("UNCHECKED_CAST")
+                                        rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
                                     }
                                 )
                             }
