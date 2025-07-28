@@ -64,7 +64,26 @@ class NotificationRecordStore(private val context: Context) {
         val file = getFile(device)
         if (!file.exists()) return mutableListOf()
         val json = file.readText()
-        return gson.fromJson(json, object : TypeToken<MutableList<NotificationRecordEntity>>() {}.type) ?: mutableListOf()
+        try {
+            return gson.fromJson(json, object : TypeToken<MutableList<NotificationRecordEntity>>() {}.type) ?: mutableListOf()
+        } catch (e: Exception) {
+            // 仅在报错时打印原始内容，避免干扰
+            android.util.Log.e("NotifyRelay", "[readAll] 解析 JSON 失败: ${file.absolutePath}, error=${e.message}")
+            android.util.Log.e("NotifyRelay", "[readAll] 损坏内容: $json")
+            // 自动删除损坏文件，避免循环报错
+            try {
+                if (file.delete()) {
+                    android.util.Log.e("NotifyRelay", "[readAll] 已删除损坏文件: ${file.absolutePath}")
+                    // 重新创建空文件以防止后续读取异常
+                    file.createNewFile()
+                } else {
+                    android.util.Log.e("NotifyRelay", "[readAll] 删除损坏文件失败: ${file.absolutePath}")
+                }
+            } catch (ex: Exception) {
+                android.util.Log.e("NotifyRelay", "[readAll] 删除损坏文件异常: ${ex.message}")
+            }
+            return mutableListOf()
+        }
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {

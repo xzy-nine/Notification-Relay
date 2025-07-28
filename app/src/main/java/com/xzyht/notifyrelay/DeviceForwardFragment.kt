@@ -29,6 +29,38 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
 
 
+// 远程通知过滤接口（可扩展）
+private fun remoteNotificationFilter(data: String): Boolean {
+    // 默认不过滤，后续可扩展黑名单/白名单等
+    return true
+}
+
+class RemoteNotificationClickReceiver : android.content.BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+        android.util.Log.d("NotifyRelay", "RemoteNotificationClickReceiver onReceive called")
+        val notifyId = intent.getIntExtra("notifyId", 0)
+        val pkg = intent.getStringExtra("pkg") ?: run {
+            android.util.Log.e("NotifyRelay", "pkg is null in broadcast")
+            return
+        }
+        val title = intent.getStringExtra("title") ?: ""
+        val text = intent.getStringExtra("text") ?: ""
+        val key = intent.getStringExtra("key") ?: (System.currentTimeMillis().toString() + pkg)
+        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        notificationManager.cancel(notifyId)
+        // 跳转应用
+        val pm = context.packageManager
+        val launchIntent = pm.getLaunchIntentForPackage(pkg)
+        if (launchIntent != null) {
+            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launchIntent)
+        } else {
+            android.util.Log.w("NotifyRelay", "No launch intent for package: $pkg")
+        }
+    }
+}
+
+
 class DeviceForwardFragment : Fragment() {
     // 认证通过设备持久化key
     private val PREFS_NAME = "notifyrelay_device_prefs"
@@ -100,15 +132,95 @@ fun DeviceForwardScreen(
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
     val selectedDevice = selectedDeviceState.value
     // 复刻lancomm事件监听风格，Compose事件流监听消息
+    // 远程通知过滤与复刻到系统通知中心
     DisposableEffect(Unit) {
         val oldHandler = deviceManager.onNotificationDataReceived
         deviceManager.onNotificationDataReceived = { data ->
-            com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: $data")
-            chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+            val shouldShow = remoteNotificationFilter(data)
+            if (shouldShow) {
+                try {
+                    val json = org.json.JSONObject(data)
+                    val pkg = json.optString("packageName")
+                    val appName = json.optString("appName", pkg)
+                    val title = json.optString("title")
+                    val text = json.optString("text")
+                    val time = json.optLong("time", System.currentTimeMillis())
+                    // 获取应用大图标
+                    var appIcon: android.graphics.Bitmap? = null
+                    try {
+                        val pm = context.packageManager
+                        val appInfo = pm.getApplicationInfo(pkg, 0)
+                        val drawable = pm.getApplicationIcon(appInfo)
+                        if (drawable is android.graphics.drawable.BitmapDrawable) {
+                            appIcon = drawable.bitmap
+                        } else {
+                            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+                            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(bitmap)
+                            drawable.setBounds(0, 0, width, height)
+                            drawable.draw(canvas)
+                            appIcon = bitmap
+                        }
+                    } catch (_: Exception) {}
+                    // 构造点击跳转PendingIntent
+                    val pm = context.packageManager
+                    val launchIntent = pm.getLaunchIntentForPackage(pkg)
+                    val key = time.toString() + pkg
+                    val notifyId = key.hashCode()
+                    val pendingIntent = if (launchIntent != null) {
+                        launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        android.app.PendingIntent.getActivity(
+                            context,
+                            notifyId,
+                            launchIntent,
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or (if (android.os.Build.VERSION.SDK_INT >= 23) android.app.PendingIntent.FLAG_IMMUTABLE else 0)
+                        )
+                    } else null
+                    // 发送系统通知（直接带 appIcon）
+                    val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    val channelId = "notifyrelay_remote"
+                    if (notificationManager.getNotificationChannel(channelId) == null) {
+                        val channel = android.app.NotificationChannel(channelId, "远程通知", android.app.NotificationManager.IMPORTANCE_HIGH)
+                        channel.description = "远程设备转发通知"
+                        channel.enableLights(true)
+                        channel.lightColor = android.graphics.Color.GREEN
+                        channel.enableVibration(false)
+                        channel.setSound(null, null)
+                        channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                        channel.setShowBadge(false)
+                        channel.importance = android.app.NotificationManager.IMPORTANCE_HIGH
+                        channel.setBypassDnd(true)
+                        notificationManager.createNotificationChannel(channel)
+                    }
+                    val builder = android.app.Notification.Builder(context, channelId)
+                        .setContentTitle(title)
+                        .setContentText(text)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setCategory(android.app.Notification.CATEGORY_MESSAGE)
+                        .setAutoCancel(true)
+                        .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                        .setOngoing(false)
+                        .setWhen(time)
+                    if (appIcon != null) {
+                        builder.setLargeIcon(appIcon)
+                    }
+                    if (pendingIntent != null) {
+                        builder.setContentIntent(pendingIntent)
+                    }
+                    // 直接在普通通知上使用大图标，不再发送二次通知
+                    notificationManager.notify(notifyId, builder.build())
+                } catch (e: Exception) {
+                    android.util.Log.e("NotifyRelay", "远程通知复刻失败", e)
+                }
+                com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: $data")
+                chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+            }
             oldHandler?.invoke(data)
         }
         onDispose { deviceManager.onNotificationDataReceived = oldHandler }
     }
+
     // 聊天区UI（可折叠）
     androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.Card(
@@ -184,4 +296,4 @@ fun DeviceForwardScreen(
         }
     }
 }
-}
+                                    }

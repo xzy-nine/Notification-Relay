@@ -59,6 +59,10 @@
             android:name=".service.DeviceConnectionService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- 注册通知点击广播接收器 -->
+        <receiver
+            android:name=".DeviceForwardFragment$RemoteNotificationClickReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
