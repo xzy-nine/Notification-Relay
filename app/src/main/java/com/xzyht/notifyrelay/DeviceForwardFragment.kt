@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.TabRow
+import com.xzyht.notifyrelay.ui.device.NotificationFilterPager
+import com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter
 
 @Composable
 fun AppPickerDialog(
@@ -473,8 +475,40 @@ fun DeviceForwardScreen(
      
     android.util.Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
-    val tabTitles = listOf("通知过滤设置", "聊天测试")
+    val tabTitles = listOf("通知过滤设置", "聊天测试", "通知软编码过滤")
     var selectedTabIndex by remember { mutableStateOf(0) }
+    // NotificationFilterPager 状态，持久化与后端同步
+    var filterSelf by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterSelf) }
+    var filterOngoing by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterOngoing) }
+    var filterNoTitleOrText by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterNoTitleOrText) }
+    var filterImportanceNone by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterImportanceNone) }
+
+    // 持久化监听
+    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone) {
+        DefaultNotificationFilter.filterSelf = filterSelf
+        DefaultNotificationFilter.filterOngoing = filterOngoing
+        DefaultNotificationFilter.filterNoTitleOrText = filterNoTitleOrText
+        DefaultNotificationFilter.filterImportanceNone = filterImportanceNone
+        context?.let {
+            val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
+            prefs.edit()
+                .putBoolean("filter_self", filterSelf)
+                .putBoolean("filter_ongoing", filterOngoing)
+                .putBoolean("filter_no_title_or_text", filterNoTitleOrText)
+                .putBoolean("filter_importance_none", filterImportanceNone)
+                .apply()
+        }
+    }
+    // 启动时加载本地持久化
+    LaunchedEffect(Unit) {
+        context?.let {
+            val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
+            filterSelf = prefs.getBoolean("filter_self", filterSelf)
+            filterOngoing = prefs.getBoolean("filter_ongoing", filterOngoing)
+            filterNoTitleOrText = prefs.getBoolean("filter_no_title_or_text", filterNoTitleOrText)
+            filterImportanceNone = prefs.getBoolean("filter_importance_none", filterImportanceNone)
+        }
+    }
     // 连接弹窗与错误弹窗相关状态
     var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -1161,6 +1195,19 @@ fun DeviceForwardScreen(
                         }
                     }
                 }
+            }
+            2 -> {
+                // 通知软编码过滤 Tab
+                NotificationFilterPager(
+                    filterSelf = filterSelf,
+                    filterOngoing = filterOngoing,
+                    filterNoTitleOrText = filterNoTitleOrText,
+                    filterImportanceNone = filterImportanceNone,
+                    onFilterSelfChange = { filterSelf = it },
+                    onFilterOngoingChange = { filterOngoing = it },
+                    onFilterNoTitleOrTextChange = { filterNoTitleOrText = it },
+                    onFilterImportanceNoneChange = { filterImportanceNone = it }
+                )
             }
         }
     }

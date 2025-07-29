@@ -38,62 +38,60 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val CHANNEL_ID = "notifyrelay_foreground"
     private val NOTIFY_ID = 1001
 
+    private fun logSbnDetail(tag: String, sbn: StatusBarNotification) {
+        val n = sbn.notification
+        val title = NotificationRepository.getStringCompat(n.extras, "android.title")
+        val text = NotificationRepository.getStringCompat(n.extras, "android.text")
+        val channelId = n.channelId
+        val category = n.category
+        val id = sbn.id
+        val postTime = sbn.postTime
+        val pkg = sbn.packageName
+        val isOngoing = sbn.isOngoing
+        val flags = n.flags
+        android.util.Log.i(tag, "pkg=$pkg, id=$id, title=$title, text=$text, isOngoing=$isOngoing, flags=$flags, channelId=$channelId, category=$category, postTime=$postTime, sbnKey=${sbn.key}")
+    }
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // 过滤本应用自身通知
-        if (sbn.packageName == applicationContext.packageName) return
-        // 过滤持久化通知（ongoing/persistent）
-        if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) return
-        // 过滤优先级为无的通知（IMPORTANCE_NONE）
-        val channelId = sbn.notification.channelId
-        if (channelId != null) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val channel = nm.getNotificationChannel(channelId)
-            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return
+        // 使用软编码过滤器
+        if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+            logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
+            return
         }
-        // 过滤空标题和空内容
-        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
-        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-        if (title.isNullOrBlank() || text.isNullOrBlank()) return
         // 使用协程在后台处理通知，提升实时性且不阻塞主线程
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
+                logSbnDetail("黑影 onNotificationPosted 通过", sbn)
                 NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
                 // ===== 新增：自动转发到所有已认证设备 =====
                 try {
-                    // 获取全局 DeviceConnectionManager 实例（与 DeviceForwardFragment 保持一致）
                     val deviceManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
-                    // 获取应用名
                     var appName: String? = null
                     try {
                         val pm = applicationContext.packageManager
                         val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
                         appName = pm.getApplicationLabel(appInfo).toString()
                     } catch (_: Exception) {
-                        appName = sbn.packageName // 未安装时用包名兜底
+                        appName = sbn.packageName
                     }
-                    // 反射获取认证设备表
                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                     field.isAccessible = true
                     @Suppress("UNCHECKED_CAST")
                     val authedMap = field.get(deviceManager) as? Map<String, *>
                     if (authedMap != null) {
                         for ((uuid, auth) in authedMap) {
-                            // 跳过本机
                             val myUuidField = deviceManager.javaClass.getDeclaredField("uuid")
                             myUuidField.isAccessible = true
                             val myUuid = myUuidField.get(deviceManager) as? String
                             if (uuid == myUuid) continue
-                            // 获取设备信息
                             val infoMethod = deviceManager.javaClass.getDeclaredMethod("getDeviceInfo", String::class.java)
                             infoMethod.isAccessible = true
                             val deviceInfo = infoMethod.invoke(deviceManager, uuid) as? com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
                             if (deviceInfo != null) {
-                                // 组装转发内容（统一用json）
                                 val payload = com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil.buildNotificationJson(
                                     sbn.packageName,
                                     appName,
-                                    title,
-                                    text,
+                                    NotificationRepository.getStringCompat(sbn.notification.extras, "android.title"),
+                                    NotificationRepository.getStringCompat(sbn.notification.extras, "android.text"),
                                     sbn.postTime
                                 )
                                 deviceManager.sendNotificationData(deviceInfo, payload)
@@ -105,10 +103,48 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 }
                 // ===== END =====
             } catch (e: Exception) {
-                // android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e) // 调试日志已注释
+                // android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification error", e)
             }
         }
     }
+// 默认通知过滤器（软编码，可配置）
+object DefaultNotificationFilter {
+    // 可配置项
+    var filterSelf: Boolean = true // 过滤本应用
+    var filterOngoing: Boolean = true // 过滤持久化
+    var filterNoTitleOrText: Boolean = true // 过滤空标题内容
+    var filterImportanceNone: Boolean = true // 过滤IMPORTANCE_NONE
+    // 前台/持久化服务文本关键词（可扩展）
+    val foregroundKeywords = listOf(
+        "正在运行", "服务运行中", "后台运行", "点按即可了解详情", "正在同步", "运行中", "service running", "is running", "tap for more info"
+    )
+    // 未来可扩展更多条件
+
+    fun shouldForward(sbn: StatusBarNotification, context: Context): Boolean {
+        if (filterSelf && sbn.packageName == context.packageName) return false
+        val flags = sbn.notification.flags
+        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
+        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
+        // 持久化/前台服务过滤，包含文本关键词
+        if (filterOngoing) {
+            val isOngoing = sbn.isOngoing || (flags and Notification.FLAG_ONGOING_EVENT) != 0 || (flags and 0x00000200) != 0
+            val hasForegroundKeyword = foregroundKeywords.any { k -> title.contains(k, true) || text.contains(k, true) }
+            if (isOngoing || hasForegroundKeyword) return false
+        }
+        if (filterImportanceNone) {
+            val channelId = sbn.notification.channelId
+            if (channelId != null) {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val channel = nm.getNotificationChannel(channelId)
+                if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return false
+            }
+        }
+        if (filterNoTitleOrText) {
+            if (title.isBlank() || text.isBlank()) return false
+        }
+        return true
+    }
+}
 
     override fun onListenerConnected() {
         super.onListenerConnected()
@@ -129,25 +165,15 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             // android.util.Log.i("NotifyRelay", "[NotifyListener] activeNotifications size=${actives.size}") // 调试日志已注释
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
-                    // 过滤本应用自身通知
-                    if (sbn.packageName == applicationContext.packageName) continue
-                    // 过滤持久化通知
-                    if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) continue
-                    // 过滤优先级为无的通知（IMPORTANCE_NONE）
-                    val channelId = sbn.notification.channelId
-                    if (channelId != null) {
-                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        val channel = nm.getNotificationChannel(channelId)
-                        if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) continue
+                    if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+                        logSbnDetail("法鸡-黑影 onListenerConnected 被过滤", sbn)
+                        continue
                     }
-                    val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
-                    val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-                    if (title.isNullOrBlank() || text.isNullOrBlank()) continue // 过滤无标题或无内容
                     try {
+                        logSbnDetail("黑影 onListenerConnected 通过", sbn)
                         NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (active) success: key=${sbn.key}, title=$title, text=$text") // 调试日志已注释
                     } catch (e: Exception) {
-                        android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (active) error", e)
+                        android.util.Log.e("黑影", "onListenerConnected addNotification (active) error", e)
                     }
                 }
             }
@@ -165,25 +191,16 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (actives != null) {
                     // android.util.Log.i("NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications size=${actives.size}") // 调试日志已注释
                     for (sbn in actives) {
-                        // 过滤本应用自身通知
                         if (sbn.packageName == applicationContext.packageName) continue
-                        // 过滤持久化通知
-                        if ((sbn.isOngoing || (sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0)) continue
-                        // 过滤优先级为无的通知（IMPORTANCE_NONE）
-                        val channelId = sbn.notification.channelId
-                        if (channelId != null) {
-                            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                            val channel = nm.getNotificationChannel(channelId)
-                            if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) continue
+                        if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+                            logSbnDetail("法鸡-黑影 定时拉取被过滤", sbn)
+                            continue
                         }
-                        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
-                        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-                        if (title.isNullOrBlank() || text.isNullOrBlank()) continue // 过滤无标题或无内容
                         try {
+                            logSbnDetail("黑影 定时拉取通过", sbn)
                             NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            // android.util.Log.i("NotifyRelay", "[NotifyListener] addNotification (timer) success: key=${sbn.key}, title=$title, text=$text") // 已不再需要，注释保留
                         } catch (e: Exception) {
-                            android.util.Log.e("NotifyRelay", "[NotifyListener] addNotification (timer) error", e)
+                            android.util.Log.e("黑影", "定时拉取 addNotification (timer) error", e)
                         }
                     }
                 } else {
