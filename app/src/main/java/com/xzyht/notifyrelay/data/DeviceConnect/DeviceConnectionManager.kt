@@ -234,7 +234,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
                         socket.send(packet)
                         //android.util.Log.d("NotifyRelay", "已发送广播: NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}")
-                        Thread.sleep(3000)
+                        Thread.sleep(2000) // 广播周期2秒，提升容错
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -255,29 +255,28 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         val packet = java.net.DatagramPacket(buf, buf.size)
                         socket.receive(packet)
                         val msg = String(packet.data, 0, packet.length)
-                        //android.util.Log.d("NotifyRelay", "收到广播: $msg, ip=${packet.address.hostAddress}")
-                        // logDeviceCache("before_broadcast_handle")
+                        val ip = packet.address.hostAddress
                         if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
                             val parts = msg.split(":")
                             if (parts.size >= 4) {
                                 val uuid = parts[1]
                                 val displayName = parts[2]
                                 val port = parts[3].toIntOrNull() ?: 23333
-                                val ip = packet.address.hostAddress
                                 if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid && !ip.isNullOrEmpty()) {
-                                val device = DeviceInfo(uuid, displayName, ip, port)
-                                deviceLastSeen[uuid] = System.currentTimeMillis()
-                                synchronized(deviceInfoCache) {
-                                    deviceInfoCache[uuid] = device
+                                    // 只记录非本机uuid的广播日志
+                                    android.util.Log.d("死神-NotifyRelay(离线修复)", "收到广播: $msg, ip=$ip, 本机uuid=${this@DeviceConnectionManager.uuid}")
+                                    val device = DeviceInfo(uuid, displayName, ip, port)
+                                    deviceLastSeen[uuid] = System.currentTimeMillis()
+                                    android.util.Log.d("死神-NotifyRelay(离线修复)", "已重置 deviceLastSeen[$uuid] = ${deviceLastSeen[uuid]}")
+                                    synchronized(deviceInfoCache) {
+                                        deviceInfoCache[uuid] = device
+                                    }
+                                    DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
+                                    coroutineScope.launch {
+                                        updateDeviceList()
+                                    }
                                 }
-                                // 更新全局缓存
-                                DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
-                                // Log.d("NotifyRelay", "[broadcast_handle] 新增/更新设备: $device")
-                                // logDeviceCache("after_broadcast_handle")
-                                coroutineScope.launch {
-                                    updateDeviceList()
-                                }
-                                }
+                                // 本机uuid的广播不再记录日志
                             }
                         }
                     }
@@ -288,7 +287,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             listenThread?.isDaemon = true
             listenThread?.start()
         }
-        // 启动TCP服务监听
         startServer()
     }
 
@@ -297,7 +295,11 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             while (true) {
                 delay(1000)
-                updateDeviceList()
+                try {
+                    updateDeviceList()
+                } catch (e: Exception) {
+                    Log.e("死神-NotifyRelay", "startOfflineDeviceCleaner定时器异常: ${e.message}")
+                }
             }
         }
     }
@@ -308,18 +310,33 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         val allUuids = (deviceLastSeen.keys + authed).toSet()
         val newMap = mutableMapOf<String, Pair<DeviceInfo, Boolean>>()
         val unauthedTimeout = 30_000L // 未认证设备保留30秒
-        val authedOfflineTimeout = 9_000L // 已认证设备离线阈值，放宽到9秒
+        val authedOfflineTimeout = 8_000L // 已认证设备离线阈值，放宽到8秒（需与广播周期匹配）
         for (uuid in allUuids) {
             val lastSeen = deviceLastSeen[uuid]
             val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
+            // 检查时钟回拨
+            var safeLastSeen = lastSeen
+            if (lastSeen != null && now < lastSeen) {
+                Log.w("死神-NotifyRelay", "检测到时钟回拨: now=$now, lastSeen=$lastSeen, uuid=$uuid，强制重置lastSeen=now")
+                deviceLastSeen[uuid] = now
+                safeLastSeen = now
+            }
             if (auth != null) {
-                // 已认证设备，离线也保留
-                val isOnline = lastSeen != null && now - lastSeen <= authedOfflineTimeout
+                val diff = if (safeLastSeen != null) now - safeLastSeen else -1L
+                val isOnline = safeLastSeen != null && diff <= authedOfflineTimeout
+                Log.d("死神-NotifyRelay", "[updateDeviceList] 已认证 uuid=$uuid, now=$now, lastSeen=$safeLastSeen, diff=$diff, authedOfflineTimeout=$authedOfflineTimeout, isOnline=$isOnline")
+                if (!isOnline && safeLastSeen != null && diff in (authedOfflineTimeout + 1)..(authedOfflineTimeout + 2000)) {
+                    Log.w("死神-NotifyRelay", "[updateDeviceList] 已认证设备即将离线: uuid=$uuid, diff=$diff, 阈值=$authedOfflineTimeout")
+                }
                 val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, auth.displayName ?: "已认证设备", "", listenPort)
                 newMap[uuid] = info to isOnline
             } else {
-                // 未认证设备，30秒未发现则移除
-                val isOnline = lastSeen != null && now - lastSeen <= unauthedTimeout
+                val diff = if (safeLastSeen != null) now - safeLastSeen else -1L
+                val isOnline = safeLastSeen != null && diff <= unauthedTimeout
+                Log.d("死神-NotifyRelay", "[updateDeviceList] 未认证 uuid=$uuid, now=$now, lastSeen=$safeLastSeen, diff=$diff, unauthedTimeout=$unauthedTimeout, isOnline=$isOnline")
+                if (!isOnline && safeLastSeen != null && diff in (unauthedTimeout + 1)..(unauthedTimeout + 2000)) {
+                    Log.w("死神-NotifyRelay", "[updateDeviceList] 未认证设备即将离线: uuid=$uuid, diff=$diff, 阈值=$unauthedTimeout")
+                }
                 if (isOnline) {
                     val info = getDeviceInfo(uuid)
                     if (info != null) newMap[uuid] = info to true
@@ -425,7 +442,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             try {
                 val auth = authenticatedDevices[device.uuid]
                 if (auth == null || !auth.isAccepted) {
-                    Log.d("NotifyRelay", "未认证设备，禁止发送")
+                    Log.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
                 val socket = Socket(device.ip, device.port)
@@ -446,12 +463,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 接收通知数据（解密）
     fun handleNotificationData(data: String, sharedSecret: String? = null, remoteUuid: String? = null) {
-        Log.d("NotifyRelay", "收到通知数据: $data")
+        Log.d("死神-NotifyRelay", "收到通知数据: $data")
         val decrypted = if (sharedSecret != null) {
             try {
                 xorDecrypt(data, sharedSecret)
             } catch (e: Exception) {
-                Log.d("NotifyRelay", "解密失败: ${e.message}")
+                Log.d("死神-NotifyRelay", "解密失败: ${e.message}")
                 data
             }
         } else data
@@ -476,7 +493,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 scanMethod.invoke(null, context)
             }
         } catch (e: Exception) {
-            Log.e("NotifyRelay", "存储远程通知失败: ${e.message}")
+            Log.e("死神-NotifyRelay", "存储远程通知失败: ${e.message}")
         }
         // 不再直接发系统通知，由 UI 层渲染
         notificationDataReceivedCallbacks.forEach { it.invoke(decrypted) }
@@ -572,20 +589,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                             handleNotificationData(payload, sharedSecret, remoteUuid)
                                         } else {
                                             if (auth == null) {
-                                                Log.d("NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
+                                            Log.d("死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
                                             } else {
                                                 val reason = buildString {
                                                     if (auth.sharedSecret != sharedSecret) append("sharedSecret不匹配; ")
                                                     if (!auth.isAccepted) append("isAccepted=false; ")
                                                 }
-                                                Log.d("NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
+                                                Log.d("死神-NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
                                             }
                                         }
                                     }
                                     reader.close()
                                     client.close()
                                 } else {
-                                    Log.d("NotifyRelay", "未知请求: $line")
+                                    Log.d("死神-NotifyRelay", "未知请求: $line")
                                     reader.close()
                                     client.close()
                                 }
