@@ -9,6 +9,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
@@ -89,6 +90,7 @@ fun DeviceListScreen() {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceForwardFragment.getDeviceManager(context) }
+    // 手动发现/心跳等提示完全交由后端处理，前端不再注册回调
     // 拒绝设备弹窗状态（需提前声明，供下方 LaunchedEffect、rejectedDevices 使用）
     var showRejectedDialog by remember { mutableStateOf(false) }
     var authedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -499,7 +501,7 @@ fun DeviceListScreen() {
         }
     }
 
-    // 所有弹窗统一放在最外层，保证横竖屏都能弹出且不被遮挡
+    // ...不再弹窗提示，已改为Toast...
     if (showConnectDialog && pendingConnectDevice != null) {
         val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
         AlertDialog(
@@ -753,20 +755,20 @@ fun DeviceListScreen() {
                                 TextButton(
                                     text = "恢复",
                                     onClick = {
-                                        // 恢复设备（移除rejected），同IP下所有UUID都移除
-                                        val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                        field.isAccessible = true
-                                        val set = field.get(deviceManager)
-                                        if (set is MutableSet<*>) {
-                                            @Suppress("UNCHECKED_CAST")
-                                            val ms = set as? MutableSet<String>
-                                            val allUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
-                                            allUuids.distinct().forEach { ms?.remove(it) }
-                                        }
-                                        // 触发刷新
+                                    // 恢复设备（移除rejected），同IP下所有UUID都移除
+                                    val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                                    field.isAccessible = true
+                                    val set = field.get(deviceManager)
+                                    if (set is MutableSet<*>) {
                                         @Suppress("UNCHECKED_CAST")
-                                        rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
+                                        val ms = set as? MutableSet<String>
+                                        val allUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
+                                        allUuids.distinct().forEach { ms?.remove(it) }
                                     }
+                                    // 触发刷新
+                                    @Suppress("UNCHECKED_CAST")
+                                    rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
+                                }
                                 )
                             }
                         }

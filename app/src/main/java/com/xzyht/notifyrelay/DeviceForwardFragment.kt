@@ -465,6 +465,12 @@ fun DeviceForwardScreen(
     loadAuthedUuids: () -> Set<String>,
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
+    // 手动发现提示相关状态
+    val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
+    val snackbarVisible = remember { mutableStateOf(false) }
+    val coroutineScopeSnackbar = rememberCoroutineScope()
+
+     
     android.util.Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
     val tabTitles = listOf("通知过滤设置", "聊天测试")
@@ -474,6 +480,27 @@ fun DeviceForwardScreen(
     var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
     var connectError by rememberSaveable { mutableStateOf<String?>(null) }
     // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
+
+    // Miuix风格Snackbar弹窗
+    if (snackbarVisible.value && manualDiscoveryPrompt.value != null) {
+        androidx.compose.material3.Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { snackbarVisible.value = false }) {
+                    Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
+                }
+            },
+            containerColor = MiuixTheme.colorScheme.surface,
+            contentColor = MiuixTheme.colorScheme.onSurface
+        ) {
+            Text(manualDiscoveryPrompt.value!!, style = MiuixTheme.textStyles.body2)
+        }
+        // 自动消失
+        LaunchedEffect(manualDiscoveryPrompt.value) {
+            kotlinx.coroutines.delay(5000)
+            snackbarVisible.value = false
+        }
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles

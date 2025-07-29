@@ -184,7 +184,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
                 // 权限状态列表
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // ...existing code...
+                     
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("通知访问权限", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))

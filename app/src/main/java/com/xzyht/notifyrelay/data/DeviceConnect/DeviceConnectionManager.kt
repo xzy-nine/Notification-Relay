@@ -21,6 +21,7 @@ import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
 import android.util.Log
 
+
 data class DeviceInfo(
     val uuid: String,
     val displayName: String, // 前端显示名，优先蓝牙名，其次型号
@@ -56,15 +57,43 @@ object DeviceConnectionManagerUtil {
     }
 }
 
-
 data class AuthInfo(
     val publicKey: String,
     val sharedSecret: String,
     val isAccepted: Boolean,
-    val displayName: String? = null // 新增：持久化设备名
+    val displayName: String? = null, // 新增：持久化设备名
+    val lastIp: String? = null,
+    val lastPort: Int? = null
 )
 
+// =================== 设备连接管理器主类 ===================
 class DeviceConnectionManager(private val context: android.content.Context) {
+    // 获取本机局域网IP（非127.0.0.1）
+    private fun getLocalIpAddress(): String {
+        try {
+            val en = java.net.NetworkInterface.getNetworkInterfaces()
+            while (en.hasMoreElements()) {
+                val intf = en.nextElement()
+                val addrs = intf.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        return addr.hostAddress ?: "0.0.0.0"
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return "0.0.0.0"
+    }
+    // 新增：UDP关闭时对已认证设备发送加密UDP唤醒包
+    private var manualDiscoveryJob: kotlinx.coroutines.Job? = null
+    private val manualDiscoveryTimeout = 30_000L // 30秒
+    private val manualDiscoveryInterval = 2000L // 2秒
+    private val manualDiscoveryPromptCount = 2
+    // 记录已建立心跳的设备
+    private val heartbeatedDevices = mutableSetOf<String>()
+
+    // 手动发现失败等提示不再通过回调UI，直接Log输出
     /**
      * 停止所有后台线程和网络服务，释放资源，供 Service onDestroy 调用
      */
@@ -111,10 +140,18 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val sharedSecret = obj.getString("sharedSecret")
                 val isAccepted = obj.optBoolean("isAccepted", true)
                 val displayName = obj.optString("displayName").takeIf { it.isNotEmpty() }
-                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted, displayName)
+                val lastIp = obj.optString("lastIp").takeIf { it.isNotEmpty() }
+                val lastPort = if (obj.has("lastPort")) obj.optInt("lastPort", 23333) else null
+                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted, displayName, lastIp, lastPort)
                 // 新增：恢复设备名到缓存
                 if (!displayName.isNullOrEmpty()) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
+                }
+                // 新增：恢复ip到deviceInfoCache
+                if (!lastIp.isNullOrEmpty()) {
+                    synchronized(deviceInfoCache) {
+                        deviceInfoCache[uuid] = DeviceInfo(uuid, displayName ?: "已认证设备", lastIp, lastPort ?: 23333)
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -134,6 +171,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     // 新增：持久化 displayName
                     val name = auth.displayName ?: deviceInfoCache[uuid]?.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
                     obj.put("displayName", name)
+                    // 新增：持久化ip和port
+                    val info = deviceInfoCache[uuid]
+                    obj.put("lastIp", info?.ip ?: auth.lastIp ?: "")
+                    obj.put("lastPort", info?.port ?: auth.lastPort ?: 23333)
                     arr.put(obj)
                 }
             }
@@ -219,6 +260,17 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             prefs.edit().putBoolean("udp_discovery_enabled", true).apply()
         }
         loadAuthedDevices()
+        // 新增：补全本机 deviceInfoCache，便于反向 connectToDevice
+        val displayName = try {
+            val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+            if (!name.isNullOrEmpty()) name else android.os.Build.MODEL
+        } catch (_: Exception) {
+            android.os.Build.MODEL
+        }
+        val localIp = getLocalIpAddress()
+        synchronized(deviceInfoCache) {
+            deviceInfoCache[uuid] = DeviceInfo(uuid, displayName, localIp, listenPort)
+        }
         startOfflineDeviceCleaner()
     }
     fun startDiscovery() {
@@ -231,8 +283,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 android.os.Build.MODEL
             }
         }
-        // 仅在UI开关允许时启用UDP广播/监听
         if (udpDiscoveryEnabled) {
+             
             if (broadcastThread == null) {
                 broadcastThread = Thread {
                     var socket: java.net.DatagramSocket? = null
@@ -283,11 +335,17 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         android.util.Log.d("卢西奥-死神-NotifyRelay", "收到UDP广播: $msg, ip=$ip, 设备uuid为=${this@DeviceConnectionManager.uuid}")
                                         val device = DeviceInfo(uuid, displayName, ip, port)
                                         deviceLastSeen[uuid] = System.currentTimeMillis()
-                                        android.util.Log.d("卢西奥-死神-NotifyRelay", "已重置 deviceLastSeen[$uuid] = ${deviceLastSeen[uuid]}")
+                                        android.util.Log.i("卢西奥-死神-NotifyRelay", "收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceLastSeen[uuid]}")
                                         synchronized(deviceInfoCache) {
                                             deviceInfoCache[uuid] = device
                                         }
                                         DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
+                                        // 新增：已认证设备自动connectToDevice建立心跳
+                                        val isAuthed = synchronized(authenticatedDevices) { authenticatedDevices.containsKey(uuid) }
+                                        if (isAuthed && !heartbeatedDevices.contains(uuid)) {
+                                            android.util.Log.d("死神-NotifyRelay", "已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
+                                            connectToDevice(DeviceInfo(uuid, displayName, ip, port))
+                                        }
                                         coroutineScope.launch {
                                             updateDeviceList()
                                         }
@@ -310,8 +368,107 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 listenThread?.isDaemon = true
                 listenThread?.start()
             }
+            // 停止手动发现任务
+            manualDiscoveryJob?.cancel()
+        } else {
+            // UDP关闭时，主动对所有已认证设备尝试connectToDevice（只要未建立心跳且有ip）
+            coroutineScope.launch {
+                val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+                for ((uuid, auth) in authed) {
+                    if (uuid == this@DeviceConnectionManager.uuid) continue
+                    if (heartbeatedDevices.contains(uuid)) continue
+                    val info = getDeviceInfo(uuid)
+                    val ip = info?.ip
+                    val port = info?.port ?: 23333
+                    if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                        android.util.Log.d("死神-NotifyRelay", "UDP关闭时自动connectToDevice: $uuid, $ip")
+                        connectToDevice(DeviceInfo(uuid, info.displayName, ip, port))
+                    }
+                }
+            }
+            startManualDiscoveryForAuthedDevices(getLocalDisplayName())
         }
         startServer()
+    }
+
+    // 启动手动发现任务
+    private fun startManualDiscoveryForAuthedDevices(localDisplayName: String) {
+        manualDiscoveryJob?.cancel()
+        manualDiscoveryJob = coroutineScope.launch {
+            val startTime = System.currentTimeMillis()
+            var promptCount = 0
+            val failMap = mutableMapOf<String, Int>() // 记录每个设备的失败次数
+            val maxFail = 3
+            while (System.currentTimeMillis() - startTime < manualDiscoveryTimeout) {
+                val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+                var anySent = false
+                for ((uuid, auth) in authed) {
+                    if (uuid == this@DeviceConnectionManager.uuid) continue
+                    if (heartbeatedDevices.contains(uuid)) continue // 已建立心跳则跳过
+                    if (failMap[uuid] != null && failMap[uuid]!! >= maxFail) continue // 连续失败则跳过
+                    // 获取上次已知ip
+                    val info = getDeviceInfo(uuid)
+                    val ip = info?.ip
+                    val port = info?.port ?: 23333
+                    if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                        // 尝试直接建立TCP连接
+                        connectToDevice(DeviceInfo(uuid, info.displayName, ip, port)) { success, _ ->
+                            if (success) {
+                                android.util.Log.d("死神-NotifyRelay", "手动直连认证成功: $uuid, $ip")
+                                failMap.remove(uuid)
+                            } else {
+                                val count = (failMap[uuid] ?: 0) + 1
+                                failMap[uuid] = count
+                                if (count >= maxFail) {
+                                    android.util.Log.w("死神-NotifyRelay", "自动tcp重连连续失败${maxFail}次")
+                                    val msg = "自动重连失败${maxFail}次.\n请确认设备网络环境未改变或打开udp广播开关"
+                                    val ctx = context
+                                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        anySent = true
+                    }
+                }
+                if (!anySent && promptCount < manualDiscoveryPromptCount) {
+                    android.util.Log.w("死神-NotifyRelay", "手动发现超时")
+                    val msg = "未能重连已认证设备,请打开udp广播再试;\n确认已认证设备在同一局域网下"
+                    val ctx = context
+                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    promptCount++
+                }
+                delay(manualDiscoveryInterval)
+            }
+            // 30秒后如仍有未建立心跳的设备，提示
+            val authed = synchronized(authenticatedDevices) { authenticatedDevices.keys.toSet() }
+            val notOnline = authed.filter { it != this@DeviceConnectionManager.uuid && !heartbeatedDevices.contains(it) }
+            if (notOnline.isNotEmpty()) {
+                repeat(manualDiscoveryPromptCount) {
+                    android.util.Log.w("死神-NotifyRelay", "手动发现超时，以下设备仍未建立心跳: $notOnline")
+                    val msg = "未能发现已认证设备,请打开udp广播;确认已认证设备在同一局域网下"
+                    val ctx = context
+                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // 统一设备状态管理：3秒未发现未认证设备直接移除，已认证设备置灰
@@ -335,6 +492,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         val newMap = mutableMapOf<String, Pair<DeviceInfo, Boolean>>()
         val unauthedTimeout = 5000L // 未认证设备保留两次UDP广播周期（2*2000ms）
         val authedHeartbeatTimeout = 12_000L // 已认证设备心跳超时阈值
+        val oldMap = _devices.value
         for (uuid in allUuids) {
             val lastSeen = deviceLastSeen[uuid]
             val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
@@ -349,21 +507,21 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 // 仅基于心跳包判定在线
                 val diff = if (safeLastSeen != null) now - safeLastSeen else -1L
                 val isOnline = safeLastSeen != null && diff <= authedHeartbeatTimeout
-                android.util.Log.d("天使-死神-NotifyRelay", "[updateDeviceList] 已认证 uuid=$uuid, now=$now, lastSeen=$safeLastSeen, diff=$diff, authedHeartbeatTimeout=$authedHeartbeatTimeout, isOnline=$isOnline")
-                if (!isOnline && safeLastSeen != null && diff in (authedHeartbeatTimeout + 1)..(authedHeartbeatTimeout + 2000)) {
-                    android.util.Log.w("天使-死神-NotifyRelay", "[updateDeviceList] 已认证设备即将离线: uuid=$uuid, diff=$diff, 阈值=$authedHeartbeatTimeout")
-                }
                 val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, auth.displayName ?: "已认证设备", "", listenPort)
+                val oldOnline = oldMap[uuid]?.second
+                if (oldOnline != null && oldOnline != isOnline) {
+                    android.util.Log.i("天使-死神-NotifyRelay", "[updateDeviceList] 已认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
+                }
                 newMap[uuid] = info to isOnline
             } else {
                 val diff = if (safeLastSeen != null) now - safeLastSeen else -1L
                 val isOnline = safeLastSeen != null && diff <= unauthedTimeout
-                android.util.Log.d("死神-NotifyRelay", "[updateDeviceList] 未认证 uuid=$uuid, now=$now, lastSeen=$safeLastSeen, diff=$diff, unauthedTimeout=$unauthedTimeout, isOnline=$isOnline")
-                if (!isOnline && safeLastSeen != null && diff in (unauthedTimeout + 1)..(unauthedTimeout + 2000)) {
-                    android.util.Log.w("死神-NotifyRelay", "[updateDeviceList] 未认证设备即将离线: uuid=$uuid, diff=$diff, 阈值=$unauthedTimeout")
+                val info = getDeviceInfo(uuid)
+                val oldOnline = oldMap[uuid]?.second
+                if (oldOnline != null && oldOnline != isOnline) {
+                    android.util.Log.i("死神-NotifyRelay", "[updateDeviceList] 未认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
                 }
                 if (isOnline) {
-                    val info = getDeviceInfo(uuid)
                     if (info != null) newMap[uuid] = info to true
                 } else {
                     deviceLastSeen.remove(uuid)
@@ -374,24 +532,41 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     private fun getDeviceInfo(uuid: String): DeviceInfo? {
-        // 优先从缓存取，取不到再从已展示的设备流取
+        // 优先从缓存取（含真实ip）
         synchronized(deviceInfoCache) {
             deviceInfoCache[uuid]?.let { return it }
         }
-        // 新增：若为已认证设备，优先用认证表中的 displayName
+        // 其次从设备流取
+        _devices.value[uuid]?.first?.let { return it }
+        // 最后从认证表补全（无ip）
         val auth = authenticatedDevices[uuid]
         if (auth != null) {
             val name = auth.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
-            return DeviceInfo(uuid, name, "", listenPort)
+            val ip = auth.lastIp ?: ""
+            val port = auth.lastPort ?: listenPort
+            return DeviceInfo(uuid, name, ip, port)
         }
-        return _devices.value[uuid]?.first
+        // 新增：本机兜底逻辑
+        if (uuid == this.uuid) {
+            val displayName = try {
+                val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+                if (!name.isNullOrEmpty()) name else android.os.Build.MODEL
+            } catch (_: Exception) {
+                android.os.Build.MODEL
+            }
+            val localIp = getLocalIpAddress()
+            return DeviceInfo(uuid, displayName, localIp, listenPort)
+        }
+        return null
     }
 
     // 连接设备
     fun connectToDevice(device: DeviceInfo, callback: ((Boolean, String?) -> Unit)? = null) {
         coroutineScope.launch {
+            android.util.Log.d("死神-NotifyRelay", "connectToDevice called: device=$device, rejected=${rejectedDevices.contains(device.uuid)}")
             try {
                 if (rejectedDevices.contains(device.uuid)) {
+                    android.util.Log.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
                     callback?.invoke(false, "已被对方拒绝")
                     return@launch
                 }
@@ -401,6 +576,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 writer.write("HANDSHAKE:${uuid}:${localPublicKey}\n")
                 writer.flush()
                 val resp = reader.readLine()
+                android.util.Log.d("死神-NotifyRelay", "connectToDevice: handshake resp=$resp")
                 if (resp != null && resp.startsWith("ACCEPT:")) {
                     val parts = resp.split(":")
                     if (parts.size >= 3) {
@@ -411,25 +587,51 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             (remotePubKey + localPublicKey).take(32)
                         synchronized(authenticatedDevices) {
                             authenticatedDevices.remove(device.uuid)
-                            authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true, device.displayName)
+                            authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true, device.displayName, device.ip, device.port)
                             saveAuthedDevices()
                         }
+                        // 强制更新deviceInfoCache，确保ip为最新
+                        synchronized(deviceInfoCache) {
+                            deviceInfoCache[device.uuid] = device
+                        }
+                        android.util.Log.d("死神-NotifyRelay", "认证成功，启动心跳: uuid=${device.uuid}, ip=${device.ip}, port=${device.port}")
                         // 启动心跳定时任务
                         startHeartbeatToDevice(device.uuid, device.ip, device.port, remotePubKey, sharedSecret)
+                        // 立即刷新lastSeen，保证认证后立刻在线
+                        deviceLastSeen[device.uuid] = System.currentTimeMillis()
+                        // 自动反向connectToDevice本机，确保双向链路
+                        if (device.uuid != this@DeviceConnectionManager.uuid) {
+                            val myInfo = getDeviceInfo(this@DeviceConnectionManager.uuid)
+                            if (myInfo != null) {
+                                // 避免死循环，仅在对方未主动连接时尝试
+                                if (!heartbeatedDevices.contains(device.uuid)) {
+                                    android.util.Log.d("死神-NotifyRelay", "认证成功后自动反向connectToDevice: myInfo=$myInfo, peer=${device.uuid}")
+                                    connectToDevice(myInfo)
+                                } else {
+                                    android.util.Log.d("死神-NotifyRelay", "对方已建立心跳，不再反向connectToDevice: peer=${device.uuid}")
+                                }
+                            } else {
+                                android.util.Log.d("死神-NotifyRelay", "本机getDeviceInfo返回null，无法反向connectToDevice")
+                            }
+                        }
                         callback?.invoke(true, null)
                     } else {
+                        android.util.Log.d("死神-NotifyRelay", "认证响应格式错误: $resp")
                         callback?.invoke(false, "认证响应格式错误")
                     }
                 } else if (resp != null && resp.startsWith("REJECT:")) {
+                    android.util.Log.d("死神-NotifyRelay", "对方拒绝连接: uuid=${device.uuid}")
                     rejectedDevices.add(device.uuid)
                     callback?.invoke(false, "对方拒绝连接")
                 } else {
+                    android.util.Log.d("死神-NotifyRelay", "认证失败: resp=$resp")
                     callback?.invoke(false, "认证失败")
                 }
                 writer.close()
                 reader.close()
                 socket.close()
             } catch (e: Exception) {
+                android.util.Log.e("死神-NotifyRelay", "connectToDevice异常: ${e.message}")
                 e.printStackTrace()
                 callback?.invoke(false, e.message)
             }
@@ -439,17 +641,60 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 启动心跳定时任务
     private fun startHeartbeatToDevice(uuid: String, ip: String, port: Int, remotePubKey: String, sharedSecret: String) {
         heartbeatJobs[uuid]?.cancel()
+        heartbeatedDevices.add(uuid) // 标记已建立心跳
+        android.util.Log.d("死神-NotifyRelay", "startHeartbeatToDevice: uuid=$uuid, ip=$ip, port=$port")
         val job = coroutineScope.launch {
+            var failCount = 0
+            val maxFail = 3 // 连续失败次数阈值
             while (true) {
+                var success = false
                 try {
-                    val socket = Socket(ip, port)
+                    // 每次取最新ip和port，避免ip变更后心跳丢失
+                    val info = synchronized(deviceInfoCache) { deviceInfoCache[uuid] }
+                    val targetIp = info?.ip?.takeIf { it.isNotEmpty() && it != "0.0.0.0" } ?: ip
+                    val targetPort = info?.port ?: port
+                    android.util.Log.d("死神-NotifyRelay", "心跳目标ip=$targetIp, port=$targetPort, uuid=$uuid")
+                    val socket = Socket(targetIp, targetPort)
                     val writer = OutputStreamWriter(socket.getOutputStream())
                     writer.write("HEARTBEAT:${this@DeviceConnectionManager.uuid}:${localPublicKey}\n")
                     writer.flush()
                     writer.close()
                     socket.close()
+                    // 不再本地刷新 deviceLastSeen，只有收到对方心跳包时才刷新
+                    success = true
                 } catch (e: Exception) {
                     android.util.Log.d("死神-NotifyRelay", "心跳发送失败: $uuid, ${e.message}")
+                }
+                if (success) {
+                    failCount = 0
+                } else {
+                    failCount++
+                    if (failCount >= maxFail) {
+                        android.util.Log.w("死神-NotifyRelay", "心跳连续失败${failCount}次，自动停止心跳并进入手动发现: $uuid")
+                        // 停止心跳任务
+                        heartbeatJobs[uuid]?.cancel()
+                        heartbeatJobs.remove(uuid)
+                        heartbeatedDevices.remove(uuid)
+                        // 直接Toast提示（主线程）
+                        val msg = "设备[${DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)}]离线，已自动进入手动发现模式，请检查网络或重新发现设备"
+                        val ctx = context
+                        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        // 启动手动发现
+                        val displayName = try {
+                            val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+                            if (!name.isNullOrEmpty()) name else android.os.Build.MODEL
+                        } catch (_: Exception) {
+                            android.os.Build.MODEL
+                        }
+                        startManualDiscoveryForAuthedDevices(displayName)
+                        break
+                    }
                 }
                 delay(4000) // 心跳周期4秒
             }
@@ -555,23 +800,47 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             val line = reader.readLine()
                             if (line != null) {
                                 if (line.startsWith("HANDSHAKE:")) {
-                                    // 握手请求
                                     val parts = line.split(":")
                                     if (parts.size >= 3) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
                                         val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                        val remoteDevice = _devices.value[remoteUuid]?.first ?: DeviceInfo(
-                                            remoteUuid,
-                                            "未知设备",
-                                            ip,
-                                            client.port
-                                        )
-                                        // 通过回调通知UI弹窗确认
-                                        val handshakeHandler = onHandshakeRequest
-                                        if (handshakeHandler != null) {
-                                            handshakeHandler.invoke(remoteDevice, remotePubKey) { accepted ->
-                                                // 关键修复：无论回调在何线程，先同步写入认证表
+                                        // 同步更新 deviceInfoCache，保证ip为最新
+                                        synchronized(deviceInfoCache) {
+                                            val old = deviceInfoCache[remoteUuid]
+                                            val displayName = old?.displayName ?: "未知设备"
+                                            // 只更新IP，不更新端口，端口保持原有或默认
+                                            deviceInfoCache[remoteUuid] = DeviceInfo(
+                                                remoteUuid,
+                                                displayName,
+                                                ip,
+                                                old?.port ?: 23333
+                                            )
+                                        }
+                                        // 只更新认证表中的IP，不更新端口
+                                        synchronized(authenticatedDevices) {
+                                            val auth = authenticatedDevices[remoteUuid]
+                                            if (auth != null) {
+                                                authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
+                                                saveAuthedDevices()
+                                            }
+                                        }
+                                        val remoteDevice = deviceInfoCache[remoteUuid]!!
+                                        // 新增：已认证设备自动ACCEPT
+                                        val alreadyAuthed = synchronized(authenticatedDevices) {
+                                            authenticatedDevices[remoteUuid]?.isAccepted == true
+                                        }
+                                        if (alreadyAuthed) {
+                                            coroutineScope.launch {
+                                                val writer = OutputStreamWriter(client.getOutputStream())
+                                                writer.write("ACCEPT:${uuid}:${localPublicKey}\n")
+                                                writer.flush()
+                                                writer.close()
+                                                reader.close()
+                                                client.close()
+                                            }
+                                        } else if (onHandshakeRequest != null) {
+                                            onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
                                                 if (accepted) {
                                                     val sharedSecret = if (localPublicKey < remotePubKey)
                                                         (localPublicKey + remotePubKey).take(32)
@@ -601,7 +870,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                                 }
                                             }
                                         } else {
-                                            // 若无回调，默认拒绝
                                             val writer = OutputStreamWriter(client.getOutputStream())
                                             writer.write("REJECT:${uuid}\n")
                                             writer.flush()
@@ -618,22 +886,55 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         client.close()
                                     }
                                 } else if (line.startsWith("HEARTBEAT:")) {
-                                    // 处理心跳包，格式：HEARTBEAT:uuid:pubkey
                                     val parts = line.split(":")
                                     if (parts.size >= 3) {
                                         val remoteUuid = parts[1]
-                                        // 仅已认证设备才更新lastSeen
                                         val isAuthed = synchronized(authenticatedDevices) { authenticatedDevices.containsKey(remoteUuid) }
+                                        android.util.Log.d("死神-NotifyRelay", "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${authenticatedDevices.keys}")
                                         if (isAuthed) {
-                                            deviceLastSeen[remoteUuid] = System.currentTimeMillis()
-                                            android.util.Log.d("死神-NotifyRelay", "收到HEARTBEAT，已更新lastSeen: $remoteUuid -> ${deviceLastSeen[remoteUuid]}")
-                                            coroutineScope.launch { updateDeviceList() }
+                                            val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                                            // 同步更新 deviceInfoCache，保证ip为最新
+                                            synchronized(deviceInfoCache) {
+                                                val old = deviceInfoCache[remoteUuid]
+                                                val displayName = old?.displayName ?: "未知设备"
+                                                // 只更新IP，不更新端口
+                                                deviceInfoCache[remoteUuid] = DeviceInfo(
+                                                    remoteUuid,
+                                                    displayName,
+                                                    ip,
+                                                    old?.port ?: 23333
+                                                )
+                                            }
+                                            // 只更新认证表中的IP，不更新端口
+                                            synchronized(authenticatedDevices) {
+                                                val auth = authenticatedDevices[remoteUuid]
+                                                if (auth != null) {
+                                                    authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
+                                                    saveAuthedDevices()
+                                                }
+                                            }
+                                        deviceLastSeen[remoteUuid] = System.currentTimeMillis()
+                                        heartbeatedDevices.add(remoteUuid) // 标记已建立心跳
+                                        android.util.Log.i("死神-NotifyRelay", "收到HEARTBEAT，已更新lastSeen: $remoteUuid -> ${deviceLastSeen[remoteUuid]}")
+                                        coroutineScope.launch { updateDeviceList() }
+                                    // 新增：收到对方心跳时，若本地发送心跳给对方，则自动connectToDevice对方，确保双向链路
+                                    if (remoteUuid != uuid && !heartbeatJobs.containsKey(remoteUuid)) {
+                                        val info = getDeviceInfo(remoteUuid)
+                                        if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
+                                            android.util.Log.d("死神-NotifyRelay", "收到HEARTBEAT后自动反向connectToDevice: $info")
+                                            connectToDevice(info)
                                         }
+                                    }
+                                        } else {
+                                            android.util.Log.w("死神-NotifyRelay", "收到HEARTBEAT但未认证: remoteUuid=$remoteUuid, authedKeys=${authenticatedDevices.keys}")
+                                        }
+                                    } else {
+                                        android.util.Log.w("死神-NotifyRelay", "收到HEARTBEAT格式异常: $line")
                                     }
                                     reader.close()
                                     client.close()
                                 } else if (line.startsWith("DATA:") || line.startsWith("DATA_JSON:")) {
-                                    // 数据包，校验认证
+                                     
                                     val isJson = line.startsWith("DATA_JSON:")
                                     val parts = line.split(":", limit = 5)
                                     if (parts.size >= 5) {
@@ -643,11 +944,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                         val payload = parts[4]
                                         val auth = authenticatedDevices[remoteUuid]
                                         if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            // 解密数据并存储，传递 remoteUuid
                                             handleNotificationData(payload, sharedSecret, remoteUuid)
                                         } else {
                                             if (auth == null) {
-                                            android.util.Log.d("死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
+                                                android.util.Log.d("死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
                                             } else {
                                                 val reason = buildString {
                                                     if (auth.sharedSecret != sharedSecret) append("sharedSecret不匹配; ")
@@ -660,6 +960,44 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     reader.close()
                                     client.close()
                                 } else {
+                                    // 新增：手动发现UDP包（加密）
+                                    try {
+                                        val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+                                        for ((uuid, auth) in authed) {
+                                            if (uuid == this@DeviceConnectionManager.uuid) continue
+                                            try {
+                                                val decrypted = try { xorDecrypt(line, auth.sharedSecret) } catch (_: Exception) { null }
+                                                if (decrypted != null && decrypted.startsWith("NOTIFYRELAY_DISCOVER_MANUAL:")) {
+                                                    val parts = decrypted.split(":")
+                                                    if (parts.size >= 5) {
+                                                        val remoteUuid = parts[1]
+                                                        val displayName = parts[2]
+                                                        val port = parts[3].toIntOrNull() ?: 23333
+                                                        val sharedSecret = parts[4]
+                                                        // 仅已认证设备才处理
+                                                        if (auth.sharedSecret == sharedSecret) {
+                                                            // 更新设备缓存
+                                                            val ip = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                                                            val device = DeviceInfo(remoteUuid, displayName, ip, port)
+                                                            deviceLastSeen[remoteUuid] = System.currentTimeMillis()
+                                                            synchronized(deviceInfoCache) { deviceInfoCache[remoteUuid] = device }
+                                                            // 只在手动发现包里才允许更新端口
+                                                            synchronized(authenticatedDevices) {
+                                                                val auth = authenticatedDevices[remoteUuid]
+                                                                if (auth != null) {
+                                                                    authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip, lastPort = port)
+                                                                    saveAuthedDevices()
+                                                                }
+                                                            }
+                                                            DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
+                                                            coroutineScope.launch { updateDeviceList() }
+                                                            android.util.Log.d("死神-NotifyRelay", "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
+                                                        }
+                                                    }
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                    } catch (_: Exception) {}
                                     Log.d("死神-NotifyRelay", "未知请求: $line")
                                     reader.close()
                                     client.close()
