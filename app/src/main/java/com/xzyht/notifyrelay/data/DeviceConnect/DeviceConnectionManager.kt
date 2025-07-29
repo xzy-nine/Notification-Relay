@@ -397,76 +397,32 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         manualDiscoveryJob = coroutineScope.launch {
             val startTime = System.currentTimeMillis()
             var promptCount = 0
-            val failMap = mutableMapOf<String, Int>() // 记录每个设备的失败次数
+            val failMap = mutableMapOf<String, Int>()
             val maxFail = 3
             while (System.currentTimeMillis() - startTime < manualDiscoveryTimeout) {
                 val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
                 var anySent = false
                 for ((uuid, auth) in authed) {
                     if (uuid == this@DeviceConnectionManager.uuid) continue
-                    if (heartbeatedDevices.contains(uuid)) continue // 已建立心跳则跳过
-                    if (failMap[uuid] != null && failMap[uuid]!! >= maxFail) continue // 连续失败则跳过
-                    // 获取上次已知ip
+                    if (heartbeatedDevices.contains(uuid)) continue
+                    if (failMap[uuid] != null && failMap[uuid]!! >= maxFail) continue
                     val info = getDeviceInfo(uuid)
                     val ip = info?.ip
                     val port = info?.port ?: 23333
                     if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                        // 尝试直接建立TCP连接
                         connectToDevice(DeviceInfo(uuid, info.displayName, ip, port)) { success, _ ->
                             if (success) {
-                                android.util.Log.d("死神-NotifyRelay", "手动直连认证成功: $uuid, $ip")
                                 failMap.remove(uuid)
                             } else {
                                 val count = (failMap[uuid] ?: 0) + 1
                                 failMap[uuid] = count
-                                if (count >= maxFail) {
-                                    android.util.Log.w("死神-NotifyRelay", "自动tcp重连连续失败${maxFail}次")
-                                    val msg = "自动重连失败${maxFail}次.\n请确认设备网络环境未改变或打开udp广播开关"
-                                    val ctx = context
-                                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
                             }
                         }
                         anySent = true
                     }
                 }
-                if (!anySent && promptCount < manualDiscoveryPromptCount) {
-                    android.util.Log.w("死神-NotifyRelay", "手动发现超时")
-                    val msg = "未能重连已认证设备,请打开udp广播再试;\n确认已认证设备在同一局域网下"
-                    val ctx = context
-                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    promptCount++
-                }
+                promptCount++
                 delay(manualDiscoveryInterval)
-            }
-            // 30秒后如仍有未建立心跳的设备，提示
-            val authed = synchronized(authenticatedDevices) { authenticatedDevices.keys.toSet() }
-            val notOnline = authed.filter { it != this@DeviceConnectionManager.uuid && !heartbeatedDevices.contains(it) }
-            if (notOnline.isNotEmpty()) {
-                repeat(manualDiscoveryPromptCount) {
-                    android.util.Log.w("死神-NotifyRelay", "手动发现超时，以下设备仍未建立心跳: $notOnline")
-                    val msg = "未能发现已认证设备,请打开udp广播;确认已认证设备在同一局域网下"
-                    val ctx = context
-                    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                        android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                    } else {
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
             }
         }
     }
