@@ -93,6 +93,27 @@ fun DeviceListScreen() {
     var showRejectedDialog by remember { mutableStateOf(false) }
     var authedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
+    // 新增：UDP发现开关状态与切换方法
+    var udpDiscoveryEnabled by remember { mutableStateOf(deviceManager.udpDiscoveryEnabled) }
+    fun toggleUdpDiscovery(enabled: Boolean) {
+        udpDiscoveryEnabled = enabled
+        deviceManager.udpDiscoveryEnabled = enabled
+        if (enabled) {
+            deviceManager.startDiscovery()
+        } else {
+            // 只停止UDP相关线程，避免影响TCP服务
+            try {
+                val broadcastField = deviceManager.javaClass.getDeclaredField("broadcastThread")
+                broadcastField.isAccessible = true
+                (broadcastField.get(deviceManager) as? Thread)?.interrupt()
+                broadcastField.set(deviceManager, null)
+                val listenField = deviceManager.javaClass.getDeclaredField("listenThread")
+                listenField.isAccessible = true
+                (listenField.get(deviceManager) as? Thread)?.interrupt()
+                listenField.set(deviceManager, null)
+            } catch (_: Exception) {}
+        }
+    }
     // 新增：未认证设备连接弹窗状态
     var showConnectDialog by remember { mutableStateOf(false) }
     var pendingConnectDevice by remember { mutableStateOf<DeviceInfo?>(null) }
@@ -186,8 +207,8 @@ fun DeviceListScreen() {
     val textScrollModifier = Modifier
         .padding(horizontal = 2.dp, vertical = 4.dp)
 
+    // 横竖屏都显示UDP发现开关
     if (isLandscape) {
-        // 横屏：设备列表竖排（侧边栏）
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -195,6 +216,22 @@ fun DeviceListScreen() {
                 .background(colorScheme.background)
                 .padding(12.dp)
         ) {
+            // UDP发现开关
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = "UDP发现(未认证设备)",
+                    style = textStyles.body2,
+                    modifier = Modifier.weight(1f)
+                )
+                top.yukonga.miuix.kmp.basic.Switch(
+                    checked = udpDiscoveryEnabled,
+                    onCheckedChange = { toggleUdpDiscovery(it) }
+                )
+            }
+            // 设备列表竖排
             allDevices.forEach { device: DeviceInfo? ->
                 if (device == null) {
                     Button(
@@ -216,9 +253,7 @@ fun DeviceListScreen() {
                     val isOnline = deviceStates[device.uuid] == true
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
+                        modifier = Modifier.padding(bottom = 4.dp)
                     ) {
                         Button(
                             onClick = { onSelectDevice(device) },
@@ -229,7 +264,7 @@ fun DeviceListScreen() {
                             colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
                         ) {
                             Text(
-                                text = device.displayName + if (!isOnline) " (离线)" else "",
+                                device.displayName + if (!isOnline) " (离线)" else "",
                                 style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
@@ -238,51 +273,28 @@ fun DeviceListScreen() {
                             Spacer(Modifier.width(4.dp))
                             Button(
                                 onClick = {
-                                    // 批量移除同IP下所有UUID的认证、历史和缓存
                                     try {
                                         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                         field.isAccessible = true
-                                        val rawMap = field.get(deviceManager)
-                                        val safeMap = if (rawMap is MutableMap<*, *>) {
-                                            val m = mutableMapOf<String, Any?>()
-                                            for ((k, v) in rawMap) {
-                                                if (k is String) m[k] = v
-                                            }
-                                            m
-                                        } else mutableMapOf()
-                                        // 查找同IP的所有已认证UUID（含自己）
-                                        val allUuidsToRemove = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
-                                        val appContext = context.applicationContext
-                                        for (uuid in allUuidsToRemove.distinct()) {
-                                            safeMap.remove(uuid)
-                                            // 清除通知历史和本地json缓存
-                                            try {
-                                                val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationData")
-                                                val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
-                                                val notificationData = getInstance.invoke(null, appContext)
-                                                val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
-                                                clearDeviceHistory.invoke(notificationData, uuid, appContext)
-                                            } catch (_: Exception) {}
-                                            try {
-                                                val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
-                                                if (file.exists()) file.delete()
-                                            } catch (_: Exception) {}
+                                        val map = field.get(deviceManager)
+                                        if (map is MutableMap<*, *>) {
+                                            @Suppress("UNCHECKED_CAST")
+                                            (map as? MutableMap<String, *>)?.remove(device.uuid)
                                         }
-                                        // 持久化认证状态
                                         val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                                         saveMethod.isAccessible = true
                                         saveMethod.invoke(deviceManager)
-                                        // 触发刷新
                                         val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
                                         updateMethod.isAccessible = true
                                         updateMethod.invoke(deviceManager)
-                                        // 立即刷新UI侧已认证设备列表
-                                        authedDeviceUuids = safeMap.entries.filter { (k, v) ->
+                                        @Suppress("UNCHECKED_CAST")
+                                        authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
+                                            val v = entry.value
                                             v?.let {
                                                 val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
                                                 isAcceptedField.getBoolean(v)
                                             } ?: false
-                                        }.map { it.key }.toSet()
+                                        }?.keys?.toSet() ?: emptySet()
                                     } catch (_: Exception) {}
                                     selectedDevice = null
                                     GlobalSelectedDeviceHolder.selectedDevice = null
@@ -301,145 +313,17 @@ fun DeviceListScreen() {
                             }
                         }
                     }
-                } else {
-                    val isOnline = deviceStates[device.uuid] == true
-                    Button(
-                        onClick = { onSelectDevice(device) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = buttonMinHeight)
-                            .padding(vertical = 2.dp),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
-                    ) {
-                        Text(
-                            text = device.displayName + if (!isOnline) " (离线)" else "",
-                            style = textStyles.body2.copy(color = colorScheme.primary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = { showRejectedDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = buttonMinHeight)
-                    .padding(vertical = 2.dp),
-                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
-            ) {
-                Text(
-                    text = "查看已拒绝设备",
-                    style = textStyles.body2.copy(color = colorScheme.secondary),
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
-        }
-    } else {
-        // 竖屏：所有按钮和“查看已拒绝设备”按钮横向排列并可左右滚动
-        androidx.compose.foundation.lazy.LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colorScheme.background)
-                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 本机按钮
-            item {
-                Button(
-                    onClick = { onSelectDevice(null) },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = buttonMinHeight)
-                        .padding(end = 6.dp),
-                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                    colors = if (selectedDevice == null) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                ) {
-                    Text(
-                        "本机",
-                        style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary),
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                }
-            }
-            // 已认证设备
-            items(allDevices.filterNotNull().filter { authedDeviceUuids.contains(it.uuid) }) { device ->
-                val isOnline = deviceStates[device.uuid] == true
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 6.dp)
-                ) {
-                    Button(
-                        onClick = { onSelectDevice(device) },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = buttonMinHeight),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                    ) {
-                        Text(
-                            device.displayName + if (!isOnline) " (离线)" else "",
-                            style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                    if (selectedDevice?.uuid == device.uuid) {
-                        Spacer(Modifier.width(4.dp))
-                        Button(
-                            onClick = {
-                                // 移除认证设备，竖屏与横屏逻辑一致
-                                try {
-                                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                    field.isAccessible = true
-                                    val map = field.get(deviceManager)
-                                    if (map is MutableMap<*, *>) {
-                                        @Suppress("UNCHECKED_CAST")
-                                        (map as? MutableMap<String, *>)?.remove(device.uuid)
-                                    }
-                                    // 持久化认证状态
-                                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                    saveMethod.isAccessible = true
-                                    saveMethod.invoke(deviceManager)
-                                    // 触发刷新
-                                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                                    updateMethod.isAccessible = true
-                                    updateMethod.invoke(deviceManager)
-                                    // 立即刷新UI侧已认证设备列表
-                                    @Suppress("UNCHECKED_CAST")
-                                    authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
-                                        val v = entry.value
-                                        v?.let {
-                                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                            isAcceptedField.getBoolean(v)
-                                        } ?: false
-                                    }?.keys?.toSet() ?: emptySet()
-                                } catch (_: Exception) {}
-                                selectedDevice = null
-                                GlobalSelectedDeviceHolder.selectedDevice = null
-                            },
-                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = buttonMinHeight)
-                                .heightIn(min = buttonMinHeight),
-                            colors = ButtonDefaults.buttonColors(color = Color.Red)
-                        ) {
-                            Text(
-                                text = "删除",
-                                style = textStyles.body2.copy(color = Color.White),
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                    }
                 }
             }
             // 未认证设备
-            items(unauthedDevices) { device ->
+            unauthedDevices.forEach { device ->
                 val isOnline = deviceStates[device.uuid] == true
                 Button(
                     onClick = { onSelectDevice(device) },
                     modifier = Modifier
+                        .fillMaxWidth()
                         .defaultMinSize(minHeight = buttonMinHeight)
-                        .padding(end = 6.dp),
+                        .padding(vertical = 2.dp),
                     insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                     colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
                 ) {
@@ -450,21 +334,166 @@ fun DeviceListScreen() {
                     )
                 }
             }
-            // 已拒绝设备按钮直接展示在横向列表最后
-            item {
-                Button(
-                    onClick = { showRejectedDialog = true },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = buttonMinHeight)
-                        .padding(end = 6.dp),
-                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                    colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
-                ) {
-                    Text(
-                        "查看已拒绝设备",
-                        style = textStyles.body2.copy(color = colorScheme.secondary),
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+            // 已拒绝设备按钮
+            Button(
+                onClick = { showRejectedDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = buttonMinHeight)
+                    .padding(vertical = 2.dp),
+                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
+            ) {
+                Text(
+                    "查看已拒绝设备",
+                    style = textStyles.body2.copy(color = colorScheme.secondary),
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colorScheme.background)
+                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp)
+        ) {
+            // UDP发现开关
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = "UDP发现(未认证设备)",
+                    style = textStyles.body2,
+                    modifier = Modifier.weight(1f)
+                )
+                top.yukonga.miuix.kmp.basic.Switch(
+                    checked = udpDiscoveryEnabled,
+                    onCheckedChange = { toggleUdpDiscovery(it) }
+                )
+            }
+            // 设备列表横排，顺序：本机、已认证、未认证、已拒绝
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 本机按钮
+                item {
+                    Button(
+                        onClick = { onSelectDevice(null) },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = buttonMinHeight)
+                            .padding(end = 6.dp),
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        colors = if (selectedDevice == null) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
+                    ) {
+                        Text(
+                            "本机",
+                            style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // 已认证设备
+                items(allDevices.filterNotNull().filter { authedDeviceUuids.contains(it.uuid) }) { device ->
+                    val isOnline = deviceStates[device.uuid] == true
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        Button(
+                            onClick = { onSelectDevice(device) },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = buttonMinHeight),
+                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                            colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
+                        ) {
+                            Text(
+                                device.displayName + if (!isOnline) " (离线)" else "",
+                                style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                        if (selectedDevice?.uuid == device.uuid) {
+                            Spacer(Modifier.width(4.dp))
+                            Button(
+                                onClick = {
+                                    try {
+                                        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                                        field.isAccessible = true
+                                        val map = field.get(deviceManager)
+                                        if (map is MutableMap<*, *>) {
+                                            @Suppress("UNCHECKED_CAST")
+                                            (map as? MutableMap<String, *>)?.remove(device.uuid)
+                                        }
+                                        val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+                                        saveMethod.isAccessible = true
+                                        saveMethod.invoke(deviceManager)
+                                        val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
+                                        updateMethod.isAccessible = true
+                                        updateMethod.invoke(deviceManager)
+                                        @Suppress("UNCHECKED_CAST")
+                                        authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
+                                            val v = entry.value
+                                            v?.let {
+                                                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                                isAcceptedField.getBoolean(v)
+                                            } ?: false
+                                        }?.keys?.toSet() ?: emptySet()
+                                    } catch (_: Exception) {}
+                                    selectedDevice = null
+                                    GlobalSelectedDeviceHolder.selectedDevice = null
+                                },
+                                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = buttonMinHeight)
+                                    .heightIn(min = buttonMinHeight),
+                                colors = ButtonDefaults.buttonColors(color = Color.Red)
+                            ) {
+                                Text(
+                                    text = "删除",
+                                    style = textStyles.body2.copy(color = Color.White),
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+                // 未认证设备
+                items(unauthedDevices) { device ->
+                    val isOnline = deviceStates[device.uuid] == true
+                    Button(
+                        onClick = { onSelectDevice(device) },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = buttonMinHeight)
+                            .padding(end = 6.dp),
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
+                    ) {
+                        Text(
+                            device.displayName + if (!isOnline) " (离线)" else "",
+                            style = textStyles.body2.copy(color = colorScheme.primary),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // 已拒绝设备按钮
+                item {
+                    Button(
+                        onClick = { showRejectedDialog = true },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = buttonMinHeight)
+                            .padding(end = 6.dp),
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
+                    ) {
+                        Text(
+                            "查看已拒绝设备",
+                            style = textStyles.body2.copy(color = colorScheme.secondary),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

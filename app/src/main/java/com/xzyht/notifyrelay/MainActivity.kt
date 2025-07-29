@@ -236,7 +236,8 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .defaultMinSize(minHeight = 56.dp)
+                        .heightIn(max = 90.dp)
                         .background(colorScheme.background)
                 ) {
                     DeviceListFragmentView(fragmentContainerId + 100)
