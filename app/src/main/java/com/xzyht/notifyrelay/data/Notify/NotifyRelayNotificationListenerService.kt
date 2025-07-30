@@ -24,6 +24,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
     override fun onCreate() {
         android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onCreate called")
+        // 确保本地历史缓存已加载，避免首次拉取时判重失效
+        NotificationRepository.init(applicationContext)
         super.onCreate()
     }
 
@@ -50,16 +52,21 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        // 先判断是否需要转发（如过滤等）
         if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
             logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
             return
         }
+        // 再写入本地历史（写入本地时回调是否写入过）
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
                 logSbnDetail("黑影 onNotificationPosted 通过", sbn)
                 val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
+                // 没写入过再转发到远程设备
                 if (added) {
                     forwardNotificationToRemoteDevices(sbn)
+                } else {
+                    android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] 本地已存在该通知，未转发到远程设备: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("黑影 NotifyRelay", "[NotifyListener] addNotification error", e)
@@ -68,7 +75,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
             val deviceManager = com.xzyht.notifyrelay.DeviceForwardFragment.getDeviceManager(applicationContext)
             var appName: String? = null
@@ -101,6 +108,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                             sbn.postTime
                         )
                         deviceManager.sendNotificationData(deviceInfo, payload)
+                        android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] 已转发通知到设备: uuid=$uuid, deviceInfo=$deviceInfo, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
                     }
                 }
             }

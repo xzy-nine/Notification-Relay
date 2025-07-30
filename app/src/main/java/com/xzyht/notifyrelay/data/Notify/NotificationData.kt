@@ -48,30 +48,25 @@ data class NotificationRecordEntity(
 // 本地存储实现
 class NotificationRecordStore(private val context: Context) {
     private val gson = Gson()
-    // 新增：多设备文件缓存
     private val fileCache = mutableMapOf<String, File>()
-    private fun getFile(device: String): File {
-        return fileCache.getOrPut(device) {
+    companion object {
+        fun getFile(context: Context, device: String): File {
             val safe = if (device == "本机") "local" else device.replace(Regex("[^a-zA-Z0-9_]"), "_")
-            File(context.filesDir, "notification_records_${safe}.json")
+            return File(context.filesDir, "notification_records_${safe}.json")
         }
     }
-
-    private fun readAll(device: String): MutableList<NotificationRecordEntity> {
-        val file = getFile(device)
+    internal fun readAll(device: String): MutableList<NotificationRecordEntity> {
+        val file = getFile(context, device)
         if (!file.exists()) return mutableListOf()
         val json = file.readText()
         try {
             return gson.fromJson(json, object : TypeToken<MutableList<NotificationRecordEntity>>() {}.type) ?: mutableListOf()
         } catch (e: Exception) {
-            // 仅在报错时打印原始内容，避免干扰
             android.util.Log.e("NotifyRelay", "[readAll] 解析 JSON 失败: ${file.absolutePath}, error=${e.message}")
             android.util.Log.e("NotifyRelay", "[readAll] 损坏内容: $json")
-            // 自动删除损坏文件，避免循环报错
             try {
                 if (file.delete()) {
                     android.util.Log.e("NotifyRelay", "[readAll] 已删除损坏文件: ${file.absolutePath}")
-                    // 重新创建空文件以防止后续读取异常
                     file.createNewFile()
                 } else {
                     android.util.Log.e("NotifyRelay", "[readAll] 删除损坏文件失败: ${file.absolutePath}")
@@ -84,7 +79,7 @@ class NotificationRecordStore(private val context: Context) {
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
-        val file = getFile(device)
+        val file = NotificationRecordStore.getFile(context, device)
         try {
             // android.util.Log.i("NotifyRelay", "[writeAll] path=${file.absolutePath}, device=$device, size=${list.size}")
             file.writeText(gson.toJson(list))
@@ -233,8 +228,27 @@ object NotificationRepository {
             time = time,
             device = device
         )
-        val existed = notifications.any { it.key == key }
-        notifications.removeAll { it.key == key }
+        // 修正判重逻辑：只用 packageName+title+text+time 全部相同才算重复，key 仅用于辅助删除/更新
+        var existed = false
+        notifications.forEach {
+            if (
+                it.packageName == packageName &&
+                (it.title ?: "") == (title ?: "") &&
+                (it.text ?: "") == (text ?: "") &&
+                it.time == time
+            ) {
+                existed = true
+                android.util.Log.i("狂鼠 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
+            }
+        }
+        notifications.removeAll {
+            it.key == key || (
+                it.packageName == packageName &&
+                (it.title ?: "") == (title ?: "") &&
+                (it.text ?: "") == (text ?: "") &&
+                it.time == time
+            )
+        }
         notifications.add(0, record)
         syncToCache(context)
         notifyHistoryChanged(device, context)
@@ -278,7 +292,21 @@ object NotificationRepository {
         try {
             scanDeviceList(context)
             val store = NotifyRelayStoreProvider.getInstance(context)
-            // 这里可以添加初始化逻辑
+            // 主动加载本地历史到内存，保证判重有效
+            val store2 = NotifyRelayStoreProvider.getInstance(context)
+            val localList = store2.readAll("本机").map {
+                NotificationRecord(
+                    key = it.key,
+                    packageName = it.packageName,
+                    appName = it.appName,
+                    title = it.title,
+                    text = it.text,
+                    time = it.time,
+                    device = it.device
+                )
+            }
+            notifications.clear()
+            notifications.addAll(localList)
         } catch (e: Exception) {
             notifications.clear()
         }
