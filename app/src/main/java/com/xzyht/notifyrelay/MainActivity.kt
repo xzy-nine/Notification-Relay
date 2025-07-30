@@ -23,8 +23,59 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
+import android.content.Context
+import androidx.compose.ui.Alignment
 
 class MainActivity : FragmentActivity() {
+    internal var showAutoStartBanner = false
+    internal var bannerMessage: String? = null
+
+    override fun onResume() {
+        super.onResume()
+        showAutoStartBanner = false
+        bannerMessage = null
+        // 检查设备连接服务是否存活，未存活则重启
+        val serviceStarted = try {
+            if (!isServiceRunning("com.xzyht.notifyrelay.service.DeviceConnectionService")) {
+                DeviceConnectionService.start(this)
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+        // 检查通知监听服务是否启用，未启用则尝试引导或重启
+        val notificationListenerEnabled = isNotificationListenerEnabled()
+        if (!notificationListenerEnabled) {
+            android.util.Log.w("NotifyRelay", "通知监听服务未启用，尝试引导用户授权")
+            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } else {
+            try {
+                val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService")
+                val restartIntent = Intent()
+                restartIntent.component = cn
+                restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startService(restartIntent)
+            } catch (e: Exception) {
+                // 服务无法启动，极可能是自启动权限被拒绝
+                showAutoStartBanner = true
+                bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
+            }
+        }
+        // 设备服务也无法启动时同样提示
+        if (!serviceStarted) {
+            showAutoStartBanner = true
+            bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
+        }
+    }
+
+    // 判断服务是否存活
+    private fun isServiceRunning(serviceClassName: String): Boolean {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return false
+        val running = am.getRunningServices(Int.MAX_VALUE)
+        return running.any { it.service.className == serviceClassName }
+    }
     private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         // 授权页返回后重新检查权限
         recreate()
@@ -182,8 +233,58 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
     val colorScheme = MiuixTheme.colorScheme
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    // 读取Activity的Banner状态
+    val activity = LocalContext.current as? MainActivity
+    val showBanner = activity?.showAutoStartBanner == true
+    val bannerMsg = activity?.bannerMessage
+    val context = LocalContext.current
     Scaffold(
         modifier = modifier,
+        topBar = {
+            if (showBanner && !bannerMsg.isNullOrBlank()) {
+                // Miuix风格Banner，兼容Material3标准色彩
+                androidx.compose.material3.Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    tonalElevation = 2.dp,
+                    shadowElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = MiuixIcons.Useful.Settings,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        androidx.compose.material3.Text(
+                            text = bannerMsg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        top.yukonga.miuix.kmp.basic.Button(
+                            onClick = {
+                                // 跳转到本应用系统详情页
+                                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                intent.data = android.net.Uri.fromParts("package", context.packageName, null)
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            top.yukonga.miuix.kmp.basic.Text("前往设置")
+                        }
+                    }
+                }
+            }
+        },
         bottomBar = {
             NavigationBar(
                 items = items,
@@ -192,10 +293,10 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                 color = colorScheme.background,
                 modifier = Modifier
                     .height(58.dp)
-                    .navigationBarsPadding() // 防止被系统导航栏遮挡
+                    .navigationBarsPadding()
             )
         },
-        containerColor = colorScheme.background // Scaffold 背景色
+        containerColor = colorScheme.background
     ) { paddingValues ->
         if (isLandscape) {
             Row(
@@ -204,7 +305,6 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                     .background(colorScheme.background)
                     .padding(paddingValues)
             ) {
-                // 横屏：设备列表侧边栏
                 Box(
                     modifier = Modifier
                         .width(220.dp)
@@ -213,7 +313,6 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                 ) {
                     DeviceListFragmentView(fragmentContainerId + 100)
                 }
-                // 内容区
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -226,7 +325,6 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                 }
             }
         } else {
-            // 竖屏：设备列表顶部横排
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -242,7 +340,6 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                 ) {
                     DeviceListFragmentView(fragmentContainerId + 100)
                 }
-                // 内容区
                 Box(
                     modifier = Modifier
                         .weight(1f)

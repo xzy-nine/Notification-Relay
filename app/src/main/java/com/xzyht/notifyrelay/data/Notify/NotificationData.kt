@@ -204,8 +204,9 @@ object NotificationRepository {
     }
     /**
      * 新增通知到历史记录（支持监听服务调用）
+     * @return true 表示本地历史中原本不存在该通知（即为新增）
      */
-    fun addNotification(sbn: StatusBarNotification, context: Context) {
+    fun addNotification(sbn: StatusBarNotification, context: Context): Boolean {
         val notification = sbn.notification
         val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
         fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
@@ -235,10 +236,12 @@ object NotificationRepository {
             time = time,
             device = device
         )
+        val existed = notifications.any { it.key == key }
         notifications.removeAll { it.key == key }
         notifications.add(0, record)
         syncToCache(context)
         notifyHistoryChanged(device, context)
+        return !existed
     }
     val notifications: SnapshotStateList<NotificationRecord> = mutableStateListOf()
 
@@ -289,9 +292,6 @@ object NotificationRepository {
      */
     fun removeNotification(key: String, context: Context) {
         notifications.removeAll { it.key == key }
-        syncToCache(context)
-        // 写入后主动推送变更
-        notifyHistoryChanged(currentDevice, context)
     }
 
     /**
