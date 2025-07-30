@@ -114,6 +114,8 @@ object DefaultNotificationFilter {
     var filterOngoing: Boolean = true // 过滤持久化
     var filterNoTitleOrText: Boolean = true // 过滤空标题内容
     var filterImportanceNone: Boolean = true // 过滤IMPORTANCE_NONE
+    var filterMiPushGroupSummary: Boolean = true // 过滤mipush群组引导消息
+    var filterSensitiveHidden: Boolean = true // 过滤敏感内容被隐藏的通知
     // 前台/持久化服务文本关键词（可扩展）
     val foregroundKeywords = listOf(
         "正在运行", "服务运行中", "后台运行", "点按即可了解详情", "正在同步", "运行中", "service running", "is running", "tap for more info"
@@ -125,6 +127,10 @@ object DefaultNotificationFilter {
         val flags = sbn.notification.flags
         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
+        // 过滤mipush群组引导消息（title=新消息 且 text=你有一条新消息）
+        if (filterMiPushGroupSummary && title == "新消息" && text == "你有一条新消息") return false
+        // 过滤敏感内容被隐藏的通知（text=已隐藏敏感通知内容）
+        if (filterSensitiveHidden && text == "已隐藏敏感通知内容") return false
         // 持久化/前台服务过滤，包含文本关键词
         if (filterOngoing) {
             val isOngoing = sbn.isOngoing || (flags and Notification.FLAG_ONGOING_EVENT) != 0 || (flags and 0x00000200) != 0

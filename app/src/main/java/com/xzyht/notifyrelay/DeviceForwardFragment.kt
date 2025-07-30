@@ -482,13 +482,17 @@ fun DeviceForwardScreen(
     var filterOngoing by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterOngoing) }
     var filterNoTitleOrText by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterNoTitleOrText) }
     var filterImportanceNone by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterImportanceNone) }
+    var filterMiPushGroupSummary by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterMiPushGroupSummary) }
+    var filterSensitiveHidden by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterSensitiveHidden) }
 
     // 持久化监听
-    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone) {
+    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone, filterMiPushGroupSummary, filterSensitiveHidden) {
         DefaultNotificationFilter.filterSelf = filterSelf
         DefaultNotificationFilter.filterOngoing = filterOngoing
         DefaultNotificationFilter.filterNoTitleOrText = filterNoTitleOrText
         DefaultNotificationFilter.filterImportanceNone = filterImportanceNone
+        DefaultNotificationFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
+        DefaultNotificationFilter.filterSensitiveHidden = filterSensitiveHidden
         context?.let {
             val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
             prefs.edit()
@@ -496,6 +500,8 @@ fun DeviceForwardScreen(
                 .putBoolean("filter_ongoing", filterOngoing)
                 .putBoolean("filter_no_title_or_text", filterNoTitleOrText)
                 .putBoolean("filter_importance_none", filterImportanceNone)
+                .putBoolean("filter_mipush_group_summary", filterMiPushGroupSummary)
+                .putBoolean("filter_sensitive_hidden", filterSensitiveHidden)
                 .apply()
         }
     }
@@ -507,6 +513,8 @@ fun DeviceForwardScreen(
             filterOngoing = prefs.getBoolean("filter_ongoing", filterOngoing)
             filterNoTitleOrText = prefs.getBoolean("filter_no_title_or_text", filterNoTitleOrText)
             filterImportanceNone = prefs.getBoolean("filter_importance_none", filterImportanceNone)
+            filterMiPushGroupSummary = prefs.getBoolean("filter_mipush_group_summary", filterMiPushGroupSummary)
+            filterSensitiveHidden = prefs.getBoolean("filter_sensitive_hidden", filterSensitiveHidden)
         }
     }
     // 连接弹窗与错误弹窗相关状态
@@ -1203,10 +1211,14 @@ fun DeviceForwardScreen(
                     filterOngoing = filterOngoing,
                     filterNoTitleOrText = filterNoTitleOrText,
                     filterImportanceNone = filterImportanceNone,
+                    filterMiPushGroupSummary = filterMiPushGroupSummary,
+                    filterSensitiveHidden = filterSensitiveHidden,
                     onFilterSelfChange = { filterSelf = it },
                     onFilterOngoingChange = { filterOngoing = it },
                     onFilterNoTitleOrTextChange = { filterNoTitleOrText = it },
-                    onFilterImportanceNoneChange = { filterImportanceNone = it }
+                    onFilterImportanceNoneChange = { filterImportanceNone = it },
+                    onFilterMiPushGroupSummaryChange = { filterMiPushGroupSummary = it },
+                    onFilterSensitiveHiddenChange = { filterSensitiveHidden = it }
                 )
             }
         }

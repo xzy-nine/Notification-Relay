@@ -22,10 +22,14 @@ fun NotificationFilterPager(
     filterOngoing: Boolean = true,
     filterNoTitleOrText: Boolean = true,
     filterImportanceNone: Boolean = true,
+    filterMiPushGroupSummary: Boolean = true,
+    filterSensitiveHidden: Boolean = true,
     onFilterSelfChange: (Boolean) -> Unit = {},
     onFilterOngoingChange: (Boolean) -> Unit = {},
     onFilterNoTitleOrTextChange: (Boolean) -> Unit = {},
     onFilterImportanceNoneChange: (Boolean) -> Unit = {},
+    onFilterMiPushGroupSummaryChange: (Boolean) -> Unit = {},
+    onFilterSensitiveHiddenChange: (Boolean) -> Unit = {},
     foregroundKeywords: List<String> = emptyList(),
     onAddKeyword: (String) -> Unit = {},
     onRemoveKeyword: (String) -> Unit = {}
@@ -56,6 +60,16 @@ fun NotificationFilterPager(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = filterImportanceNone, onCheckedChange = onFilterImportanceNoneChange)
                 Text("过滤优先级为无的通知", Modifier.padding(start = 8.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = filterMiPushGroupSummary, onCheckedChange = onFilterMiPushGroupSummaryChange)
+                Text("过滤mipush群组引导消息(新消息/你有一条新消息)", Modifier.padding(start = 8.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = filterSensitiveHidden, onCheckedChange = onFilterSensitiveHiddenChange)
+                Text("过滤敏感内容被隐藏的通知", Modifier.padding(start = 8.dp))
             }
             Spacer(Modifier.height(16.dp))
             Text("文本关键词过滤(黑名单)：", Modifier.padding(bottom = 8.dp))
