@@ -9,7 +9,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.DisposableEffect
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
-import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext

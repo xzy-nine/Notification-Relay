@@ -7,10 +7,7 @@ import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken

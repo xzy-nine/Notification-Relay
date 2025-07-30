@@ -1,6 +1,5 @@
 package com.xzyht.notifyrelay.data.deviceconnect
 
-import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,16 +8,11 @@ import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
-import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
 import android.content.SharedPreferences
 import kotlinx.coroutines.delay
-import javax.jmdns.JmDNS
-import javax.jmdns.ServiceEvent
-import javax.jmdns.ServiceInfo
-import javax.jmdns.ServiceListener
 import android.util.Log
 
 

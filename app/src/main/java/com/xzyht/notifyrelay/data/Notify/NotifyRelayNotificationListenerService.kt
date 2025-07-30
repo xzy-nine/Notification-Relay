@@ -1,15 +1,11 @@
 package com.xzyht.notifyrelay.data.Notify
 
 import android.app.Notification
-// android.app.ServiceInfo 仅在 API 33+，此处直接用常量值 1073741824（FOREGROUND_SERVICE_TYPE_SPECIAL_USE）
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
