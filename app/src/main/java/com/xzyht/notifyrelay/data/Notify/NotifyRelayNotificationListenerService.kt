@@ -191,10 +191,12 @@ object DefaultNotificationFilter {
         val flags = sbn.notification.flags
         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
+        // 日志辅助排查过滤内容
+        android.util.Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
         // 过滤mipush群组引导消息（title=新消息 且 text=你有一条新消息）
         if (filterMiPushGroupSummary && title == "新消息" && text == "你有一条新消息") return false
-        // 过滤敏感内容被隐藏的通知（text=已隐藏敏感通知）
-        if (filterSensitiveHidden && text == "已隐藏敏感通知") return false
+        // 过滤敏感内容被隐藏的通知（text包含已隐藏敏感通知等，放宽匹配）
+        if (filterSensitiveHidden && text.trim().contains("已隐藏敏感通知")) return false
         // 持久化/前台服务过滤，包含服务相关关键词
         if (filterOngoing) {
             val isOngoing = sbn.isOngoing || (flags and Notification.FLAG_ONGOING_EVENT) != 0 || (flags and 0x00000200) != 0
