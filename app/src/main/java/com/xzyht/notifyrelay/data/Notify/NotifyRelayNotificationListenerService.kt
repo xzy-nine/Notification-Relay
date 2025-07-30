@@ -11,6 +11,29 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        // 只补发本应用的前台服务通知（必须channelId和id都匹配）
+        if (sbn.packageName == applicationContext.packageName
+            && sbn.notification.channelId == CHANNEL_ID
+            && sbn.id == NOTIFY_ID) {
+            android.util.Log.w("NotifyRelay", "前台服务通知被移除，自动补发！")
+            // 立即补发本服务前台通知
+            startForegroundService()
+            // 通知DeviceConnectionService延迟补发
+            try {
+                val intent = android.content.Intent(applicationContext, com.xzyht.notifyrelay.service.DeviceConnectionService::class.java)
+                intent.action = "com.xzyht.notifyrelay.ACTION_REISSUE_FOREGROUND"
+                intent.putExtra("delay", 3000L) // 延迟3秒
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    applicationContext.startForegroundService(intent)
+                } else {
+                    applicationContext.startService(intent)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
+            }
+        }
+    }
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
         android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onTaskRemoved called, rootIntent=$rootIntent")
         super.onTaskRemoved(rootIntent)
@@ -313,7 +336,7 @@ object DefaultNotificationFilter {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "通知转发后台服务",
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_HIGH
         )
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
@@ -323,6 +346,7 @@ object DefaultNotificationFilter {
             .setContentText("保证通知实时同步")
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
+            .setPriority(Notification.PRIORITY_HIGH)
             .build()
         // Android 12+ 及以上不再指定特殊前台服务类型，避免权限崩溃
         startForeground(NOTIFY_ID, notification)

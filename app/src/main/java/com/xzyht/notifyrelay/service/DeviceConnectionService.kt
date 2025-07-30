@@ -43,10 +43,10 @@ class DeviceConnectionService : Service() {
     }
 
     private fun startForegroundServiceNotification() {
-        val channelId = "notifyrelay_device_service"
-        val channelName = "设备在线服务"
+        val channelId = "notifyrelay_foreground"
+        val channelName = "通知转发后台服务"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH)
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
@@ -55,13 +55,25 @@ class DeviceConnectionService : Service() {
             .setContentText("保证本设备的在线和通知的获取与转发")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         startForeground(NOTIFY_ID, notification)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForegroundServiceNotification() // 确保每次重启都恢复前台通知
-        // 可根据需要处理命令
+        if (intent?.action == "com.xzyht.notifyrelay.ACTION_REISSUE_FOREGROUND") {
+            // 延迟补发前台通知
+            val delay = intent.getLongExtra("delay", 0L)
+            if (delay > 0) {
+                android.os.Handler(mainLooper).postDelayed({
+                    startForegroundServiceNotification()
+                }, delay)
+            } else {
+                startForegroundServiceNotification()
+            }
+        } else {
+            startForegroundServiceNotification() // 确保每次重启都恢复前台通知
+        }
         return START_STICKY
     }
 
