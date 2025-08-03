@@ -334,13 +334,19 @@ fun NotificationHistoryScreen() {
                 items(mixedList) { list ->
                     if (list.size == 1) {
                         val record = list[0]
-                        val (appName, appIcon) = getCachedAppInfo(record.packageName)
-                        // 单条通知标题应为原始通知标题（已修正）
-                        NotificationCard(record, record.title ?: "(无标题)", appIcon)
+                        val (localAppName, appIcon) = getCachedAppInfo(record.packageName)
+                        NotificationCard(record, localAppName, appIcon)
                     } else {
                         val latest = list.maxByOrNull { it.time }
                         var expanded by remember { mutableStateOf(false) }
                         val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
+                        // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
+                        val groupTitle = when {
+                            !latest?.appName.isNullOrBlank() -> latest?.appName!!
+                            !appName.isNullOrBlank() -> appName
+                            !latest?.packageName.isNullOrBlank() -> latest?.packageName!!
+                            else -> "(未知应用)"
+                        }
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -365,7 +371,7 @@ fun NotificationHistoryScreen() {
                                         Spacer(modifier = Modifier.width(8.dp))
                                     }
                                     top.yukonga.miuix.kmp.basic.Text(
-                                        text = latest?.appName ?: appName,
+                                        text = groupTitle,
                                         style = textStyles.title3.copy(color = colorScheme.onBackground)
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -404,7 +410,9 @@ fun NotificationHistoryScreen() {
                                             top.yukonga.miuix.kmp.basic.Text(
                                                 text = record.text ?: "(无内容)",
                                                 style = textStyles.body2.copy(color = colorScheme.onBackground),
-                                                modifier = Modifier.weight(0.6f)
+                                                modifier = Modifier.weight(0.6f),
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                             )
                                         }
                                         if (idx < showList.lastIndex) {
@@ -423,8 +431,8 @@ fun NotificationHistoryScreen() {
                                     }
                                 } else {
                                     list.sortedByDescending { it.time }.forEach { record ->
-                                        val (appName1, appIcon1) = getCachedAppInfo(record.packageName)
-                                        NotificationCard(record, record.title ?: "(无标题)", appIcon1)
+                                        val (localAppName, appIcon1) = getCachedAppInfo(record.packageName)
+                                        NotificationCard(record, localAppName, appIcon1)
                                     }
                                 }
                             }

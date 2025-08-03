@@ -162,9 +162,9 @@ object NotificationRepository {
     fun addRemoteNotification(packageName: String, title: String, text: String, time: Long, device: String, context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        android.util.Log.i("NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
+        android.util.Log.i("狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
         if (context !is android.app.Application) {
-            android.util.Log.w("NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
+            android.util.Log.w("狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
         }
         val key = (time.toString() + packageName + device)
         // 远程推送时应带上 appName，尝试从 text/title 里提取，或后续参数补充
@@ -187,12 +187,13 @@ object NotificationRepository {
                 device = fileKey
             ))
             runBlocking { store.writeAll(oldList, fileKey) }
+            android.util.Log.i("狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
         } catch (e: Exception) {
-            android.util.Log.e("NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
+            android.util.Log.e("狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
         }
         // 写入后主动推送变更
         notifyHistoryChanged(device, context)
-        android.util.Log.i("NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
+        android.util.Log.i("狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
     }
     /**
      * 新增通知到历史记录（支持监听服务调用）
@@ -238,7 +239,7 @@ object NotificationRepository {
                 it.time == time
             ) {
                 existed = true
-                android.util.Log.i("狂鼠 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
+                android.util.Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
             }
         }
         notifications.removeAll {
@@ -352,6 +353,7 @@ object NotificationRepository {
             if (entities.isNotEmpty()) {
                 val device = entities.first().device
                 runBlocking { store.writeAll(entities, device) }
+                android.util.Log.i("回声 NotifyRelay", "写入本地历史 device=$device, size=${entities.size}")
             }
             scanDeviceList(context)
         } catch (e: Exception) {
