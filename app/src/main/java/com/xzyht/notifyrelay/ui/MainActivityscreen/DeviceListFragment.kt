@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.ui.MainActivityscreen
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue

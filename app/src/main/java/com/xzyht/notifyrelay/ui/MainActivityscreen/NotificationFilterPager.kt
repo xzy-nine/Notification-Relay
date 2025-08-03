@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.ui.device
+package com.xzyht.notifyrelay.ui.MainActivityscreen
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -34,16 +34,16 @@ fun NotificationFilterPager(
     val context = LocalContext.current
     var newKeyword by remember { mutableStateOf("") }
     var keywordList by remember { mutableStateOf(
-        com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
+        com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
     ) }
     var enabledKeywords by remember { mutableStateOf(
-        com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
+        com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
     ) }
     var deleteMode by remember { mutableStateOf(false) }
 
     fun refreshKeywords() {
-        keywordList = com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
-        enabledKeywords = com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
+        keywordList = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
+        enabledKeywords = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
     }
 
     MiuixTheme {
@@ -99,11 +99,11 @@ fun NotificationFilterPager(
 
             // 获取内置关键词集合（与后端保持单例）
             val builtinKeywords: Set<String> = try {
-                val clazz = com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter::class.java
+                val clazz = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter::class.java
                 val field = clazz.getDeclaredField("builtinCustomKeywords")
                 field.isAccessible = true
                 @Suppress("UNCHECKED_CAST")
-                field.get(com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter) as? Set<String> ?: emptySet()
+                field.get(com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter) as? Set<String> ?: emptySet()
             } catch (e: Exception) { emptySet() }
 
             keywordList.forEach { keyword ->
@@ -113,10 +113,10 @@ fun NotificationFilterPager(
                     Button(
                         onClick = {
                             if (deleteMode && !isBuiltin) {
-                                com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.removeForegroundKeyword(context, keyword)
+                                com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.removeForegroundKeyword(context, keyword)
                                 refreshKeywords()
                             } else if (!deleteMode) {
-                                com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.setKeywordEnabled(context, keyword, !enabled)
+                                com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.setKeywordEnabled(context, keyword, !enabled)
                                 refreshKeywords()
                             }
                         },
@@ -151,7 +151,7 @@ fun NotificationFilterPager(
                     onClick = {
                         val trimmed = newKeyword.trim()
                         if (trimmed.isNotEmpty() && !keywordList.contains(trimmed)) {
-                            com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter.addForegroundKeyword(context, trimmed)
+                            com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.addForegroundKeyword(context, trimmed)
                             newKeyword = ""
                             refreshKeywords()
                         }

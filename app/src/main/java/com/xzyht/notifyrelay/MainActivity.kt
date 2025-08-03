@@ -34,6 +34,15 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         showAutoStartBanner = false
         bannerMessage = null
+        // 检查所有必要权限，未授权则跳转引导页
+        if (!checkAllPermissions(this)) {
+            android.util.Log.w("NotifyRelay", "必要权限未授权，跳转引导页")
+            val intent = Intent(this, GuideActivity::class.java)
+            intent.putExtra("from", "MainActivity")
+            startActivity(intent)
+            finish()
+            return
+        }
         // 检查设备连接服务是否存活，未存活则重启
         val serviceStarted = try {
             if (!isServiceRunning("com.xzyht.notifyrelay.service.DeviceConnectionService")) {
@@ -43,25 +52,17 @@ class MainActivity : FragmentActivity() {
         } catch (e: Exception) {
             false
         }
-        // 检查通知监听服务是否启用，未启用则尝试引导或重启
-        val notificationListenerEnabled = isNotificationListenerEnabled()
-        if (!notificationListenerEnabled) {
-            android.util.Log.w("NotifyRelay", "通知监听服务未启用，尝试引导用户授权")
-            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        } else {
-            try {
-                val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService")
-                val restartIntent = Intent()
-                restartIntent.component = cn
-                restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startService(restartIntent)
-            } catch (e: Exception) {
-                // 服务无法启动，极可能是自启动权限被拒绝
-                showAutoStartBanner = true
-                bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
-            }
+        // 尝试重启通知监听服务
+        try {
+            val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService")
+            val restartIntent = Intent()
+            restartIntent.component = cn
+            restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startService(restartIntent)
+        } catch (e: Exception) {
+            // 服务无法启动，极可能是自启动权限被拒绝
+            showAutoStartBanner = true
+            bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
         }
         // 设备服务也无法启动时同样提示
         if (!serviceStarted) {
@@ -140,11 +141,44 @@ class MainActivity : FragmentActivity() {
 
     // onActivityResult 已废弃，已迁移到 Activity Result API
 
-    // 检查通知监听权限
-    private fun isNotificationListenerEnabled(): Boolean {
-        val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService")
-        val flat = android.provider.Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        return flat?.contains(cn.flattenToString()) == true
+    // 检查所有必要权限（与 GuideActivity 保持一致）
+    private fun checkAllPermissions(context: Context): Boolean {
+        val enabledListeners = android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        ) ?: ""
+        val hasNotification = enabledListeners.contains(context.packageName)
+
+        // 判断是否为 MIUI/澎湃系统
+        var isMiuiOrPengpai = false
+        isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+        if (!isMiuiOrPengpai) {
+            try {
+                val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
+                if (permissionInfo.packageName == "com.lbe.security.miui") {
+                    isMiuiOrPengpai = true
+                }
+            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
+        }
+
+        // 检查应用列表权限
+        var canQueryApps: Boolean
+        try {
+            val pm = context.packageManager
+            val apps = pm.getInstalledApplications(0)
+            canQueryApps = apps.size > 2
+            if (isMiuiOrPengpai) {
+                canQueryApps = canQueryApps && (androidx.core.content.ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            }
+        } catch (e: Exception) {
+            canQueryApps = false
+        }
+
+        // 检查通知发送权限
+        val hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else true
+        return hasNotification && canQueryApps && hasPost
     }
 
     // 检查应用使用情况权限
@@ -167,7 +201,7 @@ fun DeviceListFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceListFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceListFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -189,7 +223,7 @@ fun DeviceForwardFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.DeviceForwardFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceForwardFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -212,7 +246,7 @@ fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
                 fragmentManager?.let { fm ->
                     // 每次都 replace，保证 fragment attach
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.NotificationHistoryFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.NotificationHistoryFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout

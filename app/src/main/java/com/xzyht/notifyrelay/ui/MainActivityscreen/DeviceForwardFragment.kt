@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.ui.MainActivityscreen
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -29,8 +29,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.TabRow
-import com.xzyht.notifyrelay.ui.device.NotificationFilterPager
-import com.xzyht.notifyrelay.data.Notify.NotifyRelayNotificationListenerService.DefaultNotificationFilter
+import com.xzyht.notifyrelay.ui.MainActivityscreen.NotificationFilterPager
+import com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter
 
 @Composable
 fun AppPickerDialog(
