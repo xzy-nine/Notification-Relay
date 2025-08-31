@@ -10,7 +10,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import top.yukonga.miuix.kmp.basic.*
@@ -278,8 +280,8 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
             if (showBanner && !bannerMsg.isNullOrBlank()) {
                 // Miuix风格Banner，兼容Material3标准色彩
                 androidx.compose.material3.Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer,
+                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
                     tonalElevation = 2.dp,
                     shadowElevation = 2.dp,
                     modifier = Modifier.fillMaxWidth()
@@ -293,13 +295,13 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                         androidx.compose.material3.Icon(
                             imageVector = MiuixIcons.Useful.Settings,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
+                            tint = androidx.compose.material3.MaterialTheme.colorScheme.error
                         )
                         Spacer(Modifier.width(10.dp))
                         androidx.compose.material3.Text(
                             text = bannerMsg,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MiuixTheme.textStyles.body1,
+                            color = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(10.dp))

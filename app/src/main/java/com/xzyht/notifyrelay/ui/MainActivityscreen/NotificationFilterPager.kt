@@ -5,7 +5,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
@@ -88,8 +90,8 @@ fun NotificationFilterPager(
                 Button(
                     onClick = { deleteMode = !deleteMode },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!deleteMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
-                        contentColor = if (!deleteMode) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSecondary
+                        containerColor = if (!deleteMode) androidx.compose.material3.MaterialTheme.colorScheme.error else MiuixTheme.colorScheme.secondary,
+                        contentColor = if (!deleteMode) androidx.compose.material3.MaterialTheme.colorScheme.onError else MiuixTheme.colorScheme.onSecondary
                     ),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
@@ -122,14 +124,14 @@ fun NotificationFilterPager(
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = when {
-                                deleteMode && !isBuiltin -> MaterialTheme.colorScheme.error
-                                enabled -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.surfaceVariant
+                                deleteMode && !isBuiltin -> androidx.compose.material3.MaterialTheme.colorScheme.error
+                                enabled -> MiuixTheme.colorScheme.primary
+                                else -> MiuixTheme.colorScheme.surfaceVariant
                             },
                             contentColor = when {
-                                deleteMode && !isBuiltin -> MaterialTheme.colorScheme.onError
-                                enabled -> MaterialTheme.colorScheme.onPrimary
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                deleteMode && !isBuiltin -> androidx.compose.material3.MaterialTheme.colorScheme.onError
+                                enabled -> MiuixTheme.colorScheme.onPrimary
+                                else -> androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         ),
                         modifier = Modifier.padding(end = 8.dp)

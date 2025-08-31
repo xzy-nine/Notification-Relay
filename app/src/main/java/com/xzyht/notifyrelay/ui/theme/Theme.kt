@@ -1,8 +1,8 @@
 package com.xzyht.notifyrelay.ui.theme
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme
 import androidx.compose.runtime.Composable
 
 @Composable
@@ -11,9 +11,5 @@ fun NotifyRelayTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) darkColorScheme() else lightColorScheme()
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = androidx.compose.material3.Typography(),
-        content = content
-    )
+    MiuixTheme(colors = colorScheme, content = content)
 }

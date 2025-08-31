@@ -19,13 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import top.yukonga.miuix.kmp.icon.icons.basic.Search
@@ -33,6 +26,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Text
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

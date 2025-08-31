@@ -850,7 +850,7 @@ fun DeviceForwardScreen(
                                             allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
                                         } else Modifier
                                     ),
-                                shape = androidx.compose.material3.MaterialTheme.shapes.small,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                                 elevation = androidx.compose.material3.CardDefaults.cardElevation(1.dp),
                                 colors = androidx.compose.material3.CardDefaults.cardColors(
                                     containerColor = colorScheme.surfaceVariant
@@ -1083,13 +1083,9 @@ fun DeviceForwardScreen(
                             }
                             NotificationForwardConfig.save(context)
                         },
-                        modifier = Modifier.padding(top = 8.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = colorScheme.primary,
-                            contentColor = colorScheme.onPrimary
-                        )
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("应用设置", style = textStyles.button, color = colorScheme.onPrimary)
+                        Text("应用设置", style = textStyles.button)
                     }
                 }
             }
@@ -1130,7 +1126,7 @@ fun DeviceForwardScreen(
                             ) {
                                 androidx.compose.material3.Surface(
                                     color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
-                                    shape = androidx.compose.material3.MaterialTheme.shapes.medium,
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
                                     tonalElevation = 2.dp,
                                     modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
                                 ) {
@@ -1184,13 +1180,9 @@ fun DeviceForwardScreen(
                                 }
                             },
                             enabled = deviceManager.devices.value.isNotEmpty() && chatInput.isNotBlank(),
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = colorScheme.primary,
-                                contentColor = colorScheme.onPrimary
-                            )
+                            modifier = Modifier.align(Alignment.CenterVertically)
                         ) {
-                            Text("发送", style = textStyles.button, color = colorScheme.onPrimary)
+                            Text("发送", style = textStyles.button)
                         }
                     }
                 }
