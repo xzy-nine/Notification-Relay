@@ -502,11 +502,12 @@ fun DeviceListScreen() {
     // 连接设备弹窗
     if (showConnectDialog && pendingConnectDevice != null) {
         val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        val showDialog = remember { mutableStateOf(true) }
         SuperDialog(
-            show = remember { mutableStateOf(true) },
+            show = showDialog,
             title = "连接设备",
             summary = "是否连接设备：${pendingConnectDevice?.displayName ?: ""}？\n对方将收到认证请求。",
-            onDismissRequest = { showConnectDialog = false }
+            onDismissRequest = { showDialog.value = false; showConnectDialog = false }
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -515,6 +516,7 @@ fun DeviceListScreen() {
                 TextButton(
                     text = "连接",
                     onClick = {
+                        showDialog.value = false
                         showConnectDialog = false
                         pendingConnectDevice?.let { device ->
                             // 连接前，先移除同IP的所有旧UUID认证（防止多UUID）
@@ -580,7 +582,7 @@ fun DeviceListScreen() {
                 )
                 TextButton(
                     text = "取消",
-                    onClick = { showConnectDialog = false }
+                    onClick = { showDialog.value = false; showConnectDialog = false }
                 )
             }
         }
@@ -589,12 +591,14 @@ fun DeviceListScreen() {
     if (showHandshakeDialog && pendingHandshakeRequest != null) {
         val req = pendingHandshakeRequest!!
         val device = req.device
+        val showDialog = remember { mutableStateOf(true) }
         SuperDialog(
-            show = remember { mutableStateOf(true) },
+            show = showDialog,
             title = "新设备连接请求",
             onDismissRequest = {
                 // 先回调，后关闭弹窗，避免回调丢失
                 req.callback(false)
+                showDialog.value = false
                 showHandshakeDialog = false
                 pendingHandshakeRequest = null
             }
@@ -672,6 +676,7 @@ fun DeviceListScreen() {
                                 updateMethod.invoke(deviceManager)
                             } catch (_: Exception) {}
                             req.callback(true)
+                            showDialog.value = false
                             showHandshakeDialog = false
                             pendingHandshakeRequest = null
                             // 强制刷新设备列表
@@ -698,6 +703,7 @@ fun DeviceListScreen() {
                         text = "拒绝",
                         onClick = {
                             req.callback(false)
+                            showDialog.value = false
                             showHandshakeDialog = false
                             pendingHandshakeRequest = null
                         }
@@ -708,10 +714,11 @@ fun DeviceListScreen() {
     }
 
     if (showRejectedDialog) {
+        val showDialog = remember { mutableStateOf(true) }
         SuperDialog(
-            show = remember { mutableStateOf(true) },
+            show = showDialog,
             title = "已拒绝设备",
-            onDismissRequest = { showRejectedDialog = false }
+            onDismissRequest = { showDialog.value = false; showRejectedDialog = false }
         ) {
             if (rejectedDevices.isEmpty()) {
                 Text(
@@ -761,7 +768,7 @@ fun DeviceListScreen() {
             ) {
                 TextButton(
                     text = "关闭",
-                    onClick = { showRejectedDialog = false }
+                    onClick = { showDialog.value = false; showRejectedDialog = false }
                 )
             }
         }

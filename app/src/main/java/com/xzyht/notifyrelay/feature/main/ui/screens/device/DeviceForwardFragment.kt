@@ -34,7 +34,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.TabRow
 import com.xzyht.notifyrelay.feature.notification.NotificationFilterPager
-import com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter
+import com.xzyht.notifyrelay.feature.notification.DefaultNotificationFilter
 
 @Composable
 fun AppPickerDialog(
@@ -98,11 +98,12 @@ fun AppPickerDialog(
             androidx.compose.ui.graphics.ImageBitmap(22, 22, androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888)
         }
     }
+    val showDialog = remember { mutableStateOf(true) }
     MiuixTheme {
         SuperDialog(
-            show = remember { mutableStateOf(true) },
+            show = showDialog,
             title = title,
-            onDismissRequest = { onDismiss(); appSearchQuery = "" }
+            onDismissRequest = { showDialog.value = false; onDismiss(); appSearchQuery = "" }
         ) {
             if (allApps.isEmpty()) {
                 // 动态加载提示
@@ -137,6 +138,7 @@ fun AppPickerDialog(
                                     .fillMaxWidth()
                                     .clickable {
                                         onAppSelected(pkg)
+                                        showDialog.value = false
                                         appSearchQuery = ""
                                     }
                                     .padding(horizontal = 4.dp, vertical = 6.dp)
@@ -166,6 +168,7 @@ fun AppPickerDialog(
                                         .fillMaxWidth()
                                         .clickable {
                                             onAppSelected(appSearchQuery)
+                                            showDialog.value = false
                                             appSearchQuery = ""
                                         }
                                         .padding(horizontal = 4.dp, vertical = 10.dp)
@@ -192,7 +195,7 @@ fun AppPickerDialog(
             ) {
                                         TextButton(
                                             text = "关闭",
-                                            onClick = { onDismiss(); appSearchQuery = "" }
+                                            onClick = { showDialog.value = false; onDismiss(); appSearchQuery = "" }
                                         )
             }
         }
@@ -871,7 +874,7 @@ fun DeviceForwardScreen(
                                         if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
                                             top.yukonga.miuix.kmp.basic.Button(
                                                 onClick = { showAppPickerForGroup = true to idx },
-                                                modifier = Modifier.size(24.dp),
+                                                modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
                                                 enabled = enablePackageGroupMapping
                                             ) {
                                                 top.yukonga.miuix.kmp.basic.Text("+")
@@ -881,7 +884,7 @@ fun DeviceForwardScreen(
                                                     allGroups = allGroups.toMutableList().apply { removeAt(idx) }
                                                     allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
                                                 },
-                                                modifier = Modifier.size(24.dp).padding(start = 2.dp),
+                                                modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp).padding(start = 2.dp),
                                                 enabled = enablePackageGroupMapping
                                             ) {
                                                 top.yukonga.miuix.kmp.basic.Text("×")
@@ -988,10 +991,11 @@ fun DeviceForwardScreen(
                             )
                         }
                         if (pendingFilterPkg != null) {
+                            val showKeywordDialog = remember { mutableStateOf(true) }
                             SuperDialog(
-                                show = remember { mutableStateOf(true) },
+                                show = showKeywordDialog,
                                 title = "为包名添加关键词(可选)",
-                                onDismissRequest = { pendingFilterPkg = null }
+                                onDismissRequest = { showKeywordDialog.value = false; pendingFilterPkg = null }
                             ) {
                                 Column {
                                     Text(pendingFilterPkg!!, style = textStyles.body2, color = colorScheme.primary)
@@ -1012,12 +1016,13 @@ fun DeviceForwardScreen(
                                                 // 追加到名单
                                                 val line = if (pendingKeyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + pendingKeyword.trim()
                                                 filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                                showKeywordDialog.value = false
                                                 pendingFilterPkg = null
                                             }
                                         )
                                         top.yukonga.miuix.kmp.basic.TextButton(
                                             text = "取消",
-                                            onClick = { pendingFilterPkg = null }
+                                            onClick = { showKeywordDialog.value = false; pendingFilterPkg = null }
                                         )
                                     }
                                 }

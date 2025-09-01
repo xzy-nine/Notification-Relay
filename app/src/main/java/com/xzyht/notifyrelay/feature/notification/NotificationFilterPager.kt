@@ -37,16 +37,16 @@ fun NotificationFilterPager(
     val context = LocalContext.current
     var newKeyword by remember { mutableStateOf("") }
     var keywordList by remember { mutableStateOf(
-        com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
+        DefaultNotificationFilter.getForegroundKeywords(context).toList()
     ) }
     var enabledKeywords by remember { mutableStateOf(
-        com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
+        DefaultNotificationFilter.getEnabledForegroundKeywords(context)
     ) }
     var deleteMode by remember { mutableStateOf(false) }
 
     fun refreshKeywords() {
-        keywordList = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getForegroundKeywords(context).toList()
-        enabledKeywords = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.getEnabledForegroundKeywords(context)
+        keywordList = DefaultNotificationFilter.getForegroundKeywords(context).toList()
+        enabledKeywords = DefaultNotificationFilter.getEnabledForegroundKeywords(context)
     }
 
     MiuixTheme {
@@ -98,11 +98,11 @@ fun NotificationFilterPager(
 
             // 获取内置关键词集合（与后端保持单例）
             val builtinKeywords: Set<String> = try {
-                val clazz = com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter::class.java
+                val clazz = DefaultNotificationFilter::class.java
                 val field = clazz.getDeclaredField("builtinCustomKeywords")
                 field.isAccessible = true
                 @Suppress("UNCHECKED_CAST")
-                field.get(com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter) as? Set<String> ?: emptySet()
+                field.get(DefaultNotificationFilter) as? Set<String> ?: emptySet()
             } catch (e: Exception) { emptySet() }
 
             keywordList.forEach { keyword ->
@@ -112,10 +112,10 @@ fun NotificationFilterPager(
                     top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
                             if (deleteMode && !isBuiltin) {
-                                com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.removeForegroundKeyword(context, keyword)
+                                DefaultNotificationFilter.removeForegroundKeyword(context, keyword)
                                 refreshKeywords()
                             } else if (!deleteMode) {
-                                com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.setKeywordEnabled(context, keyword, !enabled)
+                                DefaultNotificationFilter.setKeywordEnabled(context, keyword, !enabled)
                                 refreshKeywords()
                             }
                         },
@@ -138,7 +138,7 @@ fun NotificationFilterPager(
                     onClick = {
                         val trimmed = newKeyword.trim()
                         if (trimmed.isNotEmpty() && !keywordList.contains(trimmed)) {
-                            com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.addForegroundKeyword(context, trimmed)
+                            DefaultNotificationFilter.addForegroundKeyword(context, trimmed)
                             newKeyword = ""
                             refreshKeywords()
                         }
