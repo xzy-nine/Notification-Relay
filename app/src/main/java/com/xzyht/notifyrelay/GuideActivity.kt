@@ -223,7 +223,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         },
                         modifier = Modifier.padding(vertical = 0.dp)
                     )
-                    androidx.compose.material3.Divider(color = dividerColor, thickness = 1.dp)
+                    top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "应用列表权限",
             summary = if (canQueryApps) "已授权" else "用于发现本机已安装应用，辅助通知跳转",
@@ -276,7 +276,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        androidx.compose.material3.Divider(color = dividerColor, thickness = 1.dp)
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "通知发送权限 (Android 13+)",
             summary = if (hasPost) "已授权" else "用于发送本地通知，部分功能需开启",
@@ -308,7 +308,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        androidx.compose.material3.Divider(color = dividerColor, thickness = 1.dp)
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "蓝牙连接权限 (可选)",
             summary = if (hasBluetoothConnect) "已授权" else "用于优化设备发现速度，显示真实设备名",
@@ -335,7 +335,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        androidx.compose.material3.Divider(color = dividerColor, thickness = 1.dp)
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "通知管理 (可选)",
             summary = "请手动选择并打开具体的通知类别的悬浮通知权限，以提升通知体验",
@@ -361,7 +361,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-    androidx.compose.material3.Divider(color = dividerColor, thickness = 1.dp)
+    top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
             BasicComponent(
                 title = "敏感通知访问权限 (Android 15+)",
                 summary = "未授权时部分通知内容只能获取到'已隐藏敏感通知',因此应用予以隐藏，建议开启以完整接收通知。如无法跳转可复制下方 adb 命令授权。",
@@ -433,7 +433,7 @@ fun GuideScreen(onContinue: () -> Unit) {
         }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = {
+                top.yukonga.miuix.kmp.basic.Button(onClick = {
                     if (permissionsGranted) {
                         onContinue()
                     } else {
@@ -447,7 +447,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         }
                     }
                 }) {
-                    Text(
+                    top.yukonga.miuix.kmp.basic.Text(
                         if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
                         style = MiuixTheme.textStyles.button
                     )

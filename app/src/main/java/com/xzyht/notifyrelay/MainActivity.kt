@@ -3,16 +3,17 @@ package com.xzyht.notifyrelay
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 import android.content.Intent
 import com.xzyht.notifyrelay.service.DeviceConnectionService
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import android.os.Bundle
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import top.yukonga.miuix.kmp.basic.*
@@ -22,11 +23,13 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.background
-import android.content.Context
 import androidx.compose.ui.Alignment
+import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme
+import android.content.Context
+import androidx.core.graphics.toColorInt
 
 class MainActivity : FragmentActivity() {
     internal var showAutoStartBanner = false
@@ -105,7 +108,7 @@ class MainActivity : FragmentActivity() {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
         // 先用默认背景色，后续在 Compose SideEffect 里动态同步
-        val defaultBg = top.yukonga.miuix.kmp.theme.lightColorScheme().background.toArgb()
+        val defaultBg = android.graphics.Color.parseColor("#FFFFFF")
         window.statusBarColor = defaultBg
         window.navigationBarColor = defaultBg
         window.decorView.systemUiVisibility = (
@@ -117,7 +120,12 @@ class MainActivity : FragmentActivity() {
         // 仅使用 Compose 管理主页面和通知历史页面
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-            val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
+            
+            // 自定义错误颜色常量
+            val errorColor = Color(0xFFD32F2F)
+            val onErrorColor = Color.White
+            
+            val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
             MiuixTheme(colors = colors) {
                 val colorScheme = MiuixTheme.colorScheme
                 // 状态栏/导航栏图标颜色适配+背景色同步
@@ -126,8 +134,8 @@ class MainActivity : FragmentActivity() {
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
                     // 统一系统栏背景色为主题背景色
-                    window.statusBarColor = colorScheme.background.toArgb()
-                    window.navigationBarColor = colorScheme.background.toArgb()
+                    window.statusBarColor = android.graphics.Color.parseColor("#FFFFFF")
+                    window.navigationBarColor = android.graphics.Color.parseColor("#FFFFFF")
                 }
                 // 根布局加 systemBarsPadding，避免内容被遮挡，强制背景色一致
                 Box(modifier = Modifier
@@ -267,6 +275,11 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
     )
     val colorScheme = MiuixTheme.colorScheme
+    
+    // 自定义错误颜色常量
+    val errorColor = Color(0xFFD32F2F)
+    val onErrorColor = Color.White
+    
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     // 读取Activity的Banner状态
@@ -278,12 +291,8 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
         modifier = modifier,
         topBar = {
             if (showBanner && !bannerMsg.isNullOrBlank()) {
-                // Miuix风格Banner，兼容Material3标准色彩
-                androidx.compose.material3.Surface(
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer,
-                    contentColor = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
-                    tonalElevation = 2.dp,
-                    shadowElevation = 2.dp,
+                top.yukonga.miuix.kmp.basic.Surface(
+                    color = errorColor,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -292,16 +301,15 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.Icon(
+                        top.yukonga.miuix.kmp.basic.Icon(
                             imageVector = MiuixIcons.Useful.Settings,
-                            contentDescription = null,
-                            tint = androidx.compose.material3.MaterialTheme.colorScheme.error
+                            contentDescription = null
                         )
                         Spacer(Modifier.width(10.dp))
-                        androidx.compose.material3.Text(
+                        top.yukonga.miuix.kmp.basic.Text(
                             text = bannerMsg,
                             style = MiuixTheme.textStyles.body1,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer,
+                            color = onErrorColor,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(10.dp))
@@ -392,8 +400,9 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
 @Preview(showBackground = true)
 @Composable
 fun MainAppPreview() {
-    MiuixTheme {
+    val colors = lightColorScheme()
+    MiuixTheme(colors = colors) {
         MainAppFragment()
-     }
-  }
+    }
+}
 }

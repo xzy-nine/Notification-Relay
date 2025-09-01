@@ -5,9 +5,10 @@ import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
-import androidx.compose.material3.OutlinedTextField
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.Button
 import androidx.compose.runtime.*
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.*
@@ -23,7 +24,10 @@ import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
-import androidx.compose.material3.TextFieldDefaults
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Surface
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
@@ -95,116 +99,103 @@ fun AppPickerDialog(
         }
     }
     MiuixTheme {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { onDismiss(); appSearchQuery = "" },
-            title = {
-                Text(title, style = MiuixTheme.textStyles.headline2, color = MiuixTheme.colorScheme.onSurface)
-            },
-            text = {
-                if (allApps.isEmpty()) {
-                    // 动态加载提示
-                    Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                        Text("正在加载应用列表...", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary)
-                    }
-                } else {
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                        ) {
-                            androidx.compose.material3.Switch(
-                                checked = showSystemApps,
-                                onCheckedChange = { showSystemApps = it },
-                                modifier = Modifier.padding(end = 4.dp),
-                                colors = androidx.compose.material3.SwitchDefaults.colors(
-                                    checkedThumbColor = MiuixTheme.colorScheme.primary,
-                                    uncheckedThumbColor = MiuixTheme.colorScheme.outline,
-                                    checkedTrackColor = MiuixTheme.colorScheme.primaryContainer,
-                                    uncheckedTrackColor = MiuixTheme.colorScheme.surface
-                                )
-                            )
-                            Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                        }
-                        OutlinedTextField(
-                            value = appSearchQuery,
-                            onValueChange = { appSearchQuery = it },
-                            label = { Text("搜索应用/包名", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary) },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MiuixTheme.colorScheme.surface,
-                                unfocusedContainerColor = MiuixTheme.colorScheme.surface,
-                                focusedIndicatorColor = MiuixTheme.colorScheme.primary,
-                                unfocusedIndicatorColor = MiuixTheme.colorScheme.outline,
-                                cursorColor = MiuixTheme.colorScheme.primary
-                            ),
-                            textStyle = MiuixTheme.textStyles.body2
+        SuperDialog(
+            show = remember { mutableStateOf(true) },
+            title = title,
+            onDismissRequest = { onDismiss(); appSearchQuery = "" }
+        ) {
+            if (allApps.isEmpty()) {
+                // 动态加载提示
+                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
+                    Text("正在加载应用列表...", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary)
+                }
+            } else {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    ) {
+                        top.yukonga.miuix.kmp.basic.Switch(
+                            checked = showSystemApps,
+                            onCheckedChange = { showSystemApps = it },
+                            modifier = Modifier.padding(end = 4.dp)
                         )
-                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                            items(filteredApps) { appInfo ->
-                                val pkg = appInfo.packageName
-                                val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
+                        Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                    }
+                    top.yukonga.miuix.kmp.basic.TextField(
+                        value = appSearchQuery,
+                        onValueChange = { appSearchQuery = it },
+                        label = "搜索应用/包名",
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    )
+                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(filteredApps) { appInfo ->
+                            val pkg = appInfo.packageName
+                            val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onAppSelected(pkg)
+                                        appSearchQuery = ""
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (iconBitmap != null) {
+                                        Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                    } else {
+                                        Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                    }
+                                    Column(modifier = Modifier.padding(start = 8.dp)) {
+                                        Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
+                                        Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
+                                    }
+                                }
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    color = MiuixTheme.colorScheme.dividerLine,
+                                    thickness = 0.7.dp
+                                )
+                            }
+                        }
+                        if (appSearchQuery.isNotBlank() && filteredApps.none { it.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
+                            item {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            onAppSelected(pkg)
+                                            onAppSelected(appSearchQuery)
                                             appSearchQuery = ""
                                         }
-                                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                                        .padding(horizontal = 4.dp, vertical = 10.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (iconBitmap != null) {
-                                            Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                        } else {
-                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                        }
-                                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                                            Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                                            Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
-                                        }
-                                    }
-                                    androidx.compose.material3.Divider(
-                                        modifier = Modifier.padding(top = 8.dp),
-                                        color = MiuixTheme.colorScheme.dividerLine,
-                                        thickness = 0.7.dp
-                                    )
-                                }
-                            }
-                            if (appSearchQuery.isNotBlank() && filteredApps.none { it.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
-                                item {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                onAppSelected(appSearchQuery)
-                                                appSearchQuery = ""
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 10.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                            Text(
-                                                "添加自定义包名：${appSearchQuery}",
-                                                style = MiuixTheme.textStyles.body2,
-                                                color = MiuixTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(start = 8.dp)
-                                            )
-                                        }
+                                        Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
+                                        Text(
+                                            "添加自定义包名：${appSearchQuery}",
+                                            style = MiuixTheme.textStyles.body2,
+                                            color = MiuixTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { onDismiss(); appSearchQuery = "" }) {
-                    Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
-                }
-            },
-            containerColor = MiuixTheme.colorScheme.surface,
-            tonalElevation = 4.dp
-        )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                                        TextButton(
+                                            text = "关闭",
+                                            onClick = { onDismiss(); appSearchQuery = "" }
+                                        )
+            }
+        }
     }
 }
 
@@ -458,6 +449,7 @@ fun DeviceForwardScreen(
     loadAuthedUuids: () -> Set<String>,
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     // 手动发现提示相关状态
     val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
     val snackbarVisible = remember { mutableStateOf(false) }
@@ -514,19 +506,27 @@ fun DeviceForwardScreen(
     var connectError by rememberSaveable { mutableStateOf<String?>(null) }
     // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
 
-    // Miuix风格Snackbar弹窗
+    // Miuix风格通知弹窗
     if (snackbarVisible.value && manualDiscoveryPrompt.value != null) {
-        androidx.compose.material3.Snackbar(
-            modifier = Modifier.padding(16.dp),
-            action = {
-                TextButton(onClick = { snackbarVisible.value = false }) {
-                    Text("关闭", style = MiuixTheme.textStyles.button, color = MiuixTheme.colorScheme.primary)
-                }
-            },
-            containerColor = MiuixTheme.colorScheme.surface,
-            contentColor = MiuixTheme.colorScheme.onSurface
+        Surface(
+            color = MiuixTheme.colorScheme.surface,
+            modifier = Modifier.padding(16.dp)
         ) {
-            Text(manualDiscoveryPrompt.value!!, style = MiuixTheme.textStyles.body2)
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    manualDiscoveryPrompt.value!!,
+                    style = MiuixTheme.textStyles.body2,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TextButton(
+                    text = "关闭",
+                    onClick = { snackbarVisible.value = false }
+                )
+            }
         }
         // 自动消失
         LaunchedEffect(manualDiscoveryPrompt.value) {
@@ -534,10 +534,8 @@ fun DeviceForwardScreen(
             snackbarVisible.value = false
         }
     }
-    val context = androidx.compose.ui.platform.LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    val context2 = LocalContext.current
     // 聊天区相关状态
     var chatInput by remember { mutableStateOf("") }
     var chatExpanded by remember { mutableStateOf(false) }
@@ -820,16 +818,10 @@ fun DeviceForwardScreen(
                     ) {
                         Text("启用包名等价映射", style = textStyles.body2, color = colorScheme.onSurface)
                         Spacer(modifier = Modifier.width(16.dp))
-                        androidx.compose.material3.Switch(
+                        top.yukonga.miuix.kmp.basic.Switch(
                             checked = enablePackageGroupMapping,
                             onCheckedChange = { enablePackageGroupMapping = it },
-                            modifier = Modifier.size(width = 24.dp, height = 12.dp),
-                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                checkedThumbColor = colorScheme.primary,
-                                uncheckedThumbColor = colorScheme.outline,
-                                checkedTrackColor = colorScheme.primaryContainer,
-                                uncheckedTrackColor = colorScheme.surface
-                            )
+                            modifier = Modifier.size(width = 24.dp, height = 12.dp)
                         )
                     }
                     // 滚动区域：包名组配置
@@ -841,7 +833,7 @@ fun DeviceForwardScreen(
                         items(allGroups.size) { idx ->
                             val group = allGroups[idx]
                             val groupEnabled = enablePackageGroupMapping
-                            androidx.compose.material3.Card(
+                            top.yukonga.miuix.kmp.basic.Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 2.dp)
@@ -849,12 +841,7 @@ fun DeviceForwardScreen(
                                         if (groupEnabled) Modifier.clickable {
                                             allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
                                         } else Modifier
-                                    ),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                                elevation = androidx.compose.material3.CardDefaults.cardElevation(1.dp),
-                                colors = androidx.compose.material3.CardDefaults.cardColors(
-                                    containerColor = colorScheme.surfaceVariant
-                                )
+                                    )
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -882,24 +869,22 @@ fun DeviceForwardScreen(
                                         )
                                         Spacer(Modifier.weight(1f))
                                         if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
-                                            Button(
+                                            top.yukonga.miuix.kmp.basic.Button(
                                                 onClick = { showAppPickerForGroup = true to idx },
-                                                contentPadding = PaddingValues(0.dp),
                                                 modifier = Modifier.size(24.dp),
                                                 enabled = enablePackageGroupMapping
                                             ) {
-                                                Text("+", style = textStyles.button)
+                                                top.yukonga.miuix.kmp.basic.Text("+")
                                             }
-                                            Button(
+                                            top.yukonga.miuix.kmp.basic.Button(
                                                 onClick = {
                                                     allGroups = allGroups.toMutableList().apply { removeAt(idx) }
                                                     allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
                                                 },
-                                                contentPadding = PaddingValues(0.dp),
                                                 modifier = Modifier.size(24.dp).padding(start = 2.dp),
                                                 enabled = enablePackageGroupMapping
                                             ) {
-                                                Text("×", style = textStyles.button, color = colorScheme.primary)
+                                                top.yukonga.miuix.kmp.basic.Text("×")
                                             }
                                         }
                                     }
@@ -927,7 +912,7 @@ fun DeviceForwardScreen(
                         }
                     }
                     // 添加新组按钮
-                    Button(
+                    top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
                             allGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
                             allGroupEnabled = allGroupEnabled.toMutableList().apply { add(true) }
@@ -935,7 +920,7 @@ fun DeviceForwardScreen(
                         modifier = Modifier.padding(vertical = 2.dp),
                         enabled = enablePackageGroupMapping
                     ) {
-                        Text("添加新组", style = textStyles.button)
+                        top.yukonga.miuix.kmp.basic.Text("添加新组")
                     }
                     // 应用选择弹窗（封装组件调用）
                     if (showAppPickerForGroup.first) {
@@ -957,20 +942,13 @@ fun DeviceForwardScreen(
                         Text("过滤模式:", style = textStyles.body2, color = colorScheme.onSurface)
                         val modes = listOf("none" to "无", "black" to "黑名单", "white" to "白名单", "peer" to "对等")
                         modes.forEach { (value, label) ->
-                            androidx.compose.material3.FilterChip(
-                                selected = filterMode == value,
+                            top.yukonga.miuix.kmp.basic.Button(
                                 onClick = { filterMode = value },
-                                label = {
-                                    Text(label, style = textStyles.body2, color = if (filterMode == value) colorScheme.onPrimary else colorScheme.onSurface)
-                                },
                                 modifier = Modifier.padding(horizontal = 2.dp),
-                                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = colorScheme.primary,
-                                    containerColor = colorScheme.surface,
-                                    labelColor = colorScheme.onSurface,
-                                    selectedLabelColor = colorScheme.onPrimary
-                                )
-                            )
+                                colors = if (filterMode == value) top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary() else top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
+                            ) {
+                                top.yukonga.miuix.kmp.basic.Text(label)
+                            }
                         }
                     }
                     // 黑白名单
@@ -984,21 +962,17 @@ fun DeviceForwardScreen(
                             color = colorScheme.onSurface
                         )
                         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
+                            top.yukonga.miuix.kmp.basic.TextField(
                                 value = filterListText,
                                 onValueChange = { filterListText = it },
                                 modifier = Modifier.weight(1f),
-                                placeholder = {
-                                    Text("com.a,关键字\ncom.b", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
-                                },
-                                colors = TextFieldDefaults.colors(),
-                                textStyle = textStyles.body2
+                                label = "com.a,关键字\ncom.b"
                             )
-                            Button(
+                            top.yukonga.miuix.kmp.basic.Button(
                                 onClick = { showFilterAppPicker = true },
                                 modifier = Modifier.padding(start = 6.dp)
                             ) {
-                                Text("添加包名", style = textStyles.button)
+                                top.yukonga.miuix.kmp.basic.Text("添加包名")
                             }
                         }
                         if (showFilterAppPicker) {
@@ -1014,59 +988,53 @@ fun DeviceForwardScreen(
                             )
                         }
                         if (pendingFilterPkg != null) {
-                            androidx.compose.material3.AlertDialog(
-                                onDismissRequest = { pendingFilterPkg = null },
-                                title = { Text("为包名添加关键词(可选)", style = textStyles.headline2, color = colorScheme.onSurface) },
-                                text = {
-                                    Column {
-                                        Text(pendingFilterPkg!!, style = textStyles.body2, color = colorScheme.primary)
-                                        OutlinedTextField(
-                                            value = pendingKeyword,
-                                            onValueChange = { pendingKeyword = it },
-                                            label = { Text("关键词(可选)", style = textStyles.body2, color = colorScheme.onSurfaceSecondary) },
-                                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                            colors = TextFieldDefaults.colors(),
-                                            textStyle = textStyles.body2
+                            SuperDialog(
+                                show = remember { mutableStateOf(true) },
+                                title = "为包名添加关键词(可选)",
+                                onDismissRequest = { pendingFilterPkg = null }
+                            ) {
+                                Column {
+                                    Text(pendingFilterPkg!!, style = textStyles.body2, color = colorScheme.primary)
+                                    top.yukonga.miuix.kmp.basic.TextField(
+                                        value = pendingKeyword,
+                                        onValueChange = { pendingKeyword = it },
+                                        label = "关键词(可选)",
+                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        top.yukonga.miuix.kmp.basic.TextButton(
+                                            text = "确定",
+                                            onClick = {
+                                                // 追加到名单
+                                                val line = if (pendingKeyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + pendingKeyword.trim()
+                                                filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                                pendingFilterPkg = null
+                                            }
+                                        )
+                                        top.yukonga.miuix.kmp.basic.TextButton(
+                                            text = "取消",
+                                            onClick = { pendingFilterPkg = null }
                                         )
                                     }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        // 追加到名单
-                                        val line = if (pendingKeyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + pendingKeyword.trim()
-                                        filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
-                                        pendingFilterPkg = null
-                                    }) {
-                                        Text("确定", style = textStyles.button, color = colorScheme.primary)
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { pendingFilterPkg = null }) {
-                                        Text("取消", style = textStyles.button)
-                                    }
-                                },
-                                containerColor = colorScheme.surface,
-                                tonalElevation = 4.dp
-                            )
+                                }
+                            }
                         }
                     }
                     // 延迟去重
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Switch(
+                        top.yukonga.miuix.kmp.basic.Switch(
                             checked = enableDedup,
                             onCheckedChange = { enableDedup = it },
-                            modifier = Modifier.padding(end = 4.dp),
-                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                checkedThumbColor = colorScheme.primary,
-                                uncheckedThumbColor = colorScheme.outline,
-                                checkedTrackColor = colorScheme.primaryContainer,
-                                uncheckedTrackColor = colorScheme.surface
-                            )
+                            modifier = Modifier.padding(end = 4.dp)
                         )
                         Text("10秒内重复通知去重", style = textStyles.body2, color = colorScheme.onSurface)
                     }
                     // 应用按钮
-                    Button(
+                    top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
                             NotificationForwardConfig.enablePackageGroupMapping = enablePackageGroupMapping
                             // 拆分allGroups和allGroupEnabled为默认组和自定义组
@@ -1085,7 +1053,7 @@ fun DeviceForwardScreen(
                         },
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("应用设置", style = textStyles.button)
+                        top.yukonga.miuix.kmp.basic.Text("应用设置")
                     }
                 }
             }
@@ -1124,10 +1092,9 @@ fun DeviceForwardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = if (isSend) Arrangement.End else Arrangement.Start
                             ) {
-                                androidx.compose.material3.Surface(
+                                top.yukonga.miuix.kmp.basic.Surface(
                                     color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
                                     shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                                    tonalElevation = 2.dp,
                                     modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
                                 ) {
                                     Text(
@@ -1146,17 +1113,13 @@ fun DeviceForwardScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        OutlinedTextField(
+                        top.yukonga.miuix.kmp.basic.TextField(
                             value = chatInput,
                             onValueChange = { chatInput = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = {
-                                Text("输入消息...", color = colorScheme.onSurfaceSecondary, style = textStyles.body2)
-                            },
-                            colors = TextFieldDefaults.colors(),
-                            textStyle = textStyles.body2
+                            label = "输入消息..."
                         )
-                        Button(
+                        top.yukonga.miuix.kmp.basic.Button(
                             onClick = {
                                 // 全部广播：遍历所有已认证设备
                                 val allDevices = deviceManager.devices.value.values.map { it.first }
@@ -1182,7 +1145,7 @@ fun DeviceForwardScreen(
                             enabled = deviceManager.devices.value.isNotEmpty() && chatInput.isNotBlank(),
                             modifier = Modifier.align(Alignment.CenterVertically)
                         ) {
-                            Text("发送", style = textStyles.button)
+                            top.yukonga.miuix.kmp.basic.Text("发送")
                         }
                     }
                 }

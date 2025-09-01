@@ -5,9 +5,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedTextField
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
@@ -87,15 +88,11 @@ fun NotificationFilterPager(
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("文本关键词过滤(黑名单)：", Modifier.padding(bottom = 8.dp).weight(1f))
-                Button(
+                top.yukonga.miuix.kmp.basic.Button(
                     onClick = { deleteMode = !deleteMode },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!deleteMode) androidx.compose.material3.MaterialTheme.colorScheme.error else MiuixTheme.colorScheme.secondary,
-                        contentColor = if (!deleteMode) androidx.compose.material3.MaterialTheme.colorScheme.onError else MiuixTheme.colorScheme.onSecondary
-                    ),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    Text(if (deleteMode) "完成" else "删除")
+                    top.yukonga.miuix.kmp.basic.Text(if (deleteMode) "完成" else "删除")
                 }
             }
 
@@ -112,7 +109,7 @@ fun NotificationFilterPager(
                 val enabled = enabledKeywords.contains(keyword)
                 val isBuiltin = builtinKeywords.contains(keyword)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
-                    Button(
+                    top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
                             if (deleteMode && !isBuiltin) {
                                 com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter.removeForegroundKeyword(context, keyword)
@@ -122,34 +119,22 @@ fun NotificationFilterPager(
                                 refreshKeywords()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = when {
-                                deleteMode && !isBuiltin -> androidx.compose.material3.MaterialTheme.colorScheme.error
-                                enabled -> MiuixTheme.colorScheme.primary
-                                else -> MiuixTheme.colorScheme.surfaceVariant
-                            },
-                            contentColor = when {
-                                deleteMode && !isBuiltin -> androidx.compose.material3.MaterialTheme.colorScheme.onError
-                                enabled -> MiuixTheme.colorScheme.onPrimary
-                                else -> androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        ),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Text(keyword)
+                        top.yukonga.miuix.kmp.basic.Text(keyword)
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                top.yukonga.miuix.kmp.basic.TextField(
                     value = newKeyword,
                     onValueChange = { newKeyword = it },
-                    label = { Text("添加关键词") },
+                    label = "添加关键词",
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
-                Button(
+                top.yukonga.miuix.kmp.basic.Button(
                     onClick = {
                         val trimmed = newKeyword.trim()
                         if (trimmed.isNotEmpty() && !keywordList.contains(trimmed)) {
@@ -159,7 +144,7 @@ fun NotificationFilterPager(
                         }
                     }
                 ) {
-                    Text("添加")
+                    top.yukonga.miuix.kmp.basic.Text("添加")
                 }
             }
         }
