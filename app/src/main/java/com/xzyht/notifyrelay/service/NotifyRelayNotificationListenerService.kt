@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.xzyht.notifyrelay.data.Notify.NotificationRepository
+import com.xzyht.notifyrelay.data.notify.NotificationRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

@@ -723,7 +723,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 if (!displayName.isNullOrEmpty() && displayName != remoteUuid) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
-                val repoClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationRepository")
+                val repoClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationRepository")
                 val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
                 addMethod.invoke(null, pkg, title, text, time, remoteUuid, context)
                 // 强制刷新设备列表和UI

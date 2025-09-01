@@ -339,7 +339,7 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
             }
             // 2. 再查本机通知历史（10秒内同title+text）
             try {
-                val localList = com.xzyht.notifyrelay.data.Notify.NotificationRepository.notifications
+                val localList = com.xzyht.notifyrelay.data.notify.NotificationRepository.notifications
                 val localDup = localList.any {
                     val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
                     if (it.device == "本机" && (now - it.time <= 10_000)) {
@@ -544,7 +544,7 @@ fun DeviceForwardScreen(
     val coroutineScope = rememberCoroutineScope()
     // 聊天内容持久化到本地文件，应用退出前都保留
     LaunchedEffect(context) {
-        chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
     }
     // 只监听全局选中设备
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
@@ -652,11 +652,11 @@ fun DeviceForwardScreen(
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay(狂鼠)", "[延迟]远程通知复刻失败", e)
                         }
-                        com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                        com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
                     } else {
-                        com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                        com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
                     }
                 }
             } else {
@@ -747,11 +747,11 @@ fun DeviceForwardScreen(
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
                     }
-                    com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
                 } else {
-                    com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
                 }
             }
         }
@@ -1137,8 +1137,8 @@ fun DeviceForwardScreen(
                                     deviceManager.sendNotificationData(dev, json)
                                 }
                                 if (sentAny) {
-                                    com.xzyht.notifyrelay.data.Notify.ChatMemory.append(context, "发送: $chatInput")
-                                    chatHistoryState.value = com.xzyht.notifyrelay.data.Notify.ChatMemory.getChatHistory(context)
+                                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "发送: $chatInput")
+                                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
                                     chatInput = ""
                                 }
                             },

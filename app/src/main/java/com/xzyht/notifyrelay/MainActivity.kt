@@ -1,6 +1,6 @@
 package com.xzyht.notifyrelay
 
-import com.xzyht.notifyrelay.data.Notify.NotificationRepository
+import com.xzyht.notifyrelay.data.notify.NotificationRepository
 import android.content.Intent
 import com.xzyht.notifyrelay.service.DeviceConnectionService
 import androidx.compose.foundation.background

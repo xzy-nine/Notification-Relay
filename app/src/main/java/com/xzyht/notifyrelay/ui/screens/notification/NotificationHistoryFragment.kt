@@ -1,8 +1,8 @@
 package com.xzyht.notifyrelay.ui.screens.notification
 
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil
-import com.xzyht.notifyrelay.data.Notify.NotificationRepository
-import com.xzyht.notifyrelay.data.Notify.NotificationRecord
+import com.xzyht.notifyrelay.data.notify.NotificationRepository
+import com.xzyht.notifyrelay.data.notify.NotificationRecord
 import com.xzyht.notifyrelay.ui.screens.device.GlobalSelectedDeviceHolder
 import com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment
 import android.os.Bundle
@@ -43,7 +43,7 @@ object ToastDebounce {
 }
 
 @Composable
-fun NotificationCard(record: com.xzyht.notifyrelay.data.Notify.NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
+fun NotificationCard(record: com.xzyht.notifyrelay.data.notify.NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     val context = LocalContext.current
@@ -274,7 +274,7 @@ fun NotificationHistoryScreen() {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
             appInfoCache.clear() // 清空应用信息缓存
             // 修正：同步清理本地json文件内容
-            val store = com.xzyht.notifyrelay.data.Notify.NotifyRelayStoreProvider.getInstance(context)
+            val store = com.xzyht.notifyrelay.data.notify.NotifyRelayStoreProvider.getInstance(context)
             val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
             kotlinx.coroutines.runBlocking {
                 store.clearByDevice(fileKey)
@@ -327,8 +327,8 @@ fun NotificationHistoryScreen() {
     // 通用通知列表块
     @Composable
     fun NotificationListBlock(
-        notifications: List<com.xzyht.notifyrelay.data.Notify.NotificationRecord>,
-        mixedList: List<List<com.xzyht.notifyrelay.data.Notify.NotificationRecord>>,
+        notifications: List<com.xzyht.notifyrelay.data.notify.NotificationRecord>,
+        mixedList: List<List<com.xzyht.notifyrelay.data.notify.NotificationRecord>>,
         getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>
     ) {
         if (notifications.isNotEmpty()) {

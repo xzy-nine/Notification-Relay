@@ -534,7 +534,7 @@ fun DeviceListScreen() {
                                 for (uuid in oldUuids.distinct()) {
                                     safeMap.remove(uuid)
                                     try {
-                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationData")
+                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
                                         val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
                                         val notificationData = getInstance.invoke(null, appContext)
                                         val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
@@ -653,7 +653,7 @@ fun DeviceListScreen() {
                                 for (uuid in allUuidsToRemove.distinct()) {
                                     safeMap.remove(uuid)
                                     try {
-                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.Notify.NotificationData")
+                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
                                         val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
                                         val notificationData = getInstance.invoke(null, appContext)
                                         val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
