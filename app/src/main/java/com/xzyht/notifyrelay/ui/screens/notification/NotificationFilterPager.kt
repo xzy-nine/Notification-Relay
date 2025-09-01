@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.ui.MainActivityscreen
+package com.xzyht.notifyrelay.ui.screens.notification
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext

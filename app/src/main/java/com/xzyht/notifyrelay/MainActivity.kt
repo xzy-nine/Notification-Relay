@@ -211,7 +211,7 @@ fun DeviceListFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceListFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.device.DeviceListFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -233,7 +233,7 @@ fun DeviceForwardFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceForwardFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -256,7 +256,7 @@ fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
                 fragmentManager?.let { fm ->
                     // 每次都 replace，保证 fragment attach
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.MainActivityscreen.NotificationHistoryFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.notification.NotificationHistoryFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout

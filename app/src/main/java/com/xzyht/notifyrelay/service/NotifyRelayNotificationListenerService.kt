@@ -101,7 +101,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
         android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
-            val deviceManager = com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceForwardFragment.getDeviceManager(applicationContext)
+            val deviceManager = com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment.getDeviceManager(applicationContext)
             var appName: String? = null
             try {
                 val pm = applicationContext.packageManager

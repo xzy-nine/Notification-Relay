@@ -1,8 +1,10 @@
-package com.xzyht.notifyrelay.ui.MainActivityscreen
+package com.xzyht.notifyrelay.ui.screens.notification
 
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil
 import com.xzyht.notifyrelay.data.Notify.NotificationRepository
 import com.xzyht.notifyrelay.data.Notify.NotificationRecord
+import com.xzyht.notifyrelay.ui.screens.device.GlobalSelectedDeviceHolder
+import com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment
 import android.os.Bundle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -214,7 +216,7 @@ fun NotificationHistoryScreen() {
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
     // 响应全局设备选中状态
-    val selectedDeviceObj by com.xzyht.notifyrelay.ui.MainActivityscreen.GlobalSelectedDeviceHolder.current()
+    val selectedDeviceObj by GlobalSelectedDeviceHolder.current()
     val selectedDevice = selectedDeviceObj?.uuid ?: "本机"
     // 切换设备时，先切换 currentDevice，再刷新 flow
     LaunchedEffect(selectedDevice) {
@@ -282,7 +284,7 @@ fun NotificationHistoryScreen() {
                 val files = context.filesDir.listFiles()?.filter { it.name.startsWith("notification_records_") && it.name.endsWith(".json") } ?: emptyList()
                 // 获取当前认证设备uuid集合（含本机local）
                 val authedUuids: Set<String> = try {
-                    val deviceManager = com.xzyht.notifyrelay.ui.MainActivityscreen.DeviceForwardFragment.getDeviceManager(context)
+                    val deviceManager = DeviceForwardFragment.getDeviceManager(context)
                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                     field.isAccessible = true
                     @Suppress("UNCHECKED_CAST")
