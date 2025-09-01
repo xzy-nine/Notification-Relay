@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.feature.guide
 
 import android.app.Activity
 import android.content.Context
@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import com.xzyht.notifyrelay.MainActivity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning

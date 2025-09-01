@@ -2,9 +2,10 @@ package com.xzyht.notifyrelay.ui.screens.notification
 
 import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManagerUtil
 import com.xzyht.notifyrelay.data.notify.NotificationRepository
-import com.xzyht.notifyrelay.data.notify.NotificationRecord
+import com.xzyht.notifyrelay.common.data.NotificationRecord
 import com.xzyht.notifyrelay.ui.screens.device.GlobalSelectedDeviceHolder
 import com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment
+import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import android.os.Bundle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -43,7 +44,7 @@ object ToastDebounce {
 }
 
 @Composable
-fun NotificationCard(record: com.xzyht.notifyrelay.data.notify.NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
+fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     val context = LocalContext.current
@@ -327,8 +328,8 @@ fun NotificationHistoryScreen() {
     // 通用通知列表块
     @Composable
     fun NotificationListBlock(
-        notifications: List<com.xzyht.notifyrelay.data.notify.NotificationRecord>,
-        mixedList: List<List<com.xzyht.notifyrelay.data.notify.NotificationRecord>>,
+        notifications: List<NotificationRecord>,
+        mixedList: List<List<NotificationRecord>>,
         getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>
     ) {
         if (notifications.isNotEmpty()) {
@@ -483,7 +484,7 @@ fun NotificationHistoryScreen() {
                     showIndication = true,
                     onClick = clearHistory,
                     onLongPress = {
-                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.GuideActivity::class.java)
+                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
                         intent.putExtra("fromInternal", true)
                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)

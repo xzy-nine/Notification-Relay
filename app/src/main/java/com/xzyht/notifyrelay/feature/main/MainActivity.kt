@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay
 import com.xzyht.notifyrelay.data.notify.NotificationRepository
 import android.content.Intent
 import com.xzyht.notifyrelay.service.DeviceConnectionService
+import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import android.os.Bundle

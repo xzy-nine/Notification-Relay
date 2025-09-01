@@ -12,38 +12,9 @@ import kotlinx.coroutines.runBlocking
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
-
-// 通知动作数据模型
-data class NotificationAction(
-    val icon: Icon? = null,
-    val svgResId: Int? = null,
-    val title: String?,
-    val intent: PendingIntent?
-)
-
-// 通知记录数据模型
-data class NotificationRecord(
-    val key: String,
-    val packageName: String,
-    val appName: String? = null, // 新增字段
-    val title: String?,
-    val text: String?,
-    val time: Long,
-    val device: String = "本机",
-    val actions: List<NotificationAction> = emptyList(),
-    val smallIconResId: Int? = null
-)
-
-// 数据库存储实体
-data class NotificationRecordEntity(
-    val key: String,
-    val packageName: String,
-    val appName: String? = null, // 新增字段
-    val title: String?,
-    val text: String?,
-    val time: Long,
-    val device: String = "本机"
-)
+import com.xzyht.notifyrelay.common.data.NotificationAction
+import com.xzyht.notifyrelay.common.data.NotificationRecord
+import com.xzyht.notifyrelay.common.data.NotificationRecordEntity
 
 // 本地存储实现
 class NotificationRecordStore(private val context: Context) {

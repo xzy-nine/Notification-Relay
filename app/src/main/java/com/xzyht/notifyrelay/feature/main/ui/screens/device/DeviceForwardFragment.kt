@@ -33,7 +33,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.TabRow
-import com.xzyht.notifyrelay.ui.screens.notification.NotificationFilterPager
+import com.xzyht.notifyrelay.feature.notification.NotificationFilterPager
 import com.xzyht.notifyrelay.service.NotifyRelayNotificationListenerService.DefaultNotificationFilter
 
 @Composable
@@ -544,7 +544,7 @@ fun DeviceForwardScreen(
     val coroutineScope = rememberCoroutineScope()
     // 聊天内容持久化到本地文件，应用退出前都保留
     LaunchedEffect(context) {
-        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+        chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
     }
     // 只监听全局选中设备
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
@@ -652,11 +652,11 @@ fun DeviceForwardScreen(
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay(狂鼠)", "[延迟]远程通知复刻失败", e)
                         }
-                        com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+                        com.xzyht.notifyrelay.common.data.ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
                     } else {
-                        com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+                        com.xzyht.notifyrelay.common.data.ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
                     }
                 }
             } else {
@@ -747,11 +747,11 @@ fun DeviceForwardScreen(
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
                     }
-                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+                    com.xzyht.notifyrelay.common.data.ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
                 } else {
-                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+                    com.xzyht.notifyrelay.common.data.ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
                 }
             }
         }
@@ -1137,8 +1137,8 @@ fun DeviceForwardScreen(
                                     deviceManager.sendNotificationData(dev, json)
                                 }
                                 if (sentAny) {
-                                    com.xzyht.notifyrelay.data.notify.ChatMemory.append(context, "发送: $chatInput")
-                                    chatHistoryState.value = com.xzyht.notifyrelay.data.notify.ChatMemory.getChatHistory(context)
+                                    com.xzyht.notifyrelay.common.data.ChatMemory.append(context, "发送: $chatInput")
+                                    chatHistoryState.value = com.xzyht.notifyrelay.common.data.ChatMemory.getChatHistory(context)
                                     chatInput = ""
                                 }
                             },
