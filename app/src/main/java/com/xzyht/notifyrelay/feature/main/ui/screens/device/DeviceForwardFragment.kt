@@ -5,7 +5,6 @@ import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.Composable
-import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.Button
@@ -38,335 +37,12 @@ import com.xzyht.notifyrelay.feature.notification.DefaultNotificationFilter
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
+import com.xzyht.notifyrelay.common.ui.dialogs.AppPickerDialog
+import com.xzyht.notifyrelay.common.ui.dialogs.AddKeywordDialog
 
-// 应用列表缓存机制（持久化）
-object AppListCache {
-    private const val PREFS_NAME = "notifyrelay_app_cache"
-    private const val KEY_CACHED_APPS = "cached_apps"
-    private const val KEY_CACHE_TIMESTAMP = "cache_timestamp"
 
-    private var cachedApps: List<android.content.pm.ApplicationInfo>? = null
-    private var isLoaded = false
 
-    // 从 SharedPreferences 加载缓存
-    private fun loadFromPrefs(context: android.content.Context): List<android.content.pm.ApplicationInfo>? {
-        if (isLoaded) return cachedApps
 
-        try {
-            val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-            val appsJson = prefs.getString(KEY_CACHED_APPS, null) ?: return null
-
-            val jsonArray = org.json.JSONArray(appsJson)
-            val apps = mutableListOf<android.content.pm.ApplicationInfo>()
-
-            for (i in 0 until jsonArray.length()) {
-                val appJson = jsonArray.getJSONObject(i)
-                val packageName = appJson.getString("packageName")
-                val appName = appJson.optString("appName", packageName)
-
-                // 创建一个基本的 ApplicationInfo 对象
-                val appInfo = android.content.pm.ApplicationInfo()
-                appInfo.packageName = packageName
-                appInfo.name = appName
-                appInfo.flags = appJson.optInt("flags", 0)
-                appInfo.uid = appJson.optInt("uid", 0)
-                appInfo.sourceDir = appJson.optString("sourceDir", null)
-                appInfo.publicSourceDir = appJson.optString("publicSourceDir", null)
-
-                apps.add(appInfo)
-            }
-
-            cachedApps = apps
-            isLoaded = true
-            return apps
-        } catch (e: Exception) {
-            android.util.Log.e("AppListCache", "Failed to load cached apps", e)
-            return null
-        }
-    }
-
-    // 保存缓存到 SharedPreferences
-    private fun saveToPrefs(context: android.content.Context, apps: List<android.content.pm.ApplicationInfo>) {
-        try {
-            val jsonArray = org.json.JSONArray()
-            apps.forEach { appInfo ->
-                val appJson = org.json.JSONObject()
-                appJson.put("packageName", appInfo.packageName)
-                appJson.put("appName", try {
-                    context.packageManager.getApplicationLabel(appInfo).toString()
-                } catch (e: Exception) {
-                    appInfo.packageName
-                })
-                appJson.put("flags", appInfo.flags)
-                appJson.put("uid", appInfo.uid)
-                appJson.put("sourceDir", appInfo.sourceDir)
-                appJson.put("publicSourceDir", appInfo.publicSourceDir)
-                jsonArray.put(appJson)
-            }
-
-            val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-            prefs.edit()
-                .putString(KEY_CACHED_APPS, jsonArray.toString())
-                .putLong(KEY_CACHE_TIMESTAMP, System.currentTimeMillis())
-                .apply()
-
-            cachedApps = apps
-            isLoaded = true
-        } catch (e: Exception) {
-            android.util.Log.e("AppListCache", "Failed to save cached apps", e)
-        }
-    }
-
-    fun getCachedApps(context: android.content.Context): List<android.content.pm.ApplicationInfo>? {
-        return loadFromPrefs(context)
-    }
-
-    fun updateCache(context: android.content.Context, apps: List<android.content.pm.ApplicationInfo>) {
-        saveToPrefs(context, apps)
-    }
-
-    fun invalidate(context: android.content.Context) {
-        cachedApps = null
-        isLoaded = false
-        val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-        prefs.edit().clear().apply()
-    }
-}
-
-@Composable
-fun AppPickerDialog(
-    visible: Boolean,
-    onDismiss: () -> Unit,
-    onAppSelected: (String) -> Unit,
-    title: String = "选择应用"
-) {
-    if (!visible) return
-    val context = LocalContext.current
-    val pm = context.packageManager
-    var showSystemApps by remember { mutableStateOf(true) }
-    var appSearchQuery by remember { mutableStateOf("") }
-    // 异步加载应用列表，避免主线程阻塞导致弹窗延迟
-    var isLoading by remember(visible) { mutableStateOf(true) }
-    var allApps by remember(visible) { mutableStateOf<List<android.content.pm.ApplicationInfo>>(emptyList()) }
-    var dataLoaded by remember(visible) { mutableStateOf(false) }
-
-    LaunchedEffect(visible) {
-        // 检查缓存
-        val cached = AppListCache.getCachedApps(context)
-        if (cached != null && cached.isNotEmpty()) {
-            android.util.Log.d("AppPickerDialog", "Using cached apps: ${cached.size} apps")
-            allApps = cached
-            isLoading = false
-            dataLoaded = true
-        } else {
-            android.util.Log.d("AppPickerDialog", "No valid cache found, loading from system")
-            // 异步加载并缓存
-            isLoading = true
-            try {
-                val apps = pm.getInstalledApplications(0).sortedBy { appInfo ->
-                    try {
-                        pm.getApplicationLabel(appInfo).toString()
-                    } catch (e: Exception) {
-                        appInfo.packageName
-                    }
-                }
-                android.util.Log.d("AppPickerDialog", "Loaded ${apps.size} apps from system")
-                allApps = apps
-                AppListCache.updateCache(context, apps)
-                dataLoaded = true
-            } catch (e: Exception) {
-                android.util.Log.e("AppPickerDialog", "Failed to load apps", e)
-                allApps = emptyList()
-                dataLoaded = true
-            }
-            isLoading = false
-        }
-    }
-    val userApps = remember(dataLoaded, allApps) {
-        if (!dataLoaded || allApps.isEmpty()) {
-            android.util.Log.d("AppPickerDialog", "userApps: dataLoaded=$dataLoaded, allApps.size=${allApps.size}")
-            emptyList()
-        } else {
-            val result = allApps.filter { (it.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0 }
-            android.util.Log.d("AppPickerDialog", "userApps: filtered ${result.size} user apps from ${allApps.size} total apps")
-            result
-        }
-    }
-    val displayApps = if (showSystemApps) allApps else userApps
-    val filteredApps = remember(dataLoaded, appSearchQuery, displayApps) {
-        if (!dataLoaded || displayApps.isEmpty()) {
-            android.util.Log.d("AppPickerDialog", "filteredApps: dataLoaded=$dataLoaded, displayApps.size=${displayApps.size}")
-            emptyList()
-        } else if (appSearchQuery.isBlank()) {
-            android.util.Log.d("AppPickerDialog", "filteredApps: no search query, returning ${displayApps.size} apps")
-            displayApps
-        } else {
-            val result = displayApps.filter {
-                try {
-                    pm.getApplicationLabel(it).toString().contains(appSearchQuery, true) || appSearchQuery in it.packageName
-                } catch (e: Exception) {
-                    appSearchQuery in it.packageName
-                }
-            }
-            android.util.Log.d("AppPickerDialog", "filteredApps: search '$appSearchQuery' found ${result.size} apps from ${displayApps.size}")
-            result
-        }
-    }
-    val iconLabelCache = remember(dataLoaded, allApps) {
-        if (!dataLoaded || allApps.isEmpty()) emptyMap()
-        else {
-            val map = mutableMapOf<String, Pair<androidx.compose.ui.graphics.ImageBitmap?, String>>()
-            allApps.forEach { appInfo ->
-                val pkg = appInfo.packageName
-                val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
-                val iconBitmap = try {
-                    val icon = pm.getApplicationIcon(appInfo)
-                    when (icon) {
-                        is android.graphics.drawable.BitmapDrawable -> icon.bitmap.asImageBitmap()
-                        null -> null
-                        else -> {
-                            val drawable = icon as android.graphics.drawable.Drawable
-                            val width: Int = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-                            val height: Int = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                            val canvas = android.graphics.Canvas(bitmap)
-                            drawable.setBounds(0, 0, width, height)
-                            drawable.draw(canvas)
-                            bitmap.asImageBitmap()
-                        }
-                    }
-                } catch (_: Exception) { null }
-                map[pkg] = iconBitmap to label
-            }
-            map
-        }
-    }
-    val defaultAppIconBitmap = remember {
-        val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
-        if (drawable is android.graphics.drawable.BitmapDrawable) {
-            drawable.bitmap.asImageBitmap()
-        } else {
-            androidx.compose.ui.graphics.ImageBitmap(22, 22, androidx.compose.ui.graphics.ImageBitmapConfig.Argb8888)
-        }
-    }
-    val showDialog = remember { mutableStateOf(true) }
-    MiuixTheme {
-        SuperDialog(
-            show = showDialog,
-            title = title,
-            onDismissRequest = { showDialog.value = false; onDismiss(); appSearchQuery = "" }
-        ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                ) {
-                    top.yukonga.miuix.kmp.basic.Switch(
-                        checked = showSystemApps,
-                        onCheckedChange = { showSystemApps = it },
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    Text("显示系统应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                }
-                top.yukonga.miuix.kmp.basic.TextField(
-                    value = appSearchQuery,
-                    onValueChange = { appSearchQuery = it },
-                    label = "搜索应用/包名",
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                )
-                if (isLoading || !dataLoaded) {
-                    // 显示加载提示在应用列表区域
-                    Box(Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            InfiniteProgressIndicator(
-                                size = 48.dp,
-                                color = MiuixTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("正在加载应用列表...", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary)
-                        }
-                    }
-                } else {
-                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                        if (filteredApps.isEmpty()) {
-                            item {
-                                Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                                    Text("没有匹配的应用", style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceSecondary)
-                                }
-                            }
-                        } else {
-                            items(filteredApps) { appInfo ->
-                                val pkg = appInfo.packageName
-                                val (iconBitmap, label) = iconLabelCache[pkg] ?: (null to pkg)
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onAppSelected(pkg)
-                                            showDialog.value = false
-                                            appSearchQuery = ""
-                                        }
-                                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (iconBitmap != null) {
-                                            Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                        } else {
-                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                        }
-                                        Column(modifier = Modifier.padding(start = 8.dp)) {
-                                            Text(label, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurface)
-                                            Text(pkg, style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceSecondary, modifier = Modifier.padding(top = 2.dp))
-                                        }
-                                    }
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(top = 8.dp),
-                                        color = MiuixTheme.colorScheme.dividerLine,
-                                        thickness = 0.7.dp
-                                    )
-                                }
-                            }
-                            if (appSearchQuery.isNotBlank() && filteredApps.none { it.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
-                                item {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                onAppSelected(appSearchQuery)
-                                                showDialog.value = false
-                                                appSearchQuery = ""
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 10.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Image(bitmap = defaultAppIconBitmap, contentDescription = null, modifier = Modifier.size(22.dp))
-                                            Text(
-                                                "添加自定义包名：${appSearchQuery}",
-                                                style = MiuixTheme.textStyles.body2,
-                                                color = MiuixTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(start = 8.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                                        TextButton(
-                                            text = "关闭",
-                                            onClick = { showDialog.value = false; onDismiss(); appSearchQuery = "" }
-                                        )
-            }
-        }
-    }
-}
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -576,7 +252,7 @@ class DeviceForwardFragment : Fragment() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             when (intent.action) {
                 android.content.Intent.ACTION_PACKAGE_ADDED, android.content.Intent.ACTION_PACKAGE_REMOVED -> {
-                    AppListCache.invalidate(context)
+                    // AppListCache现在在AppPickerDialog.kt中，由其负责管理缓存
                 }
             }
         }
@@ -1126,7 +802,7 @@ fun DeviceForwardScreen(
                         AppPickerDialog(
                             visible = true,
                             onDismiss = { showAppPickerForGroup = false to -1 },
-                            onAppSelected = { pkg ->
+                            onAppSelected = { pkg: String ->
                                 allGroups = allGroups.toMutableList().apply {
                                     if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
                                 }
@@ -1177,7 +853,7 @@ fun DeviceForwardScreen(
                             AppPickerDialog(
                                 visible = true,
                                 onDismiss = { showFilterAppPicker = false },
-                                onAppSelected = { pkg ->
+                                onAppSelected = { pkg: String ->
                                     pendingFilterPkg = pkg
                                     pendingKeyword = ""
                                     showFilterAppPicker = false
@@ -1187,41 +863,22 @@ fun DeviceForwardScreen(
                         }
                         if (pendingFilterPkg != null) {
                             val showKeywordDialog = remember { mutableStateOf(true) }
-                            SuperDialog(
-                                show = showKeywordDialog,
-                                title = "为包名添加关键词(可选)",
-                                onDismissRequest = { showKeywordDialog.value = false; pendingFilterPkg = null }
-                            ) {
-                                Column {
-                                    Text(pendingFilterPkg!!, style = textStyles.body2, color = colorScheme.primary)
-                                    top.yukonga.miuix.kmp.basic.TextField(
-                                        value = pendingKeyword,
-                                        onValueChange = { pendingKeyword = it },
-                                        label = "关键词(可选)",
-                                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End
-                                    ) {
-                                        top.yukonga.miuix.kmp.basic.TextButton(
-                                            text = "确定",
-                                            onClick = {
-                                                // 追加到名单
-                                                val line = if (pendingKeyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + pendingKeyword.trim()
-                                                filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
-                                                showKeywordDialog.value = false
-                                                pendingFilterPkg = null
-                                            }
-                                        )
-                                        top.yukonga.miuix.kmp.basic.TextButton(
-                                            text = "取消",
-                                            onClick = { showKeywordDialog.value = false; pendingFilterPkg = null }
-                                        )
-                                    }
+                            AddKeywordDialog(
+                                showDialog = showKeywordDialog,
+                                packageName = pendingFilterPkg!!,
+                                initialKeyword = pendingKeyword,
+                                onConfirm = { keyword ->
+                                    // 追加到名单
+                                    val line = if (keyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + keyword.trim()
+                                    filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                    showKeywordDialog.value = false
+                                    pendingFilterPkg = null
+                                },
+                                onDismiss = {
+                                    showKeywordDialog.value = false
+                                    pendingFilterPkg = null
                                 }
-                            }
+                            )
                         }
                     }
                     // 延迟去重

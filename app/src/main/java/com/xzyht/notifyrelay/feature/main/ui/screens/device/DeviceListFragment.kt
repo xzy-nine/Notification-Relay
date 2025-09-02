@@ -25,16 +25,12 @@ import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.extra.SuperDialog
 import androidx.compose.ui.graphics.Color
 import top.yukonga.miuix.kmp.basic.Text
-
-// 握手请求数据结构
-data class HandshakeRequest(
-    val device: DeviceInfo,
-    val publicKey: String?,
-    val callback: (Boolean) -> Unit
-)
+import com.xzyht.notifyrelay.common.ui.dialogs.ConnectDeviceDialog
+import com.xzyht.notifyrelay.common.ui.dialogs.HandshakeRequestDialog
+import com.xzyht.notifyrelay.common.ui.dialogs.RejectedDevicesDialog
+import com.xzyht.notifyrelay.common.ui.dialogs.HandshakeRequest
 
 // 全局设备选中状态单例
 object GlobalSelectedDeviceHolder {
@@ -274,6 +270,19 @@ fun DeviceListScreen() {
                             Button(
                                 onClick = {
                                     try {
+                                        // 停止心跳任务
+                                        val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
+                                        heartbeatJobsField.isAccessible = true
+                                        val heartbeatJobs = heartbeatJobsField.get(deviceManager) as? MutableMap<String, *>
+                                        heartbeatJobs?.remove(device.uuid)
+
+                                        // 从心跳设备集合中移除
+                                        val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
+                                        heartbeatedDevicesField.isAccessible = true
+                                        val heartbeatedDevices = heartbeatedDevicesField.get(deviceManager) as? MutableSet<String>
+                                        heartbeatedDevices?.remove(device.uuid)
+
+                                        // 从认证设备表中移除
                                         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                         field.isAccessible = true
                                         val map = field.get(deviceManager)
@@ -420,6 +429,19 @@ fun DeviceListScreen() {
                             Button(
                                 onClick = {
                                     try {
+                                        // 停止心跳任务
+                                        val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
+                                        heartbeatJobsField.isAccessible = true
+                                        val heartbeatJobs = heartbeatJobsField.get(deviceManager) as? MutableMap<String, *>
+                                        heartbeatJobs?.remove(device.uuid)
+
+                                        // 从心跳设备集合中移除
+                                        val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
+                                        heartbeatedDevicesField.isAccessible = true
+                                        val heartbeatedDevices = heartbeatedDevicesField.get(deviceManager) as? MutableSet<String>
+                                        heartbeatedDevices?.remove(device.uuid)
+
+                                        // 从认证设备表中移除
                                         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                         field.isAccessible = true
                                         val map = field.get(deviceManager)
@@ -503,274 +525,178 @@ fun DeviceListScreen() {
     if (showConnectDialog && pendingConnectDevice != null) {
         val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
         val showDialog = remember { mutableStateOf(true) }
-        SuperDialog(
-            show = showDialog,
-            title = "连接设备",
-            summary = "是否连接设备：${pendingConnectDevice?.displayName ?: ""}？\n对方将收到认证请求。",
-            onDismissRequest = { showDialog.value = false; showConnectDialog = false }
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    text = "连接",
-                    onClick = {
-                        showDialog.value = false
-                        showConnectDialog = false
-                        pendingConnectDevice?.let { device ->
-                            // 连接前，先移除同IP的所有旧UUID认证（防止多UUID）
-                            try {
-                                val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                field.isAccessible = true
-                                val rawMap = field.get(deviceManager)
-                                val safeMap = if (rawMap is MutableMap<*, *>) {
-                                    val m = mutableMapOf<String, Any?>()
-                                    for ((k, v) in rawMap) {
-                                        if (k is String) m[k] = v
-                                    }
-                                    m
-                                } else mutableMapOf()
-                                val oldUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
-                                val appContext = context.applicationContext
-                                for (uuid in oldUuids.distinct()) {
-                                    safeMap.remove(uuid)
-                                    try {
-                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
-                                        val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
-                                        val notificationData = getInstance.invoke(null, appContext)
-                                        val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
-                                        clearDeviceHistory.invoke(notificationData, uuid, appContext)
-                                    } catch (_: Exception) {}
-                                    try {
-                                        val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
-                                        if (file.exists()) file.delete()
-                                    } catch (_: Exception) {}
-                                }
-                                // 持久化认证状态
-                                val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                saveMethod.isAccessible = true
-                                saveMethod.invoke(deviceManager)
-                                val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                                updateMethod.isAccessible = true
-                                updateMethod.invoke(deviceManager)
-                            } catch (_: Exception) {}
-                            deviceManager.connectToDevice(device) { success, msg ->
-                                if (!success && msg != null && activity != null) {
-                                    activity.runOnUiThread {
-                                        android.widget.Toast.makeText(activity, "连接失败: $msg", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                } else if (success) {
-                                    // 认证成功，立即刷新UI侧已认证设备列表
-                                    try {
-                                        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                        field.isAccessible = true
-                                        @Suppress("UNCHECKED_CAST")
-                                        val map = field.get(deviceManager) as? Map<String, *>
-                                        authedDeviceUuids = map?.filter { entry ->
-                                            val v = entry.value
-                                            v?.let {
-                                                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                                isAcceptedField.getBoolean(v)
-                                            } ?: false
-                                        }?.keys?.toSet() ?: emptySet()
-                                    } catch (_: Exception) {}
-                                }
-                            }
+        ConnectDeviceDialog(
+            showDialog = showDialog,
+            device = pendingConnectDevice,
+            onConnect = { device ->
+                // 连接前，先移除同IP的所有旧UUID认证（防止多UUID）
+                try {
+                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                    field.isAccessible = true
+                    val rawMap = field.get(deviceManager)
+                    val safeMap = if (rawMap is MutableMap<*, *>) {
+                        val m = mutableMapOf<String, Any?>()
+                        for ((k, v) in rawMap) {
+                            if (k is String) m[k] = v
                         }
+                        m
+                    } else mutableMapOf()
+                    val oldUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
+                    val appContext = context.applicationContext
+                    for (uuid in oldUuids.distinct()) {
+                        safeMap.remove(uuid)
+                        try {
+                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
+                            val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
+                            val notificationData = getInstance.invoke(null, appContext)
+                            val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
+                            clearDeviceHistory.invoke(notificationData, uuid, appContext)
+                        } catch (_: Exception) {}
+                        try {
+                            val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
+                            if (file.exists()) file.delete()
+                        } catch (_: Exception) {}
                     }
-                )
-                TextButton(
-                    text = "取消",
-                    onClick = { showDialog.value = false; showConnectDialog = false }
-                )
+                    // 持久化认证状态
+                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+                    saveMethod.isAccessible = true
+                    saveMethod.invoke(deviceManager)
+                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
+                    updateMethod.isAccessible = true
+                    updateMethod.invoke(deviceManager)
+                } catch (_: Exception) {}
+                deviceManager.connectToDevice(device) { success, msg ->
+                    if (!success && msg != null && activity != null) {
+                        activity.runOnUiThread {
+                            android.widget.Toast.makeText(activity, "连接失败: $msg", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } else if (success) {
+                        // 认证成功，立即刷新UI侧已认证设备列表
+                        try {
+                            val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                            field.isAccessible = true
+                            @Suppress("UNCHECKED_CAST")
+                            val map = field.get(deviceManager) as? Map<String, *>
+                            authedDeviceUuids = map?.filter { entry ->
+                                val v = entry.value
+                                v?.let {
+                                    val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                                    isAcceptedField.getBoolean(v)
+                                } ?: false
+                            }?.keys?.toSet() ?: emptySet()
+                        } catch (_: Exception) {}
+                    }
+                    // 无论成功还是失败，都关闭弹窗
+                    showDialog.value = false
+                    showConnectDialog = false
+                    pendingConnectDevice = null
+                }
+            },
+            onDismiss = {
+                showDialog.value = false
+                showConnectDialog = false
+                pendingConnectDevice = null
             }
-        }
+        )
     }
 
     if (showHandshakeDialog && pendingHandshakeRequest != null) {
         val req = pendingHandshakeRequest!!
-        val device = req.device
         val showDialog = remember { mutableStateOf(true) }
-        SuperDialog(
-            show = showDialog,
-            title = "新设备连接请求",
-            onDismissRequest = {
-                // 先回调，后关闭弹窗，避免回调丢失
-                req.callback(false)
+        HandshakeRequestDialog(
+            showDialog = showDialog,
+            handshakeRequest = req,
+            onAccept = { handshakeReq ->
+                // 认证前，批量移除同IP下所有旧UUID认证和缓存
+                try {
+                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                    field.isAccessible = true
+                    val rawMap = field.get(deviceManager)
+                    val safeMap = if (rawMap is MutableMap<*, *>) {
+                        val m = mutableMapOf<String, Any?>()
+                        for ((k, v) in rawMap) {
+                            if (k is String) m[k] = v
+                        }
+                        m
+                    } else mutableMapOf()
+                    val allUuidsToRemove = findOtherUuidsWithSameIp(handshakeReq.device.uuid, "") + handshakeReq.device.uuid
+                    val appContext = context.applicationContext
+                    for (uuid in allUuidsToRemove.distinct()) {
+                        safeMap.remove(uuid)
+                        try {
+                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
+                            val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
+                            val notificationData = getInstance.invoke(null, appContext)
+                            val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
+                            clearDeviceHistory.invoke(notificationData, uuid, appContext)
+                        } catch (_: Exception) {}
+                        try {
+                            val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
+                            if (file.exists()) file.delete()
+                        } catch (_: Exception) {}
+                    }
+                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
+                    saveMethod.isAccessible = true
+                    saveMethod.invoke(deviceManager)
+                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
+                    updateMethod.isAccessible = true
+                    updateMethod.invoke(deviceManager)
+                } catch (_: Exception) {}
+                handshakeReq.callback(true)
+                // 强制刷新设备列表
+                val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
+                updateMethod.isAccessible = true
+                updateMethod.invoke(deviceManager)
+                // 立即刷新UI侧已认证设备列表
+                try {
+                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                    field.isAccessible = true
+                    @Suppress("UNCHECKED_CAST")
+                    val map = field.get(deviceManager) as? Map<String, *>
+                    authedDeviceUuids = map?.filter { entry ->
+                        val v = entry.value
+                        v?.let {
+                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                            isAcceptedField.getBoolean(v)
+                        } ?: false
+                    }?.keys?.toSet() ?: emptySet()
+                } catch (_: Exception) {}
+            },
+            onReject = { handshakeReq ->
+                handshakeReq.callback(false)
+            },
+            onDismiss = {
                 showDialog.value = false
                 showHandshakeDialog = false
                 pendingHandshakeRequest = null
             }
-        ) {
-            Column {
-                Text(
-                    text = "设备名: ${device.displayName}",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceContainerVariant
-                )
-                Text(
-                    text = "UUID: ${device.uuid}",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceContainerVariant
-                )
-                Text(
-                    text = "IP: ${device.ip}  端口: ${device.port}",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceContainerVariant
-                )
-                if (!req.publicKey.isNullOrBlank()) {
-                    Text(
-                        text = "公钥: ${req.publicKey}",
-                        style = textStyles.body2,
-                        color = colorScheme.onSurfaceContainerVariant
-                    )
-                }
-                Text(
-                    text = "是否允许该设备连接？",
-                    style = textStyles.body2,
-                    color = colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        text = "同意",
-                        onClick = {
-                            // 先回调，后关闭弹窗，避免回调丢失
-                            // 认证前，批量移除同IP下所有旧UUID认证和缓存
-                            try {
-                                val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                field.isAccessible = true
-                                val rawMap = field.get(deviceManager)
-                                val safeMap = if (rawMap is MutableMap<*, *>) {
-                                    val m = mutableMapOf<String, Any?>()
-                                    for ((k, v) in rawMap) {
-                                        if (k is String) m[k] = v
-                                    }
-                                    m
-                                } else mutableMapOf()
-                                val allUuidsToRemove = findOtherUuidsWithSameIp(device.uuid, "") + device.uuid
-                                val appContext = context.applicationContext
-                                for (uuid in allUuidsToRemove.distinct()) {
-                                    safeMap.remove(uuid)
-                                    try {
-                                        val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
-                                        val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
-                                        val notificationData = getInstance.invoke(null, appContext)
-                                        val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
-                                        clearDeviceHistory.invoke(notificationData, uuid, appContext)
-                                    } catch (_: Exception) {}
-                                    try {
-                                        val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
-                                        if (file.exists()) file.delete()
-                                    } catch (_: Exception) {}
-                                }
-                                val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                saveMethod.isAccessible = true
-                                saveMethod.invoke(deviceManager)
-                                val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                                updateMethod.isAccessible = true
-                                updateMethod.invoke(deviceManager)
-                            } catch (_: Exception) {}
-                            req.callback(true)
-                            showDialog.value = false
-                            showHandshakeDialog = false
-                            pendingHandshakeRequest = null
-                            // 强制刷新设备列表
-                            val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                            updateMethod.isAccessible = true
-                            updateMethod.invoke(deviceManager)
-                            // 立即刷新UI侧已认证设备列表
-                            try {
-                                val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                field.isAccessible = true
-                                @Suppress("UNCHECKED_CAST")
-                                val map = field.get(deviceManager) as? Map<String, *>
-                                authedDeviceUuids = map?.filter { entry ->
-                                    val v = entry.value
-                                    v?.let {
-                                        val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                        isAcceptedField.getBoolean(v)
-                                    } ?: false
-                                }?.keys?.toSet() ?: emptySet()
-                            } catch (_: Exception) {}
-                        }
-                    )
-                    TextButton(
-                        text = "拒绝",
-                        onClick = {
-                            req.callback(false)
-                            showDialog.value = false
-                            showHandshakeDialog = false
-                            pendingHandshakeRequest = null
-                        }
-                    )
-                }
-            }
-        }
+        )
     }
 
     if (showRejectedDialog) {
         val showDialog = remember { mutableStateOf(true) }
-        SuperDialog(
-            show = showDialog,
-            title = "已拒绝设备",
-            onDismissRequest = { showDialog.value = false; showRejectedDialog = false }
-        ) {
-            if (rejectedDevices.isEmpty()) {
-                Text(
-                    text = "暂无已拒绝设备",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceContainerVariant
-                )
-            } else {
-                Column {
-                    rejectedDevices.forEach { device ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = device.displayName,
-                                style = textStyles.body2,
-                                color = colorScheme.onBackground,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(
-                                text = "恢复",
-                                onClick = {
-                                // 恢复设备（移除rejected），同IP下所有UUID都移除
-                                val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-                                field.isAccessible = true
-                                val set = field.get(deviceManager)
-                                if (set is MutableSet<*>) {
-                                    @Suppress("UNCHECKED_CAST")
-                                    val ms = set as? MutableSet<String>
-                                    val allUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
-                                    allUuids.distinct().forEach { ms?.remove(it) }
-                                }
-                                // 触发刷新
-                                @Suppress("UNCHECKED_CAST")
-                                rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
-                            }
-                            )
-                        }
-                    }
+        RejectedDevicesDialog(
+            showDialog = showDialog,
+            rejectedDevices = rejectedDevices,
+            onRestoreDevice = { device ->
+                // 恢复设备（移除rejected），同IP下所有UUID都移除
+                val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
+                field.isAccessible = true
+                val set = field.get(deviceManager)
+                if (set is MutableSet<*>) {
+                    @Suppress("UNCHECKED_CAST")
+                    val ms = set as? MutableSet<String>
+                    val allUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
+                    allUuids.distinct().forEach { ms?.remove(it) }
                 }
+                // 触发刷新
+                @Suppress("UNCHECKED_CAST")
+                rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
+            },
+            onDismiss = {
+                showDialog.value = false
+                showRejectedDialog = false
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    text = "关闭",
-                    onClick = { showDialog.value = false; showRejectedDialog = false }
-                )
-            }
-        }
+        )
     }
 }
