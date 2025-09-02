@@ -80,41 +80,7 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
                     // 发送高优先级悬浮通知
                     val title = record.title ?: "(无标题)"
                     val text = record.text ?: "(无内容)"
-                    val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                    val channelId = "notifyrelay_temp"
-                    // 仅支持 API 26+，不再兼容旧版
-                    if (notificationManager.getNotificationChannel(channelId) == null) {
-                        val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH)
-                        channel.description = "应用内跳转指示通知"
-                        channel.enableLights(true)
-                        channel.lightColor = android.graphics.Color.BLUE
-                        channel.enableVibration(false)
-                        channel.setSound(null, null)
-                        channel.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-                        channel.setShowBadge(false)
-                        channel.importance = android.app.NotificationManager.IMPORTANCE_HIGH
-                        channel.setBypassDnd(true)
-                        notificationManager.createNotificationChannel(channel)
-                    }
-                    val builder = android.app.Notification.Builder(context, channelId)
-                    builder.setContentTitle(title)
-                        .setContentText(text)
-                        .setSmallIcon(android.R.drawable.ic_dialog_info)
-                        .setCategory(android.app.Notification.CATEGORY_MESSAGE)
-                        .setAutoCancel(true)
-                        .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
-                        .setOngoing(false)
-                    // 设置应用图标
-                    if (appIcon != null) {
-                        builder.setLargeIcon(appIcon)
-                    }
-                    // 发送通知，ID用当前时间戳
-                    val notifyId = (System.currentTimeMillis() % Int.MAX_VALUE).toInt()
-                    notificationManager.notify(notifyId, builder.build())
-                    // 5秒后自动销毁通知
-                    android.os.Handler(context.mainLooper).postDelayed({
-                        notificationManager.cancel(notifyId)
-                    }, 5000)
+                    com.xzyht.notifyrelay.core.util.MessageSender.sendHighPriorityNotification(context, title, text)
                     intent!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }

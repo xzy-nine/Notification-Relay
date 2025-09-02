@@ -102,7 +102,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
         android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
-                        val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+            val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
             var appName: String? = null
             try {
                 val pm = applicationContext.packageManager
@@ -111,33 +111,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             } catch (_: Exception) {
                 appName = sbn.packageName
             }
-            val field = deviceManager::class.java.getDeclaredField("authenticatedDevices")
-            field.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val authedMap = field.get(deviceManager) as? Map<String, *>
-            if (authedMap != null) {
-                for ((uuid, auth) in authedMap) {
-                    val uuidStr = uuid as String
-                    val myUuidField = deviceManager::class.java.getDeclaredField("uuid")
-                    myUuidField.isAccessible = true
-                    val myUuid = myUuidField.get(deviceManager) as? String
-                    if (uuidStr == myUuid) continue
-                    val infoMethod = deviceManager::class.java.getDeclaredMethod("getDeviceInfo", String::class.java)
-                    infoMethod.isAccessible = true
-                    val deviceInfo = infoMethod.invoke(deviceManager, uuidStr) as? com.xzyht.notifyrelay.feature.device.service.DeviceInfo
-                    if (deviceInfo != null) {
-                        val payload = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.buildNotificationJson(
-                            sbn.packageName,
-                            appName,
-                            NotificationRepository.getStringCompat(sbn.notification.extras, "android.title"),
-                            NotificationRepository.getStringCompat(sbn.notification.extras, "android.text"),
-                            sbn.postTime
-                        )
-                        deviceManager.sendNotificationData(deviceInfo, payload)
-                        android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] 已转发通知到设备: uuid=$uuidStr, deviceInfo=$deviceInfo, title=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")}, text=${NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")}")
-                    }
-                }
-            }
+
+            // 使用整合的消息发送工具
+            com.xzyht.notifyrelay.core.util.MessageSender.sendNotificationMessage(
+                applicationContext,
+                sbn.packageName,
+                appName,
+                NotificationRepository.getStringCompat(sbn.notification.extras, "android.title"),
+                NotificationRepository.getStringCompat(sbn.notification.extras, "android.text"),
+                sbn.postTime,
+                deviceManager
+            )
         } catch (e: Exception) {
             android.util.Log.e("NotifyRelay", "自动转发通知到远程设备失败", e)
         }

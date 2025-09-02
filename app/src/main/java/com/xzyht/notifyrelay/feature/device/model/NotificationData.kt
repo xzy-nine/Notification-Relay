@@ -130,24 +130,21 @@ object NotificationRepository {
      * 新增：以远程设备uuid存储转发通知
      */
     @JvmStatic
-    fun addRemoteNotification(packageName: String, title: String, text: String, time: Long, device: String, context: Context) {
+    fun addRemoteNotification(packageName: String, appName: String?, title: String, text: String, time: Long, device: String, context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        android.util.Log.i("狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
+        android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
         if (context !is android.app.Application) {
-            android.util.Log.w("狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
+            android.util.Log.w("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
         }
         val key = (time.toString() + packageName + device)
-        // 远程推送时应带上 appName，尝试从 text/title 里提取，或后续参数补充
-        var appName: String? = null
-        // 远程 json 应带有 appName 字段，后续解析时补充
+        // 使用传入的appName参数
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val fileKey = device // 远程设备uuid
             val oldList = runBlocking { store.getAll(fileKey) }.toMutableList()
             oldList.removeAll { it.key == key }
             // device 字段严格等于 fileKey，保证UI读取时一致
-            // 兼容远程 json 结构，appName 字段后续由解析补充
             oldList.add(0, NotificationRecordEntity(
                 key = key,
                 packageName = packageName,
@@ -158,13 +155,13 @@ object NotificationRepository {
                 device = fileKey
             ))
             runBlocking { store.writeAll(oldList, fileKey) }
-            android.util.Log.i("狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
+            android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
         } catch (e: Exception) {
-            android.util.Log.e("狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
+            android.util.Log.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
         }
         // 写入后主动推送变更
         notifyHistoryChanged(device, context)
-        android.util.Log.i("狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
+        android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
     }
     /**
      * 新增通知到历史记录（支持监听服务调用）

@@ -701,12 +701,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 接收通知数据（解密）
     fun handleNotificationData(data: String, sharedSecret: String? = null, remoteUuid: String? = null) {
-        android.util.Log.d("死神-NotifyRelay", "收到通知数据: $data")
+        android.util.Log.d("秩序之光 死神-NotifyRelay", "收到通知数据: $data")
         val decrypted = if (sharedSecret != null) {
             try {
                 xorDecrypt(data, sharedSecret)
             } catch (e: Exception) {
-                android.util.Log.d("死神-NotifyRelay", "解密失败: ${e.message}")
+                android.util.Log.d("秩序之光 死神-NotifyRelay", "解密失败: ${e.message}")
                 data
             }
         } else data
@@ -715,6 +715,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             if (remoteUuid != null) {
                 val json = org.json.JSONObject(decrypted)
                 val pkg = json.optString("packageName")
+                val appName = json.optString("appName")
                 val title = json.optString("title")
                 val text = json.optString("text")
                 val time = json.optLong("time", System.currentTimeMillis())
@@ -724,14 +725,16 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
                 val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationRepository")
-                val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
-                addMethod.invoke(null, pkg, title, text, time, remoteUuid, context)
+                val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
+                // 修复：NotificationRepository是object（单例），需要获取实例
+                val repoInstance = repoClass.getDeclaredField("INSTANCE").get(null)
+                addMethod.invoke(repoInstance, pkg, appName, title, text, time, remoteUuid, context)
                 // 强制刷新设备列表和UI
                 val scanMethod = repoClass.getDeclaredMethod("scanDeviceList", android.content.Context::class.java)
-                scanMethod.invoke(null, context)
+                scanMethod.invoke(repoInstance, context)
             }
         } catch (e: Exception) {
-            android.util.Log.e("死神-NotifyRelay", "存储远程通知失败: ${e.message}")
+            android.util.Log.e("秩序之光 死神-NotifyRelay", "存储远程通知失败: ${e.message}")
         }
         // 不再直接发系统通知，由 UI 层渲染
         notificationDataReceivedCallbacks.forEach { it.invoke(decrypted) }
@@ -897,13 +900,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                             handleNotificationData(payload, sharedSecret, remoteUuid)
                                         } else {
                                             if (auth == null) {
-                                                android.util.Log.d("死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
+                                                android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
                                             } else {
                                                 val reason = buildString {
                                                     if (auth.sharedSecret != sharedSecret) append("sharedSecret不匹配; ")
                                                     if (!auth.isAccepted) append("isAccepted=false; ")
                                                 }
-                                                android.util.Log.d("死神-NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
+                                                android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
                                             }
                                         }
                                     }

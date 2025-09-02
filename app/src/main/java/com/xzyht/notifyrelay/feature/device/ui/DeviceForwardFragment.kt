@@ -599,28 +599,17 @@ fun DeviceForwardScreen(
                         )
                         top.yukonga.miuix.kmp.basic.Button(
                             onClick = {
-                                // 全部广播：遍历所有已认证设备
-                                val allDevices = deviceManager.devices.value.values.map { it.first }
-                                val sentAny = allDevices.isNotEmpty() && chatInput.isNotBlank()
-                                // 构建标准 JSON
-                                val pkgName: String = context.packageName
-                                val json = org.json.JSONObject().apply {
-                                    put("packageName", pkgName)
-                                    put("appName", "NotifyRelay")
-                                    put("title", "聊天测试")
-                                    put("text", chatInput)
-                                    put("time", System.currentTimeMillis())
-                                }.toString()
-                                allDevices.forEach { dev ->
-                                    deviceManager.sendNotificationData(dev, json)
-                                }
-                                if (sentAny) {
-                                    ChatMemory.append(context, "发送: $chatInput")
-                                    chatHistoryState.value = ChatMemory.getChatHistory(context)
-                                    chatInput = ""
-                                }
+                                // 使用整合的消息发送工具
+                                com.xzyht.notifyrelay.core.util.MessageSender.sendChatMessage(
+                                    context,
+                                    chatInput,
+                                    deviceManager
+                                )
+                                chatHistoryState.value = ChatMemory.getChatHistory(context)
+                                chatInput = ""
                             },
-                            enabled = deviceManager.devices.value.isNotEmpty() && chatInput.isNotBlank(),
+                            enabled = com.xzyht.notifyrelay.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
+                                    com.xzyht.notifyrelay.core.util.MessageSender.isValidMessage(chatInput),
                             modifier = Modifier.align(Alignment.CenterVertically)
                         ) {
                             top.yukonga.miuix.kmp.basic.Text("发送")
