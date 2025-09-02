@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import com.xzyht.notifyrelay.MainActivity
 import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.AppListHelper
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -39,8 +40,7 @@ import top.yukonga.miuix.kmp.basic.Text
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val prefs = getSharedPreferences("notifyrelay_prefs", Context.MODE_PRIVATE)
-        val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
+        val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true)
         val fromInternal = intent.getBooleanExtra("fromInternal", false)
         // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
         if (!fromInternal && PermissionHelper.checkAllPermissions(this) && !isFirstLaunch) {
@@ -71,7 +71,7 @@ class GuideActivity : ComponentActivity() {
                 }
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
-                    prefs.edit().putBoolean("isFirstLaunch", false).apply()
+                    StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false)
                     startActivity(Intent(this@GuideActivity, MainActivity::class.java))
                     finish()
                 })

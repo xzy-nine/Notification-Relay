@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.data.StorageManager
 
 /**
  * 后端接收通知过滤器
@@ -139,7 +140,6 @@ object BackendRemoteFilter {
  * 包含包名映射、去重、黑白名单/对等模式配置
  */
 object RemoteFilterConfig {
-    private const val PREFS_NAME = "notifyrelay_filter_prefs"
     private const val KEY_PACKAGE_GROUPS = "package_groups"
     private const val KEY_FILTER_MODE = "filter_mode"
     private const val KEY_FILTER_LIST = "filter_list"
@@ -183,44 +183,43 @@ object RemoteFilterConfig {
 
     // 加载设置
     fun load(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-        enablePackageGroupMapping = prefs.getBoolean("enable_package_group_mapping", true)
-        val defaultEnabled = prefs.getString("default_group_enabled", "1,1,1")!!.split(",").map { it == "1" }
+        enablePackageGroupMapping = StorageManager.getBoolean(context, "enable_package_group_mapping", true, StorageManager.PrefsType.FILTER)
+        val defaultEnabledStr = StorageManager.getString(context, "default_group_enabled", "1,1,1", StorageManager.PrefsType.FILTER)
+        val defaultEnabled = defaultEnabledStr.split(",").map { it == "1" }
         defaultGroupEnabled = defaultEnabled.toMutableList().apply {
             while (size < defaultPackageGroups.size) add(true)
         }
-        val customGroups = prefs.getStringSet(KEY_PACKAGE_GROUPS, null)?.mapNotNull {
+        val customGroupsStr = StorageManager.getStringSet(context, KEY_PACKAGE_GROUPS, emptySet(), StorageManager.PrefsType.FILTER)
+        val customGroups = customGroupsStr.mapNotNull {
             it.split("|").map { s->s.trim() }.filter { s->s.isNotBlank() }.toMutableList().takeIf { set->set.isNotEmpty() }
-        }?.toMutableList() ?: mutableListOf()
+        }.toMutableList()
         customPackageGroups = customGroups
-        val customEnabledStr = prefs.getString("custom_group_enabled", null)
-        customGroupEnabled = if (customEnabledStr != null) {
+        val customEnabledStr = StorageManager.getString(context, "custom_group_enabled", "", StorageManager.PrefsType.FILTER)
+        customGroupEnabled = if (customEnabledStr.isNotEmpty()) {
             customEnabledStr.split(",").map { it == "1" }.toMutableList().apply {
                 while (size < customGroups.size) add(true)
             }
         } else MutableList(customGroups.size) { true }
-        filterMode = prefs.getString(KEY_FILTER_MODE, "none") ?: "none"
-        enableDeduplication = prefs.getBoolean(KEY_ENABLE_DEDUP, true)
-        enablePeerMode = prefs.getBoolean(KEY_ENABLE_PEER, false)
-        filterList = prefs.getStringSet(KEY_FILTER_LIST, null)?.map {
+        filterMode = StorageManager.getString(context, KEY_FILTER_MODE, "none", StorageManager.PrefsType.FILTER)
+        enableDeduplication = StorageManager.getBoolean(context, KEY_ENABLE_DEDUP, true, StorageManager.PrefsType.FILTER)
+        enablePeerMode = StorageManager.getBoolean(context, KEY_ENABLE_PEER, false, StorageManager.PrefsType.FILTER)
+        val filterListStr = StorageManager.getStringSet(context, KEY_FILTER_LIST, emptySet(), StorageManager.PrefsType.FILTER)
+        filterList = filterListStr.map {
             val arr = it.split("|", limit=2)
             arr[0] to arr.getOrNull(1)?.takeIf { k->k.isNotBlank() }
-        } ?: emptyList()
+        }
     }
 
     // 保存设置
     fun save(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, 0)
-        prefs.edit()
-            .putBoolean("enable_package_group_mapping", enablePackageGroupMapping)
-            .putString("default_group_enabled", defaultGroupEnabled.joinToString(",") { if (it) "1" else "0" })
-            .putString("custom_group_enabled", customGroupEnabled.joinToString(",") { if (it) "1" else "0" })
-            .putStringSet(KEY_PACKAGE_GROUPS, customPackageGroups.map { it.joinToString("|") }.toSet())
-            .putString(KEY_FILTER_MODE, filterMode)
-            .putBoolean(KEY_ENABLE_DEDUP, enableDeduplication)
-            .putBoolean(KEY_ENABLE_PEER, enablePeerMode)
-            .putStringSet(KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet())
-            .apply()
+        StorageManager.putBoolean(context, "enable_package_group_mapping", enablePackageGroupMapping, StorageManager.PrefsType.FILTER)
+        StorageManager.putString(context, "default_group_enabled", defaultGroupEnabled.joinToString(",") { if (it) "1" else "0" }, StorageManager.PrefsType.FILTER)
+        StorageManager.putString(context, "custom_group_enabled", customGroupEnabled.joinToString(",") { if (it) "1" else "0" }, StorageManager.PrefsType.FILTER)
+        StorageManager.putStringSet(context, KEY_PACKAGE_GROUPS, customPackageGroups.map { it.joinToString("|") }.toSet(), StorageManager.PrefsType.FILTER)
+        StorageManager.putString(context, KEY_FILTER_MODE, filterMode, StorageManager.PrefsType.FILTER)
+        StorageManager.putBoolean(context, KEY_ENABLE_DEDUP, enableDeduplication, StorageManager.PrefsType.FILTER)
+        StorageManager.putBoolean(context, KEY_ENABLE_PEER, enablePeerMode, StorageManager.PrefsType.FILTER)
+        StorageManager.putStringSet(context, KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet(), StorageManager.PrefsType.FILTER)
     }
 
     // 包名映射：返回本地等价包名

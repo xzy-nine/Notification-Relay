@@ -46,11 +46,11 @@ import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
 import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.data.StorageManager
 
 
 class DeviceForwardFragment : Fragment() {
     // 认证通过设备持久化key
-    private val PREFS_NAME = "notifyrelay_device_prefs"
     private val KEY_AUTHED_UUIDS = "authed_device_uuids"
 
     // 应用安装/卸载监听器
@@ -77,14 +77,12 @@ class DeviceForwardFragment : Fragment() {
 
     // 加载已认证设备uuid集合
     fun loadAuthedUuids(): Set<String> {
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, 0)
-        return prefs.getStringSet(KEY_AUTHED_UUIDS, emptySet()) ?: emptySet()
+        return StorageManager.getStringSet(requireContext(), KEY_AUTHED_UUIDS)
     }
 
     // 保存已认证设备uuid集合
     fun saveAuthedUuids(uuids: Set<String>) {
-        val prefs = requireContext().getSharedPreferences(PREFS_NAME, 0)
-        prefs.edit().putStringSet(KEY_AUTHED_UUIDS, uuids).apply()
+        StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids)
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -156,27 +154,23 @@ fun DeviceForwardScreen(
         BackendLocalFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
         BackendLocalFilter.filterSensitiveHidden = filterSensitiveHidden
         context?.let {
-            val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
-            prefs.edit()
-                .putBoolean("filter_self", filterSelf)
-                .putBoolean("filter_ongoing", filterOngoing)
-                .putBoolean("filter_no_title_or_text", filterNoTitleOrText)
-                .putBoolean("filter_importance_none", filterImportanceNone)
-                .putBoolean("filter_mipush_group_summary", filterMiPushGroupSummary)
-                .putBoolean("filter_sensitive_hidden", filterSensitiveHidden)
-                .apply()
+            StorageManager.putBoolean(it, "filter_self", filterSelf, StorageManager.PrefsType.FILTER)
+            StorageManager.putBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
+            StorageManager.putBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
+            StorageManager.putBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
+            StorageManager.putBoolean(it, "filter_mipush_group_summary", filterMiPushGroupSummary, StorageManager.PrefsType.FILTER)
+            StorageManager.putBoolean(it, "filter_sensitive_hidden", filterSensitiveHidden, StorageManager.PrefsType.FILTER)
         }
     }
     // 启动时加载本地持久化
     LaunchedEffect(Unit) {
         context?.let {
-            val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
-            filterSelf = prefs.getBoolean("filter_self", filterSelf)
-            filterOngoing = prefs.getBoolean("filter_ongoing", filterOngoing)
-            filterNoTitleOrText = prefs.getBoolean("filter_no_title_or_text", filterNoTitleOrText)
-            filterImportanceNone = prefs.getBoolean("filter_importance_none", filterImportanceNone)
-            filterMiPushGroupSummary = prefs.getBoolean("filter_mipush_group_summary", filterMiPushGroupSummary)
-            filterSensitiveHidden = prefs.getBoolean("filter_sensitive_hidden", filterSensitiveHidden)
+            filterSelf = StorageManager.getBoolean(it, "filter_self", filterSelf, StorageManager.PrefsType.FILTER)
+            filterOngoing = StorageManager.getBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
+            filterNoTitleOrText = StorageManager.getBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
+            filterImportanceNone = StorageManager.getBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
+            filterMiPushGroupSummary = StorageManager.getBoolean(it, "filter_mipush_group_summary", filterMiPushGroupSummary, StorageManager.PrefsType.FILTER)
+            filterSensitiveHidden = StorageManager.getBoolean(it, "filter_sensitive_hidden", filterSensitiveHidden, StorageManager.PrefsType.FILTER)
         }
     }
     // 连接弹窗与错误弹窗相关状态

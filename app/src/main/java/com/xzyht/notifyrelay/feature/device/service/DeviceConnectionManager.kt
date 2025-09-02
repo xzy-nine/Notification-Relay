@@ -11,7 +11,7 @@ import java.io.OutputStreamWriter
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.UUID
-import android.content.SharedPreferences
+import com.xzyht.notifyrelay.common.data.StorageManager
 import kotlinx.coroutines.delay
 import android.util.Log
 
@@ -124,7 +124,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 加载已认证设备
     private fun loadAuthedDevices() {
-        val json = prefs.getString(PREFS_AUTHED_DEVICES, null) ?: return
+        val json = StorageManager.getString(context, PREFS_AUTHED_DEVICES) ?: return
         try {
             val arr = org.json.JSONArray(json)
             for (i in 0 until arr.length()) {
@@ -172,7 +172,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     arr.put(obj)
                 }
             }
-            prefs.edit().putString(PREFS_AUTHED_DEVICES, arr.toString()).apply()
+            StorageManager.putString(context, PREFS_AUTHED_DEVICES, arr.toString())
         } catch (_: Exception) {}
     }
     /**
@@ -214,7 +214,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
-    private val prefs: SharedPreferences = context.getSharedPreferences("notifyrelay_prefs", android.content.Context.MODE_PRIVATE)
     private val deviceLastSeen = mutableMapOf<String, Long>()
     // 广播发现线程
     private var broadcastThread: Thread? = null
@@ -224,34 +223,34 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val heartbeatJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
     // UI全局开关：是否启用UDP发现
     var udpDiscoveryEnabled: Boolean
-        get() = prefs.getBoolean("udp_discovery_enabled", true)
+        get() = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
         set(value) {
-            prefs.edit().putBoolean("udp_discovery_enabled", value).apply()
+            StorageManager.putBoolean(context, "udp_discovery_enabled", value)
         }
 
     init {
-        val savedUuid = prefs.getString("device_uuid", null)
-        if (savedUuid != null) {
+        val savedUuid = StorageManager.getString(context, "device_uuid")
+        if (savedUuid.isNotEmpty()) {
             uuid = savedUuid
         } else {
             val newUuid = UUID.randomUUID().toString()
-            prefs.edit().putString("device_uuid", newUuid).apply()
+            StorageManager.putString(context, "device_uuid", newUuid)
             uuid = newUuid
         }
         // 公钥持久化
-        val savedPub = prefs.getString("device_pubkey", null)
-        if (savedPub != null) {
+        val savedPub = StorageManager.getString(context, "device_pubkey")
+        if (savedPub.isNotEmpty()) {
             localPublicKey = savedPub
         } else {
             val newPub = UUID.randomUUID().toString().replace("-", "")
-            prefs.edit().putString("device_pubkey", newPub).apply()
+            StorageManager.putString(context, "device_pubkey", newPub)
             localPublicKey = newPub
         }
         // 私钥可临时
         localPrivateKey = UUID.randomUUID().toString().replace("-", "")
         // 兼容旧用户：首次运行时如无保存则默认true
-        if (!prefs.contains("udp_discovery_enabled")) {
-            prefs.edit().putBoolean("udp_discovery_enabled", true).apply()
+        if (!StorageManager.getBoolean(context, "udp_discovery_enabled", false)) {
+            StorageManager.putBoolean(context, "udp_discovery_enabled", true)
         }
         loadAuthedDevices()
         // 新增：补全本机 deviceInfoCache，便于反向 connectToDevice

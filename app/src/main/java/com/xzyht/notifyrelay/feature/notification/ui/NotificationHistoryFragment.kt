@@ -4,6 +4,7 @@ import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
+import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import android.os.Bundle
 import androidx.compose.foundation.Image
@@ -241,25 +242,24 @@ fun NotificationHistoryScreen() {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
             appInfoCache.clear() // 清空应用信息缓存
             // 修正：同步清理本地json文件内容
-            val store = com.xzyht.notifyrelay.feature.device.model.NotifyRelayStoreProvider.getInstance(context)
+            val store = com.xzyht.notifyrelay.common.data.PersistenceManager
             val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
             kotlinx.coroutines.runBlocking {
-                store.clearByDevice(fileKey)
+                store.clearNotificationRecords(context, fileKey)
             }
             // 新增：仅删除当前设备和所有已不在认证设备列表的通知历史文件（本机除非当前选中，否则不删）
             try {
-                val files = context.filesDir.listFiles()?.filter { it.name.startsWith("notification_records_") && it.name.endsWith(".json") } ?: emptyList()
                 // 获取当前认证设备uuid集合（含本机local）
                 val authedUuids: Set<String> = try {
                     val deviceManager = DeviceForwardFragment.getDeviceManager(context)
-                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
+                    val field = deviceManager::class.java.getDeclaredField("authenticatedDevices")
                     field.isAccessible = true
                     @Suppress("UNCHECKED_CAST")
                     val map = field.get(deviceManager) as? Map<String, *>
                     val set = map?.filter { entry ->
                         val v = entry.value
                         v?.let {
-                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
+                            val isAcceptedField = v::class.java.getDeclaredField("isAccepted").apply { isAccessible = true }
                             isAcceptedField.getBoolean(v)
                         } ?: false
                     }?.keys?.toSet() ?: emptySet()
@@ -267,16 +267,16 @@ fun NotificationHistoryScreen() {
                 } catch (_: Exception) {
                     setOf("local")
                 }
-                for (file in files) {
+                for (file in PersistenceManager.getAllNotificationFiles(context)) {
                     val name = file.name.removePrefix("notification_records_").removeSuffix(".json")
                     // 当前设备的历史文件始终删除
                     if (name == fileKey) {
-                        try { file.delete() } catch (_: Exception) {}
+                        PersistenceManager.deleteNotificationFile(context, fileKey)
                         continue
                     }
                     // 不是当前设备，且不在认证设备列表，且不是本机（除非当前选中）
                     if (!authedUuids.contains(name) && !(name == "local" && fileKey != "local")) {
-                        try { file.delete() } catch (_: Exception) {}
+                        PersistenceManager.deleteNotificationFile(context, name)
                     }
                 }
             } catch (_: Exception) {}

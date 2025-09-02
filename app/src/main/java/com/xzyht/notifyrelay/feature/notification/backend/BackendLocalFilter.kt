@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.StatusBarNotification
+import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 
 /**
@@ -20,7 +21,6 @@ object BackendLocalFilter {
     var filterSensitiveHidden: Boolean = true // 过滤敏感内容被隐藏的通知
 
     // 关键词持久化相关
-    private const val PREFS_NAME = "notifyrelay_filter_prefs"
     private const val KEY_FOREGROUND_KEYWORDS = "foreground_keywords"
     private const val KEY_ENABLED_FOREGROUND_KEYWORDS = "enabled_foreground_keywords"
 
@@ -34,50 +34,47 @@ object BackendLocalFilter {
 
     // 获取自定义文本关键词集合（不含服务相关关键词）
     fun getForegroundKeywords(context: Context): Set<String> {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val saved = prefs.getStringSet(KEY_FOREGROUND_KEYWORDS, null)
+        val saved = StorageManager.getStringSet(context, KEY_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER)
         // 自动补全内置关键词（不可删除）
-        return if (saved != null) builtinCustomKeywords + saved else builtinCustomKeywords
+        return builtinCustomKeywords + saved
     }
 
     fun getEnabledForegroundKeywords(context: Context): Set<String> {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val enabled = prefs.getStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, null)
+        val enabled = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER)
         val all = getForegroundKeywords(context)
         // 首次无任何启用集时，默认启用全部（含内置）；否则严格以持久化内容为准（内置项可被禁用）
-        return if (enabled == null) all else enabled.intersect(all)
+        return if (enabled.isEmpty()) all else enabled.intersect(all)
     }
 
     fun setKeywordEnabled(context: Context, keyword: String, enabled: Boolean) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val all = getForegroundKeywords(context)
-        var enabledSet = prefs.getStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, null)?.toMutableSet() ?: all.toMutableSet()
+        var enabledSet = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
+        if (enabledSet.isEmpty()) enabledSet = all.toMutableSet()
         if (enabled) enabledSet.add(keyword) else enabledSet.remove(keyword)
-        prefs.edit().putStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet).apply()
+        StorageManager.putStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet, StorageManager.PrefsType.FILTER)
     }
 
     fun addForegroundKeyword(context: Context, keyword: String) {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val set = prefs.getStringSet(KEY_FOREGROUND_KEYWORDS, null)?.toMutableSet() ?: mutableSetOf()
+        val set = StorageManager.getStringSet(context, KEY_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         set.add(keyword)
-        prefs.edit().putStringSet(KEY_FOREGROUND_KEYWORDS, set).apply()
+        StorageManager.putStringSet(context, KEY_FOREGROUND_KEYWORDS, set, StorageManager.PrefsType.FILTER)
         // 新增关键词默认启用
-        val enabledSet = prefs.getStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, null)?.toMutableSet() ?: set.toMutableSet()
+        var enabledSet = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
+        if (enabledSet.isEmpty()) enabledSet = set
         enabledSet.add(keyword)
-        prefs.edit().putStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet).apply()
+        StorageManager.putStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet, StorageManager.PrefsType.FILTER)
     }
 
     fun removeForegroundKeyword(context: Context, keyword: String) {
         // 内置关键词不可删除
         if (builtinCustomKeywords.contains(keyword)) return
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val set = prefs.getStringSet(KEY_FOREGROUND_KEYWORDS, null)?.toMutableSet() ?: mutableSetOf()
+        val set = StorageManager.getStringSet(context, KEY_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         set.remove(keyword)
-        prefs.edit().putStringSet(KEY_FOREGROUND_KEYWORDS, set).apply()
+        StorageManager.putStringSet(context, KEY_FOREGROUND_KEYWORDS, set, StorageManager.PrefsType.FILTER)
         // 同时移除启用状态
-        val enabledSet = prefs.getStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, null)?.toMutableSet() ?: mutableSetOf()
+        val enabledSet = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         enabledSet.remove(keyword)
-        prefs.edit().putStringSet(KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet).apply()
+        StorageManager.putStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, enabledSet, StorageManager.PrefsType.FILTER)
     }
 
     /**

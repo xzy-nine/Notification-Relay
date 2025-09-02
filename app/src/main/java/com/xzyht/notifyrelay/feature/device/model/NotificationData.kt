@@ -9,55 +9,20 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
-import com.google.gson.Gson
+import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.google.gson.reflect.TypeToken
-import java.io.File
 import com.xzyht.notifyrelay.feature.notification.data.NotificationAction
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity
 
-// 本地存储实现
 class NotificationRecordStore(private val context: Context) {
-    private val gson = Gson()
-    private val fileCache = mutableMapOf<String, File>()
-    companion object {
-        fun getFile(context: Context, device: String): File {
-            val safe = if (device == "本机") "local" else device.replace(Regex("[^a-zA-Z0-9_]"), "_")
-            return File(context.filesDir, "notification_records_${safe}.json")
-        }
-    }
     internal fun readAll(device: String): MutableList<NotificationRecordEntity> {
-        val file = getFile(context, device)
-        if (!file.exists()) return mutableListOf()
-        val json = file.readText()
-        try {
-            return gson.fromJson(json, object : TypeToken<MutableList<NotificationRecordEntity>>() {}.type) ?: mutableListOf()
-        } catch (e: Exception) {
-            android.util.Log.e("NotifyRelay", "[readAll] 解析 JSON 失败: ${file.absolutePath}, error=${e.message}")
-            android.util.Log.e("NotifyRelay", "[readAll] 损坏内容: $json")
-            try {
-                if (file.delete()) {
-                    android.util.Log.e("NotifyRelay", "[readAll] 已删除损坏文件: ${file.absolutePath}")
-                    file.createNewFile()
-                } else {
-                    android.util.Log.e("NotifyRelay", "[readAll] 删除损坏文件失败: ${file.absolutePath}")
-                }
-            } catch (ex: Exception) {
-                android.util.Log.e("NotifyRelay", "[readAll] 删除损坏文件异常: ${ex.message}")
-            }
-            return mutableListOf()
-        }
+        val typeToken = object : TypeToken<List<NotificationRecordEntity>>() {}
+        return PersistenceManager.readNotificationRecords(context, device, typeToken).toMutableList()
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
-        val file = NotificationRecordStore.getFile(context, device)
-        try {
-            // android.util.Log.i("NotifyRelay", "[writeAll] path=${file.absolutePath}, device=$device, size=${list.size}")
-            file.writeText(gson.toJson(list))
-        } catch (e: Exception) {
-            // android.util.Log.e("NotifyRelay", "[writeAll] 写入失败: path=${file.absolutePath}, device=$device, error=${e.message}\n${e.stackTraceToString()}")
-            throw e
-        }
+        PersistenceManager.saveNotificationRecords(context, device, list)
     }
 
     suspend fun insert(record: NotificationRecordEntity) {
@@ -78,7 +43,7 @@ class NotificationRecordStore(private val context: Context) {
     }
 
     suspend fun clearByDevice(device: String) {
-        writeAll(emptyList(), device)
+        PersistenceManager.clearNotificationRecords(context, device)
     }
 }
 

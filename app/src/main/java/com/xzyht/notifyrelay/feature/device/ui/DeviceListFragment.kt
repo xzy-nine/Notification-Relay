@@ -31,6 +31,7 @@ import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
 import com.xzyht.notifyrelay.feature.device.ui.dialog.HandshakeRequestDialog
 import com.xzyht.notifyrelay.feature.device.ui.dialog.RejectedDevicesDialog
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
+import com.xzyht.notifyrelay.common.data.PersistenceManager
 
 // 全局设备选中状态单例
 object GlobalSelectedDeviceHolder {
@@ -553,8 +554,7 @@ fun DeviceListScreen() {
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
                         try {
-                            val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
-                            if (file.exists()) file.delete()
+                            PersistenceManager.deleteNotificationFile(appContext, uuid)
                         } catch (_: Exception) {}
                     }
                     // 持久化认证状态
@@ -631,8 +631,7 @@ fun DeviceListScreen() {
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
                         try {
-                            val file = java.io.File(appContext.filesDir, "notification_records_${uuid}.json")
-                            if (file.exists()) file.delete()
+                            PersistenceManager.deleteNotificationFile(appContext, uuid)
                         } catch (_: Exception) {}
                     }
                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
