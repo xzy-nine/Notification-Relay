@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.data.notify
+package com.xzyht.notifyrelay.feature.device.data
 
 import android.app.Notification
 import android.app.PendingIntent

@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.ui.screens.device
+package com.xzyht.notifyrelay.feature.device.ui.screens
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
-import com.xzyht.notifyrelay.data.deviceconnect.DeviceConnectionManager
-import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.data.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.data.DeviceInfo
 import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
@@ -184,7 +184,7 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
             }
             // 2. 再查本机通知历史（10秒内同title+text）
             try {
-                val localList = com.xzyht.notifyrelay.data.notify.NotificationRepository.notifications
+                val localList = com.xzyht.notifyrelay.feature.device.data.NotificationRepository.notifications
                 val localDup = localList.any {
                     val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
                     if (it.device == "本机" && (now - it.time <= 10_000)) {
@@ -213,31 +213,6 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
     } catch (e: Exception) {
         android.util.Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 解析异常", e)
         return DedupResult(true, true, "", "", "", data)
-    }
-}
-
-class RemoteNotificationClickReceiver : android.content.BroadcastReceiver() {
-    override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
-        android.util.Log.d("NotifyRelay(狂鼠)", "RemoteNotificationClickReceiver onReceive called")
-        val notifyId = intent.getIntExtra("notifyId", 0)
-        val pkg = intent.getStringExtra("pkg") ?: run {
-            android.util.Log.e("NotifyRelay(狂鼠)", "pkg is null in broadcast")
-            return
-        }
-        val title = intent.getStringExtra("title") ?: ""
-        val text = intent.getStringExtra("text") ?: ""
-        val key = intent.getStringExtra("key") ?: (System.currentTimeMillis().toString() + pkg)
-        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        notificationManager.cancel(notifyId)
-        // 跳转应用
-        val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(pkg)
-        if (launchIntent != null) {
-            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(launchIntent)
-        } else {
-            android.util.Log.w("NotifyRelay(狂鼠)", "No launch intent for package: $pkg")
-        }
     }
 }
 

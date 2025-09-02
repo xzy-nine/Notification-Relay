@@ -45,7 +45,7 @@
         <activity android:name=".MainActivity" android:exported="true" />
         <!-- 通知监听服务声明，用于系统识别通知访问权限 -->
         <service
-            android:name=".service.NotifyRelayNotificationListenerService"
+            android:name=".common.service.NotifyRelayNotificationListenerService"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true"
@@ -56,12 +56,12 @@
             </intent-filter>
         </service>
         <service
-            android:name=".service.DeviceConnectionService"
+            android:name=".common.service.DeviceConnectionService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <!-- 注册通知点击广播接收器 -->
         <receiver
-            android:name=".DeviceForwardFragment$RemoteNotificationClickReceiver"
+            android:name=".feature.device.ui.screens.RemoteNotificationClickReceiver"
             android:exported="false" />
     </application>
 

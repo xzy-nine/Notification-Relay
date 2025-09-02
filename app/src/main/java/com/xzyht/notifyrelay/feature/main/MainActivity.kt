@@ -1,8 +1,8 @@
 package com.xzyht.notifyrelay
 
-import com.xzyht.notifyrelay.data.notify.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.data.NotificationRepository
 import android.content.Intent
-import com.xzyht.notifyrelay.service.DeviceConnectionService
+import com.xzyht.notifyrelay.common.service.DeviceConnectionService
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
@@ -51,7 +51,7 @@ class MainActivity : FragmentActivity() {
         }
         // 检查设备连接服务是否存活，未存活则重启
         val serviceStarted = try {
-            if (!isServiceRunning("com.xzyht.notifyrelay.service.DeviceConnectionService")) {
+            if (!isServiceRunning("com.xzyht.notifyrelay.common.service.DeviceConnectionService")) {
                 DeviceConnectionService.start(this)
             }
             true
@@ -212,7 +212,7 @@ fun DeviceListFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.device.DeviceListFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.feature.device.ui.screens.DeviceListFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -234,7 +234,7 @@ fun DeviceForwardFragmentView(fragmentContainerId: Int) {
                 frameLayout.id = fragmentContainerId
                 fragmentManager?.let { fm ->
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.device.DeviceForwardFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.feature.device.ui.screens.DeviceForwardFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout
@@ -257,7 +257,7 @@ fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
                 fragmentManager?.let { fm ->
                     // 每次都 replace，保证 fragment attach
                     fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.ui.screens.notification.NotificationHistoryFragment(), fragmentTag)
+                        .replace(frameLayout.id, com.xzyht.notifyrelay.feature.main.ui.screens.notification.NotificationHistoryFragment(), fragmentTag)
                         .commitAllowingStateLoss()
                 }
                 frameLayout

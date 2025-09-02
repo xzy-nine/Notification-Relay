@@ -10,7 +10,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.data.DeviceInfo
 
 /**
  * 连接设备弹窗

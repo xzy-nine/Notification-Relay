@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.ui.screens.device
+package com.xzyht.notifyrelay.feature.device.ui.screens
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
-import com.xzyht.notifyrelay.data.deviceconnect.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.data.DeviceInfo
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -624,7 +624,7 @@ fun DeviceListScreen() {
                     for (uuid in allUuidsToRemove.distinct()) {
                         safeMap.remove(uuid)
                         try {
-                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.data.notify.NotificationData")
+                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.feature.device.data.NotificationData")
                             val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
                             val notificationData = getInstance.invoke(null, appContext)
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
