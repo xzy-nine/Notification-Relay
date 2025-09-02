@@ -155,8 +155,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // onActivityResult 已废弃，已迁移到 Activity Result API
-
     // 检查所有必要权限（与 GuideActivity 保持一致）
     private fun checkAllPermissions(context: Context): Boolean {
         return PermissionHelper.checkAllPermissions(context)

@@ -57,6 +57,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview:1.8.1")
     debugImplementation("androidx.compose.ui:ui-tooling:1.8.1")
     implementation("androidx.compose.foundation:foundation:1.8.1")
+    implementation("androidx.compose.runtime:runtime:1.8.1")
     implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
 
     // Miuix Compose 主题库
