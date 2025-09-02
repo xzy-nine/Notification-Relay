@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.common.ui.dialogs
+package com.xzyht.notifyrelay.feature.notification
 
 import android.content.pm.ApplicationInfo
 import android.util.Log

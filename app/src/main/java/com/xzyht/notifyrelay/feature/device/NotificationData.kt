@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device.data
+package com.xzyht.notifyrelay.feature.device
 
 import android.app.Notification
 import android.app.PendingIntent
@@ -12,9 +12,9 @@ import kotlinx.coroutines.runBlocking
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
-import com.xzyht.notifyrelay.common.data.NotificationAction
-import com.xzyht.notifyrelay.common.data.NotificationRecord
-import com.xzyht.notifyrelay.common.data.NotificationRecordEntity
+import com.xzyht.notifyrelay.feature.notification.NotificationAction
+import com.xzyht.notifyrelay.feature.notification.NotificationRecord
+import com.xzyht.notifyrelay.feature.notification.NotificationRecordEntity
 
 // 本地存储实现
 class NotificationRecordStore(private val context: Context) {

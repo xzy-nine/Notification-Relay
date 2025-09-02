@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.common.ui
+package com.xzyht.notifyrelay.common
 
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme

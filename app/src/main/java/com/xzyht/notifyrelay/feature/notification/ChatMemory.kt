@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.common.data
+package com.xzyht.notifyrelay.feature.notification
 
 import android.content.Context
 import com.google.gson.Gson

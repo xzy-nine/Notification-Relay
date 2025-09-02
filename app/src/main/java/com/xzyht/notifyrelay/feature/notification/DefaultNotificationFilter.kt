@@ -4,7 +4,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.StatusBarNotification
-import com.xzyht.notifyrelay.feature.device.data.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.NotificationRepository
 
 object DefaultNotificationFilter {
     // 内置文本黑名单关键词（不可删除，支持标题+内容联合匹配）

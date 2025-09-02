@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device.ui.screens
+package com.xzyht.notifyrelay.feature.device
 
 import android.content.BroadcastReceiver
 import android.content.Context

@@ -1,6 +1,6 @@
-package com.xzyht.notifyrelay.common.ui.dialogs
+package com.xzyht.notifyrelay.feature.device
 
-import com.xzyht.notifyrelay.feature.device.data.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.DeviceInfo
 
 /**
  * 握手请求数据结构

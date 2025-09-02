@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.common.service
+package com.xzyht.notifyrelay.feature.notification
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.xzyht.notifyrelay.feature.device.data.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.DefaultNotificationFilter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -23,7 +23,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             startForegroundService()
             // 通知DeviceConnectionService延迟补发
             try {
-                val intent = android.content.Intent(applicationContext, com.xzyht.notifyrelay.common.service.DeviceConnectionService::class.java)
+                val intent = android.content.Intent(applicationContext, com.xzyht.notifyrelay.feature.device.DeviceConnectionService::class.java)
                 intent.action = "com.xzyht.notifyrelay.ACTION_REISSUE_FOREGROUND"
                 intent.putExtra("delay", 3000L) // 延迟3秒
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -102,7 +102,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
         android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
-            val deviceManager = com.xzyht.notifyrelay.feature.device.ui.screens.DeviceForwardFragment.getDeviceManager(applicationContext)
+                        val deviceManager = com.xzyht.notifyrelay.feature.device.DeviceForwardFragment.getDeviceManager(applicationContext)
             var appName: String? = null
             try {
                 val pm = applicationContext.packageManager
@@ -124,9 +124,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     if (uuidStr == myUuid) continue
                     val infoMethod = deviceManager::class.java.getDeclaredMethod("getDeviceInfo", String::class.java)
                     infoMethod.isAccessible = true
-                    val deviceInfo = infoMethod.invoke(deviceManager, uuidStr) as? com.xzyht.notifyrelay.feature.device.data.DeviceInfo
+                    val deviceInfo = infoMethod.invoke(deviceManager, uuidStr) as? com.xzyht.notifyrelay.feature.device.DeviceInfo
                     if (deviceInfo != null) {
-                        val payload = com.xzyht.notifyrelay.feature.device.data.DeviceConnectionManagerUtil.buildNotificationJson(
+                        val payload = com.xzyht.notifyrelay.feature.device.DeviceConnectionManagerUtil.buildNotificationJson(
                             sbn.packageName,
                             appName,
                             NotificationRepository.getStringCompat(sbn.notification.extras, "android.title"),

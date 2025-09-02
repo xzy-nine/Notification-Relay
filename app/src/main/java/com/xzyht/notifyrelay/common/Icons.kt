@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.common.ui
+package com.xzyht.notifyrelay.common
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications

@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device.data
+package com.xzyht.notifyrelay.feature.device
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -723,7 +723,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 if (!displayName.isNullOrEmpty() && displayName != remoteUuid) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
-                val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.data.NotificationRepository")
+                val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.NotificationRepository")
                 val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
                 addMethod.invoke(null, pkg, title, text, time, remoteUuid, context)
                 // 强制刷新设备列表和UI

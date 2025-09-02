@@ -1,6 +1,6 @@
-package com.xzyht.notifyrelay.common.data
+package com.xzyht.notifyrelay.feature.notification
 
-import com.xzyht.notifyrelay.common.data.NotificationAction
+import com.xzyht.notifyrelay.feature.notification.NotificationAction
 
 // 通知记录数据模型
 data class NotificationRecord(
