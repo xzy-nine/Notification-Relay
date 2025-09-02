@@ -100,85 +100,13 @@ object NotificationForwardConfig {
 private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
 private val pendingDelayedNotifications = mutableListOf<Triple<String, String, String>>() // title, text, rawData
 
-// 远程通知过滤接口（含包名映射、去重、黑白名单/对等模式）
-data class DedupResult(val immediate: Boolean, val shouldShow: Boolean, val mappedPkg: String, val title: String, val text: String, val rawData: String)
-
 // 远程通知过滤与复刻到系统通知中心
-fun remoteNotificationFilter(data: String, context: Context): DedupResult {
-    try {
-        val json = org.json.JSONObject(data)
-        var pkg = json.optString("packageName")
-        val title = json.optString("title")
-        val text = json.optString("text")
-        val time = System.currentTimeMillis()
-        val installedPkgs = AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet()
-        val mappedPkg = NotificationForwardConfig.mapToLocalPackage(pkg, installedPkgs)
-        if (NotificationForwardConfig.filterMode == "peer" || NotificationForwardConfig.enablePeerMode) {
-            if (mappedPkg !in installedPkgs) {
-                Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: peer mode过滤 mappedPkg=$mappedPkg 不在本机已安装应用")
-                return DedupResult(true, false, mappedPkg, title, text, data)
-            }
-        }
-        if (NotificationForwardConfig.filterMode == "black" || NotificationForwardConfig.filterMode == "white") {
-            val match = NotificationForwardConfig.filterList.any { (filterPkg, keyword) ->
-                (mappedPkg == filterPkg || pkg == filterPkg) && (keyword.isNullOrBlank() || title.contains(keyword) || text.contains(keyword))
-            }
-            if (NotificationForwardConfig.filterMode == "black" && match) {
-                Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 命中黑名单 filtered=$match mappedPkg=$mappedPkg title=$title text=$text")
-                return DedupResult(true, false, mappedPkg, title, text, data)
-            }
-            if (NotificationForwardConfig.filterMode == "white" && !match) {
-                Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 未命中白名单 mappedPkg=$mappedPkg title=$title text=$text")
-                return DedupResult(true, false, mappedPkg, title, text, data)
-            }
-        }
-        if (NotificationForwardConfig.enableDeduplication) {
-            val now = System.currentTimeMillis()
-            // 1. 先查dedupCache
-            synchronized(dedupCache) {
-                dedupCache.removeAll { now - it.third > 10_000 }
-                val dup = dedupCache.any { it.first == title && it.second == text }
-                if (dup) {
-                    Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 去重命中 title=$title text=$text (dedupCache)")
-                    return DedupResult(true, false, mappedPkg, title, text, data)
-                }
-            }
-            // 2. 再查本机通知历史（10秒内同title+text）
-            try {
-                val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifications
-                val localDup = localList.any {
-                    val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
-                    if (it.device == "本机" && (now - it.time <= 10_000)) {
-                        Log.d(
-                            "NotifyRelay(狂鼠)",
-                            "remoteNotificationFilter(狂鼠): 本机历史检查 title=$title text=$text vs it.title=${it.title} it.text=${it.text} match=$match"
-                        )
-                    }
-                    match
-                }
-                if (localDup) {
-                    Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 去重命中 title=$title text=$text (本机历史)")
-                    return DedupResult(true, false, mappedPkg, title, text, data)
-                }
-            } catch (e: Exception) {
-                Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 本机历史去重检查异常", e)
-            }
-            // 需延迟判断
-            val result = DedupResult(false, true, mappedPkg, title, text, data)
-            Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 需延迟判断 title=$title text=$text")
-            return result
-        }
-        val result = DedupResult(true, true, mappedPkg, title, text, data)
-        Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 直接通过 mappedPkg=$mappedPkg title=$title text=$text result=$result")
-        return result
-    } catch (e: Exception) {
-        Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 解析异常", e)
-        return DedupResult(true, true, "", "", "", data)
-    }
+fun remoteNotificationFilter(data: String, context: Context): com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult {
+    return com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.filterRemoteNotification(data, context)
 }
 
 // 通知复刻处理函数
-fun replicateNotification(context: Context, result: DedupResult, chatHistoryState: MutableState<List<String>>) {
+fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>) {
     try {
         Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
         val json = org.json.JSONObject(result.rawData)
@@ -257,9 +185,7 @@ fun replicateNotification(context: Context, result: DedupResult, chatHistoryStat
         }
         Log.d("NotifyRelay(狂鼠)", "[立即]准备发送通知: id=$notifyId, title=$title, text=$text, pkg=$pkg")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
-        synchronized(dedupCache) {
-            dedupCache.add(Triple(title, text, System.currentTimeMillis()))
-        }
+        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(title, text)
         notificationManager.notify(notifyId, builder.build())
         Log.d("NotifyRelay(狂鼠)", "[立即]已调用notify: id=$notifyId")
     } catch (e: Exception) {
@@ -270,15 +196,12 @@ fun replicateNotification(context: Context, result: DedupResult, chatHistoryStat
 }
 
 // 延迟通知复刻处理函数
-suspend fun replicateNotificationDelayed(context: Context, result: DedupResult, chatHistoryState: MutableState<List<String>>) {
+suspend fun replicateNotificationDelayed(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>) {
     kotlinx.coroutines.delay(10_000)
     var shouldShow = true
-    synchronized(dedupCache) {
-        val dup = dedupCache.any { it.first == result.title && it.second == result.text }
-        if (dup) shouldShow = false
-        else dedupCache.add(Triple(result.title, result.text, System.currentTimeMillis()))
-    }
+    shouldShow = !com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.isInDedupCache(result.title, result.text)
     if (shouldShow) {
+        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(result.title, result.text)
         replicateNotification(context, result, chatHistoryState)
     } else {
         com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")

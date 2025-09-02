@@ -7,7 +7,7 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
-import com.xzyht.notifyrelay.feature.notification.data.DefaultNotificationFilter
+import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,7 +78,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         // 先判断是否需要转发（如过滤等）
-        if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+        if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
             logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
             return
         }
@@ -147,7 +147,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
-                    if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+                    if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
                         logSbnDetail("法鸡-黑影 onListenerConnected 被过滤", sbn)
                         continue
                     }
@@ -177,7 +177,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     android.util.Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
-                        if (!DefaultNotificationFilter.shouldForward(sbn, applicationContext)) {
+                        if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
                             logSbnDetail("法鸡-黑影 定时拉取被过滤", sbn)
                             continue
                         }

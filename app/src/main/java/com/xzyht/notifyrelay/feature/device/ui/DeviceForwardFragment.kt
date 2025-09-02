@@ -33,16 +33,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.TabRow
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
-import com.xzyht.notifyrelay.feature.notification.data.DefaultNotificationFilter
+import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
-import com.xzyht.notifyrelay.feature.device.repository.NotificationForwardConfig
+import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
-import com.xzyht.notifyrelay.feature.device.repository.DedupResult
+import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
 import com.xzyht.notifyrelay.core.util.AppListHelper
@@ -140,21 +140,21 @@ fun DeviceForwardScreen(
     val tabTitles = listOf("通知过滤设置", "聊天测试", "通知软编码过滤")
     var selectedTabIndex by remember { mutableStateOf(0) }
     // NotificationFilterPager 状态，持久化与后端同步
-    var filterSelf by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterSelf) }
-    var filterOngoing by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterOngoing) }
-    var filterNoTitleOrText by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterNoTitleOrText) }
-    var filterImportanceNone by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterImportanceNone) }
-    var filterMiPushGroupSummary by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterMiPushGroupSummary) }
-    var filterSensitiveHidden by remember { mutableStateOf<Boolean>(DefaultNotificationFilter.filterSensitiveHidden) }
+    var filterSelf by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSelf) }
+    var filterOngoing by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterOngoing) }
+    var filterNoTitleOrText by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterNoTitleOrText) }
+    var filterImportanceNone by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterImportanceNone) }
+    var filterMiPushGroupSummary by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterMiPushGroupSummary) }
+    var filterSensitiveHidden by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSensitiveHidden) }
 
     // 持久化监听
     LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone, filterMiPushGroupSummary, filterSensitiveHidden) {
-        DefaultNotificationFilter.filterSelf = filterSelf
-        DefaultNotificationFilter.filterOngoing = filterOngoing
-        DefaultNotificationFilter.filterNoTitleOrText = filterNoTitleOrText
-        DefaultNotificationFilter.filterImportanceNone = filterImportanceNone
-        DefaultNotificationFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
-        DefaultNotificationFilter.filterSensitiveHidden = filterSensitiveHidden
+        BackendLocalFilter.filterSelf = filterSelf
+        BackendLocalFilter.filterOngoing = filterOngoing
+        BackendLocalFilter.filterNoTitleOrText = filterNoTitleOrText
+        BackendLocalFilter.filterImportanceNone = filterImportanceNone
+        BackendLocalFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
+        BackendLocalFilter.filterSensitiveHidden = filterSensitiveHidden
         context?.let {
             val prefs = it.getSharedPreferences("notifyrelay_filter_prefs", 0)
             prefs.edit()
@@ -235,7 +235,7 @@ fun DeviceForwardScreen(
             android.util.Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
             val result = remoteNotificationFilter(data, context)
             android.util.Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
-            if (NotificationForwardConfig.enableDeduplication && !result.immediate && result.shouldShow) {
+            if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
                 // 延迟去重，需10秒后再判断
                 coroutineScope.launch {
                     replicateNotificationDelayed(context, result, chatHistoryState)
@@ -261,27 +261,27 @@ fun DeviceForwardScreen(
 
     // 首次进入时加载持久化设置
     LaunchedEffect(context) {
-        NotificationForwardConfig.load(context)
+        RemoteFilterConfig.load(context)
     }
-    var filterMode by remember { mutableStateOf(NotificationForwardConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(NotificationForwardConfig.enableDeduplication) }
+    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
+    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
     // 移除enablePeer的独立Switch，只用filterMode控制
-    var enablePackageGroupMapping by remember { mutableStateOf(NotificationForwardConfig.enablePackageGroupMapping) }
+    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
     // 合并组：默认组+自定义组
     var allGroups by remember {
         mutableStateOf(
-            NotificationForwardConfig.defaultPackageGroups.map { it.toList() }.toMutableList() +
-            NotificationForwardConfig.customPackageGroups.map { it.toList() }.toMutableList()
+            RemoteFilterConfig.defaultPackageGroups.map { it.toList() }.toMutableList() +
+            RemoteFilterConfig.customPackageGroups.map { it.toList() }.toMutableList()
         )
     }
     var allGroupEnabled by remember {
         mutableStateOf(
-            NotificationForwardConfig.defaultGroupEnabled.toList() + NotificationForwardConfig.customGroupEnabled.toList()
+            RemoteFilterConfig.defaultGroupEnabled.toList() + RemoteFilterConfig.customGroupEnabled.toList()
         )
     }
     var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
     var appSearchQuery by remember { mutableStateOf("") }
-    var filterListText by remember { mutableStateOf(NotificationForwardConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
+    var filterListText by remember { mutableStateOf(RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
@@ -359,11 +359,11 @@ fun DeviceForwardScreen(
                                             enabled = enablePackageGroupMapping
                                         )
                                         Text(
-                                            if (idx < NotificationForwardConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-NotificationForwardConfig.defaultPackageGroups.size}",
+                                            if (idx < RemoteFilterConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-RemoteFilterConfig.defaultPackageGroups.size}",
                                             style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
                                         )
                                         Spacer(Modifier.weight(1f))
-                                        if (idx >= NotificationForwardConfig.defaultPackageGroups.size) {
+                                        if (idx >= RemoteFilterConfig.defaultPackageGroups.size) {
                                             top.yukonga.miuix.kmp.basic.Button(
                                                 onClick = { showAppPickerForGroup = true to idx },
                                                 modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
@@ -514,20 +514,20 @@ fun DeviceForwardScreen(
                     // 应用按钮
                     top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
-                            NotificationForwardConfig.enablePackageGroupMapping = enablePackageGroupMapping
+                            RemoteFilterConfig.enablePackageGroupMapping = enablePackageGroupMapping
                             // 拆分allGroups和allGroupEnabled为默认组和自定义组
-                            val defaultSize = NotificationForwardConfig.defaultPackageGroups.size
-                            NotificationForwardConfig.defaultGroupEnabled = allGroupEnabled.take(defaultSize).toMutableList()
-                            NotificationForwardConfig.customGroupEnabled = allGroupEnabled.drop(defaultSize).toMutableList()
-                            NotificationForwardConfig.customPackageGroups = allGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
-                            NotificationForwardConfig.filterMode = filterMode
-                            NotificationForwardConfig.enableDeduplication = enableDedup
-                            NotificationForwardConfig.enablePeerMode = (filterMode == "peer")
-                            NotificationForwardConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
+                            val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
+                            RemoteFilterConfig.defaultGroupEnabled = allGroupEnabled.take(defaultSize).toMutableList()
+                            RemoteFilterConfig.customGroupEnabled = allGroupEnabled.drop(defaultSize).toMutableList()
+                            RemoteFilterConfig.customPackageGroups = allGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
+                            RemoteFilterConfig.filterMode = filterMode
+                            RemoteFilterConfig.enableDeduplication = enableDedup
+                            RemoteFilterConfig.enablePeerMode = (filterMode == "peer")
+                            RemoteFilterConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
                                 val arr = it.split(",", limit=2)
                                 arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
                             }
-                            NotificationForwardConfig.save(context)
+                            RemoteFilterConfig.save(context)
                         },
                         modifier = Modifier.padding(top = 8.dp)
                     ) {
