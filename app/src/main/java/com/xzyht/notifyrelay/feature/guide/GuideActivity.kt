@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import com.xzyht.notifyrelay.MainActivity
+import com.xzyht.notifyrelay.common.PermissionHelper
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
@@ -459,75 +460,9 @@ fun GuideScreen(onContinue: () -> Unit) {
 }
 
 fun requestAllPermissions(activity: Activity) {
-    // 判断是否为 MIUI/澎湃系统
-    var isMiuiOrPengpai = false
-    isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
-    if (!isMiuiOrPengpai) {
-        try {
-            val permissionInfo = activity.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-            if (permissionInfo.packageName == "com.lbe.security.miui") {
-                isMiuiOrPengpai = true
-            }
-        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
-    }
-
-    // 通知访问权限
-    val intentNotification = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-    activity.startActivity(intentNotification)
-
-    if (isMiuiOrPengpai) {
-        // MIUI/澎湃优先动态申请应用列表权限
-        if (androidx.core.content.ContextCompat.checkSelfPermission(activity, "com.android.permission.GET_INSTALLED_APPS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            androidx.core.app.ActivityCompat.requestPermissions(activity, arrayOf("com.android.permission.GET_INSTALLED_APPS"), 999)
-        }
-    } else {
-        // 非 MIUI/澎湃，使用原生应用使用情况访问权限
-        val intentUsage = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-        activity.startActivity(intentUsage)
-    }
-
-    // 通知发送权限（Android 13+）
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        activity.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
-    }
+    PermissionHelper.requestAllPermissions(activity)
 }
 
 fun checkAllPermissions(context: Context): Boolean {
-    // 检查通知监听
-    val enabledListeners = Settings.Secure.getString(
-        context.contentResolver,
-        "enabled_notification_listeners"
-    ) ?: ""
-    val hasNotification = enabledListeners.contains(context.packageName)
-
-    // 判断是否为 MIUI/澎湃系统
-    var isMiuiOrPengpai = false
-    isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
-    if (!isMiuiOrPengpai) {
-        try {
-            val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-            if (permissionInfo.packageName == "com.lbe.security.miui") {
-                isMiuiOrPengpai = true
-            }
-        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
-    }
-
-    // 检查应用列表权限
-    var canQueryApps: Boolean
-    try {
-        val pm = context.packageManager
-        val apps = pm.getInstalledApplications(0)
-        canQueryApps = apps.size > 2
-        if (isMiuiOrPengpai) {
-            canQueryApps = canQueryApps && (androidx.core.content.ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") == android.content.pm.PackageManager.PERMISSION_GRANTED)
-        }
-    } catch (e: Exception) {
-        canQueryApps = false
-    }
-
-    // 检查通知发送权限
-    val hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
-    } else true
-    return hasNotification && canQueryApps && hasPost
+    return PermissionHelper.checkAllPermissions(context)
 }

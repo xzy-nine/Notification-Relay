@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay
 
+import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import android.content.Intent
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService
@@ -31,7 +32,7 @@ import androidx.compose.ui.Alignment
 import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import android.content.Context
-import androidx.core.graphics.toColorInt
+import androidx.compose.ui.graphics.toArgb
 
 class MainActivity : FragmentActivity() {
     internal var showAutoStartBanner = false
@@ -109,10 +110,9 @@ class MainActivity : FragmentActivity() {
         // 允许内容延伸到状态栏和导航栏区域
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        // 先用默认背景色，后续在 Compose SideEffect 里动态同步
-        val defaultBg = android.graphics.Color.parseColor("#FFFFFF")
-        window.statusBarColor = defaultBg
-        window.navigationBarColor = defaultBg
+        // 先用透明背景，后续在 Compose SideEffect 里动态同步
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
         window.decorView.systemUiVisibility = (
             android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
             android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
@@ -136,8 +136,12 @@ class MainActivity : FragmentActivity() {
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
                     // 统一系统栏背景色为主题背景色
-                    window.statusBarColor = android.graphics.Color.parseColor("#FFFFFF")
-                    window.navigationBarColor = android.graphics.Color.parseColor("#FFFFFF")
+                    window.statusBarColor = colorScheme.background.toArgb()
+                    window.navigationBarColor = colorScheme.background.toArgb()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        window.isNavigationBarContrastEnforced = false
+                        window.navigationBarDividerColor = colorScheme.background.toArgb()
+                    }
                 }
                 // 根布局加 systemBarsPadding，避免内容被遮挡，强制背景色一致
                 Box(modifier = Modifier
@@ -155,50 +159,13 @@ class MainActivity : FragmentActivity() {
 
     // 检查所有必要权限（与 GuideActivity 保持一致）
     private fun checkAllPermissions(context: Context): Boolean {
-        val enabledListeners = android.provider.Settings.Secure.getString(
-            context.contentResolver,
-            "enabled_notification_listeners"
-        ) ?: ""
-        val hasNotification = enabledListeners.contains(context.packageName)
-
-        // 判断是否为 MIUI/澎湃系统
-        var isMiuiOrPengpai = false
-        isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
-        if (!isMiuiOrPengpai) {
-            try {
-                val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-                if (permissionInfo.packageName == "com.lbe.security.miui") {
-                    isMiuiOrPengpai = true
-                }
-            } catch (_: android.content.pm.PackageManager.NameNotFoundException) {}
-        }
-
-        // 检查应用列表权限
-        var canQueryApps: Boolean
-        try {
-            val pm = context.packageManager
-            val apps = pm.getInstalledApplications(0)
-            canQueryApps = apps.size > 2
-            if (isMiuiOrPengpai) {
-                canQueryApps = canQueryApps && (androidx.core.content.ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") == android.content.pm.PackageManager.PERMISSION_GRANTED)
-            }
-        } catch (e: Exception) {
-            canQueryApps = false
-        }
-
-        // 检查通知发送权限
-        val hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else true
-        return hasNotification && canQueryApps && hasPost
+        return PermissionHelper.checkAllPermissions(context)
     }
 
     // 检查应用使用情况权限
     @Suppress("DEPRECATION")
     private fun isUsageStatsEnabled(): Boolean {
-        val appOps = getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), packageName)
-        return mode == android.app.AppOpsManager.MODE_ALLOWED
+        return PermissionHelper.isUsageStatsEnabled(this)
     }
 }
 @Composable
