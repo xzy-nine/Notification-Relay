@@ -82,6 +82,8 @@ object DefaultNotificationFilter {
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
         // 日志辅助排查过滤内容
         android.util.Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
+        // 过滤媒体通知（不存储，避免蓝牙歌词等标题频繁变化）
+        if (sbn.notification.category == Notification.CATEGORY_TRANSPORT) return false
         // 过滤mipush群组引导消息（title=新消息 且 text=你有一条新消息）
         if (filterMiPushGroupSummary && title == "新消息" && text == "你有一条新消息") return false
         // 过滤敏感内容被隐藏的通知（text包含已隐藏敏感通知等，放宽匹配）
