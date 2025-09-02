@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device
+package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
-import com.xzyht.notifyrelay.feature.device.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
@@ -32,13 +32,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import top.yukonga.miuix.kmp.basic.TabRow
-import com.xzyht.notifyrelay.feature.notification.NotificationFilterPager
-import com.xzyht.notifyrelay.feature.notification.DefaultNotificationFilter
+import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
+import com.xzyht.notifyrelay.feature.notification.data.DefaultNotificationFilter
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
-import com.xzyht.notifyrelay.feature.notification.AppPickerDialog
-import com.xzyht.notifyrelay.feature.notification.AddKeywordDialog
+import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
+import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
+import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 
 
 
@@ -184,7 +185,7 @@ private fun remoteNotificationFilter(data: String, context: android.content.Cont
             }
             // 2. 再查本机通知历史（10秒内同title+text）
             try {
-                val localList = com.xzyht.notifyrelay.feature.device.NotificationRepository.notifications
+                val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifications
                 val localDup = localList.any {
                     val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
                     if (it.device == "本机" && (now - it.time <= 10_000)) {
@@ -392,7 +393,7 @@ fun DeviceForwardScreen(
     val coroutineScope = rememberCoroutineScope()
     // 聊天内容持久化到本地文件，应用退出前都保留
     LaunchedEffect(context) {
-        chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+        chatHistoryState.value = ChatMemory.getChatHistory(context)
     }
     // 只监听全局选中设备
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
@@ -500,11 +501,11 @@ fun DeviceForwardScreen(
                         } catch (e: Exception) {
                             android.util.Log.e("NotifyRelay(狂鼠)", "[延迟]远程通知复刻失败", e)
                         }
-                        com.xzyht.notifyrelay.feature.notification.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+                        ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = ChatMemory.getChatHistory(context)
                     } else {
-                        com.xzyht.notifyrelay.feature.notification.ChatMemory.append(context, "收到: ${result.rawData}")
-                        chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+                        ChatMemory.append(context, "收到: ${result.rawData}")
+                        chatHistoryState.value = ChatMemory.getChatHistory(context)
                     }
                 }
             } else {
@@ -596,11 +597,11 @@ fun DeviceForwardScreen(
                     } catch (e: Exception) {
                         android.util.Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
                     }
-                    com.xzyht.notifyrelay.feature.notification.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+                    ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = ChatMemory.getChatHistory(context)
                 } else {
-                    com.xzyht.notifyrelay.feature.notification.ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+                    ChatMemory.append(context, "收到: ${result.rawData}")
+                    chatHistoryState.value = ChatMemory.getChatHistory(context)
                 }
             }
         }
@@ -969,8 +970,8 @@ fun DeviceForwardScreen(
                                     deviceManager.sendNotificationData(dev, json)
                                 }
                                 if (sentAny) {
-                                    com.xzyht.notifyrelay.feature.notification.ChatMemory.append(context, "发送: $chatInput")
-                                    chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.ChatMemory.getChatHistory(context)
+                                    ChatMemory.append(context, "发送: $chatInput")
+                                    chatHistoryState.value = ChatMemory.getChatHistory(context)
                                     chatInput = ""
                                 }
                             },
@@ -1002,3 +1003,4 @@ fun DeviceForwardScreen(
         }
     }
 }}
+

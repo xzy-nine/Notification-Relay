@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device
+package com.xzyht.notifyrelay.feature.device.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -9,9 +9,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.xzyht.notifyrelay.feature.device.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.DeviceInfo
-import com.xzyht.notifyrelay.feature.device.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 
 class DeviceConnectionService : Service() {
     private lateinit var connectionManager: DeviceConnectionManager
@@ -40,7 +38,7 @@ class DeviceConnectionService : Service() {
     override fun onCreate() {
         super.onCreate()
         // 保证全局唯一实例，UI和Service同步
-        connectionManager = com.xzyht.notifyrelay.feature.device.DeviceForwardFragment.getDeviceManager(applicationContext)
+        connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
         connectionManager.startDiscovery()
     }
 

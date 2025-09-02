@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device
+package com.xzyht.notifyrelay.feature.device.ui.dialog
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -10,7 +10,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.xzyht.notifyrelay.feature.device.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 
 /**
  * 连接设备弹窗

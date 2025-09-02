@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification
+package com.xzyht.notifyrelay.feature.notification.data
 
 import android.app.PendingIntent
 import android.graphics.drawable.Icon

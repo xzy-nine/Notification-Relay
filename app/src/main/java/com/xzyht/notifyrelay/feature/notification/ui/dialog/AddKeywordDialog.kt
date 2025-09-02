@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification
+package com.xzyht.notifyrelay.feature.notification.ui.dialog
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*

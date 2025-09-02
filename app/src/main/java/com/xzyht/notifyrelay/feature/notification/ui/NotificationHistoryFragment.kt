@@ -1,9 +1,9 @@
-package com.xzyht.notifyrelay.feature.notification
+package com.xzyht.notifyrelay.feature.notification.ui
 
-import com.xzyht.notifyrelay.feature.device.NotificationRepository
-import com.xzyht.notifyrelay.feature.notification.NotificationRecord
-import com.xzyht.notifyrelay.feature.device.GlobalSelectedDeviceHolder
-import com.xzyht.notifyrelay.feature.device.DeviceForwardFragment
+import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
+import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
+import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import android.os.Bundle
 import androidx.compose.foundation.Image
@@ -230,7 +230,8 @@ fun NotificationHistoryScreen() {
     val grouped = notifications.groupBy { it.packageName }
     val groupList = mutableListOf<List<NotificationRecord>>()
     val singleList = mutableListOf<NotificationRecord>()
-    for ((_, list) in grouped) {
+    for (entry in grouped.entries) {
+        val list = entry.value
         if (list.size >= 2) {
             groupList.add(list.sortedByDescending { it.time })
         } else {
@@ -274,7 +275,7 @@ fun NotificationHistoryScreen() {
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
             appInfoCache.clear() // 清空应用信息缓存
             // 修正：同步清理本地json文件内容
-            val store = com.xzyht.notifyrelay.feature.device.NotifyRelayStoreProvider.getInstance(context)
+            val store = com.xzyht.notifyrelay.feature.device.model.NotifyRelayStoreProvider.getInstance(context)
             val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
             kotlinx.coroutines.runBlocking {
                 store.clearByDevice(fileKey)

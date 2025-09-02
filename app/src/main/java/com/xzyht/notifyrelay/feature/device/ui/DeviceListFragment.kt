@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.device
+package com.xzyht.notifyrelay.feature.device.ui
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
-import com.xzyht.notifyrelay.feature.device.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -27,10 +27,10 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.ui.graphics.Color
 import top.yukonga.miuix.kmp.basic.Text
-import com.xzyht.notifyrelay.feature.device.ConnectDeviceDialog
-import com.xzyht.notifyrelay.feature.device.HandshakeRequestDialog
-import com.xzyht.notifyrelay.feature.device.RejectedDevicesDialog
-import com.xzyht.notifyrelay.feature.device.HandshakeRequest
+import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
+import com.xzyht.notifyrelay.feature.device.ui.dialog.HandshakeRequestDialog
+import com.xzyht.notifyrelay.feature.device.ui.dialog.RejectedDevicesDialog
+import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 
 // 全局设备选中状态单例
 object GlobalSelectedDeviceHolder {
@@ -546,7 +546,7 @@ fun DeviceListScreen() {
                     for (uuid in oldUuids.distinct()) {
                         safeMap.remove(uuid)
                         try {
-                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.feature.device.NotificationData")
+                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationData")
                             val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
                             val notificationData = getInstance.invoke(null, appContext)
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
@@ -624,7 +624,7 @@ fun DeviceListScreen() {
                     for (uuid in allUuidsToRemove.distinct()) {
                         safeMap.remove(uuid)
                         try {
-                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.feature.device.NotificationData")
+                            val notificationDataClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationData")
                             val getInstance = notificationDataClass.getDeclaredMethod("getInstance", android.content.Context::class.java)
                             val notificationData = getInstance.invoke(null, appContext)
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)

@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification
+package com.xzyht.notifyrelay.feature.notification.ui
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.Checkbox
+import com.xzyht.notifyrelay.feature.notification.data.DefaultNotificationFilter
 
 /**
  * 通知过滤软编码设置Pager
