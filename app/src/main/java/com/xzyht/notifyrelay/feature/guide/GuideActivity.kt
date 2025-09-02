@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import com.xzyht.notifyrelay.MainActivity
 import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.core.util.AppListHelper
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
@@ -42,7 +43,7 @@ class GuideActivity : ComponentActivity() {
         val isFirstLaunch = prefs.getBoolean("isFirstLaunch", true)
         val fromInternal = intent.getBooleanExtra("fromInternal", false)
         // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
-        if (!fromInternal && checkAllPermissions(this) && !isFirstLaunch) {
+        if (!fromInternal && PermissionHelper.checkAllPermissions(this) && !isFirstLaunch) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
@@ -112,64 +113,42 @@ fun GuideScreen(onContinue: () -> Unit) {
         android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    // 权限检测方法（去除自动跳转，仅检测状态）
+    // 权限检测方法（使用 PermissionHelper 和 AppListHelper）
     fun refreshPermissions() {
         val enabledListeners = android.provider.Settings.Secure.getString(
             context.contentResolver,
             "enabled_notification_listeners"
         )
         hasNotification = enabledListeners?.contains(context.packageName) == true
-        val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-            appOps.unsafeCheckOpNoThrow(
-                "android:get_usage_stats",
-                android.os.Process.myUid(),
-                context.packageName
-            )
-        } else {
-            val compatMode = androidx.core.app.AppOpsManagerCompat.noteOp(
-                context,
-                "android:get_usage_stats",
-                android.os.Process.myUid(),
-                context.packageName
-            )
-            if (compatMode == androidx.core.app.AppOpsManagerCompat.MODE_ALLOWED) {
-                android.app.AppOpsManager.MODE_ALLOWED
-            } else {
-                android.app.AppOpsManager.MODE_IGNORED
-            }
-        }
-        hasUsage = mode == android.app.AppOpsManager.MODE_ALLOWED
+
+        // 使用 PermissionHelper 检查使用情况权限
+        hasUsage = PermissionHelper.isUsageStatsEnabled(context)
+
+        // 使用 PermissionHelper 检查通知发送权限
         hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         } else true
-        try {
-            val pm = context.packageManager
-            val apps = pm.getInstalledApplications(0)
-            canQueryApps = apps.size > 2
-        } catch (e: Exception) {
-            canQueryApps = false
-        }
-        // 检查悬浮通知权限（临时通知分组）
-        hasFloatNotification = try {
-            android.provider.Settings.canDrawOverlays(context)
-        } catch (_: Exception) { false }
+
+        // 使用 AppListHelper 检查应用列表权限
+        canQueryApps = AppListHelper.canQueryApps(context)
+
+        // 检查悬浮通知权限
+        hasFloatNotification = PermissionHelper.checkOverlayPermission(context)
+
         // 检查开发者选项-停用屏幕共享保护
         hasDevScreenShareProtectOff = try {
             val value = android.provider.Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
             value == 1
         } catch (_: Exception) { false }
-        // Android 15+ 敏感通知权限检测
-        hasSensitiveNotification = true
-        if (android.os.Build.VERSION.SDK_INT >= 35) {
-            hasSensitiveNotification =
-                context.checkSelfPermission("android.permission.RECEIVE_SENSITIVE_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
+
+        // 使用 PermissionHelper 检查敏感通知权限
+        hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
+
         permissionsGranted = hasNotification && canQueryApps && hasPost
-        // 检查蓝牙连接权限（Android 12+）
-        hasBluetoothConnect = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        } else true
+
+        // 使用 PermissionHelper 检查蓝牙连接权限
+        hasBluetoothConnect = PermissionHelper.checkBluetoothConnectPermission(context)
+
         showCheck = permissionsGranted
     }
 
@@ -365,24 +344,12 @@ fun GuideScreen(onContinue: () -> Unit) {
         )
     top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
             BasicComponent(
-                title = "敏感通知访问权限 (Android 15+)",
+                title = "敏感通知访问权限 (Android 15+，可选)",
                 summary = "未授权时部分通知内容只能获取到'已隐藏敏感通知',因此应用予以隐藏，建议开启以完整接收通知。如无法跳转可复制下方 adb 命令授权。",
                 // 不再用 rightActions，按钮放 summary 下方
                 onClick = {
                     if (!hasSensitiveNotification) {
-                        val isMiui = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
-                        if (isMiui) {
-                            showToast("跳转关闭增强型通知")
-                            try {
-                                val intent = Intent()
-                                intent.setClassName("com.android.settings", "com.android.settings.Settings\$NotificationAssistantSettingsActivity")
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                showToast("跳转失败，请手动在设置-通知-增强型通知关闭")
-                            }
-                        } else {
-                            showToast("请用adb授权或在系统设置中搜索并关闭\nadb shell appops set ${context.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow")
-                        }
+                        PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
                     }
                 },
                 enabled = true,
@@ -399,19 +366,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                 ) {
                     Button(
                         onClick = {
-                            val isMiui = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
-                            if (isMiui) {
-                                showToast("跳转关闭增强型通知")
-                                try {
-                                    val intent = Intent()
-                                    intent.setClassName("com.android.settings", "com.android.settings.Settings\$NotificationAssistantSettingsActivity")
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {
-                                    showToast("跳转失败，请手动在设置-通知-增强型通知关闭")
-                                }
-                            } else {
-                                showToast("请用adb授权或在系统设置中授权敏感通知权限")
-                            }
+                            PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
                         },
                         modifier = Modifier
                             .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
@@ -443,6 +398,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                             if (!hasNotification) add("获取通知访问权限")
                             if (!canQueryApps) add("获取应用列表权限")
                             if (!hasPost) add("获取通知发送权限")
+                            // 敏感通知权限现在为可选，不再作为必要权限
+                            // if (!hasSensitiveNotification) add("获取敏感通知权限")
                         }.joinToString(", ")
                         if (missing.isNotEmpty()) {
                             showToast("请先授权: $missing")
@@ -461,8 +418,4 @@ fun GuideScreen(onContinue: () -> Unit) {
 
 fun requestAllPermissions(activity: Activity) {
     PermissionHelper.requestAllPermissions(activity)
-}
-
-fun checkAllPermissions(context: Context): Boolean {
-    return PermissionHelper.checkAllPermissions(context)
 }

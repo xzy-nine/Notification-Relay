@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay
 
 import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.core.util.ServiceManager
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import android.content.Intent
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService
@@ -42,8 +43,9 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         showAutoStartBanner = false
         bannerMessage = null
-        // 检查所有必要权限，未授权则跳转引导页
-        if (!checkAllPermissions(this)) {
+
+        // 使用 PermissionHelper 检查权限
+        if (!PermissionHelper.checkAllPermissions(this)) {
             android.util.Log.w("NotifyRelay", "必要权限未授权，跳转引导页")
             val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
@@ -51,40 +53,23 @@ class MainActivity : FragmentActivity() {
             finish()
             return
         }
-        // 检查设备连接服务是否存活，未存活则重启
-        val serviceStarted = try {
-            if (!isServiceRunning("com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService")) {
-                DeviceConnectionService.start(this)
-            }
-            true
-        } catch (e: Exception) {
-            false
-        }
-        // 尝试重启通知监听服务
-        try {
-            val cn = android.content.ComponentName(this, "com.xzyht.notifyrelay.feature.notification.service.NotifyRelayNotificationListenerService")
-            val restartIntent = Intent()
-            restartIntent.component = cn
-            restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startService(restartIntent)
-        } catch (e: Exception) {
-            // 服务无法启动，极可能是自启动权限被拒绝
+
+        // 使用 ServiceManager 启动服务
+        val result = ServiceManager.startAllServices(this)
+        val serviceStarted = result.first
+        val errorMessage = result.second as? String
+        if (errorMessage != null) {
             showAutoStartBanner = true
-            bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
+            bannerMessage = errorMessage
         }
-        // 设备服务也无法启动时同样提示
+
+        // 如果设备服务无法启动，也显示提示
         if (!serviceStarted) {
             showAutoStartBanner = true
             bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
         }
     }
 
-    // 判断服务是否存活
-    private fun isServiceRunning(serviceClassName: String): Boolean {
-        val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager ?: return false
-        val running = am.getRunningServices(Int.MAX_VALUE)
-        return running.any { it.service.className == serviceClassName }
-    }
     private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
         // 授权页返回后重新检查权限
         recreate()
@@ -92,14 +77,16 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 权限检查，未授权则跳转引导页，等待返回后再判断
-        if (!checkAllPermissions(this)) {
+
+        // 使用 PermissionHelper 检查权限
+        if (!PermissionHelper.checkAllPermissions(this)) {
             android.widget.Toast.makeText(this, "请先授权所有必要权限！", android.widget.Toast.LENGTH_SHORT).show()
             val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
             guideLauncher.launch(intent)
             return
         }
+
         // 权限检查通过后再启动前台服务，保证设备发现线程正常
         DeviceConnectionService.start(this)
         // 启动时加载本地历史通知
@@ -153,17 +140,6 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-    }
-
-    // 检查所有必要权限（与 GuideActivity 保持一致）
-    private fun checkAllPermissions(context: Context): Boolean {
-        return PermissionHelper.checkAllPermissions(context)
-    }
-
-    // 检查应用使用情况权限
-    @Suppress("DEPRECATION")
-    private fun isUsageStatsEnabled(): Boolean {
-        return PermissionHelper.isUsageStatsEnabled(this)
     }
 }
 @Composable

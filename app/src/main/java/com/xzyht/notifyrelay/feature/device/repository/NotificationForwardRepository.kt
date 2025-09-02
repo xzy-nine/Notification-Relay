@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.feature.device.repository
 import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.MutableState
+import com.xzyht.notifyrelay.core.util.AppListHelper
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -110,8 +111,7 @@ fun remoteNotificationFilter(data: String, context: Context): DedupResult {
         val title = json.optString("title")
         val text = json.optString("text")
         val time = System.currentTimeMillis()
-        val pm = context.packageManager
-        val installedPkgs = pm.getInstalledApplications(0).map { it.packageName }.toSet()
+        val installedPkgs = AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet()
         val mappedPkg = NotificationForwardConfig.mapToLocalPackage(pkg, installedPkgs)
         if (NotificationForwardConfig.filterMode == "peer" || NotificationForwardConfig.enablePeerMode) {
             if (mappedPkg !in installedPkgs) {

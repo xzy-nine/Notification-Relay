@@ -45,6 +45,7 @@ import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.device.repository.DedupResult
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
+import com.xzyht.notifyrelay.core.util.AppListHelper
 
 
 class DeviceForwardFragment : Fragment() {
@@ -389,7 +390,7 @@ fun DeviceForwardScreen(
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         val pm = context.packageManager
-                                        val installedPkgs = remember { pm.getInstalledApplications(0).map { it.packageName }.toSet() }
+                                        val installedPkgs = remember { AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet() }
                                         group.forEach { pkg ->
                                             val isInstalled = installedPkgs.contains(pkg)
                                             val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }

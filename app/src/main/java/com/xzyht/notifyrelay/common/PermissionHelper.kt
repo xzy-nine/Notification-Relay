@@ -89,6 +89,45 @@ object PermissionHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
         }
+
+        // 敏感通知权限现在为可选，不再强制请求
+        // if (Build.VERSION.SDK_INT >= 35 && !checkSensitiveNotificationPermission(activity)) {
+        //     requestSensitiveNotificationPermission(activity)
+        // }
+    }
+
+    /**
+     * 检查敏感通知权限（Android 15+）
+     */
+    fun checkSensitiveNotificationPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= 35) {
+            context.checkSelfPermission("android.permission.RECEIVE_SENSITIVE_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // 低版本默认有权限
+        }
+    }
+
+    /**
+     * 请求敏感通知权限
+     */
+    fun requestSensitiveNotificationPermission(activity: Activity) {
+        if (Build.VERSION.SDK_INT >= 35) {
+            val isMiui = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+            if (isMiui) {
+                // MIUI 系统跳转关闭增强型通知
+                try {
+                    val intent = Intent()
+                    intent.setClassName("com.android.settings", "com.android.settings.Settings\$NotificationAssistantSettingsActivity")
+                    activity.startActivity(intent)
+                } catch (_: Exception) {
+                    // 跳转失败，提示手动设置
+                    android.widget.Toast.makeText(activity, "请手动在设置-通知-增强型通知关闭", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } else {
+                // 其他系统提示使用 ADB
+                android.widget.Toast.makeText(activity, "请用adb授权: adb shell appops set ${activity.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /**
@@ -99,5 +138,45 @@ object PermissionHelper {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
         val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
         return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    /**
+     * 检查蓝牙连接权限（Android 12+）
+     */
+    fun checkBluetoothConnectPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    /**
+     * 请求蓝牙连接权限
+     */
+    fun requestBluetoothConnectPermission(activity: Activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1001)
+        }
+    }
+
+    /**
+     * 检查悬浮通知权限
+     */
+    fun checkOverlayPermission(context: Context): Boolean {
+        return try {
+            Settings.canDrawOverlays(context)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * 请求悬浮通知权限
+     */
+    fun requestOverlayPermission(activity: Activity) {
+        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+        intent.data = android.net.Uri.parse("package:${activity.packageName}")
+        activity.startActivity(intent)
     }
 }
