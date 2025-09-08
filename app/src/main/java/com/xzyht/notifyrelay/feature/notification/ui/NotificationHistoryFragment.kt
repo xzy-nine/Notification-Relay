@@ -195,18 +195,13 @@ fun NotificationHistoryScreen() {
     val notifications by NotificationRepository.notificationHistoryFlow.collectAsState()
 
     val grouped = notifications.groupBy { it.packageName }
-    val groupList = mutableListOf<List<NotificationRecord>>()
-    val singleList = mutableListOf<NotificationRecord>()
+    val unifiedList = mutableListOf<List<NotificationRecord>>()
     for (entry in grouped.entries) {
-        val list = entry.value
-        if (list.size >= 2) {
-            groupList.add(list.sortedByDescending { it.time })
-        } else {
-            singleList.addAll(list)
-        }
+        val list = entry.value.sortedByDescending { it.time }
+        unifiedList.add(list)
     }
-    // 混合排序：分组按分组最新时间降序，单条按时间降序，合并展示
-    val mixedList = groupList.sortedByDescending { it.firstOrNull()?.time ?: 0L } + singleList.sortedByDescending { it.time }.map { listOf(it) }
+    // 统一按最新时间降序排序
+    val mixedList = unifiedList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
