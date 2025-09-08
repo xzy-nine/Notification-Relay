@@ -14,6 +14,7 @@ import java.util.UUID
 import com.xzyht.notifyrelay.common.data.StorageManager
 import kotlinx.coroutines.delay
 import android.util.Log
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionUIHandler
 
 
 data class DeviceInfo(
@@ -62,6 +63,12 @@ data class AuthInfo(
 
 // =================== 设备连接管理器主类 ===================
 class DeviceConnectionManager(private val context: android.content.Context) {
+    @Volatile
+    private var uiHandler: DeviceConnectionUIHandler? = null
+
+    fun setUIHandler(handler: DeviceConnectionUIHandler) {
+        uiHandler = handler
+    }
     // 获取本机局域网IP（非127.0.0.1）
     private fun getLocalIpAddress(): String {
         try {
@@ -176,27 +183,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         } catch (_: Exception) {}
     }
     /**
-     * 新增：服务端握手请求回调，UI层应监听此回调并弹窗确认，参数为请求设备uuid/displayName/公钥，回调参数true=同意，false=拒绝
-     */
-    var onHandshakeRequest: ((DeviceInfo, String, (Boolean) -> Unit) -> Unit)? = null
-    /**
      * 设备发现/连接/数据发送/接收，全部本地实现。
      */
-    private val notificationDataReceivedCallbacks = mutableSetOf<(String) -> Unit>()
-
-    /**
-     * 注册通知数据接收回调
-     */
-    fun registerOnNotificationDataReceived(callback: (String) -> Unit) {
-        notificationDataReceivedCallbacks.add(callback)
-    }
-
-    /**
-     * 注销通知数据接收回调
-     */
-    fun unregisterOnNotificationDataReceived(callback: (String) -> Unit) {
-        notificationDataReceivedCallbacks.remove(callback)
-    }
     private val _devices = MutableStateFlow<Map<String, Pair<DeviceInfo, Boolean>>>(emptyMap())
     /**
      * 设备状态流：key为uuid，value为(DeviceInfo, isOnline)
@@ -478,6 +466,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             }
         }
         _devices.value = newMap
+        uiHandler?.onDeviceListUpdated()
     }
 
     private fun getDeviceInfo(uuid: String): DeviceInfo? {
@@ -624,16 +613,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         heartbeatJobs[uuid]?.cancel()
                         heartbeatJobs.remove(uuid)
                         heartbeatedDevices.remove(uuid)
-                        // 直接Toast提示（主线程）
                         val msg = "设备[${DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)}]离线，已自动进入手动发现模式，请检查网络或重新发现设备"
-                        val ctx = context
-                        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                            android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        uiHandler?.showToast(msg)
                         // 启动手动发现
                         val displayName = try {
                             val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
@@ -728,15 +709,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 // 修复：NotificationRepository是object（单例），需要获取实例
                 val repoInstance = repoClass.getDeclaredField("INSTANCE").get(null)
                 addMethod.invoke(repoInstance, pkg, appName, title, text, time, remoteUuid, context)
-                // 强制刷新设备列表和UI
-                val scanMethod = repoClass.getDeclaredMethod("scanDeviceList", android.content.Context::class.java)
-                scanMethod.invoke(repoInstance, context)
+                uiHandler?.onDeviceListUpdated()
             }
         } catch (e: Exception) {
             android.util.Log.e("秩序之光 死神-NotifyRelay", "存储远程通知失败: ${e.message}")
         }
-        // 不再直接发系统通知，由 UI 层渲染
-        notificationDataReceivedCallbacks.forEach { it.invoke(decrypted) }
+        // 通知 UI
+        uiHandler?.onNotificationDataReceived(decrypted)
     }
 
     // 启动TCP服务监听，接收其他设备的通知
@@ -791,8 +770,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                                 reader.close()
                                                 client.close()
                                             }
-                                        } else if (onHandshakeRequest != null) {
-                                            onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
+                                        } else if (uiHandler != null) {
+                                            val handler = uiHandler!!
+                                            handler.onHandshakeRequest(remoteDevice, remotePubKey) { accepted ->
                                                 if (accepted) {
                                                     val sharedSecret = if (localPublicKey < remotePubKey)
                                                         (localPublicKey + remotePubKey).take(32)

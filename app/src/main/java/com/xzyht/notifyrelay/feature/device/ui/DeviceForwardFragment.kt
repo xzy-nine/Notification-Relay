@@ -70,7 +70,12 @@ class DeviceForwardFragment : Fragment() {
         private var sharedDeviceManager: DeviceConnectionManager? = null
         fun getDeviceManager(context: android.content.Context): DeviceConnectionManager {
             return sharedDeviceManager ?: synchronized(this) {
-                sharedDeviceManager ?: DeviceConnectionManager(context.applicationContext).also { sharedDeviceManager = it }
+                sharedDeviceManager ?: DeviceConnectionManager(context.applicationContext).also { manager ->
+                    sharedDeviceManager = manager
+                    // 设置UI处理器
+                    val uiHandler = DeviceUIHandler(context.applicationContext)
+                    manager.setUIHandler(uiHandler)
+                }
             }
         }
     }
@@ -245,9 +250,19 @@ fun DeviceForwardScreen(
             }
         }
     }
-    DisposableEffect(deviceManager) {
-        deviceManager.registerOnNotificationDataReceived(notificationCallback)
-        onDispose { deviceManager.unregisterOnNotificationDataReceived(notificationCallback) }
+
+    // 监听UI处理器的通知数据接收状态
+    val uiHandler = remember { DeviceUIHandler(context) }
+    LaunchedEffect(uiHandler.receivedNotificationData.value) {
+        uiHandler.receivedNotificationData.value?.let { data ->
+            notificationCallback(data)
+            uiHandler.receivedNotificationData.value = null // 重置状态
+        }
+    }
+
+    // 监听UI处理器的设备列表更新状态
+    LaunchedEffect(uiHandler.deviceListUpdated.value) {
+        // 设备列表已更新，可以在这里执行UI刷新逻辑
     }
 
     // 聊天区UI+过滤设置（可折叠）

@@ -42,6 +42,7 @@ android {
 
 dependencies {
 
+    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
@@ -50,15 +51,15 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     // Jetpack Compose 依赖（升级至 1.8.x 以适配 Miuix 0.4.7）
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.compose.ui:ui:1.8.1")
-    implementation("androidx.compose.material3:material3:1.3.2")
-    implementation("androidx.compose.material:material:1.8.1")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.8.1")
-    debugImplementation("androidx.compose.ui:ui-tooling:1.8.1")
-    implementation("androidx.compose.foundation:foundation:1.8.1")
-    implementation("androidx.compose.runtime:runtime:1.8.1")
-    implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
+    implementation("androidx.activity:activity-compose")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.runtime:runtime-livedata")
 
     // Miuix Compose 主题库
     // DataStore 持久化（设备名、规则设置）
