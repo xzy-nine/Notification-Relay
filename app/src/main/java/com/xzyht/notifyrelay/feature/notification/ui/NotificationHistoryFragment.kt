@@ -16,13 +16,14 @@ import top.yukonga.miuix.kmp.basic.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Delete
 import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.*
@@ -36,11 +37,64 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.xzyht.notifyrelay.R
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+// 拖拽值枚举
+enum class DragValue { Center, End }
 
 // 防抖 Toast（文件级顶层对象）
 object ToastDebounce {
     var lastToastTime: Long = 0L
     const val debounceMillis: Long = 1500L
+}
+
+@Composable
+fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(80.dp)
+            .background(Color.Red, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .clickable {
+                android.util.Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Filled.Delete,
+                contentDescription = "删除",
+                tint = Color.White
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            top.yukonga.miuix.kmp.basic.Text(
+                text = "删除",
+                style = textStyles.body2.copy(color = Color.White)
+            )
+        }
+    }
 }
 
 @Composable
@@ -212,10 +266,7 @@ fun NotificationHistoryScreen() {
             val decorView = it.decorView
             // 统一使用 WindowInsetsControllerCompat 设置状态栏字体颜色
             androidx.core.view.WindowInsetsControllerCompat(it, decorView).isAppearanceLightStatusBars = !isDarkTheme
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                @Suppress("DEPRECATION")
-                it.statusBarColor = colorScheme.background.toArgb()
-            }
+            // 移除状态栏背景色设置，避免编译错误
         }
     }
     LaunchedEffect(Unit) {
@@ -286,7 +337,11 @@ fun NotificationHistoryScreen() {
             ).show()
         }
     }
+    val density = LocalDensity.current
+    val deleteWidthPx = with(density) { 80.dp.toPx() }
+    val scope = rememberCoroutineScope()
     // 通用通知列表块
+    @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
     @Composable
     fun NotificationListBlock(
         notifications: List<NotificationRecord>,
@@ -296,110 +351,226 @@ fun NotificationHistoryScreen() {
         if (notifications.isNotEmpty()) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(mixedList) { list ->
-                    if (list.size == 1) {
-                        val record = list[0]
-                        val (localAppName, appIcon) = getCachedAppInfo(record.packageName)
-                        NotificationCard(record, localAppName, appIcon)
-                    } else {
-                        val latest = list.maxByOrNull { it.time }
-                        var expanded by remember { mutableStateOf(false) }
-                        val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
-                        // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
-                        val groupTitle = when {
-                            !latest?.appName.isNullOrBlank() -> latest?.appName!!
-                            !appName.isNullOrBlank() -> appName
-                            !latest?.packageName.isNullOrBlank() -> latest?.packageName!!
-                            else -> "(未知应用)"
+                    val density = LocalDensity.current
+                    val anchoredDraggableState = remember {
+                        AnchoredDraggableState<DragValue>(
+                            initialValue = DragValue.Center,
+                            positionalThreshold = { distance: Float -> distance * 0.5f },
+                            velocityThreshold = { with(density) { 100.dp.toPx() } },
+                            snapAnimationSpec = tween(),
+                            decayAnimationSpec = exponentialDecay(),
+                        )
+                    }
+                    val anchors = DraggableAnchors {
+                        DragValue.Center at 0f
+                        DragValue.End at -deleteWidthPx
+                    }
+                    LaunchedEffect(anchors) {
+                        anchoredDraggableState.updateAnchors(anchors)
+                    }
+                    LaunchedEffect(anchoredDraggableState.currentValue) {
+                        if (anchoredDraggableState.currentValue == DragValue.End) {
+                            android.util.Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
                         }
-                        Card(
+                    }
+                    val offset = when {
+                        anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
+                        anchoredDraggableState.offset.isNaN() -> 0f
+                        else -> anchoredDraggableState.offset
+                    }
+                    val deleteWidth = 80.dp
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        // 卡片
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
-                            color = colorScheme.surfaceContainerHighest,
-                            cornerRadius = 12.dp
+                                .anchoredDraggable(
+                                    state = anchoredDraggableState,
+                                    orientation = Orientation.Horizontal
+                                )
+                                .offset { IntOffset(offset.roundToInt(), 0) }
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = if (expanded)
-                                        Modifier.fillMaxWidth().clickable { expanded = false }
-                                    else Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (appIcon != null) {
-                                        Image(
-                                            bitmap = appIcon.asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = groupTitle,
-                                        style = textStyles.title3.copy(color = colorScheme.onBackground)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = "最新时间: " + (latest?.time?.let {
-                                            java.text.SimpleDateFormat(
-                                                "yyyy-MM-dd HH:mm:ss"
-                                            ).format(java.util.Date(it))
-                                        } ?: ""),
-                                        style = textStyles.body2.copy(color = colorScheme.onBackground)
-                                    )
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    top.yukonga.miuix.kmp.basic.Text(
-                                        text = if (expanded) "收起" else "展开",
-                                        style = textStyles.body2.copy(color = colorScheme.primary)
-                                    )
+                            if (list.size == 1) {
+                                val record = list[0]
+                                val (localAppName, appIcon) = getCachedAppInfo(record.packageName)
+                                NotificationCard(record, localAppName, appIcon)
+                            } else {
+                                val latest = list.maxByOrNull { it.time }
+                                var expanded by remember { mutableStateOf(false) }
+                                val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
+                                // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
+                                val groupTitle = when {
+                                    !latest?.appName.isNullOrBlank() -> latest?.appName!!
+                                    !appName.isNullOrBlank() -> appName
+                                    !latest?.packageName.isNullOrBlank() -> latest?.packageName!!
+                                    else -> "(未知应用)"
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
-                                if (!expanded) {
-                                    showList.forEachIndexed { idx, record ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp)
+                                        .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
+                                    color = colorScheme.surfaceContainerHighest,
+                                    cornerRadius = 12.dp
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = if (expanded)
+                                                Modifier.fillMaxWidth().clickable { expanded = false }
+                                            else Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            // 修正：标题应为原始通知标题而非应用名
+                                            if (appIcon != null) {
+                                                Image(
+                                                    bitmap = appIcon.asImageBitmap(),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                            }
                                             top.yukonga.miuix.kmp.basic.Text(
-                                                text = record.title ?: "(无标题)",
-                                                style = textStyles.body2.copy(
-                                                    color = androidx.compose.ui.graphics.Color(0xFF0066B2),
-                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                                ),
-                                                modifier = Modifier.weight(0.4f)
+                                                text = groupTitle,
+                                                style = textStyles.title3.copy(color = colorScheme.onBackground)
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
                                             top.yukonga.miuix.kmp.basic.Text(
-                                                text = record.text ?: "(无内容)",
-                                                style = textStyles.body2.copy(color = colorScheme.onBackground),
-                                                modifier = Modifier.weight(0.6f),
-                                                maxLines = 1,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                text = "最新时间: " + (latest?.time?.let {
+                                                    java.text.SimpleDateFormat(
+                                                        "yyyy-MM-dd HH:mm:ss"
+                                                    ).format(java.util.Date(it))
+                                                } ?: ""),
+                                                style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                            )
+                                            Spacer(modifier = Modifier.weight(1f))
+                                            top.yukonga.miuix.kmp.basic.Text(
+                                                text = if (expanded) "收起" else "展开",
+                                                style = textStyles.body2.copy(color = colorScheme.primary)
                                             )
                                         }
-                                        if (idx < showList.lastIndex) {
-                                            top.yukonga.miuix.kmp.basic.HorizontalDivider(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                                color = colorScheme.outline,
-                                                thickness = 1.dp
-                                            )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
+                                        if (!expanded) {
+                                            showList.forEachIndexed { idx, record ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    // 修正：标题应为原始通知标题而非应用名
+                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                        text = record.title ?: "(无标题)",
+                                                        style = textStyles.body2.copy(
+                                                            color = androidx.compose.ui.graphics.Color(0xFF0066B2),
+                                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                        ),
+                                                        modifier = Modifier.weight(0.4f)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                        text = record.text ?: "(无内容)",
+                                                        style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                                        modifier = Modifier.weight(0.6f),
+                                                        maxLines = 1,
+                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                if (idx < showList.lastIndex) {
+                                                    top.yukonga.miuix.kmp.basic.HorizontalDivider(
+                                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                        color = colorScheme.outline,
+                                                        thickness = 1.dp
+                                                    )
+                                                }
+                                            }
+                                            if (list.size > 3) {
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = "... 共${list.size}条，点击展开",
+                                                    style = textStyles.body2.copy(color = colorScheme.outline)
+                                                )
+                                            }
+                                        } else {
+                                            list.sortedByDescending { it.time }.forEach { record ->
+                                                val density = LocalDensity.current
+                                                val anchoredDraggableState = remember {
+                                                    AnchoredDraggableState<DragValue>(
+                                                        initialValue = DragValue.Center,
+                                                        positionalThreshold = { distance: Float -> distance * 0.5f },
+                                                        velocityThreshold = { with(density) { 100.dp.toPx() } },
+                                                        snapAnimationSpec = tween(),
+                                                        decayAnimationSpec = exponentialDecay(),
+                                                    )
+                                                }
+                                                val deleteWidthPx = with(density) { 80.dp.toPx() }
+                                                val anchors = DraggableAnchors {
+                                                    DragValue.Center at 0f
+                                                    DragValue.End at -deleteWidthPx
+                                                }
+                                                LaunchedEffect(anchors) {
+                                                    anchoredDraggableState.updateAnchors(anchors)
+                                                }
+                                                LaunchedEffect(anchoredDraggableState.currentValue) {
+                                                    if (anchoredDraggableState.currentValue == DragValue.End) {
+                                                        android.util.Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
+                                                    }
+                                                }
+                                                val offset = when {
+                                                    anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
+                                                    anchoredDraggableState.offset.isNaN() -> 0f
+                                                    else -> anchoredDraggableState.offset
+                                                }
+                                                val deleteWidth = 80.dp
+                                                Box(modifier = Modifier.fillMaxWidth()) {
+                                                    // 卡片
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .anchoredDraggable(
+                                                                state = anchoredDraggableState,
+                                                                orientation = Orientation.Horizontal
+                                                            )
+                                                            .offset { IntOffset(offset.roundToInt(), 0) }
+                                                    ) {
+                                                        val (localAppName, appIcon1) = getCachedAppInfo(record.packageName)
+                                                        NotificationCard(record, localAppName, appIcon1)
+                                                    }
+                                                    // 删除按钮
+                                                    if (anchoredDraggableState.currentValue == DragValue.End) {
+                                                        DeleteButton(
+                                                            onClick = {
+                                                                NotificationRepository.currentDevice = selectedDevice
+                                                                android.util.Log.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
+                                                                NotificationRepository.removeNotification(record.key, context)
+                                                                NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                                            },
+                                                            modifier = Modifier.align(Alignment.CenterEnd).width(deleteWidth).fillMaxHeight()
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
-                                    }
-                                    if (list.size > 3) {
-                                        top.yukonga.miuix.kmp.basic.Text(
-                                            text = "... 共${list.size}条，点击展开",
-                                            style = textStyles.body2.copy(color = colorScheme.outline)
-                                        )
-                                    }
-                                } else {
-                                    list.sortedByDescending { it.time }.forEach { record ->
-                                        val (localAppName, appIcon1) = getCachedAppInfo(record.packageName)
-                                        NotificationCard(record, localAppName, appIcon1)
                                     }
                                 }
                             }
+                        }
+                        // 删除按钮
+                        if (anchoredDraggableState.currentValue == DragValue.End) {
+                            DeleteButton(
+                                onClick = {
+                                    NotificationRepository.currentDevice = selectedDevice
+                                    android.util.Log.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
+                                    try {
+                                        if (list.size == 1) {
+                                            NotificationRepository.removeNotification(list[0].key, context)
+                                            NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                        } else {
+                                            NotificationRepository.removeNotificationsByPackage(list[0].packageName ?: "", context)
+                                            NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("NotifyRelay", "删除失败", e)
+                                    }
+                                },
+                                modifier = Modifier.align(Alignment.CenterEnd).width(deleteWidth).fillMaxHeight()
+                            )
                         }
                     }
                 }

@@ -75,7 +75,7 @@ object NotificationRepository {
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val history = runBlocking { store.getAll(if (realKey == "本机") "local" else realKey) }
-            _notificationHistoryFlow.value = history.map {
+            val mapped = history.map {
                 NotificationRecord(
                     key = it.key,
                     packageName = it.packageName,
@@ -86,8 +86,15 @@ object NotificationRepository {
                     device = it.device
                 )
             }
+            _notificationHistoryFlow.value = mapped
+            // 同时更新内存列表，确保内存与当前设备同步
+            notifications.clear()
+            notifications.addAll(mapped)
+            android.util.Log.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
         } catch (e: Exception) {
             _notificationHistoryFlow.value = emptyList()
+            notifications.clear()
+            android.util.Log.e("NotifyRelay", "notifyHistoryChanged 失败", e)
         }
     }
 
@@ -250,7 +257,22 @@ object NotificationRepository {
      * 移除指定 key 的通知
      */
     fun removeNotification(key: String, context: Context) {
+        android.util.Log.d("NotifyRelay", "开始删除通知 key=$key")
+        val beforeSize = notifications.size
         notifications.removeAll { it.key == key }
+        val afterSize = notifications.size
+        android.util.Log.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
+        syncToCache(context)
+        notifyHistoryChanged(currentDevice, context)
+    }
+
+    /**
+     * 移除指定包名的所有通知（分组删除）
+     */
+    fun removeNotificationsByPackage(packageName: String, context: Context) {
+        notifications.removeAll { it.packageName == packageName }
+        syncToCache(context)
+        notifyHistoryChanged(currentDevice, context)
     }
 
     /**
@@ -272,21 +294,22 @@ object NotificationRepository {
         // android.util.Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
-            val entities = notifications.map {
-                NotificationRecordEntity(
-                    key = it.key,
-                    packageName = it.packageName,
-                    appName = it.appName,
-                    title = it.title,
-                    text = it.text,
-                    time = it.time,
-                    device = it.device
-                )
-            }
-            if (entities.isNotEmpty()) {
-                val device = entities.first().device
-                runBlocking { store.writeAll(entities, device) }
-                android.util.Log.i("回声 NotifyRelay", "写入本地历史 device=$device, size=${entities.size}")
+            val grouped = notifications.groupBy { it.device }
+            for ((device, list) in grouped) {
+                val entities = list.map {
+                    NotificationRecordEntity(
+                        key = it.key,
+                        packageName = it.packageName,
+                        appName = it.appName,
+                        title = it.title,
+                        text = it.text,
+                        time = it.time,
+                        device = it.device
+                    )
+                }
+                val fileKey = if (device == "本机") "local" else device
+                runBlocking { store.writeAll(entities, fileKey) }
+                android.util.Log.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
             }
             scanDeviceList(context)
         } catch (e: Exception) {
