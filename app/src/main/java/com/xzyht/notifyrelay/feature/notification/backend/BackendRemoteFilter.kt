@@ -32,6 +32,8 @@ object BackendRemoteFilter {
      * 包含包名映射、去重、黑白名单/对等模式
      */
     fun filterRemoteNotification(data: String, context: Context): FilterResult {
+        // 确保配置已加载
+        RemoteFilterConfig.load(context)
         try {
             val json = org.json.JSONObject(data)
             var pkg = json.optString("packageName")
