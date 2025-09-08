@@ -93,41 +93,31 @@ class MainActivity : FragmentActivity() {
         NotificationRepository.init(this)
 
         // 沉浸式虚拟键和状态栏设置
-        val window = this@MainActivity.window
-        // 允许内容延伸到状态栏和导航栏区域
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        // 先用透明背景，后续在 Compose SideEffect 里动态同步
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        window.decorView.systemUiVisibility = (
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        )
+    val window = this@MainActivity.window
+    // 允许内容延伸到状态栏和导航栏区域，统一用 WindowCompat 控制系统栏外观
+    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    // 颜色设置放到 Compose SideEffect 里统一管理
 
         // 仅使用 Compose 管理主页面和通知历史页面
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-            
             // 自定义错误颜色常量
             val errorColor = Color(0xFFD32F2F)
             val onErrorColor = Color.White
-            
             val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
             MiuixTheme(colors = colors) {
                 val colorScheme = MiuixTheme.colorScheme
-                // 状态栏/导航栏图标颜色适配+背景色同步
+                // 统一在 Composable 作用域设置 window decor
                 SideEffect {
+                    val window = this@MainActivity.window
                     val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
-                    // 统一系统栏背景色为主题背景色
                     window.statusBarColor = colorScheme.background.toArgb()
                     window.navigationBarColor = colorScheme.background.toArgb()
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         window.isNavigationBarContrastEnforced = false
-                        window.navigationBarDividerColor = colorScheme.background.toArgb()
                     }
                 }
                 // 根布局加 systemBarsPadding，避免内容被遮挡，强制背景色一致

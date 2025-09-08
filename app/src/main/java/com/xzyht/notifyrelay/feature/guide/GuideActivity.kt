@@ -48,25 +48,27 @@ class GuideActivity : ComponentActivity() {
             finish()
             return
         }
-        // 沉浸式虚拟键，内容延伸到手势提示线区域
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        window.decorView.systemUiVisibility =
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+    // 沉浸式虚拟键，内容延伸到手势提示线区域
+    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    // 统一用 WindowCompat 控制系统栏外观，避免废弃API
+    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+    // 颜色设置放到 Compose SideEffect 里统一管理
 
         setContent {
             val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
             MiuixTheme(colors = colors) {
-        val colorScheme = MiuixTheme.colorScheme  
-                // 适配底部导航栏颜色
+                val colorScheme = MiuixTheme.colorScheme
+                // 统一在 Composable 作用域设置 window decor
                 SideEffect {
+                    val window = this@GuideActivity.window
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    controller.isAppearanceLightNavigationBars = !isDarkTheme
+                    controller.isAppearanceLightStatusBars = !isDarkTheme
+                    window.statusBarColor = colorScheme.background.toArgb()
                     window.navigationBarColor = colorScheme.background.toArgb()
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         window.isNavigationBarContrastEnforced = false
-                        window.navigationBarDividerColor = colorScheme.background.toArgb()
                     }
                 }
                 GuideScreen(onContinue = {
