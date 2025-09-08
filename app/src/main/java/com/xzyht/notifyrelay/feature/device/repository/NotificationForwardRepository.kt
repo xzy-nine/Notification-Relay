@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.feature.device.repository
 import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.MutableState
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.AppListHelper
 import com.xzyht.notifyrelay.common.data.StorageManager
 
@@ -107,7 +108,7 @@ fun remoteNotificationFilter(data: String, context: Context): com.xzyht.notifyre
 // 通知复刻处理函数
 fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>) {
     try {
-        Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
         val json = org.json.JSONObject(result.rawData)
         json.put("packageName", result.mappedPkg)
         val pkg = result.mappedPkg
@@ -133,7 +134,7 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
                 appIcon = bitmap
             }
         } catch (e: Exception) {
-            Log.e("NotifyRelay(狂鼠)", "获取应用图标失败", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取应用图标失败", e)
         }
         val pm = context.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(pkg)
@@ -162,10 +163,10 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
             try {
                 channel.setBypassDnd(true)
             } catch (e: Exception) {
-                Log.w("NotifyRelay(狂鼠)", "setBypassDnd not supported", e)
+                if (BuildConfig.DEBUG) Log.w("NotifyRelay(狂鼠)", "setBypassDnd not supported", e)
             }
             notificationManager.createNotificationChannel(channel)
-            Log.d("NotifyRelay(狂鼠)", "已创建通知渠道: $channelId")
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "已创建通知渠道: $channelId")
         }
         val builder = android.app.Notification.Builder(context, channelId)
             .setContentTitle(title)
@@ -182,13 +183,13 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
         if (pendingIntent != null) {
             builder.setContentIntent(pendingIntent)
         }
-        Log.d("NotifyRelay(狂鼠)", "[立即]准备发送通知: id=$notifyId, title=$title, text=$text, pkg=$pkg")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备发送通知: id=$notifyId, title=$title, text=$text, pkg=$pkg")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
         com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(title, text)
         notificationManager.notify(notifyId, builder.build())
-        Log.d("NotifyRelay(狂鼠)", "[立即]已调用notify: id=$notifyId")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]已调用notify: id=$notifyId")
     } catch (e: Exception) {
-        Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
+        if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
     }
     com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
     chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)

@@ -2,6 +2,7 @@ package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
 import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
@@ -29,7 +30,7 @@ object MessageSender {
             val sentAny = allDevices.isNotEmpty() && message.isNotBlank()
 
             if (!sentAny) {
-                Log.w(TAG, "没有可用的设备或消息为空")
+                if (BuildConfig.DEBUG) Log.w(TAG, "没有可用的设备或消息为空")
                 return
             }
 
@@ -46,15 +47,15 @@ object MessageSender {
             // 发送到所有已认证设备
             allDevices.forEach { device ->
                 deviceManager.sendNotificationData(device, json)
-                Log.d(TAG, "聊天消息已发送到设备: ${device.displayName}, 消息: $message")
+                if (BuildConfig.DEBUG) Log.d(TAG, "聊天消息已发送到设备: ${device.displayName}, 消息: $message")
             }
 
             // 记录到聊天历史
             ChatMemory.append(context, "发送: $message")
 
-            Log.i(TAG, "聊天消息发送完成，共发送到 ${allDevices.size} 个设备")
+            if (BuildConfig.DEBUG) Log.i(TAG, "聊天消息发送完成，共发送到 ${allDevices.size} 个设备")
         } catch (e: Exception) {
-            Log.e(TAG, "发送聊天消息失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送聊天消息失败", e)
         }
     }
 
@@ -82,7 +83,7 @@ object MessageSender {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
 
             if (authenticatedDevices.isEmpty()) {
-                Log.w(TAG, "没有已认证的设备")
+                if (BuildConfig.DEBUG) Log.w(TAG, "没有已认证的设备")
                 return
             }
 
@@ -98,12 +99,12 @@ object MessageSender {
             // 发送到所有已认证设备
             authenticatedDevices.forEach { deviceInfo ->
                 deviceManager.sendNotificationData(deviceInfo, json)
-                Log.d(TAG, "通知已转发到设备: ${deviceInfo.displayName}, 应用: $appName, 标题: $title")
+                if (BuildConfig.DEBUG) Log.d(TAG, "通知已转发到设备: ${deviceInfo.displayName}, 应用: $appName, 标题: $title")
             }
 
-            Log.i(TAG, "通知转发完成，共转发到 ${authenticatedDevices.size} 个设备")
+            if (BuildConfig.DEBUG) Log.i(TAG, "通知转发完成，共转发到 ${authenticatedDevices.size} 个设备")
         } catch (e: Exception) {
-            Log.e(TAG, "发送通知消息失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送通知消息失败", e)
         }
     }
 
@@ -154,9 +155,9 @@ object MessageSender {
                 notificationManager.cancel(notifyId)
             }, 5000)
 
-            Log.d(TAG, "高优先级悬浮通知已发送: $title")
+            if (BuildConfig.DEBUG) Log.d(TAG, "高优先级悬浮通知已发送: $title")
         } catch (e: Exception) {
-            Log.e(TAG, "发送高优先级通知失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送高优先级通知失败", e)
         }
     }
 
@@ -193,7 +194,7 @@ object MessageSender {
 
             authenticatedDevices
         } catch (e: Exception) {
-            Log.e(TAG, "获取已认证设备列表失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "获取已认证设备列表失败", e)
             emptyList()
         }
     }

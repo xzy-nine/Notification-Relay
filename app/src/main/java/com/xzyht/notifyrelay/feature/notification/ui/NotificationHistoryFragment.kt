@@ -7,6 +7,7 @@ import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import android.os.Bundle
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -55,6 +56,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
+import com.xzyht.notifyrelay.BuildConfig
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -77,7 +79,7 @@ fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .width(80.dp)
             .background(Color.Red, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
             .clickable {
-                android.util.Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
+if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
                 onClick()
             },
         contentAlignment = Alignment.Center
@@ -329,7 +331,7 @@ fun NotificationHistoryScreen() {
             // 主动刷新 StateFlow
             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {
-            android.util.Log.e("NotifyRelay", "清除历史异常", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "清除历史异常", e)
             android.widget.Toast.makeText(
                 context,
                 "清除失败: ${e.message}",
@@ -370,7 +372,7 @@ fun NotificationHistoryScreen() {
                     }
                     LaunchedEffect(anchoredDraggableState.currentValue) {
                         if (anchoredDraggableState.currentValue == DragValue.End) {
-                            android.util.Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
                         }
                     }
                     val offset = when {
@@ -509,7 +511,7 @@ fun NotificationHistoryScreen() {
                                                 }
                                                 LaunchedEffect(anchoredDraggableState.currentValue) {
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {
-                                                        android.util.Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
+                                                        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
                                                     }
                                                 }
                                                 val offset = when {
@@ -537,7 +539,7 @@ fun NotificationHistoryScreen() {
                                                         DeleteButton(
                                                             onClick = {
                                                                 NotificationRepository.currentDevice = selectedDevice
-                                                                android.util.Log.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
+                                                                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
                                                                 NotificationRepository.removeNotification(record.key, context)
                                                                 NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                                             },
@@ -556,7 +558,7 @@ fun NotificationHistoryScreen() {
                             DeleteButton(
                                 onClick = {
                                     NotificationRepository.currentDevice = selectedDevice
-                                    android.util.Log.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
+                                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
                                     try {
                                         if (list.size == 1) {
                                             NotificationRepository.removeNotification(list[0].key, context)
@@ -566,7 +568,7 @@ fun NotificationHistoryScreen() {
                                             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                         }
                                     } catch (e: Exception) {
-                                        android.util.Log.e("NotifyRelay", "删除失败", e)
+                                        if (BuildConfig.DEBUG) Log.e("NotifyRelay", "删除失败", e)
                                     }
                                 },
                                 modifier = Modifier.align(Alignment.CenterEnd).width(deleteWidth).fillMaxHeight()

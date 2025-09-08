@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.StatusBarNotification
+import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
 
@@ -78,7 +80,7 @@ object DefaultNotificationFilter {
         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
         // 日志辅助排查过滤内容
-        android.util.Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
+        if (BuildConfig.DEBUG) Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
         // 过滤媒体通知（不存储，避免蓝牙歌词等标题频繁变化）
         if (sbn.notification.category == Notification.CATEGORY_TRANSPORT) return false
         // 过滤mipush群组引导消息（title=新消息 且 text=你有一条新消息）

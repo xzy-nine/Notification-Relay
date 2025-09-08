@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import kotlinx.coroutines.Job
@@ -18,7 +20,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         if (sbn.packageName == applicationContext.packageName
             && sbn.notification.channelId == CHANNEL_ID
             && sbn.id == NOTIFY_ID) {
-            android.util.Log.w("NotifyRelay", "前台服务通知被移除，自动补发！")
+            if (BuildConfig.DEBUG) Log.w("NotifyRelay", "前台服务通知被移除，自动补发！")
             // 立即补发本服务前台通知
             startForegroundService()
             // 通知DeviceConnectionService延迟补发
@@ -32,12 +34,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     applicationContext.startService(intent)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
+                if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
             }
         }
     }
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onTaskRemoved called, rootIntent=$rootIntent")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onTaskRemoved called, rootIntent=$rootIntent")
         super.onTaskRemoved(rootIntent)
         // 重新启动服务，防止被系统杀死
         val restartIntent = android.content.Intent(applicationContext, NotifyRelayNotificationListenerService::class.java)
@@ -48,14 +50,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
     }
     override fun onCreate() {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onCreate called")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onCreate called")
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
         super.onCreate()
     }
 
     override fun onBind(intent: android.content.Intent?): android.os.IBinder? {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onBind called, intent=$intent")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onBind called, intent=$intent")
         return super.onBind(intent)
     }
     private var foregroundJob: Job? = null
@@ -73,10 +75,10 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val pkg = sbn.packageName
         val isOngoing = sbn.isOngoing
         val flags = n.flags
-        android.util.Log.i(tag, "黑影 pkg=$pkg, id=$id, title=$title, text=$text, isOngoing=$isOngoing, flags=$flags, channelId=$channelId, category=$category, postTime=$postTime, sbnKey=${sbn.key}")
+        if (BuildConfig.DEBUG) Log.i(tag, "黑影 pkg=$pkg, id=$id, title=$title, text=$text, isOngoing=$isOngoing, flags=$flags, channelId=$channelId, category=$category, postTime=$postTime, sbnKey=${sbn.key}")
     }
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         // 先判断是否需要转发（如过滤等）
         if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
             logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
@@ -91,16 +93,16 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (added) {
                     forwardNotificationToRemoteDevices(sbn)
                 } else {
-                    android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] 本地已存在该通知，未转发到远程设备: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+                    if (BuildConfig.DEBUG) Log.i("狂鼠 NotifyRelay", "[NotifyListener] 本地已存在该通知，未转发到远程设备: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("黑影 NotifyRelay", "[NotifyListener] addNotification error", e)
+                if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "[NotifyListener] addNotification error", e)
             }
         }
     }
 
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
-        android.util.Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        if (BuildConfig.DEBUG) Log.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
             val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
             var appName: String? = null
@@ -123,13 +125,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 deviceManager
             )
         } catch (e: Exception) {
-            android.util.Log.e("NotifyRelay", "自动转发通知到远程设备失败", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "自动转发通知到远程设备失败", e)
         }
     }
 
 
     override fun onListenerConnected() {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected called")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected called")
         super.onListenerConnected()
         // 检查监听服务是否启用
         val enabledListeners = android.provider.Settings.Secure.getString(
@@ -137,14 +139,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             "enabled_notification_listeners"
         )
         val isEnabled = enabledListeners?.contains(applicationContext.packageName) == true
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] Listener enabled: $isEnabled, enabledListeners=$enabledListeners")
         if (!isEnabled) {
-            android.util.Log.w("黑影 NotifyRelay", "[NotifyListener] NotificationListenerService 未被系统启用，无法获取通知！")
+            if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "[NotifyListener] NotificationListenerService 未被系统启用，无法获取通知！")
         }
         // 启动时同步所有活跃通知到历史，后台处理
         val actives = activeNotifications
         if (actives != null) {
-            android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
+            if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
                     if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
@@ -158,12 +160,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                             forwardNotificationToRemoteDevices(sbn)
                         }
                     } catch (e: Exception) {
-                    android.util.Log.e("黑影 NotifyRelay", "onListenerConnected addNotification (active) error", e)
+                    if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "onListenerConnected addNotification (active) error", e)
                     }
                 }
             }
         } else {
-            android.util.Log.w("黑影 NotifyRelay", "[NotifyListener] activeNotifications is null")
+            if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "[NotifyListener] activeNotifications is null")
         }
         // 启动前台服务，保证后台存活
         startForegroundService()
@@ -174,7 +176,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 delay(5000)
                 val actives = activeNotifications
                 if (actives != null) {
-                    android.util.Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
+                    if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
                         if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
@@ -188,18 +190,18 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                                 forwardNotificationToRemoteDevices(sbn)
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("黑影 NotifyRelay", "定时拉取 addNotification (timer) error", e)
+                            if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "定时拉取 addNotification (timer) error", e)
                         }
                     }
                 } else {
-                    android.util.Log.w("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications is null")
+                    if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications is null")
                 }
             }
         }
     }
 
     override fun onDestroy() {
-        android.util.Log.i("黑影 NotifyRelay", "[NotifyListener] onDestroy called")
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onDestroy called")
         super.onDestroy()
         foregroundJob?.cancel()
         stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)

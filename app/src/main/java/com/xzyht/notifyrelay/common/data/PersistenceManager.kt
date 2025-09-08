@@ -1,8 +1,10 @@
 package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.xzyht.notifyrelay.BuildConfig
 import java.io.File
 
 /**
@@ -27,7 +29,7 @@ object PersistenceManager {
             val json = file.readText()
             gson.fromJson(json, Array<String>::class.java)?.toList() ?: emptyList()
         } catch (e: Exception) {
-            android.util.Log.e("PersistenceManager", "Failed to read chat memory: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to read chat memory: ${e.message}")
             emptyList()
         }
     }
@@ -38,7 +40,7 @@ object PersistenceManager {
         try {
             file.writeText(gson.toJson(history))
         } catch (e: Exception) {
-            android.util.Log.e("PersistenceManager", "Failed to save chat memory: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to save chat memory: ${e.message}")
         }
     }
 
@@ -68,12 +70,12 @@ object PersistenceManager {
             val json = file.readText()
             gson.fromJson(json, typeToken.type) ?: emptyList()
         } catch (e: Exception) {
-            android.util.Log.e("PersistenceManager", "Failed to read notification records for device $device: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to read notification records for device $device: ${e.message}")
             // 尝试删除损坏的文件
             try {
                 file.delete()
             } catch (ex: Exception) {
-                android.util.Log.e("PersistenceManager", "Failed to delete corrupted file: ${ex.message}")
+                if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to delete corrupted file: ${ex.message}")
             }
             emptyList()
         }
@@ -85,7 +87,7 @@ object PersistenceManager {
         try {
             file.writeText(gson.toJson(records))
         } catch (e: Exception) {
-            android.util.Log.e("PersistenceManager", "Failed to save notification records for device $device: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to save notification records for device $device: ${e.message}")
             throw e
         }
     }
@@ -108,7 +110,7 @@ object PersistenceManager {
         try {
             file.delete()
         } catch (e: Exception) {
-            android.util.Log.e("PersistenceManager", "Failed to delete notification file for device $device: ${e.message}")
+            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "Failed to delete notification file for device $device: ${e.message}")
         }
     }
 }

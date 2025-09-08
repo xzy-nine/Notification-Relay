@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ComponentName
 import android.app.ActivityManager
+import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 
 object ServiceManager {
     private const val AUTO_START_ERROR_MESSAGE = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
@@ -17,7 +19,7 @@ object ServiceManager {
             val startMethod = serviceClass.getMethod("start", Context::class.java)
             startMethod.invoke(null, context)
         } catch (e: Exception) {
-            android.util.Log.e("ServiceManager", "Failed to start DeviceConnectionService", e)
+            if (BuildConfig.DEBUG) Log.e("ServiceManager", "Failed to start DeviceConnectionService", e)
         }
     }
 
@@ -32,7 +34,7 @@ object ServiceManager {
             restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startService(restartIntent)
         } catch (e: Exception) {
-            android.util.Log.e("ServiceManager", "Failed to start NotificationListenerService", e)
+            if (BuildConfig.DEBUG) Log.e("ServiceManager", "Failed to start NotificationListenerService", e)
             throw e // 重新抛出异常，让调用者处理
         }
     }

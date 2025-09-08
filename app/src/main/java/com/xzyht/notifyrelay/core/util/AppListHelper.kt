@@ -3,6 +3,8 @@ package com.xzyht.notifyrelay.core.util
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 
 object AppListHelper {
 
@@ -21,7 +23,7 @@ object AppListHelper {
                 !isSystemApp && !isUpdatedSystemApp && !isSelf
             }
         } catch (e: Exception) {
-            android.util.Log.e("AppListHelper", "Failed to get installed applications", e)
+            if (BuildConfig.DEBUG) Log.e("AppListHelper", "Failed to get installed applications", e)
             emptyList()
         }
     }

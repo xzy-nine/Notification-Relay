@@ -5,12 +5,14 @@ import android.app.PendingIntent
 import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.google.gson.reflect.TypeToken
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.notification.data.NotificationAction
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity
@@ -90,11 +92,11 @@ object NotificationRepository {
             // 同时更新内存列表，确保内存与当前设备同步
             notifications.clear()
             notifications.addAll(mapped)
-            android.util.Log.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
         } catch (e: Exception) {
             _notificationHistoryFlow.value = emptyList()
             notifications.clear()
-            android.util.Log.e("NotifyRelay", "notifyHistoryChanged 失败", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "notifyHistoryChanged 失败", e)
         }
     }
 
@@ -105,9 +107,9 @@ object NotificationRepository {
     fun addRemoteNotification(packageName: String, appName: String?, title: String, text: String, time: Long, device: String, context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
+        if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
         if (context !is android.app.Application) {
-            android.util.Log.w("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
+            if (BuildConfig.DEBUG) Log.w("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
         }
         val key = (time.toString() + packageName + device)
         // 使用传入的appName参数
@@ -127,13 +129,13 @@ object NotificationRepository {
                 device = fileKey
             ))
             runBlocking { store.writeAll(oldList, fileKey) }
-            android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
+            if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
         } catch (e: Exception) {
-            android.util.Log.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
+            if (BuildConfig.DEBUG) Log.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
         }
         // 写入后主动推送变更
         notifyHistoryChanged(device, context)
-        android.util.Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
+        if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
     }
     /**
      * 新增通知到历史记录（支持监听服务调用）
@@ -179,7 +181,7 @@ object NotificationRepository {
                 it.time == time
             ) {
                 existed = true
-                android.util.Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
+                if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
             }
         }
         notifications.removeAll {
@@ -221,7 +223,7 @@ object NotificationRepository {
         found.add("本机")
         // 保证本机在首位
         val sorted = found.sortedWith(compareBy({ if (it == "本机") 0 else 1 }, { it }))
-        // android.util.Log.i("NotifyRelay", "[scanDeviceList] found devices: $sorted") //打印本机存储的通知
+        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[scanDeviceList] found devices: $sorted") //打印本机存储的通知
         deviceList.clear()
         deviceList.addAll(sorted)
     }
@@ -257,11 +259,11 @@ object NotificationRepository {
      * 移除指定 key 的通知
      */
     fun removeNotification(key: String, context: Context) {
-        android.util.Log.d("NotifyRelay", "开始删除通知 key=$key")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "开始删除通知 key=$key")
         val beforeSize = notifications.size
         notifications.removeAll { it.key == key }
         val afterSize = notifications.size
-        android.util.Log.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
         syncToCache(context)
         notifyHistoryChanged(currentDevice, context)
     }
@@ -291,7 +293,7 @@ object NotificationRepository {
     internal fun syncToCache(context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        // android.util.Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
+        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val grouped = notifications.groupBy { it.device }
@@ -309,12 +311,12 @@ object NotificationRepository {
                 }
                 val fileKey = if (device == "本机") "local" else device
                 runBlocking { store.writeAll(entities, fileKey) }
-                android.util.Log.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
+                if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
             }
             scanDeviceList(context)
         } catch (e: Exception) {
             val device = notifications.firstOrNull()?.device ?: "(unknown)"
-            android.util.Log.e("NotifyRelay", "通知保存到缓存失败, contextType=$ctxType, hash=$ctxHash, device=$device, error=${e.message}\n${e.stackTraceToString()}")
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知保存到缓存失败, contextType=$ctxType, hash=$ctxHash, device=$device, error=${e.message}\n${e.stackTraceToString()}")
         }
     }
 
@@ -323,7 +325,7 @@ object NotificationRepository {
      */
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
         val filtered = notifications.filter { it.device == device }
-        android.util.Log.i("NotifyRelay", "[getNotificationsByDevice] device=$device, found=${filtered.size}")
+        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[getNotificationsByDevice] device=$device, found=${filtered.size}")
         return filtered
     }
 }

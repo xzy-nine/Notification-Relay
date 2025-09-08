@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -26,6 +27,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.ui.graphics.Color
+import com.xzyht.notifyrelay.BuildConfig
 import top.yukonga.miuix.kmp.basic.Text
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
 import com.xzyht.notifyrelay.feature.device.ui.dialog.HandshakeRequestDialog
@@ -67,10 +69,10 @@ class DeviceListFragment : Fragment() {
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
     ): android.view.View? {
-        // android.util.Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
-                // android.util.Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
                 MiuixTheme {
                     DeviceListScreen()
                 }
@@ -144,8 +146,8 @@ fun DeviceListScreen() {
             .map { it.uuid }
     }
 
-    // android.util.Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
-    // android.util.Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
+    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
+    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
 
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {

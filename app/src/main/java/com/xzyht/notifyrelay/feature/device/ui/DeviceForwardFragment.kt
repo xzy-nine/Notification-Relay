@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import androidx.compose.ui.platform.ComposeView
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -31,6 +32,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import com.xzyht.notifyrelay.BuildConfig
 import top.yukonga.miuix.kmp.basic.TabRow
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
@@ -107,7 +109,7 @@ class DeviceForwardFragment : Fragment() {
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
     ): android.view.View? {
-        android.util.Log.d("NotifyRelay(狂鼠)", "onCreateView called")
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
                 MiuixTheme {
@@ -133,7 +135,7 @@ fun DeviceForwardScreen(
     val coroutineScopeSnackbar = rememberCoroutineScope()
 
      
-    android.util.Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
+    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
     val tabTitles = listOf("通知过滤设置", "聊天测试", "通知软编码过滤")
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -226,9 +228,9 @@ fun DeviceForwardScreen(
     // 远程通知过滤与复刻到系统通知中心
     val notificationCallback: (String) -> Unit = remember {
         { data: String ->
-            android.util.Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
             val result = remoteNotificationFilter(data, context)
-            android.util.Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
             if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
                 // 延迟去重，需10秒后再判断
                 coroutineScope.launch {

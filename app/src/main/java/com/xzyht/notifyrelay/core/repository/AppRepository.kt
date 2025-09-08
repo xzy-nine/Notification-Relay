@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.core.repository
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.AppListHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,19 +32,19 @@ object AppRepository {
      */
     suspend fun loadApps(context: Context) {
         if (isLoaded && cachedApps != null) {
-            Log.d(TAG, "使用缓存的应用列表")
+            if (BuildConfig.DEBUG) Log.d(TAG, "使用缓存的应用列表")
             _apps.value = cachedApps!!
             return
         }
 
         _isLoading.value = true
         try {
-            Log.d(TAG, "开始加载应用列表")
+            if (BuildConfig.DEBUG) Log.d(TAG, "开始加载应用列表")
             val apps = AppListHelper.getInstalledApplications(context).sortedBy { appInfo ->
                 try {
                     context.packageManager.getApplicationLabel(appInfo).toString()
                 } catch (e: Exception) {
-                    Log.w(TAG, "获取应用标签失败，使用包名: ${appInfo.packageName}", e)
+                    if (BuildConfig.DEBUG) Log.w(TAG, "获取应用标签失败，使用包名: ${appInfo.packageName}", e)
                     appInfo.packageName
                 }
             }
@@ -51,9 +52,9 @@ object AppRepository {
             cachedApps = apps
             isLoaded = true
             _apps.value = apps
-            Log.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
+            if (BuildConfig.DEBUG) Log.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
         } catch (e: Exception) {
-            Log.e(TAG, "应用列表加载失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "应用列表加载失败", e)
             cachedApps = emptyList()
             isLoaded = true
             _apps.value = emptyList()
@@ -92,7 +93,7 @@ object AppRepository {
                 val matchesPackage = app.packageName.contains(query, ignoreCase = true)
                 matchesLabel || matchesPackage
             } catch (e: Exception) {
-                Log.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
+                if (BuildConfig.DEBUG) Log.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
                 app.packageName.contains(query, ignoreCase = true)
             }
         }
