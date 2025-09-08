@@ -214,12 +214,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        // 用 NotificationCompat.Builder 替换已废弃的 Notification.Builder
+        val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("通知转发后台运行中")
             .setContentText("保证通知实时同步")
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setPriority(Notification.PRIORITY_HIGH)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
         // Android 12+ 及以上不再指定特殊前台服务类型，避免权限崩溃
         startForeground(NOTIFY_ID, notification)

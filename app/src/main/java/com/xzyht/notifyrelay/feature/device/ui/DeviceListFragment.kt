@@ -151,8 +151,9 @@ fun DeviceListScreen() {
     LaunchedEffect(deviceMap, showRejectedDialog) {
         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
         field.isAccessible = true
+        val rawMap = field.get(deviceManager)
         @Suppress("UNCHECKED_CAST")
-        val map = field.get(deviceManager) as? Map<String, *>
+        val map = if (rawMap is Map<*, *>) rawMap as Map<String, *> else null
         authedDeviceUuids = map?.filter { entry ->
             val v = entry.value
             v?.let {
@@ -162,8 +163,9 @@ fun DeviceListScreen() {
         }?.keys?.toSet() ?: emptySet()
         val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
         rejField.isAccessible = true
+        val rawRejSet = rejField.get(deviceManager)
         @Suppress("UNCHECKED_CAST")
-        rejectedDeviceUuids = (rejField.get(deviceManager) as? Set<String>)?.toSet() ?: emptySet()
+        rejectedDeviceUuids = if (rawRejSet is Set<*>) rawRejSet as Set<String> else emptySet()
     }
 
     // 监听 deviceManager 的 onHandshakeRequest 回调
@@ -274,22 +276,27 @@ fun DeviceListScreen() {
                                         // 停止心跳任务
                                         val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
                                         heartbeatJobsField.isAccessible = true
-                                        val heartbeatJobs = heartbeatJobsField.get(deviceManager) as? MutableMap<String, *>
+                                        val rawHeartbeatJobs = heartbeatJobsField.get(deviceManager)
+                                        @Suppress("UNCHECKED_CAST")
+                                        val heartbeatJobs = if (rawHeartbeatJobs is MutableMap<*, *>) rawHeartbeatJobs as MutableMap<String, *> else null
                                         heartbeatJobs?.remove(device.uuid)
 
                                         // 从心跳设备集合中移除
                                         val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
                                         heartbeatedDevicesField.isAccessible = true
-                                        val heartbeatedDevices = heartbeatedDevicesField.get(deviceManager) as? MutableSet<String>
-                                        heartbeatedDevices?.remove(device.uuid)
+                                        val rawHeartbeatedDevices = heartbeatedDevicesField.get(deviceManager)
+                                        @Suppress("UNCHECKED_CAST")
+                                        val heartbeatedDevices = if (rawHeartbeatedDevices is MutableSet<*>) rawHeartbeatedDevices as MutableSet<String> else mutableSetOf()
+                                        heartbeatedDevices.remove(device.uuid)
 
                                         // 从认证设备表中移除
                                         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                         field.isAccessible = true
-                                        val map = field.get(deviceManager)
-                                        if (map is MutableMap<*, *>) {
+                                        val rawMap = field.get(deviceManager)
+                                        if (rawMap is MutableMap<*, *>) {
                                             @Suppress("UNCHECKED_CAST")
-                                            (map as? MutableMap<String, *>)?.remove(device.uuid)
+                                            val map = rawMap as MutableMap<String, *>
+                                            map.remove(device.uuid)
                                         }
                                         val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                                         saveMethod.isAccessible = true
@@ -298,7 +305,8 @@ fun DeviceListScreen() {
                                         updateMethod.isAccessible = true
                                         updateMethod.invoke(deviceManager)
                                         @Suppress("UNCHECKED_CAST")
-                                        authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
+                                        val map = if (rawMap is MutableMap<*, *>) rawMap as MutableMap<String, *> else null
+                                        authedDeviceUuids = map?.filter { entry: Map.Entry<String, *> ->
                                             val v = entry.value
                                             v?.let {
                                                 val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
@@ -433,22 +441,27 @@ fun DeviceListScreen() {
                                         // 停止心跳任务
                                         val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
                                         heartbeatJobsField.isAccessible = true
-                                        val heartbeatJobs = heartbeatJobsField.get(deviceManager) as? MutableMap<String, *>
+                                        val rawHeartbeatJobs = heartbeatJobsField.get(deviceManager)
+                                        @Suppress("UNCHECKED_CAST")
+                                        val heartbeatJobs = if (rawHeartbeatJobs is MutableMap<*, *>) rawHeartbeatJobs as MutableMap<String, *> else null
                                         heartbeatJobs?.remove(device.uuid)
 
                                         // 从心跳设备集合中移除
                                         val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
                                         heartbeatedDevicesField.isAccessible = true
-                                        val heartbeatedDevices = heartbeatedDevicesField.get(deviceManager) as? MutableSet<String>
-                                        heartbeatedDevices?.remove(device.uuid)
+                                        val rawHeartbeatedDevices = heartbeatedDevicesField.get(deviceManager)
+                                        @Suppress("UNCHECKED_CAST")
+                                        val heartbeatedDevices = if (rawHeartbeatedDevices is MutableSet<*>) rawHeartbeatedDevices as MutableSet<String> else mutableSetOf()
+                                        heartbeatedDevices.remove(device.uuid)
 
                                         // 从认证设备表中移除
                                         val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                                         field.isAccessible = true
-                                        val map = field.get(deviceManager)
-                                        if (map is MutableMap<*, *>) {
+                                        val rawMap = field.get(deviceManager)
+                                        if (rawMap is MutableMap<*, *>) {
                                             @Suppress("UNCHECKED_CAST")
-                                            (map as? MutableMap<String, *>)?.remove(device.uuid)
+                                            val map = rawMap as MutableMap<String, *>
+                                            map.remove(device.uuid)
                                         }
                                         val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                                         saveMethod.isAccessible = true
@@ -457,7 +470,8 @@ fun DeviceListScreen() {
                                         updateMethod.isAccessible = true
                                         updateMethod.invoke(deviceManager)
                                         @Suppress("UNCHECKED_CAST")
-                                        authedDeviceUuids = (map as? MutableMap<String, *>)?.filter { entry: Map.Entry<String, *> ->
+                                        val map = if (rawMap is MutableMap<*, *>) rawMap as MutableMap<String, *> else null
+                                        authedDeviceUuids = map?.filter { entry: Map.Entry<String, *> ->
                                             val v = entry.value
                                             v?.let {
                                                 val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
@@ -575,8 +589,9 @@ fun DeviceListScreen() {
                         try {
                             val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                             field.isAccessible = true
+                            val rawMap = field.get(deviceManager)
                             @Suppress("UNCHECKED_CAST")
-                            val map = field.get(deviceManager) as? Map<String, *>
+                            val map = if (rawMap is Map<*, *>) rawMap as Map<String, *> else null
                             authedDeviceUuids = map?.filter { entry ->
                                 val v = entry.value
                                 v?.let {
@@ -650,8 +665,9 @@ fun DeviceListScreen() {
                 try {
                     val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
                     field.isAccessible = true
+                    val rawMap = field.get(deviceManager)
                     @Suppress("UNCHECKED_CAST")
-                    val map = field.get(deviceManager) as? Map<String, *>
+                    val map = if (rawMap is Map<*, *>) rawMap as Map<String, *> else null
                     authedDeviceUuids = map?.filter { entry ->
                         val v = entry.value
                         v?.let {
@@ -681,16 +697,16 @@ fun DeviceListScreen() {
                 // 恢复设备（移除rejected），同IP下所有UUID都移除
                 val field = deviceManager.javaClass.getDeclaredField("rejectedDevices")
                 field.isAccessible = true
-                val set = field.get(deviceManager)
-                if (set is MutableSet<*>) {
+                val rawSet = field.get(deviceManager)
+                if (rawSet is MutableSet<*>) {
                     @Suppress("UNCHECKED_CAST")
-                    val ms = set as? MutableSet<String>
+                    val ms = rawSet as MutableSet<String>
                     val allUuids = findOtherUuidsWithSameIp(device.ip, "") + device.uuid
-                    allUuids.distinct().forEach { ms?.remove(it) }
+                    allUuids.distinct().forEach { ms.remove(it) }
                 }
                 // 触发刷新
                 @Suppress("UNCHECKED_CAST")
-                rejectedDeviceUuids = (set as? MutableSet<String>)?.toSet() ?: emptySet()
+                rejectedDeviceUuids = if (rawSet is MutableSet<*>) (rawSet as MutableSet<String>).toSet() else emptySet()
             },
             onDismiss = {
                 showDialog.value = false
