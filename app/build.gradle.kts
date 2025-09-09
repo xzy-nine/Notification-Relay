@@ -14,7 +14,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.00.124"
+        versionName = "0.00.171"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -42,13 +42,14 @@ android {
         buildConfig = true
     }
 
-    // 配置 ABI splits 以生成分架构 APK
+    // 只在 release 构建时启用 ABI splits，debug 只生成 universal APK
     splits {
         abi {
-            isEnable = true
+            // 只在包含 Release 任务时启用分包，否则只 universal
+            isEnable = gradle.startParameter.taskNames.any { it.contains("Release") }
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true // 可选：生成通用 APK
+            isUniversalApk = true
         }
     }
 }
