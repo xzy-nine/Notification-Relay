@@ -41,6 +41,16 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // 配置 ABI splits 以生成分架构 APK
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true // 可选：生成通用 APK
+        }
+    }
 }
 
 dependencies {
