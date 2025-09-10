@@ -84,7 +84,7 @@ jobs:
           name: ${{ steps.version.outputs.version }}
           prerelease: true
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*-release-signed.apk
+            app/build/outputs/apk/debug/app-universal-debug-signed.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
