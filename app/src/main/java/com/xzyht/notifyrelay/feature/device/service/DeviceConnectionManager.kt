@@ -21,8 +21,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import android.text.format.Formatter
+import com.xzyht.notifyrelay.core.util.EncryptionManager
 import com.xzyht.notifyrelay.BuildConfig
-
 
 data class DeviceInfo(
     val uuid: String,
@@ -631,10 +631,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             val parts = resp.split(":")
                             if (parts.size >= 3) {
                                 val remotePubKey = parts[2]
-                                val sharedSecret = if (localPublicKey < remotePubKey)
-                                    (localPublicKey + remotePubKey).take(32)
-                                else
-                                    (remotePubKey + localPublicKey).take(32)
+                                val sharedSecret = EncryptionManager.generateSharedSecret(localPublicKey, remotePubKey)
                                 synchronized(authenticatedDevices) {
                                     authenticatedDevices.remove(device.uuid)
                                     authenticatedDevices[device.uuid] = AuthInfo(remotePubKey, sharedSecret, true, device.displayName, device.ip, device.port)
@@ -768,25 +765,14 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         heartbeatJobs[uuid] = job
     }
 
-    // 简单对称加密（XOR），仅用于示例，实际应用请替换为安全算法
-    private fun xorEncryptDecrypt(input: String, key: String): String {
-        val keyBytes = key.toByteArray()
-        val inputBytes = input.toByteArray()
-        val output = ByteArray(inputBytes.size)
-        for (i in inputBytes.indices) {
-            output[i] = (inputBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
-        }
-        return android.util.Base64.encodeToString(output, android.util.Base64.NO_WRAP)
+    // 使用加密管理器进行数据加密
+    private fun encryptData(input: String, key: String): String {
+        return EncryptionManager.encrypt(input, key)
     }
 
-    private fun xorDecrypt(input: String, key: String): String {
-        val keyBytes = key.toByteArray()
-        val inputBytes = android.util.Base64.decode(input, android.util.Base64.NO_WRAP)
-        val output = ByteArray(inputBytes.size)
-        for (i in inputBytes.indices) {
-            output[i] = (inputBytes[i].toInt() xor keyBytes[i % keyBytes.size].toInt()).toByte()
-        }
-        return String(output)
+    // 使用加密管理器进行数据解密
+    private fun decryptData(input: String, key: String): String {
+        return EncryptionManager.decrypt(input, key)
     }
 
     // 发送通知数据（加密）
@@ -802,7 +788,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
                 val socket = Socket(device.ip, device.port)
                 val writer = OutputStreamWriter(socket.getOutputStream())
                 // 加密数据
-                val encryptedData = xorEncryptDecrypt(data, auth.sharedSecret)
+                val encryptedData = encryptData(data, auth.sharedSecret)
                 // 标记 json
                 val payload = "DATA_JSON:${uuid}:${localPublicKey}:${auth.sharedSecret}:${encryptedData}"
                 writer.write(payload + "\n")
@@ -820,7 +806,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "收到通知数据: $data")
         val decrypted = if (sharedSecret != null) {
             try {
-                xorDecrypt(data, sharedSecret)
+                decryptData(data, sharedSecret)
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "解密失败: ${e.message}")
                 data
@@ -911,10 +897,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
                                         } else if (onHandshakeRequest != null) {
                                             onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
                                                 if (accepted) {
-                                                    val sharedSecret = if (localPublicKey < remotePubKey)
-                                                        (localPublicKey + remotePubKey).take(32)
-                                                    else
-                                                        (remotePubKey + localPublicKey).take(32)
+                                                    val sharedSecret = EncryptionManager.generateSharedSecret(localPublicKey, remotePubKey)
                                                     synchronized(authenticatedDevices) {
                                                         authenticatedDevices.remove(remoteUuid)
                                                         authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
@@ -1035,7 +1018,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
                                         for ((uuid, auth) in authed) {
                                             if (uuid == this@DeviceConnectionManager.uuid) continue
                                             try {
-                                                val decrypted = try { xorDecrypt(line, auth.sharedSecret) } catch (_: Exception) { null }
+                                                val decrypted = try { decryptData(line, auth.sharedSecret) } catch (_: Exception) { null }
                                                 if (decrypted != null && decrypted.startsWith("NOTIFYRELAY_DISCOVER_MANUAL:")) {
                                                     val parts = decrypted.split(":")
                                                     if (parts.size >= 5) {
@@ -1194,21 +1177,14 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         return "192.168.43.1" // 默认值
     }
 
-    // 新增：手动触发热点网络下的设备连接
-    fun connectToHotspotDevices() {
-        if (!isHotspotNetwork()) {
-            if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "当前不是热点网络，无需执行")
-            return
-        }
-        val hotspotGatewayIp = getHotspotGatewayIp()
-        if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "手动连接热点设备，网关IP: $hotspotGatewayIp")
-        coroutineScope.launch {
-            val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
-            for ((uuid, auth) in authed) {
-                if (uuid == this@DeviceConnectionManager.uuid) continue
-                if (heartbeatedDevices.contains(uuid)) continue
-                connectToDevice(DeviceInfo(uuid, auth.displayName ?: "热点设备", hotspotGatewayIp, auth.lastPort ?: 23333))
-            }
-        }
+    // 设置加密类型（可通过UI调用）
+    fun setEncryptionType(type: com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType) {
+        com.xzyht.notifyrelay.core.util.EncryptionManager.setEncryptionType(type)
+        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "加密类型已设置为: $type")
+    }
+
+    // 获取当前加密类型
+    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType {
+        return com.xzyht.notifyrelay.core.util.EncryptionManager.getCurrentEncryptionType()
     }
 }
