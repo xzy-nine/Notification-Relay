@@ -36,6 +36,11 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
             }
+        } else {
+            // 普通通知被移除时，从已处理缓存中移除，允许下次重新处理
+            val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+            processedNotifications.remove(notificationKey)
+            if (BuildConfig.DEBUG) Log.v("NotifyRelay", "通知移除，从缓存中清理: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         }
     }
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
@@ -64,6 +69,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val CHANNEL_ID = "notifyrelay_foreground"
     private val NOTIFY_ID = 1001
 
+    // 新增：已处理通知缓存，避免重复处理
+    private val processedNotifications = mutableSetOf<String>()
+
     private fun logSbnDetail(tag: String, sbn: StatusBarNotification) {
         val n = sbn.notification
         val title = NotificationRepository.getStringCompat(n.extras, "android.title")
@@ -84,6 +92,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
             return
         }
+        // 记录已处理的key，避免定时拉取时重复处理
+        processedNotifications.add(sbn.key ?: (sbn.id.toString() + sbn.packageName))
         // 再写入本地历史（写入本地时回调是否写入过）
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
@@ -155,6 +165,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     }
                     try {
                         logSbnDetail("黑影 onListenerConnected 通过", sbn)
+                        // 记录为已处理
+                        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+                        processedNotifications.add(notificationKey)
                         val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
                         if (added) {
                             forwardNotificationToRemoteDevices(sbn)
@@ -179,12 +192,20 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
+                        // 检查是否已处理过，避免重复处理
+                        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+                        if (processedNotifications.contains(notificationKey)) {
+                            if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取跳过已处理通知: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+                            continue
+                        }
                         if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
                             logSbnDetail("法鸡-黑影 定时拉取被过滤", sbn)
                             continue
                         }
                         try {
                             logSbnDetail("黑影 定时拉取通过", sbn)
+                            // 记录为已处理
+                            processedNotifications.add(notificationKey)
                             val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
                             if (added) {
                                 forwardNotificationToRemoteDevices(sbn)
@@ -192,6 +213,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         } catch (e: Exception) {
                             if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "定时拉取 addNotification (timer) error", e)
                         }
+                    }
+                    // 定期清理过期的缓存，避免内存泄漏
+                    if (processedNotifications.size > 1000) {
+                        // 保留最近500个，清理旧的
+                        val toRemove = processedNotifications.take(processedNotifications.size - 500)
+                        processedNotifications.removeAll(toRemove)
+                        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理过期缓存，剩余: ${processedNotifications.size}")
                     }
                 } else {
                     if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications is null")
