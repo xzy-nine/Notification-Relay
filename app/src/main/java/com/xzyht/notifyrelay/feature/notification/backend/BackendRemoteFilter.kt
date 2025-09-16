@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
 
 /**
@@ -42,7 +42,7 @@ object BackendRemoteFilter {
             val text = json.optString("text")
             val time = System.currentTimeMillis()
 
-            val installedPkgs = AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet()
+            val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
 
             // 对等模式过滤

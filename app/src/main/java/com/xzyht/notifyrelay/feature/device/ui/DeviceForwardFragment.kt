@@ -47,7 +47,7 @@ import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
-import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
 
 
@@ -59,8 +59,15 @@ class DeviceForwardFragment : Fragment() {
     private val appChangeReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             when (intent.action) {
-                android.content.Intent.ACTION_PACKAGE_ADDED, android.content.Intent.ACTION_PACKAGE_REMOVED -> {
-                    // AppListCache现在在AppPickerDialog.kt中，由其负责管理缓存
+                android.content.Intent.ACTION_PACKAGE_ADDED -> {
+                    // 应用安装时清除缓存，下次使用时会重新加载最新的应用列表和图标
+                    AppRepository.clearCache()
+                    if (BuildConfig.DEBUG) Log.d("DeviceForwardFragment", "应用安装，清除缓存")
+                }
+                android.content.Intent.ACTION_PACKAGE_REMOVED -> {
+                    // 应用卸载时清除缓存，下次使用时会重新加载最新的应用列表和图标
+                    AppRepository.clearCache()
+                    if (BuildConfig.DEBUG) Log.d("DeviceForwardFragment", "应用卸载，清除缓存")
                 }
             }
         }
@@ -386,13 +393,14 @@ fun DeviceForwardScreen(
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         val pm = context.packageManager
-                                        val installedPkgs = remember { AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet() }
+                                        val installedPkgs = remember { AppRepository.getInstalledPackageNamesSync(context) }
                                         group.forEach { pkg ->
                                             val isInstalled = installedPkgs.contains(pkg)
-                                            val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }
+                                            // 使用缓存的图标（同步版本）
+                                            val iconBitmap = AppRepository.getAppIconSync(context, pkg)
                                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                                                if (icon is android.graphics.drawable.BitmapDrawable) {
-                                                    Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
+                                                if (iconBitmap != null) {
+                                                    Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
                                                 }
                                                 Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
                                             }

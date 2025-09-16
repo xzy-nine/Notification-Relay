@@ -6,6 +6,7 @@ import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.AppListHelper
 import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.core.repository.AppRepository
 
 // 通用包名映射、去重、黑白名单/对等模式配置
 object NotificationForwardConfig {
@@ -118,20 +119,25 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
         val time = json.optLong("time", System.currentTimeMillis())
         var appIcon: android.graphics.Bitmap? = null
         try {
-            val pm = context.packageManager
-            val appInfo = pm.getApplicationInfo(pkg, 0)
-            val drawable = pm.getApplicationIcon(appInfo)
-            if (drawable is android.graphics.drawable.BitmapDrawable) {
-                appIcon = drawable.bitmap
-            } else {
-                val drawable = drawable as android.graphics.drawable.Drawable
-                val width: Int = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-                val height: Int = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(bitmap)
-                drawable.setBounds(0, 0, width, height)
-                drawable.draw(canvas)
-                appIcon = bitmap
+            // 优先使用缓存的图标（同步版本）
+            appIcon = AppRepository.getAppIconSync(context, pkg)
+            if (appIcon == null) {
+                // 如果缓存中没有，尝试直接获取
+                val pm = context.packageManager
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                val drawable = pm.getApplicationIcon(appInfo)
+                if (drawable is android.graphics.drawable.BitmapDrawable) {
+                    appIcon = drawable.bitmap
+                } else {
+                    val drawable = drawable as android.graphics.drawable.Drawable
+                    val width: Int = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
+                    val height: Int = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bitmap)
+                    drawable.setBounds(0, 0, width, height)
+                    drawable.draw(canvas)
+                    appIcon = bitmap
+                }
             }
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
         } catch (e: Exception) {
