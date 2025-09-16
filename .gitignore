@@ -18,3 +18,4 @@ local.properties
 lancomm/
 # Kotlin 编译器缓存和会话文件
 /.kotlin
+/app/debug
