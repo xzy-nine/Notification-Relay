@@ -15,6 +15,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
+    companion object {
+        private const val MAX_CACHE_SIZE = 2000
+        private const val CACHE_CLEANUP_THRESHOLD = 1500
+        private const val CACHE_ENTRY_TTL = 24 * 60 * 60 * 1000L // 24小时TTL
+    }
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         // 只补发本应用的前台服务通知（必须channelId和id都匹配）
         if (sbn.packageName == applicationContext.packageName
@@ -36,6 +41,11 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
             }
+        } else {
+            // 普通通知被移除时，从已处理缓存中移除，允许下次重新处理
+            val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+            processedNotifications.remove(notificationKey)
+            if (BuildConfig.DEBUG) Log.v("NotifyRelay", "通知移除，从缓存中清理: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         }
     }
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
@@ -51,6 +61,21 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
     override fun onCreate() {
         if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onCreate called")
+        // 注册缓存清理器
+        NotificationRepository.registerCacheCleaner { keysToRemove ->
+            if (keysToRemove.isEmpty()) {
+                // 空集合表示清除全部缓存
+                val beforeSize = processedNotifications.size
+                processedNotifications.clear()
+                if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理全部processedNotifications缓存，清除前: $beforeSize 个条目")
+            } else {
+                // 清除指定的缓存项
+                val beforeSize = processedNotifications.size
+                processedNotifications.keys.removeAll(keysToRemove)
+                val afterSize = processedNotifications.size
+                if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理processedNotifications缓存，清除前: $beforeSize，清除后: $afterSize，移除 ${keysToRemove.size} 个条目")
+            }
+        }
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
         super.onCreate()
@@ -64,32 +89,64 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val CHANNEL_ID = "notifyrelay_foreground"
     private val NOTIFY_ID = 1001
 
-    private fun logSbnDetail(tag: String, sbn: StatusBarNotification) {
-        val n = sbn.notification
-        val title = NotificationRepository.getStringCompat(n.extras, "android.title")
-        val text = NotificationRepository.getStringCompat(n.extras, "android.text")
-        val channelId = n.channelId
-        val category = n.category
-        val id = sbn.id
-        val postTime = sbn.postTime
-        val pkg = sbn.packageName
-        val isOngoing = sbn.isOngoing
-        val flags = n.flags
-        if (BuildConfig.DEBUG) Log.i(tag, "黑影 pkg=$pkg, id=$id, title=$title, text=$text, isOngoing=$isOngoing, flags=$flags, channelId=$channelId, category=$category, postTime=$postTime, sbnKey=${sbn.key}")
+    // 新增：已处理通知缓存，避免重复处理 (改进版：带时间戳的LRU缓存)
+    private val processedNotifications = mutableMapOf<String, Long>()
+
+    private fun cleanupExpiredCacheEntries(currentTime: Long) {
+        if (processedNotifications.size <= CACHE_CLEANUP_THRESHOLD) return
+
+        val expiredKeys = processedNotifications.filter { (_, timestamp) ->
+            currentTime - timestamp > CACHE_ENTRY_TTL
+        }.keys
+
+        if (expiredKeys.isNotEmpty()) {
+            processedNotifications.keys.removeAll(expiredKeys)
+            if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理过期缓存条目: ${expiredKeys.size} 个")
+        }
+
+        // 如果仍然超过最大大小，进行LRU清理
+        if (processedNotifications.size > MAX_CACHE_SIZE) {
+            val entriesToRemove = processedNotifications.size - MAX_CACHE_SIZE
+            val sortedByTime = processedNotifications.entries.sortedBy { it.value }
+            val keysToRemove = sortedByTime.take(entriesToRemove).map { it.key }
+            processedNotifications.keys.removeAll(keysToRemove)
+            if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] LRU清理缓存条目: ${keysToRemove.size} 个")
+        }
     }
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
-        // 先判断是否需要转发（如过滤等）
+
+    private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
         if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-            logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
+            logSbnDetail("法鸡-黑影 被过滤", sbn)
             return
         }
-        // 再写入本地历史（写入本地时回调是否写入过）
+        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+        val currentTime = System.currentTimeMillis()
+
+        // 检查缓存和TTL
+        if (checkProcessed) {
+            val lastProcessedTime = processedNotifications[notificationKey]
+            if (lastProcessedTime != null) {
+                // 检查是否过期
+                if (currentTime - lastProcessedTime < CACHE_ENTRY_TTL) {
+                    if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 跳过已处理通知: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+                    return
+                } else {
+                    // 过期条目，移除
+                    processedNotifications.remove(notificationKey)
+                }
+            }
+        }
+
+        // 清理过期缓存条目
+        cleanupExpiredCacheEntries(currentTime)
+
+        // 更新缓存
+        processedNotifications[notificationKey] = currentTime
+
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
-                logSbnDetail("黑影 onNotificationPosted 通过", sbn)
+                logSbnDetail("黑影 通过", sbn)
                 val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                // 没写入过再转发到远程设备
                 if (added) {
                     forwardNotificationToRemoteDevices(sbn)
                 } else {
@@ -99,6 +156,10 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "[NotifyListener] addNotification error", e)
             }
         }
+    }
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        processNotification(sbn)
     }
 
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
@@ -149,19 +210,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
-                    if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-                        logSbnDetail("法鸡-黑影 onListenerConnected 被过滤", sbn)
-                        continue
-                    }
-                    try {
-                        logSbnDetail("黑影 onListenerConnected 通过", sbn)
-                        val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        if (added) {
-                            forwardNotificationToRemoteDevices(sbn)
-                        }
-                    } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "onListenerConnected addNotification (active) error", e)
-                    }
+                    processNotification(sbn, true)
                 }
             }
         } else {
@@ -179,19 +228,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
-                        if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-                            logSbnDetail("法鸡-黑影 定时拉取被过滤", sbn)
-                            continue
-                        }
-                        try {
-                            logSbnDetail("黑影 定时拉取通过", sbn)
-                            val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            if (added) {
-                                forwardNotificationToRemoteDevices(sbn)
-                            }
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "定时拉取 addNotification (timer) error", e)
-                        }
+                        processNotification(sbn, true)
+                    }
+                    // 定期清理过期的缓存，避免内存泄漏
+                    cleanupExpiredCacheEntries(System.currentTimeMillis())
+                    if (BuildConfig.DEBUG && processedNotifications.size > CACHE_CLEANUP_THRESHOLD) {
+                        Log.i("黑影 NotifyRelay", "[NotifyListener] 缓存大小: ${processedNotifications.size}")
                     }
                 } else {
                     if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications is null")
@@ -229,4 +271,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     // 保留通知历史，不做移除处理
+
+    private fun logSbnDetail(prefix: String, sbn: StatusBarNotification) {
+        if (BuildConfig.DEBUG) {
+            val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
+            val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+            Log.d("NotifyRelay", "$prefix sbnKey=${sbn.key}, pkg=${sbn.packageName}, id=${sbn.id}, title=$title, text=$text")
+        }
+    }
 }

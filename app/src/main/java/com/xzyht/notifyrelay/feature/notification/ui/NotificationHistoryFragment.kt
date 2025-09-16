@@ -4,8 +4,9 @@ import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
-import com.xzyht.notifyrelay.common.data.PersistenceManager
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
+import com.xzyht.notifyrelay.common.data.PersistenceManager
 import android.os.Bundle
 import android.util.Log
 import androidx.compose.foundation.Image
@@ -27,7 +28,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -185,11 +185,25 @@ fun getAppNameAndIcon(context: android.content.Context, packageName: String?): P
     var icon: android.graphics.Bitmap? = null
     if (packageName != null) {
         try {
-            val pm = context.packageManager
-            val appInfo = pm.getApplicationInfo(packageName, 0)
-            name = pm.getApplicationLabel(appInfo).toString()
-            val drawable = pm.getApplicationIcon(appInfo)
-            icon = drawableToBitmap(drawable)
+            // 优先使用缓存的图标（同步版本）
+            icon = AppRepository.getAppIconSync(context, packageName)
+            if (icon != null) {
+                // 如果有缓存图标，获取应用名
+                name = try {
+                    val pm = context.packageManager
+                    val appInfo = pm.getApplicationInfo(packageName, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (_: Exception) {
+                    packageName
+                }
+            } else {
+                // 如果没有缓存，尝试直接获取
+                val pm = context.packageManager
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                name = pm.getApplicationLabel(appInfo).toString()
+                val drawable = pm.getApplicationIcon(appInfo)
+                icon = drawableToBitmap(drawable)
+            }
         } catch (_: Exception) {
             try {
                 val pm = context.packageManager

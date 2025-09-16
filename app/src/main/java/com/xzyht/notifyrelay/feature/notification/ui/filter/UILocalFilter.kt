@@ -9,6 +9,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.IconButton
 
 /**
  * UI本机通知过滤设置
@@ -19,19 +25,22 @@ fun UILocalFilter(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
 
-    // 状态管理
-    var filterSelf by remember { mutableStateOf(BackendLocalFilter.filterSelf) }
-    var filterOngoing by remember { mutableStateOf(BackendLocalFilter.filterOngoing) }
-    var filterNoTitleOrText by remember { mutableStateOf(BackendLocalFilter.filterNoTitleOrText) }
-    var filterImportanceNone by remember { mutableStateOf(BackendLocalFilter.filterImportanceNone) }
-    var filterMiPushGroupSummary by remember { mutableStateOf(BackendLocalFilter.filterMiPushGroupSummary) }
-    var filterSensitiveHidden by remember { mutableStateOf(BackendLocalFilter.filterSensitiveHidden) }
+    MiuixTheme(colors = colors) {
+        // 状态管理
+        var filterSelf by remember { mutableStateOf(BackendLocalFilter.filterSelf) }
+        var filterOngoing by remember { mutableStateOf(BackendLocalFilter.filterOngoing) }
+        var filterNoTitleOrText by remember { mutableStateOf(BackendLocalFilter.filterNoTitleOrText) }
+        var filterImportanceNone by remember { mutableStateOf(BackendLocalFilter.filterImportanceNone) }
+        var filterMiPushGroupSummary by remember { mutableStateOf(BackendLocalFilter.filterMiPushGroupSummary) }
+        var filterSensitiveHidden by remember { mutableStateOf(BackendLocalFilter.filterSensitiveHidden) }
 
-    // 关键词相关状态
-    var keywordList by remember { mutableStateOf(BackendLocalFilter.getForegroundKeywords(context).toList()) }
-    var enabledKeywords by remember { mutableStateOf(BackendLocalFilter.getEnabledForegroundKeywords(context)) }
-    var newKeyword by remember { mutableStateOf("") }
+        // 关键词相关状态
+        var keywordList by remember { mutableStateOf(BackendLocalFilter.getForegroundKeywords(context).toList()) }
+        var enabledKeywords by remember { mutableStateOf(BackendLocalFilter.getEnabledForegroundKeywords(context)) }
+        var newKeyword by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = modifier
@@ -42,7 +51,8 @@ fun UILocalFilter(
         item {
             Text(
                 text = "本机通知过滤设置",
-                style = MaterialTheme.typography.headlineSmall
+                style = MiuixTheme.textStyles.title2,
+                color = MiuixTheme.colorScheme.onBackground
             )
         }
 
@@ -54,6 +64,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤本应用通知",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -74,6 +85,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤持久化通知",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -94,6 +106,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤无标题或无内容",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -114,6 +127,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤优先级为无的通知",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -134,6 +148,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤mipush群组引导消息(新消息/你有一条新消息)",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -154,6 +169,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = "过滤敏感内容被隐藏的通知",
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -170,7 +186,8 @@ fun UILocalFilter(
         item {
             Text(
                 text = "文本关键词过滤(黑名单)：",
-                style = MaterialTheme.typography.titleMedium,
+                style = MiuixTheme.textStyles.title4,
+                color = MiuixTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
         }
@@ -182,10 +199,12 @@ fun UILocalFilter(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
+                TextField(
                     value = newKeyword,
                     onValueChange = { newKeyword = it },
-                    label = { Text("新关键词") },
+                    label = "新关键词",
+                    backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest,
+                    textStyle = MiuixTheme.textStyles.main.copy(color = MiuixTheme.colorScheme.onSurfaceContainerHighest),
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -199,7 +218,7 @@ fun UILocalFilter(
                         }
                     }
                 ) {
-                    Text("添加")
+                    Text("添加", color = MiuixTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -215,6 +234,7 @@ fun UILocalFilter(
             ) {
                 Text(
                     text = keyword,
+                    color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -231,9 +251,10 @@ fun UILocalFilter(
                         enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
                     }
                 ) {
-                    Text("删除")
+                    Text("删除", color = MiuixTheme.colorScheme.onBackground)
                 }
             }
         }
     }
+}
 }

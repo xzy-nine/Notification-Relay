@@ -46,8 +46,7 @@ import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
-import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
 
 
@@ -59,8 +58,15 @@ class DeviceForwardFragment : Fragment() {
     private val appChangeReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
             when (intent.action) {
-                android.content.Intent.ACTION_PACKAGE_ADDED, android.content.Intent.ACTION_PACKAGE_REMOVED -> {
-                    // AppListCache现在在AppPickerDialog.kt中，由其负责管理缓存
+                android.content.Intent.ACTION_PACKAGE_ADDED -> {
+                    // 应用安装时清除缓存，下次使用时会重新加载最新的应用列表和图标
+                    AppRepository.clearCache()
+                    if (BuildConfig.DEBUG) Log.d("DeviceForwardFragment", "应用安装，清除缓存")
+                }
+                android.content.Intent.ACTION_PACKAGE_REMOVED -> {
+                    // 应用卸载时清除缓存，下次使用时会重新加载最新的应用列表和图标
+                    AppRepository.clearCache()
+                    if (BuildConfig.DEBUG) Log.d("DeviceForwardFragment", "应用卸载，清除缓存")
                 }
             }
         }
@@ -137,7 +143,7 @@ fun DeviceForwardScreen(
      
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
-    val tabTitles = listOf("通知过滤设置", "聊天测试", "通知软编码过滤")
+    val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤")
     var selectedTabIndex by remember { mutableStateOf(0) }
     // NotificationFilterPager 状态，持久化与后端同步
     var filterSelf by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSelf) }
@@ -229,55 +235,45 @@ fun DeviceForwardScreen(
     val notificationCallback: (String) -> Unit = remember {
         { data: String ->
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
-            val result = remoteNotificationFilter(data, context)
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
-            if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
-                // 延迟去重，需10秒后再判断
-                coroutineScope.launch {
-                    replicateNotificationDelayed(context, result, chatHistoryState)
-                }
-            } else {
-                // 立即决定
-                if (result.shouldShow) {
-                    replicateNotification(context, result, chatHistoryState)
-                } else {
-                    ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = ChatMemory.getChatHistory(context)
-                }
-            }
+            // 通知处理已在后台完成，这里只更新UI聊天历史
+            chatHistoryState.value = ChatMemory.getChatHistory(context)
         }
     }
     DisposableEffect(deviceManager) {
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注册通知数据接收回调")
         deviceManager.registerOnNotificationDataReceived(notificationCallback)
-        onDispose { deviceManager.unregisterOnNotificationDataReceived(notificationCallback) }
+        onDispose {
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注销通知数据接收回调")
+            deviceManager.unregisterOnNotificationDataReceived(notificationCallback)
+        }
     }
 
     // 聊天区UI+过滤设置（可折叠）
     var filterExpanded by remember { mutableStateOf(false) }
 
+    // UI状态变量
+    var filterMode by remember { mutableStateOf("") }
+    var enableDedup by remember { mutableStateOf(true) }
+    var enablePackageGroupMapping by remember { mutableStateOf(true) }
+    var allGroups by remember { mutableStateOf<List<MutableList<String>>>(emptyList()) }
+    var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(emptyList()) }
+    var filterListText by remember { mutableStateOf("") }
+
+    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
+    var appSearchQuery by remember { mutableStateOf("") }
+
     // 首次进入时加载持久化设置
     LaunchedEffect(context) {
         RemoteFilterConfig.load(context)
+        // 初始化UI状态，使用加载后的配置
+        filterMode = RemoteFilterConfig.filterMode
+        enableDedup = RemoteFilterConfig.enableDeduplication
+        enablePackageGroupMapping = RemoteFilterConfig.enablePackageGroupMapping
+        allGroups = (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
+                    RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
     }
-    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
-    // 移除enablePeer的独立Switch，只用filterMode控制
-    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
-    // 合并组：默认组+自定义组
-    var allGroups by remember {
-        mutableStateOf(
-            RemoteFilterConfig.defaultPackageGroups.map { it.toList() }.toMutableList() +
-            RemoteFilterConfig.customPackageGroups.map { it.toList() }.toMutableList()
-        )
-    }
-    var allGroupEnabled by remember {
-        mutableStateOf(
-            RemoteFilterConfig.defaultGroupEnabled.toList() + RemoteFilterConfig.customGroupEnabled.toList()
-        )
-    }
-    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
-    var appSearchQuery by remember { mutableStateOf("") }
-    var filterListText by remember { mutableStateOf(RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
@@ -294,7 +290,7 @@ fun DeviceForwardScreen(
         // 移除Spacer，改为内容区顶部padding
         when (selectedTabIndex) {
             0 -> {
-                // 通知过滤设置 Tab 内容，支持整体上下滚动
+                // 远程通知过滤 Tab 内容，支持整体上下滚动
                 val scrollState = androidx.compose.foundation.rememberScrollState()
                 Column(
                     modifier = Modifier
@@ -386,13 +382,14 @@ fun DeviceForwardScreen(
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         val pm = context.packageManager
-                                        val installedPkgs = remember { AppListHelper.getInstalledApplications(context).map { it.packageName }.toSet() }
+                                        val installedPkgs = remember { AppRepository.getInstalledPackageNamesSync(context) }
                                         group.forEach { pkg ->
                                             val isInstalled = installedPkgs.contains(pkg)
-                                            val icon = try { pm.getApplicationIcon(pkg) } catch (_: Exception) { null }
+                                            // 使用缓存的图标（同步版本）
+                                            val iconBitmap = AppRepository.getAppIconSync(context, pkg)
                                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                                                if (icon is android.graphics.drawable.BitmapDrawable) {
-                                                    Image(bitmap = icon.bitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
+                                                if (iconBitmap != null) {
+                                                    Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
                                                 }
                                                 Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
                                             }
@@ -421,7 +418,7 @@ fun DeviceForwardScreen(
                             onDismiss = { showAppPickerForGroup = false to -1 },
                             onAppSelected = { pkg: String ->
                                 allGroups = allGroups.toMutableList().apply {
-                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = (this[groupIdx] + pkg).toMutableList()
                                 }
                                 showAppPickerForGroup = false to -1
                             },
@@ -505,7 +502,7 @@ fun DeviceForwardScreen(
                             onCheckedChange = { enableDedup = it },
                             modifier = Modifier.padding(end = 4.dp)
                         )
-                        Text("10秒内重复通知去重", style = textStyles.body2, color = colorScheme.onSurface)
+                        Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
                     }
                     // 应用按钮
                     top.yukonga.miuix.kmp.basic.Button(
@@ -614,7 +611,7 @@ fun DeviceForwardScreen(
                 }
             }
             2 -> {
-                // 通知软编码过滤 Tab
+                // 本地通知过滤 Tab
                 NotificationFilterPager(
                     filterSelf = filterSelf,
                     filterOngoing = filterOngoing,

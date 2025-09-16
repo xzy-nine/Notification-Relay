@@ -134,22 +134,8 @@ fun AppPickerDialog(
                             items(filteredApps) { appInfo: ApplicationInfo ->
                                 val pkg = appInfo.packageName
                                 val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
-                                val iconBitmap = try {
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    when (icon) {
-                                        is android.graphics.drawable.BitmapDrawable -> icon.bitmap.asImageBitmap()
-                                        else -> {
-                                            val drawable = icon as android.graphics.drawable.Drawable
-                                            val width: Int = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-                                            val height: Int = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                                            val canvas = android.graphics.Canvas(bitmap)
-                                            drawable.setBounds(0, 0, width, height)
-                                            drawable.draw(canvas)
-                                            bitmap.asImageBitmap()
-                                        }
-                                    }
-                                } catch (_: Exception) { null }
+                                // 使用缓存的图标（同步版本）
+                                val iconBitmap = AppRepository.getAppIconSync(context, pkg)?.asImageBitmap()
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()

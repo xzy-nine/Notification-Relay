@@ -71,6 +71,7 @@ object NotificationRepository {
     /**
      * 主动刷新指定设备的通知历史并推送到StateFlow
      */
+    @Synchronized
     fun notifyHistoryChanged(deviceKey: String, context: Context) {
         // 只允许刷新 currentDevice 的内容，禁止外部刷新非 currentDevice
         val realKey = currentDevice
@@ -141,6 +142,7 @@ object NotificationRepository {
      * 新增通知到历史记录（支持监听服务调用）
      * @return true 表示本地历史中原本不存在该通知（即为新增）
      */
+    @Synchronized
     fun addNotification(sbn: StatusBarNotification, context: Context): Boolean {
         val notification = sbn.notification
         val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
@@ -171,17 +173,18 @@ object NotificationRepository {
             time = time,
             device = device
         )
-        // 修正判重逻辑：只用 packageName+title+text+time 全部相同才算重复，key 仅用于辅助删除/更新
+        // 改进判重逻辑：对于活跃通知，允许时间戳有一定差异（5秒内），避免因时间戳微差导致重复
         var existed = false
+        val timeTolerance = 5000L // 5秒容差
         notifications.forEach {
-            if (
-                it.packageName == packageName &&
+            if (it.packageName == packageName &&
                 (it.title ?: "") == (title ?: "") &&
-                (it.text ?: "") == (text ?: "") &&
-                it.time == time
-            ) {
-                existed = true
-                if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time=${it.time}")
+                (it.text ?: "") == (text ?: "")) {
+                // 时间戳在容差范围内认为相同
+                if (Math.abs(it.time - time) <= timeTolerance) {
+                    existed = true
+                    if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time差=${Math.abs(it.time - time)}ms")
+                }
             }
         }
         notifications.removeAll {
@@ -189,7 +192,7 @@ object NotificationRepository {
                 it.packageName == packageName &&
                 (it.title ?: "") == (title ?: "") &&
                 (it.text ?: "") == (text ?: "") &&
-                it.time == time
+                Math.abs(it.time - time) <= timeTolerance
             )
         }
         notifications.add(0, record)
@@ -231,6 +234,7 @@ object NotificationRepository {
     private var debounceJob: Job? = null
     private const val DEBOUNCE_DELAY = 500L
 
+    @Synchronized
     fun init(context: Context) {
         try {
             scanDeviceList(context)
@@ -258,31 +262,71 @@ object NotificationRepository {
     /**
      * 移除指定 key 的通知
      */
+    @Synchronized
     fun removeNotification(key: String, context: Context) {
         if (BuildConfig.DEBUG) Log.d("NotifyRelay", "开始删除通知 key=$key")
         val beforeSize = notifications.size
+
+        // 查找要删除的通知，检查其设备类型
+        val notificationToRemove = notifications.find { it.key == key }
+        val isLocalDevice = notificationToRemove?.device == "本机"
+
         notifications.removeAll { it.key == key }
         val afterSize = notifications.size
         if (BuildConfig.DEBUG) Log.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
         syncToCache(context)
+
+        // 仅在本机设备时清理processedNotifications缓存
+        if (isLocalDevice) {
+            clearProcessedCache(setOf(key))
+        }
+
         notifyHistoryChanged(currentDevice, context)
     }
 
     /**
      * 移除指定包名的所有通知（分组删除）
      */
+    @Synchronized
     fun removeNotificationsByPackage(packageName: String, context: Context) {
+        // 收集要清除的通知key，用于清理缓存
+        val notificationsToRemove = notifications.filter { it.packageName == packageName }
+        val keysToClear = notificationsToRemove.map { it.key }.toSet()
+
+        // 检查是否有本机设备的通知
+        val hasLocalNotifications = notificationsToRemove.any { it.device == "本机" }
+        val localKeysToClear = notificationsToRemove.filter { it.device == "本机" }.map { it.key }.toSet()
+
         notifications.removeAll { it.packageName == packageName }
         syncToCache(context)
+
+        // 仅清理本机设备的缓存
+        if (hasLocalNotifications) {
+            clearProcessedCache(localKeysToClear)
+        }
+
         notifyHistoryChanged(currentDevice, context)
     }
 
     /**
      * 清除指定设备的通知历史
      */
+    @Synchronized
     fun clearDeviceHistory(device: String, context: Context) {
+        // 收集要清除的通知key，用于清理缓存
+        val keysToClear = notifications.filter { it.device == device }.map { it.key }.toSet()
         notifications.removeAll { it.device == device }
         syncToCache(context)
+
+        // 仅在本机设备时清理processedNotifications缓存（非本机设备没有缓存）
+        if (device == "本机") {
+            // 对于本机设备，直接清除全部缓存（处理遗留问题）
+            clearProcessedCacheAll()
+        } else {
+            // 对于非本机设备，仅清理对应的key
+            clearProcessedCache(keysToClear)
+        }
+
         // 写入后主动推送变更
         notifyHistoryChanged(device, context)
     }
@@ -323,9 +367,35 @@ object NotificationRepository {
     /**
      * 获取指定设备的通知列表
      */
+    @Synchronized
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
         val filtered = notifications.filter { it.device == device }
         if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[getNotificationsByDevice] device=$device, found=${filtered.size}")
         return filtered
+    }
+
+    // 缓存清理回调
+    private var cacheCleaner: ((Set<String>) -> Unit)? = null
+
+    /**
+     * 注册缓存清理器（由监听服务调用）
+     */
+    fun registerCacheCleaner(cleaner: (Set<String>) -> Unit) {
+        cacheCleaner = cleaner
+    }
+
+    /**
+     * 清理指定通知的缓存
+     */
+    private fun clearProcessedCache(notificationKeys: Set<String>) {
+        cacheCleaner?.invoke(notificationKeys)
+    }
+
+    /**
+     * 清理全部缓存（仅用于本机设备）
+     */
+    private fun clearProcessedCacheAll() {
+        // 传递空集合表示清除全部缓存
+        cacheCleaner?.invoke(emptySet())
     }
 }
