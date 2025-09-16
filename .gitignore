@@ -17,4 +17,4 @@ local.properties
 # 忽略lancomm源码文件夹（外部依赖，仅本地使用）
 lancomm/
 # Kotlin 编译器缓存和会话文件
-.kotlin
+/.kotlin

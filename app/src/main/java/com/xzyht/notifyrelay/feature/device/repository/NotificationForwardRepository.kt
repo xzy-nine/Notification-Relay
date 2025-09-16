@@ -133,8 +133,29 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
                 drawable.draw(canvas)
                 appIcon = bitmap
             }
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取应用图标失败", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取应用图标失败: $pkg", e)
+            // 如果图标获取失败，尝试使用默认图标
+            try {
+                val pm = context.packageManager
+                // 尝试获取系统默认的应用图标
+                val defaultIcon = pm.getDefaultActivityIcon()
+                if (defaultIcon is android.graphics.drawable.BitmapDrawable) {
+                    appIcon = defaultIcon.bitmap
+                } else {
+                    val width = if (defaultIcon.intrinsicWidth > 0) defaultIcon.intrinsicWidth else 96
+                    val height = if (defaultIcon.intrinsicHeight > 0) defaultIcon.intrinsicHeight else 96
+                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bitmap)
+                    defaultIcon.setBounds(0, 0, width, height)
+                    defaultIcon.draw(canvas)
+                    appIcon = bitmap
+                }
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "使用默认应用图标作为回退")
+            } catch (fallbackException: Exception) {
+                if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取默认图标也失败", fallbackException)
+            }
         }
         val pm = context.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(pkg)

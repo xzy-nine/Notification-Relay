@@ -64,6 +64,7 @@ fun UIRemoteFilter(
                     onCheckedChange = {
                         enablePackageGroupMapping = it
                         RemoteFilterConfig.enablePackageGroupMapping = it
+                        RemoteFilterConfig.save(context)
                     }
                 )
             }
@@ -102,6 +103,7 @@ fun UIRemoteFilter(
                             }
                             defaultGroupEnabled = newList
                             RemoteFilterConfig.defaultGroupEnabled = newList.toMutableList()
+                            RemoteFilterConfig.save(context)
                         }
                     )
                 }
@@ -123,6 +125,7 @@ fun UIRemoteFilter(
                     onCheckedChange = {
                         enableDeduplication = it
                         RemoteFilterConfig.enableDeduplication = it
+                        RemoteFilterConfig.save(context)
                     }
                 )
             }
@@ -143,6 +146,7 @@ fun UIRemoteFilter(
                     onCheckedChange = {
                         enablePeerMode = it
                         RemoteFilterConfig.enablePeerMode = it
+                        RemoteFilterConfig.save(context)
                     }
                 )
             }
@@ -172,6 +176,7 @@ fun UIRemoteFilter(
                             onClick = {
                                 filterMode = mode.value
                                 RemoteFilterConfig.filterMode = mode.value
+                                RemoteFilterConfig.save(context)
                             }
                         )
                         Text(text = mode.displayName)
@@ -218,6 +223,7 @@ fun UIRemoteFilter(
                                 newList.add(newFilterPkg.trim() to newFilterKeyword.takeIf { it.isNotBlank() })
                                 filterList = newList
                                 RemoteFilterConfig.filterList = newList
+                                RemoteFilterConfig.save(context)
                                 newFilterPkg = ""
                                 newFilterKeyword = ""
                             }
@@ -246,6 +252,7 @@ fun UIRemoteFilter(
                             newList.removeAt(index)
                             filterList = newList
                             RemoteFilterConfig.filterList = newList
+                            RemoteFilterConfig.save(context)
                         }
                     ) {
                         Text("删除")

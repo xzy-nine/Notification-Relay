@@ -225,14 +225,30 @@ object RemoteFilterConfig {
         StorageManager.putStringSet(context, KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet(), StorageManager.PrefsType.FILTER)
     }
 
+    // 验证包名是否有效（能获取到应用信息）
+    private fun isValidPackage(context: Context, pkg: String): Boolean {
+        return try {
+            val pm = context.packageManager
+            pm.getApplicationInfo(pkg, 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     // 包名映射：返回本地等价包名
     fun mapToLocalPackage(pkg: String, installedPkgs: Set<String>): String {
         for (group in packageGroups) {
             if (pkg in group) {
-                // 优先本机已安装的包名
-                val local = group.firstOrNull { it in installedPkgs }
-                if (local != null) return local
-                // 否则取第一个
+                // 优先本机已安装且有效的包名，按组中顺序尝试
+                for (candidatePkg in group) {
+                    if (candidatePkg in installedPkgs) {
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 尝试包名 $candidatePkg")
+                        return candidatePkg
+                    }
+                }
+                // 如果没有已安装的包名，则取第一个（用于显示原始包名）
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 无已安装包名，使用组第一个 $group.first()")
                 return group.first()
             }
         }
