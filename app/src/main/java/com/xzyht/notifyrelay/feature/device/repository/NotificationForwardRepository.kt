@@ -196,7 +196,7 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "已创建通知渠道: $channelId")
         }
         val builder = android.app.Notification.Builder(context, channelId)
-            .setContentTitle(title)
+            .setContentTitle("($appName)$title")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setCategory(android.app.Notification.CATEGORY_MESSAGE)
