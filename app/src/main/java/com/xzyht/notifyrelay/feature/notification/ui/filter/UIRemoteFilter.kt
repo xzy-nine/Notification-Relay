@@ -117,7 +117,7 @@ fun UIRemoteFilter(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "启用去重",
+                    text = "智能去重（先发送后撤回机制）",
                     modifier = Modifier.weight(1f)
                 )
                 Switch(

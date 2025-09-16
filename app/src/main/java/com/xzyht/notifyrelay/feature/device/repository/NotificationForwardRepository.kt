@@ -98,7 +98,7 @@ object NotificationForwardConfig {
 }
 
 // 延迟去重缓存（10秒内）
-private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
+// private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
 private val pendingDelayedNotifications = mutableListOf<Triple<String, String, String>>() // title, text, rawData
 
 // 远程通知过滤与复刻到系统通知中心
@@ -210,11 +210,15 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
         if (pendingIntent != null) {
             builder.setContentIntent(pendingIntent)
         }
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备发送通知: id=$notifyId, title=$title, text=$text, pkg=$pkg")
+        if (BuildConfig.DEBUG) Log.d("智能去重", "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
         com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(title, text)
         notificationManager.notify(notifyId, builder.build())
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]已调用notify: id=$notifyId")
+        if (BuildConfig.DEBUG) Log.d("智能去重", "通知已发送 - 通知ID:$notifyId")
+
+        // 添加到待监控队列，准备撤回机制
+        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPendingNotification(notifyId, title, text, pkg, context)
+        if (BuildConfig.DEBUG) Log.d("智能去重", "已添加到监控队列 - 通知ID:$notifyId, 将监控15秒内重复")
     } catch (e: Exception) {
         if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
     }
@@ -222,16 +226,4 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
     chatHistoryState?.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
 }
 
-// 延迟通知复刻处理函数
-suspend fun replicateNotificationDelayed(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
-    kotlinx.coroutines.delay(10_000)
-    var shouldShow = true
-    shouldShow = !com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.isInDedupCache(result.title, result.text)
-    if (shouldShow) {
-        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(result.title, result.text)
-        replicateNotification(context, result, chatHistoryState)
-    } else {
-        com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
-        chatHistoryState?.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
-    }
-}
+

@@ -25,7 +25,6 @@ import com.xzyht.notifyrelay.core.util.EncryptionManager
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 
@@ -886,18 +885,11 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         // 处理通知过滤和复刻
         val result = remoteNotificationFilter(decrypted, context)
         if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "remoteNotificationFilter result: $result")
-        if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
-            // 延迟去重，需10秒后再判断
-            coroutineScope.launch {
-                replicateNotificationDelayed(context, result, null)
-            }
+        if (result.shouldShow) {
+            // 智能去重：先发送后撤回机制
+            replicateNotification(context, result, null)
         } else {
-            // 立即决定
-            if (result.shouldShow) {
-                replicateNotification(context, result, null)
-            } else {
-                ChatMemory.append(context, "收到: ${result.rawData}")
-            }
+            ChatMemory.append(context, "收到: ${result.rawData}")
         }
         notificationDataReceivedCallbacks.forEach { callback ->
             try {

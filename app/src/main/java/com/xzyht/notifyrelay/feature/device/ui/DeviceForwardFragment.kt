@@ -46,7 +46,6 @@ import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
 import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
 
@@ -252,29 +251,29 @@ fun DeviceForwardScreen(
     // 聊天区UI+过滤设置（可折叠）
     var filterExpanded by remember { mutableStateOf(false) }
 
+    // UI状态变量
+    var filterMode by remember { mutableStateOf("") }
+    var enableDedup by remember { mutableStateOf(true) }
+    var enablePackageGroupMapping by remember { mutableStateOf(true) }
+    var allGroups by remember { mutableStateOf<List<MutableList<String>>>(emptyList()) }
+    var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(emptyList()) }
+    var filterListText by remember { mutableStateOf("") }
+
+    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
+    var appSearchQuery by remember { mutableStateOf("") }
+
     // 首次进入时加载持久化设置
     LaunchedEffect(context) {
         RemoteFilterConfig.load(context)
+        // 初始化UI状态，使用加载后的配置
+        filterMode = RemoteFilterConfig.filterMode
+        enableDedup = RemoteFilterConfig.enableDeduplication
+        enablePackageGroupMapping = RemoteFilterConfig.enablePackageGroupMapping
+        allGroups = (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
+                    RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
     }
-    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
-    // 移除enablePeer的独立Switch，只用filterMode控制
-    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
-    // 合并组：默认组+自定义组
-    var allGroups by remember {
-        mutableStateOf(
-            RemoteFilterConfig.defaultPackageGroups.map { it.toList() }.toMutableList() +
-            RemoteFilterConfig.customPackageGroups.map { it.toList() }.toMutableList()
-        )
-    }
-    var allGroupEnabled by remember {
-        mutableStateOf(
-            RemoteFilterConfig.defaultGroupEnabled.toList() + RemoteFilterConfig.customGroupEnabled.toList()
-        )
-    }
-    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
-    var appSearchQuery by remember { mutableStateOf("") }
-    var filterListText by remember { mutableStateOf(RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }) }
 
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
@@ -419,7 +418,7 @@ fun DeviceForwardScreen(
                             onDismiss = { showAppPickerForGroup = false to -1 },
                             onAppSelected = { pkg: String ->
                                 allGroups = allGroups.toMutableList().apply {
-                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = this[groupIdx] + pkg
+                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = (this[groupIdx] + pkg).toMutableList()
                                 }
                                 showAppPickerForGroup = false to -1
                             },
@@ -503,7 +502,7 @@ fun DeviceForwardScreen(
                             onCheckedChange = { enableDedup = it },
                             modifier = Modifier.padding(end = 4.dp)
                         )
-                        Text("10秒内重复通知去重", style = textStyles.body2, color = colorScheme.onSurface)
+                        Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
                     }
                     // 应用按钮
                     top.yukonga.miuix.kmp.basic.Button(
