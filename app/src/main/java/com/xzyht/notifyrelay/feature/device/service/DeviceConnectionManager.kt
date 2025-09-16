@@ -23,6 +23,11 @@ import android.net.wifi.WifiManager
 import android.text.format.Formatter
 import com.xzyht.notifyrelay.core.util.EncryptionManager
 import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
+import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
+import com.xzyht.notifyrelay.feature.device.repository.replicateNotificationDelayed
+import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
+import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 
 data class DeviceInfo(
     val uuid: String,
@@ -878,6 +883,22 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
 
         // 不再直接发系统通知，由 UI 层渲染
         if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "准备调用UI层回调，回调数量: ${notificationDataReceivedCallbacks.size}")
+        // 处理通知过滤和复刻
+        val result = remoteNotificationFilter(decrypted, context)
+        if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "remoteNotificationFilter result: $result")
+        if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
+            // 延迟去重，需10秒后再判断
+            coroutineScope.launch {
+                replicateNotificationDelayed(context, result, null)
+            }
+        } else {
+            // 立即决定
+            if (result.shouldShow) {
+                replicateNotification(context, result, null)
+            } else {
+                ChatMemory.append(context, "收到: ${result.rawData}")
+            }
+        }
         notificationDataReceivedCallbacks.forEach { callback ->
             try {
                 if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "调用UI层回调: $callback")

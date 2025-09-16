@@ -236,22 +236,8 @@ fun DeviceForwardScreen(
     val notificationCallback: (String) -> Unit = remember {
         { data: String ->
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
-            val result = remoteNotificationFilter(data, context)
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter result: $result")
-            if (RemoteFilterConfig.enableDeduplication && result.needsDelay && result.shouldShow) {
-                // 延迟去重，需10秒后再判断
-                coroutineScope.launch {
-                    replicateNotificationDelayed(context, result, chatHistoryState)
-                }
-            } else {
-                // 立即决定
-                if (result.shouldShow) {
-                    replicateNotification(context, result, chatHistoryState)
-                } else {
-                    ChatMemory.append(context, "收到: ${result.rawData}")
-                    chatHistoryState.value = ChatMemory.getChatHistory(context)
-                }
-            }
+            // 通知处理已在后台完成，这里只更新UI聊天历史
+            chatHistoryState.value = ChatMemory.getChatHistory(context)
         }
     }
     DisposableEffect(deviceManager) {

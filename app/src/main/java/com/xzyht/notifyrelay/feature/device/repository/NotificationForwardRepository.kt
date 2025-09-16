@@ -107,7 +107,7 @@ fun remoteNotificationFilter(data: String, context: Context): com.xzyht.notifyre
 }
 
 // 通知复刻处理函数
-fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>) {
+fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
     try {
         if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
         val json = org.json.JSONObject(result.rawData)
@@ -219,11 +219,11 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
         if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
     }
     com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
-    chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
+    chatHistoryState?.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
 }
 
 // 延迟通知复刻处理函数
-suspend fun replicateNotificationDelayed(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>) {
+suspend fun replicateNotificationDelayed(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
     kotlinx.coroutines.delay(10_000)
     var shouldShow = true
     shouldShow = !com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.isInDedupCache(result.title, result.text)
@@ -232,6 +232,6 @@ suspend fun replicateNotificationDelayed(context: Context, result: com.xzyht.not
         replicateNotification(context, result, chatHistoryState)
     } else {
         com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
-        chatHistoryState.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
+        chatHistoryState?.value = com.xzyht.notifyrelay.feature.notification.data.ChatMemory.getChatHistory(context)
     }
 }
