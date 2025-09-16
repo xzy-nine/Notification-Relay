@@ -8,14 +8,107 @@ import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import org.json.JSONObject
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 消息发送工具类
  * 整合聊天测试和普通通知转发的消息发送功能
+ * 支持队列和限流，避免大量并发发送导致的通知丢失
  */
 object MessageSender {
 
     private const val TAG = "MessageSender"
+    private const val MAX_CONCURRENT_SENDS = 5 // 最大并发发送数
+    private const val MAX_RETRY_ATTEMPTS = 3 // 最大重试次数
+    private const val RETRY_DELAY_MS = 1000L // 重试延迟
+
+    // 发送队列
+    private val sendChannel = Channel<SendTask>(Channel.UNLIMITED)
+    private val sendSemaphore = Semaphore(MAX_CONCURRENT_SENDS)
+    private val activeSends = AtomicInteger(0)
+
+    init {
+        // 启动队列处理协程
+        CoroutineScope(Dispatchers.IO).launch {
+            processSendQueue()
+        }
+    }
+
+    private data class SendTask(
+        val device: DeviceInfo,
+        val data: String,
+        val deviceManager: DeviceConnectionManager,
+        val retryCount: Int = 0
+    )
+
+    /**
+     * 处理发送队列
+     */
+    private suspend fun processSendQueue() {
+        for (task in sendChannel) {
+            sendSemaphore.acquire()
+            activeSends.incrementAndGet()
+
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    sendNotificationDataWithRetry(task)
+                } finally {
+                    sendSemaphore.release()
+                    activeSends.decrementAndGet()
+                }
+            }
+        }
+    }
+
+    /**
+     * 带重试的通知数据发送
+     */
+    private suspend fun sendNotificationDataWithRetry(task: SendTask) {
+        var currentTask = task
+        var success = false
+
+        repeat(MAX_RETRY_ATTEMPTS) { attempt ->
+            try {
+                val auth = task.deviceManager.authenticatedDevices[task.device.uuid]
+                if (auth == null || !auth.isAccepted) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过发送: ${task.device.displayName}")
+                    return
+                }
+
+                withTimeout(10000L) { // 10秒超时
+                    val socket = java.net.Socket()
+                    try {
+                        socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
+                        val writer = java.io.OutputStreamWriter(socket.getOutputStream())
+                        val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
+                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                        writer.write(payload + "\n")
+                        writer.flush()
+                        success = true
+                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}")
+                    } finally {
+                        socket.close()
+                    }
+                }
+
+                if (success) return
+
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "发送失败 (尝试 ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${task.device.displayName}, 错误: ${e.message}")
+
+                if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+                    delay(RETRY_DELAY_MS * (attempt + 1)) // 递增延迟
+                }
+            }
+        }
+
+        if (!success) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送最终失败，放弃重试: ${task.device.displayName}")
+        }
+    }
 
     /**
      * 发送聊天测试消息
@@ -44,16 +137,23 @@ object MessageSender {
                 put("time", System.currentTimeMillis())
             }.toString()
 
-            // 发送到所有已认证设备
+            // 将发送任务加入队列
             allDevices.forEach { device ->
-                deviceManager.sendNotificationData(device, json)
-                if (BuildConfig.DEBUG) Log.d(TAG, "聊天消息已发送到设备: ${device.displayName}, 消息: $message")
+                val task = SendTask(device, json, deviceManager)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        if (BuildConfig.DEBUG) Log.d(TAG, "聊天消息已加入发送队列: ${device.displayName}, 消息: $message")
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${device.displayName}", e)
+                    }
+                }
             }
 
             // 记录到聊天历史
             ChatMemory.append(context, "发送: $message")
 
-            if (BuildConfig.DEBUG) Log.i(TAG, "聊天消息发送完成，共发送到 ${allDevices.size} 个设备")
+            if (BuildConfig.DEBUG) Log.i(TAG, "聊天消息已加入队列，共发送到 ${allDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "发送聊天消息失败", e)
         }
@@ -96,13 +196,20 @@ object MessageSender {
                 put("time", time)
             }.toString()
 
-            // 发送到所有已认证设备
+            // 将发送任务加入队列
             authenticatedDevices.forEach { deviceInfo ->
-                deviceManager.sendNotificationData(deviceInfo, json)
-                if (BuildConfig.DEBUG) Log.d(TAG, "通知已转发到设备: ${deviceInfo.displayName}, 应用: $appName, 标题: $title")
+                val task = SendTask(deviceInfo, json, deviceManager)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        if (BuildConfig.DEBUG) Log.d(TAG, "通知已加入发送队列: ${deviceInfo.displayName}")
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${deviceInfo.displayName}", e)
+                    }
+                }
             }
 
-            if (BuildConfig.DEBUG) Log.i(TAG, "通知转发完成，共转发到 ${authenticatedDevices.size} 个设备")
+            if (BuildConfig.DEBUG) Log.i(TAG, "通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "发送通知消息失败", e)
         }

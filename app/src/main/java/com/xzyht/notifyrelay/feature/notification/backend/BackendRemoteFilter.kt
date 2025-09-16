@@ -45,28 +45,37 @@ object BackendRemoteFilter {
             val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
 
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 开始过滤 pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=$text")
+
             // 对等模式过滤
             if (RemoteFilterConfig.filterMode == "peer" || RemoteFilterConfig.enablePeerMode) {
                 if (mappedPkg !in installedPkgs) {
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: peer mode过滤 mappedPkg=$mappedPkg 不在本机已安装应用")
+                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式过滤 - mappedPkg=$mappedPkg 不在本机已安装应用")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式通过 - mappedPkg=$mappedPkg 已安装")
             }
 
             // 黑白名单过滤
             if (RemoteFilterConfig.filterMode == "black" || RemoteFilterConfig.filterMode == "white") {
                 val match = RemoteFilterConfig.filterList.any { (filterPkg, keyword) ->
-                    (mappedPkg == filterPkg || pkg == filterPkg) &&
-                    (keyword.isNullOrBlank() || title.contains(keyword) || text.contains(keyword))
+                    val pkgMatch = (mappedPkg == filterPkg || pkg == filterPkg)
+                    val keywordMatch = keyword.isNullOrBlank() || title.contains(keyword) || text.contains(keyword)
+                    val totalMatch = pkgMatch && keywordMatch
+                    if (totalMatch) {
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单匹配 - filterPkg=$filterPkg, keyword=$keyword, pkgMatch=$pkgMatch, keywordMatch=$keywordMatch")
+                    }
+                    totalMatch
                 }
                 if (RemoteFilterConfig.filterMode == "black" && match) {
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 命中黑名单 filtered=$match mappedPkg=$mappedPkg title=$title text=$text")
+                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 命中黑名单 - filtered=$match mappedPkg=$mappedPkg title=$title text=$text")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
                 if (RemoteFilterConfig.filterMode == "white" && !match) {
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 未命中白名单 mappedPkg=$mappedPkg title=$title text=$text")
+                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 未命中白名单 - mappedPkg=$mappedPkg title=$title text=$text")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单过滤通过 - mode=${RemoteFilterConfig.filterMode}, match=$match")
             }
 
             // 去重检查
@@ -77,7 +86,7 @@ object BackendRemoteFilter {
                     dedupCache.removeAll { now - it.third > 10_000 }
                     val dup = dedupCache.any { it.first == title && it.second == text }
                     if (dup) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 去重命中 title=$title text=$text (dedupCache)")
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 去重命中(dedupCache) - title=$title text=$text")
                         return FilterResult(false, mappedPkg, title, text, data)
                     }
                 }
@@ -87,32 +96,29 @@ object BackendRemoteFilter {
                     val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifications
                     val localDup = localList.any {
                         val match = it.device == "本机" && it.title == title && it.text == text && (now - it.time <= 10_000)
-                        if (it.device == "本机" && (now - it.time <= 10_000)) {
-                            if (BuildConfig.DEBUG) Log.d(
-                                "NotifyRelay(狂鼠)",
-                                "remoteNotificationFilter(狂鼠): 本机历史检查 title=$title text=$text vs it.title=${it.title} it.text=${it.text} match=$match"
-                            )
+                        if (match) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 去重命中(本机历史) - title=$title text=$text, time差=${now - it.time}ms")
                         }
                         match
                     }
                     if (localDup) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 去重命中 title=$title text=$text (本机历史)")
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 去重命中(本机历史) - title=$title text=$text")
                         return FilterResult(false, mappedPkg, title, text, data)
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 本机历史去重检查异常", e)
+                    if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "filterRemoteNotification: 本机历史去重检查异常", e)
                 }
 
                 // 需延迟判断
-                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 需延迟判断 title=$title text=$text")
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 需延迟判断 - title=$title text=$text")
                 return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
             }
 
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "remoteNotificationFilter: 直接通过 mappedPkg=$mappedPkg title=$title text=$text")
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 直接通过 - mappedPkg=$mappedPkg title=$title text=$text")
             return FilterResult(true, mappedPkg, title, text, data)
 
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "remoteNotificationFilter: 解析异常", e)
+            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "filterRemoteNotification: 解析异常", e)
             return FilterResult(true, "", "", "", data)
         }
     }

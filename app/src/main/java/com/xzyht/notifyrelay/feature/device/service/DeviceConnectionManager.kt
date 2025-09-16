@@ -226,13 +226,15 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      * 只要认证过的设备会一直保留，未认证设备3秒未发现则消失
      */
     val devices: StateFlow<Map<String, Pair<DeviceInfo, Boolean>>> = _devices
-    private val uuid: String
+    internal val uuid: String
+        get() = field
     // 认证设备表，key为uuid
-    private val authenticatedDevices = mutableMapOf<String, AuthInfo>()
+    internal val authenticatedDevices = mutableMapOf<String, AuthInfo>()
     // 被拒绝设备表
     private val rejectedDevices = mutableSetOf<String>()
     // 本地密钥对（简单字符串模拟，实际应用可用RSA/ECDH等）
-    private val localPublicKey: String
+    internal val localPublicKey: String
+        get() = field
     private val localPrivateKey: String
     private val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -766,7 +768,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
     }
 
     // 使用加密管理器进行数据加密
-    private fun encryptData(input: String, key: String): String {
+    internal fun encryptData(input: String, key: String): String {
         return EncryptionManager.encrypt(input, key)
     }
 
@@ -801,9 +803,39 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         }
     }
 
-    // 接收通知数据（解密）
-    fun handleNotificationData(data: String, sharedSecret: String? = null, remoteUuid: String? = null) {
-        if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "收到通知数据: $data")
+    // 通知处理队列，避免大量并发通知导致的处理阻塞
+    private val notificationProcessingQueue = kotlinx.coroutines.channels.Channel<NotificationData>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+    private val notificationProcessingJob: kotlinx.coroutines.Job? = null
+
+    init {
+        // 启动通知处理协程
+        coroutineScope.launch {
+            processNotificationQueue()
+        }
+    }
+
+    private data class NotificationData(
+        val data: String,
+        val sharedSecret: String?,
+        val remoteUuid: String?
+    )
+
+    private suspend fun processNotificationQueue() {
+        for (notificationData in notificationProcessingQueue) {
+            try {
+                processSingleNotification(notificationData)
+                // 小延迟避免处理过于频繁
+                kotlinx.coroutines.delay(50)
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) android.util.Log.e("秩序之光 死神-NotifyRelay", "处理通知队列失败: ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun processSingleNotification(notificationData: NotificationData) {
+        val (data, sharedSecret, remoteUuid) = notificationData
+
+        if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "处理通知数据: $data")
         val decrypted = if (sharedSecret != null) {
             try {
                 decryptData(data, sharedSecret)
@@ -812,6 +844,7 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
                 data
             }
         } else data
+
         // 只处理 json 格式
         try {
             if (remoteUuid != null) {
@@ -821,16 +854,20 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
                 val title = json.optString("title")
                 val text = json.optString("text")
                 val time = json.optLong("time", System.currentTimeMillis())
+
                 // 尝试获取设备名并更新缓存（如有）
                 val displayName = DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid)
                 if (!displayName.isNullOrEmpty() && displayName != remoteUuid) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
+
                 val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationRepository")
                 val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
                 // 修复：NotificationRepository是object（单例），需要获取实例
                 val repoInstance = repoClass.getDeclaredField("INSTANCE").get(null)
                 addMethod.invoke(repoInstance, pkg, appName, title, text, time, remoteUuid, context)
+
+                // 减少UI刷新频率，批处理时只在最后刷新
                 // 强制刷新设备列表和UI
                 val scanMethod = repoClass.getDeclaredMethod("scanDeviceList", android.content.Context::class.java)
                 scanMethod.invoke(repoInstance, context)
@@ -838,8 +875,30 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) android.util.Log.e("秩序之光 死神-NotifyRelay", "存储远程通知失败: ${e.message}")
         }
+
         // 不再直接发系统通知，由 UI 层渲染
-        notificationDataReceivedCallbacks.forEach { it.invoke(decrypted) }
+        if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "准备调用UI层回调，回调数量: ${notificationDataReceivedCallbacks.size}")
+        notificationDataReceivedCallbacks.forEach { callback ->
+            try {
+                if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "调用UI层回调: $callback")
+                callback.invoke(decrypted)
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.e("秩序之光 死神-NotifyRelay", "调用UI层回调失败: ${e.message}")
+            }
+        }
+    }
+
+    // 接收通知数据（解密）- 现在使用队列处理
+    fun handleNotificationData(data: String, sharedSecret: String? = null, remoteUuid: String? = null) {
+        val notificationData = NotificationData(data, sharedSecret, remoteUuid)
+        coroutineScope.launch {
+            try {
+                notificationProcessingQueue.send(notificationData)
+                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "通知已加入处理队列: remoteUuid=$remoteUuid")
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) android.util.Log.e("秩序之光 死神-NotifyRelay", "加入通知处理队列失败: ${e.message}")
+            }
+        }
     }
 
     // 启动TCP服务监听，接收其他设备的通知

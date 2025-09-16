@@ -255,8 +255,12 @@ fun DeviceForwardScreen(
         }
     }
     DisposableEffect(deviceManager) {
+        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注册通知数据接收回调")
         deviceManager.registerOnNotificationDataReceived(notificationCallback)
-        onDispose { deviceManager.unregisterOnNotificationDataReceived(notificationCallback) }
+        onDispose {
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注销通知数据接收回调")
+            deviceManager.unregisterOnNotificationDataReceived(notificationCallback)
+        }
     }
 
     // 聊天区UI+过滤设置（可折叠）
