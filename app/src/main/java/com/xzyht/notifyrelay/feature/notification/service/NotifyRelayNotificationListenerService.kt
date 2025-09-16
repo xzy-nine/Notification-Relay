@@ -85,21 +85,22 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val flags = n.flags
         if (BuildConfig.DEBUG) Log.i(tag, "黑影 pkg=$pkg, id=$id, title=$title, text=$text, isOngoing=$isOngoing, flags=$flags, channelId=$channelId, category=$category, postTime=$postTime, sbnKey=${sbn.key}")
     }
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
-        // 先判断是否需要转发（如过滤等）
+
+    private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
         if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-            logSbnDetail("法鸡-黑影 onNotificationPosted 被过滤", sbn)
+            logSbnDetail("法鸡-黑影 被过滤", sbn)
             return
         }
-        // 记录已处理的key，避免定时拉取时重复处理
-        processedNotifications.add(sbn.key ?: (sbn.id.toString() + sbn.packageName))
-        // 再写入本地历史（写入本地时回调是否写入过）
+        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+        if (checkProcessed && processedNotifications.contains(notificationKey)) {
+            if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 跳过已处理通知: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+            return
+        }
+        processedNotifications.add(notificationKey)
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             try {
-                logSbnDetail("黑影 onNotificationPosted 通过", sbn)
+                logSbnDetail("黑影 通过", sbn)
                 val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                // 没写入过再转发到远程设备
                 if (added) {
                     forwardNotificationToRemoteDevices(sbn)
                 } else {
@@ -109,6 +110,10 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "[NotifyListener] addNotification error", e)
             }
         }
+    }
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onNotificationPosted called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+        processNotification(sbn)
     }
 
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
@@ -159,22 +164,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
                 for (sbn in actives) {
-                    if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-                        logSbnDetail("法鸡-黑影 onListenerConnected 被过滤", sbn)
-                        continue
-                    }
-                    try {
-                        logSbnDetail("黑影 onListenerConnected 通过", sbn)
-                        // 记录为已处理
-                        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
-                        processedNotifications.add(notificationKey)
-                        val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                        if (added) {
-                            forwardNotificationToRemoteDevices(sbn)
-                        }
-                    } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "onListenerConnected addNotification (active) error", e)
-                    }
+                    processNotification(sbn, true)
                 }
             }
         } else {
@@ -192,27 +182,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
-                        // 检查是否已处理过，避免重复处理
-                        val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
-                        if (processedNotifications.contains(notificationKey)) {
-                            if (BuildConfig.DEBUG) Log.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取跳过已处理通知: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
-                            continue
-                        }
-                        if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
-                            logSbnDetail("法鸡-黑影 定时拉取被过滤", sbn)
-                            continue
-                        }
-                        try {
-                            logSbnDetail("黑影 定时拉取通过", sbn)
-                            // 记录为已处理
-                            processedNotifications.add(notificationKey)
-                            val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
-                            if (added) {
-                                forwardNotificationToRemoteDevices(sbn)
-                            }
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.e("黑影 NotifyRelay", "定时拉取 addNotification (timer) error", e)
-                        }
+                        processNotification(sbn, true)
                     }
                     // 定期清理过期的缓存，避免内存泄漏
                     if (processedNotifications.size > 1000) {
