@@ -26,22 +26,16 @@ fun NotificationFilterPager(
     filterOngoing: Boolean = true,
     filterNoTitleOrText: Boolean = true,
     filterImportanceNone: Boolean = true,
-    filterMiPushGroupSummary: Boolean = true,
-    filterSensitiveHidden: Boolean = true,
     onFilterSelfChange: (Boolean) -> Unit = {},
     onFilterOngoingChange: (Boolean) -> Unit = {},
     onFilterNoTitleOrTextChange: (Boolean) -> Unit = {},
-    onFilterImportanceNoneChange: (Boolean) -> Unit = {},
-    onFilterMiPushGroupSummaryChange: (Boolean) -> Unit = {},
-    onFilterSensitiveHiddenChange: (Boolean) -> Unit = {}
+    onFilterImportanceNoneChange: (Boolean) -> Unit = {}
 ) {
     // 同步状态到BackendLocalFilter
     com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterSelf = filterSelf
     com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterOngoing = filterOngoing
     com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterNoTitleOrText = filterNoTitleOrText
     com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterImportanceNone = filterImportanceNone
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterSensitiveHidden = filterSensitiveHidden
 
     MiuixTheme {
         UILocalFilter()

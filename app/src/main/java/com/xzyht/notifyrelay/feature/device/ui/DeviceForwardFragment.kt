@@ -150,24 +150,18 @@ fun DeviceForwardScreen(
     var filterOngoing by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterOngoing) }
     var filterNoTitleOrText by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterNoTitleOrText) }
     var filterImportanceNone by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterImportanceNone) }
-    var filterMiPushGroupSummary by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterMiPushGroupSummary) }
-    var filterSensitiveHidden by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSensitiveHidden) }
 
     // 持久化监听
-    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone, filterMiPushGroupSummary, filterSensitiveHidden) {
+    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone) {
         BackendLocalFilter.filterSelf = filterSelf
         BackendLocalFilter.filterOngoing = filterOngoing
         BackendLocalFilter.filterNoTitleOrText = filterNoTitleOrText
         BackendLocalFilter.filterImportanceNone = filterImportanceNone
-        BackendLocalFilter.filterMiPushGroupSummary = filterMiPushGroupSummary
-        BackendLocalFilter.filterSensitiveHidden = filterSensitiveHidden
         context?.let {
             StorageManager.putBoolean(it, "filter_self", filterSelf, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(it, "filter_mipush_group_summary", filterMiPushGroupSummary, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(it, "filter_sensitive_hidden", filterSensitiveHidden, StorageManager.PrefsType.FILTER)
         }
     }
     // 启动时加载本地持久化
@@ -177,8 +171,6 @@ fun DeviceForwardScreen(
             filterOngoing = StorageManager.getBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
             filterNoTitleOrText = StorageManager.getBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
             filterImportanceNone = StorageManager.getBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
-            filterMiPushGroupSummary = StorageManager.getBoolean(it, "filter_mipush_group_summary", filterMiPushGroupSummary, StorageManager.PrefsType.FILTER)
-            filterSensitiveHidden = StorageManager.getBoolean(it, "filter_sensitive_hidden", filterSensitiveHidden, StorageManager.PrefsType.FILTER)
         }
     }
     // 连接弹窗与错误弹窗相关状态
@@ -617,14 +609,10 @@ fun DeviceForwardScreen(
                     filterOngoing = filterOngoing,
                     filterNoTitleOrText = filterNoTitleOrText,
                     filterImportanceNone = filterImportanceNone,
-                    filterMiPushGroupSummary = filterMiPushGroupSummary,
-                    filterSensitiveHidden = filterSensitiveHidden,
                     onFilterSelfChange = { filterSelf = it },
                     onFilterOngoingChange = { filterOngoing = it },
                     onFilterNoTitleOrTextChange = { filterNoTitleOrText = it },
-                    onFilterImportanceNoneChange = { filterImportanceNone = it },
-                    onFilterMiPushGroupSummaryChange = { filterMiPushGroupSummary = it },
-                    onFilterSensitiveHiddenChange = { filterSensitiveHidden = it }
+                    onFilterImportanceNoneChange = { filterImportanceNone = it }
                 )
             }
         }

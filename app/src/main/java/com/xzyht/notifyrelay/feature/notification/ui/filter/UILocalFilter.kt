@@ -15,6 +15,9 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.useful.More
 
 /**
  * UI本机通知过滤设置
@@ -34,13 +37,17 @@ fun UILocalFilter(
         var filterOngoing by remember { mutableStateOf(BackendLocalFilter.filterOngoing) }
         var filterNoTitleOrText by remember { mutableStateOf(BackendLocalFilter.filterNoTitleOrText) }
         var filterImportanceNone by remember { mutableStateOf(BackendLocalFilter.filterImportanceNone) }
-        var filterMiPushGroupSummary by remember { mutableStateOf(BackendLocalFilter.filterMiPushGroupSummary) }
-        var filterSensitiveHidden by remember { mutableStateOf(BackendLocalFilter.filterSensitiveHidden) }
 
         // 关键词相关状态
         var keywordList by remember { mutableStateOf(BackendLocalFilter.getForegroundKeywords(context).toList()) }
         var enabledKeywords by remember { mutableStateOf(BackendLocalFilter.getEnabledForegroundKeywords(context)) }
         var newKeyword by remember { mutableStateOf("") }
+        var builtinKeywordsExpanded by remember { mutableStateOf(false) }
+        
+        val builtinKeywords = remember { BackendLocalFilter.getBuiltinKeywords() }
+        val customKeywords = remember(keywordList, builtinKeywords) { 
+            keywordList.filter { !builtinKeywords.contains(it) } 
+        }
 
     LazyColumn(
         modifier = modifier
@@ -140,52 +147,70 @@ fun UILocalFilter(
             }
         }
 
-        // 过滤mipush群组引导消息
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "过滤mipush群组引导消息(新消息/你有一条新消息)",
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = filterMiPushGroupSummary,
-                    onCheckedChange = {
-                        filterMiPushGroupSummary = it
-                        BackendLocalFilter.filterMiPushGroupSummary = it
-                    }
-                )
-            }
-        }
-
-        // 过滤敏感内容被隐藏的通知
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "过滤敏感内容被隐藏的通知",
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = filterSensitiveHidden,
-                    onCheckedChange = {
-                        filterSensitiveHidden = it
-                        BackendLocalFilter.filterSensitiveHidden = it
-                    }
-                )
-            }
-        }
-
         // 关键词过滤设置
         item {
             Text(
                 text = "文本关键词过滤(黑名单)：",
+                style = MiuixTheme.textStyles.title4,
+                color = MiuixTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+
+        // 默认关键词（折叠显示）
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "默认关键词 (${builtinKeywords.size})",
+                    color = MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { builtinKeywordsExpanded = !builtinKeywordsExpanded }
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Useful.More,
+                        contentDescription = if (builtinKeywordsExpanded) "折叠" else "展开",
+                        tint = MiuixTheme.colorScheme.onBackground
+                    )
+                }
+            }
+        }
+
+        // 默认关键词列表（可折叠）
+        if (builtinKeywordsExpanded) {
+            builtinKeywords.forEach { keyword ->
+                item {
+                    val isEnabled = enabledKeywords.contains(keyword)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = keyword,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = isEnabled,
+                            onCheckedChange = { enabled ->
+                                BackendLocalFilter.setKeywordEnabled(context, keyword, enabled)
+                                enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
+                            }
+                        )
+                        // 默认关键词不显示删除按钮
+                    }
+                }
+            }
+        }
+
+        // 自定义关键词设置
+        item {
+            Text(
+                text = "自定义关键词：",
                 style = MiuixTheme.textStyles.title4,
                 color = MiuixTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -223,35 +248,35 @@ fun UILocalFilter(
             }
         }
 
-        // 关键词列表
-        items(keywordList.size) { index ->
-            val keyword = keywordList[index]
-            val isEnabled = enabledKeywords.contains(keyword)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = keyword,
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = isEnabled,
-                    onCheckedChange = { enabled ->
-                        BackendLocalFilter.setKeywordEnabled(context, keyword, enabled)
-                        enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                    }
-                )
-                IconButton(
-                    onClick = {
-                        BackendLocalFilter.removeForegroundKeyword(context, keyword)
-                        keywordList = BackendLocalFilter.getForegroundKeywords(context).toList()
-                        enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                    }
+        // 自定义关键词列表
+        customKeywords.forEach { keyword ->
+            item {
+                val isEnabled = enabledKeywords.contains(keyword)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("删除", color = MiuixTheme.colorScheme.onBackground)
+                    Text(
+                        text = keyword,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = isEnabled,
+                        onCheckedChange = { enabled ->
+                            BackendLocalFilter.setKeywordEnabled(context, keyword, enabled)
+                            enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
+                        }
+                    )
+                    IconButton(
+                        onClick = {
+                            BackendLocalFilter.removeForegroundKeyword(context, keyword)
+                            keywordList = BackendLocalFilter.getForegroundKeywords(context).toList()
+                            enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
+                        }
+                    ) {
+                        Text("删除", color = MiuixTheme.colorScheme.onBackground)
+                    }
                 }
             }
         }
