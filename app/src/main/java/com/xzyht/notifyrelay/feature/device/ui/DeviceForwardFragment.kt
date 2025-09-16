@@ -137,7 +137,7 @@ fun DeviceForwardScreen(
      
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
-    val tabTitles = listOf("通知过滤设置", "聊天测试", "通知软编码过滤")
+    val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤")
     var selectedTabIndex by remember { mutableStateOf(0) }
     // NotificationFilterPager 状态，持久化与后端同步
     var filterSelf by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSelf) }
@@ -294,7 +294,7 @@ fun DeviceForwardScreen(
         // 移除Spacer，改为内容区顶部padding
         when (selectedTabIndex) {
             0 -> {
-                // 通知过滤设置 Tab 内容，支持整体上下滚动
+                // 远程通知过滤 Tab 内容，支持整体上下滚动
                 val scrollState = androidx.compose.foundation.rememberScrollState()
                 Column(
                     modifier = Modifier
@@ -614,7 +614,7 @@ fun DeviceForwardScreen(
                 }
             }
             2 -> {
-                // 通知软编码过滤 Tab
+                // 本地通知过滤 Tab
                 NotificationFilterPager(
                     filterSelf = filterSelf,
                     filterOngoing = filterOngoing,

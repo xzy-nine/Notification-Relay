@@ -18,7 +18,7 @@ import top.yukonga.miuix.kmp.basic.Checkbox
 import com.xzyht.notifyrelay.feature.notification.ui.filter.UILocalFilter
 
 /**
- * 通知过滤软编码设置Pager
+ * 本地通知过滤设置Pager
  */
 @Composable
 fun NotificationFilterPager(
