@@ -56,6 +56,21 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
     override fun onCreate() {
         if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] onCreate called")
+        // 注册缓存清理器
+        NotificationRepository.registerCacheCleaner { keysToRemove ->
+            if (keysToRemove.isEmpty()) {
+                // 空集合表示清除全部缓存
+                val beforeSize = processedNotifications.size
+                processedNotifications.clear()
+                if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理全部processedNotifications缓存，清除前: $beforeSize 个条目")
+            } else {
+                // 清除指定的缓存项
+                val beforeSize = processedNotifications.size
+                processedNotifications.removeAll(keysToRemove)
+                val afterSize = processedNotifications.size
+                if (BuildConfig.DEBUG) Log.i("黑影 NotifyRelay", "[NotifyListener] 清理processedNotifications缓存，清除前: $beforeSize，清除后: $afterSize，移除 ${keysToRemove.size} 个条目")
+            }
+        }
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
         super.onCreate()
