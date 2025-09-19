@@ -450,7 +450,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
                             val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
                             socket.send(packet)
-                            if (BuildConfig.DEBUG) Log.d("卢西奥-死神-NotifyRelay", "UDP广播已发送: $displayName, uuid=$uuid, port=$listenPort")
                             Thread.sleep(2000)
                         }
                         if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP广播线程已关闭")
@@ -486,7 +485,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     val displayName = parts[2]
                                     val port = parts[3].toIntOrNull() ?: 23333
                                     if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid && !ip.isNullOrEmpty()) {
-                                        if (BuildConfig.DEBUG) Log.d("卢西奥-死神-NotifyRelay", "收到UDP广播: $msg, ip=$ip, 设备uuid为=${this@DeviceConnectionManager.uuid}")
                                         val device = DeviceInfo(uuid, displayName, ip, port)
                                         deviceLastSeen[uuid] = System.currentTimeMillis()
                                         if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceLastSeen[uuid]}")
@@ -711,7 +709,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 连接设备
     fun connectToDevice(device: DeviceInfo, callback: ((Boolean, String?) -> Unit)? = null) {
         coroutineScope.launch {
-            if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "connectToDevice called: device=$device, rejected=${rejectedDevices.contains(device.uuid)}")
             try {
                 if (rejectedDevices.contains(device.uuid)) {
                     if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
@@ -825,7 +822,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     val info = synchronized(deviceInfoCache) { deviceInfoCache[uuid] }
                     val targetIp = info?.ip?.takeIf { it.isNotEmpty() && it != "0.0.0.0" } ?: ip
                     val targetPort = info?.port ?: port
-                    if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "心跳目标ip=$targetIp, port=$targetPort, uuid=$uuid")
                     val socket = Socket(targetIp, targetPort)
                     val writer = OutputStreamWriter(socket.getOutputStream())
                     writer.write("HEARTBEAT:${this@DeviceConnectionManager.uuid}:${localPublicKey}\n")
@@ -854,13 +850,35 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 封装心跳失败处理逻辑
     private fun handleHeartbeatFailure(uuid: String) {
-        if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "心跳连续失败5次，自动停止心跳并进入手动发现: $uuid")
+        if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "心跳连续失败5次，自动停止心跳并尝试重连: $uuid")
         // 停止心跳任务
         heartbeatJobs[uuid]?.cancel()
         heartbeatJobs.remove(uuid)
         heartbeatedDevices.remove(uuid)
+        // 尝试几次UDP重连
+        coroutineScope.launch {
+            val info = getDeviceInfo(uuid)
+            val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
+            val ip = info?.ip ?: auth?.lastIp
+            val port = info?.port ?: auth?.lastPort ?: 23333
+            val displayName = info?.displayName ?: auth?.displayName ?: "已认证设备"
+            if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                // 尝试3次重连
+                for (attempt in 1..3) {
+                    if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "心跳失败后重连尝试 $attempt/3: $uuid, $ip:$port")
+                    connectToDevice(DeviceInfo(uuid, displayName, ip, port))
+                    delay(2000) // 每次尝试间隔2秒
+                    // 如果重连成功，心跳会重新启动
+                    if (heartbeatedDevices.contains(uuid)) {
+                        if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "心跳失败后重连成功: $uuid")
+                        return@launch
+                    }
+                }
+                if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "心跳失败后重连失败，设备离线: $uuid")
+            }
+        }
         // 直接Toast提示（主线程）
-        val msg = "设备[${DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)}]离线，已自动进入手动发现模式，请检查网络或重新发现设备"
+        val msg = "设备[${DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)}]离线，已尝试重连，请检查网络或重新发现设备"
         val ctx = context
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
@@ -869,8 +887,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 android.widget.Toast.makeText(ctx, msg, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
-        // 启动手动发现
-        startManualDiscoveryForAuthedDevices(getLocalDisplayName())
     }
 
     // 使用加密管理器进行数据加密
@@ -1141,7 +1157,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                             }
                                         deviceLastSeen[remoteUuid] = System.currentTimeMillis()
                                         heartbeatedDevices.add(remoteUuid) // 标记已建立心跳
-                                        if (BuildConfig.DEBUG) android.util.Log.i("死神-NotifyRelay", "收到HEARTBEAT，已更新lastSeen: $remoteUuid -> ${deviceLastSeen[remoteUuid]}")
                                         coroutineScope.launch { updateDeviceList() }
                                     // 新增：收到对方心跳时，若本地发送心跳给对方，则自动connectToDevice对方，确保双向链路
                                     if (remoteUuid != uuid && !heartbeatJobs.containsKey(remoteUuid)) {

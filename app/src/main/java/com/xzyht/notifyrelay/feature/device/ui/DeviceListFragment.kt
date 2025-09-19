@@ -217,13 +217,13 @@ fun DeviceListScreen() {
                 .background(colorScheme.background)
                 .padding(12.dp)
         ) {
-            // UDP发现开关
+            // UDP广播开关
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
             ) {
                 Text(
-                    text = "UDP发现(未认证设备)",
+                    text = "主动广播和接收",
                     style = textStyles.body2,
                     modifier = Modifier.weight(1f)
                 )
@@ -378,13 +378,13 @@ fun DeviceListScreen() {
                 .background(colorScheme.background)
                 .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp)
         ) {
-            // UDP发现开关
+            // UDP广播开关
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
             ) {
                 Text(
-                    text = "UDP发现(未认证设备)",
+                    text = "主动广播和接收",
                     style = textStyles.body2,
                     modifier = Modifier.weight(1f)
                 )
