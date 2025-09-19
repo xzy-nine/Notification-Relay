@@ -10,33 +10,26 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import com.xzyht.notifyrelay.MainActivity
-import com.xzyht.notifyrelay.common.PermissionHelper
-import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.util.AppListHelper
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.basic.Check
-import top.yukonga.miuix.kmp.icon.icons.basic.Search
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.basic.Switch
+import com.xzyht.notifyrelay.MainActivity
+import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.core.util.AppListHelper
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

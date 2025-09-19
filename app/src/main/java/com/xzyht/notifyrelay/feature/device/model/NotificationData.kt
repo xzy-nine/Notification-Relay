@@ -1,9 +1,7 @@
 package com.xzyht.notifyrelay.feature.device.model
 
 import android.app.Notification
-import android.app.PendingIntent
 import android.content.Context
-import android.graphics.drawable.Icon
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
@@ -13,7 +11,6 @@ import kotlinx.coroutines.runBlocking
 import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.google.gson.reflect.TypeToken
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.feature.notification.data.NotificationAction
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity
 

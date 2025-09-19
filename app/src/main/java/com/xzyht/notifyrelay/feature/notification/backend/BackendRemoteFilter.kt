@@ -3,12 +3,11 @@ package com.xzyht.notifyrelay.feature.notification.backend
 import android.content.Context
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.data.StorageManager
-import kotlinx.coroutines.runBlocking
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 后端接收通知过滤器

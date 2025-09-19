@@ -16,16 +16,10 @@ import kotlinx.coroutines.delay
 import android.util.Log
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.content.BroadcastReceiver
-import android.content.Intent
-import android.content.IntentFilter
-import android.net.wifi.WifiManager
-import android.text.format.Formatter
 import com.xzyht.notifyrelay.core.util.EncryptionManager
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 
 data class DeviceInfo(

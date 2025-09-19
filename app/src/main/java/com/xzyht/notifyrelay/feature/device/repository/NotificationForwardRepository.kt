@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.AppListHelper
-import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
 
 // 延迟去重缓存（10秒内）

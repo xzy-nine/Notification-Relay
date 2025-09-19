@@ -5,7 +5,6 @@ import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
-import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import org.json.JSONObject
 import kotlinx.coroutines.*
