@@ -26,7 +26,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.xzyht.notifyrelay.core.repository.AppRepository
 
 /**
- * 应用选择弹窗
+ * 应用选择的弹窗
  */
 @Composable
 fun AppPickerDialog(

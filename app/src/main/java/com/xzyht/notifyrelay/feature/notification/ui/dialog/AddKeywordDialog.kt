@@ -12,7 +12,7 @@ import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 为包名添加关键词弹窗
+ * 为包名过滤后添加关键词的弹窗
  */
 @Composable
 fun AddKeywordDialog(
