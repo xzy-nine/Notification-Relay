@@ -145,7 +145,8 @@ object NotificationRepository {
     @Synchronized
     fun addNotification(sbn: StatusBarNotification, context: Context): Boolean {
         val notification = sbn.notification
-        val key = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+        val time = sbn.postTime
+        val key = (sbn.key ?: (sbn.id.toString() + sbn.packageName)) + "_" + time.toString()
         fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
             val value = bundle.getCharSequence(key)
             return value?.toString()
@@ -153,7 +154,6 @@ object NotificationRepository {
         // 保证 title 是实际通知标题
         val title = getStringCompat(notification.extras, Notification.EXTRA_TITLE)
         val text = getStringCompat(notification.extras, Notification.EXTRA_TEXT)
-        val time = sbn.postTime
         val packageName = sbn.packageName
         val device = "本机"
         var appName: String? = null
