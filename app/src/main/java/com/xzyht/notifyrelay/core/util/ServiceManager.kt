@@ -26,16 +26,17 @@ object ServiceManager {
     /**
      * 启动通知监听服务
      */
-    fun startNotificationListenerService(context: Context) {
-        try {
+    fun startNotificationListenerService(context: Context): Boolean {
+        return try {
             val cn = ComponentName(context, "com.xzyht.notifyrelay.feature.notification.service.NotifyRelayNotificationListenerService")
             val restartIntent = Intent()
             restartIntent.component = cn
             restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startService(restartIntent)
+            true
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("ServiceManager", "Failed to start NotificationListenerService", e)
-            throw e // 重新抛出异常，让调用者处理
+            false
         }
     }
 
@@ -52,12 +53,7 @@ object ServiceManager {
      * 检查自启动权限（通过尝试启动服务来检测）
      */
     fun checkAutoStartPermission(context: Context): Boolean {
-        return try {
-            startNotificationListenerService(context)
-            true
-        } catch (e: Exception) {
-            false
-        }
+        return startNotificationListenerService(context)
     }
 
     /**
@@ -79,7 +75,12 @@ object ServiceManager {
 
         // 启动通知监听服务
         try {
-            startNotificationListenerService(context)
+            val notificationStarted = startNotificationListenerService(context)
+            if (!notificationStarted) {
+                if (errorMessage == null) {
+                    errorMessage = AUTO_START_ERROR_MESSAGE
+                }
+            }
         } catch (e: Exception) {
             if (errorMessage == null) {
                 errorMessage = AUTO_START_ERROR_MESSAGE

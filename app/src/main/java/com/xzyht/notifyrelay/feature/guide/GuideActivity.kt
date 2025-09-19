@@ -151,10 +151,16 @@ fun GuideScreen(onContinue: () -> Unit) {
         // 使用 PermissionHelper 检查敏感通知权限
         hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
 
-        permissionsGranted = hasNotification && canQueryApps && hasPost && hasSelfStart
-
         // 使用 PermissionHelper 检查蓝牙连接权限
         hasBluetoothConnect = PermissionHelper.checkBluetoothConnectPermission(context)
+
+        // 使用 PermissionHelper 检查后台无限制权限
+        hasBackgroundUnlimited = PermissionHelper.checkBackgroundUnlimitedPermission(context)
+
+        // 使用 PermissionHelper 检查自启动权限（通过通知监听器启用状态间接验证）
+        hasSelfStart = PermissionHelper.checkNotificationListenerServiceCanStart(context)
+
+        permissionsGranted = hasNotification && canQueryApps && hasPost && hasSelfStart
 
         showCheck = permissionsGranted
     }
@@ -340,7 +346,6 @@ fun GuideScreen(onContinue: () -> Unit) {
                             val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                             intent.data = android.net.Uri.parse("package:" + context.packageName)
                             context.startActivity(intent)
-                            hasBackgroundUnlimited = true
                         } else {
                             hasBackgroundUnlimited = false
                         }
@@ -442,7 +447,6 @@ fun GuideScreen(onContinue: () -> Unit) {
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                             intent.data = android.net.Uri.parse("package:" + context.packageName)
                             context.startActivity(intent)
-                            hasSelfStart = true
                         } else {
                             hasSelfStart = false
                         }
