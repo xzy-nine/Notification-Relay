@@ -104,6 +104,12 @@ object BackendRemoteFilter {
                 if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单过滤通过 - mode=${RemoteFilterConfig.filterMode}, match=$match")
             }
 
+            // 锁屏通知过滤
+            if (RemoteFilterConfig.enableLockScreenOnly && !isLocked) {
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤 - 非锁屏通知被过滤")
+                return FilterResult(false, mappedPkg, title, text, data)
+            }
+
             // 智能去重检查 - 优化性能和逻辑
             if (RemoteFilterConfig.enableDeduplication) {
                 val now = System.currentTimeMillis()
