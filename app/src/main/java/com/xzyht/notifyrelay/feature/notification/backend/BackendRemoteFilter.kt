@@ -131,7 +131,7 @@ object BackendRemoteFilter {
 
                     // 获取内存历史数据
                     // Note: This references non-existent classes, need to handle appropriately
-                    val localList = emptyList<Any>() // Placeholder
+                    val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
                     val memoryDup = checkDuplicateInMemory(localList, title, text, now)
 
                     // 如果内存中有重复，直接过滤
@@ -176,10 +176,13 @@ object BackendRemoteFilter {
                 val record = notification as? com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
                 record?.let {
                     val match = it.device == "本机" && it.title == title && it.text == text
-                    if (match && BuildConfig.DEBUG) {
-                        Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${now - it.time}ms")
+                    // 允许5秒的时间容差
+                    val timeMatch = Math.abs(it.time - now) <= 5000L
+                    val finalMatch = match && timeMatch
+                    if (finalMatch && BuildConfig.DEBUG) {
+                        Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(it.time - now)}ms")
                     }
-                    match
+                    finalMatch
                 } ?: false
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e("智能去重", "内存检查异常", e)
@@ -265,11 +268,8 @@ object BackendRemoteFilter {
                         }
 
                         // 检查是否有重复的本机通知
-                        val localList = emptyList<Any>() // Placeholder
-                        val duplicateFound = localList.any { local ->
-                            // Placeholder logic
-                            false
-                        }
+                        val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
+                        val duplicateFound = checkDuplicateInMemory(localList, pending.title, pending.text, pending.sendTime)
 
                         if (duplicateFound) {
                             if (BuildConfig.DEBUG) Log.d("智能去重", "命中并撤回通知 - 包名:${pending.packageName}, 标题:${pending.title}, 内容:${pending.text}, 通知ID:${pending.notifyId}, 发送后${now - pending.sendTime}ms发现重复")

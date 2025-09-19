@@ -86,12 +86,12 @@ class DeviceForwardFragment : Fragment() {
 
     // 加载已认证设备uuid集合
     fun loadAuthedUuids(): Set<String> {
-        return StorageManager.getStringSet(requireContext(), KEY_AUTHED_UUIDS)
+        return StorageManager.getStringSet(requireContext(), KEY_AUTHED_UUIDS, emptySet(), StorageManager.PrefsType.DEVICE)
     }
 
     // 保存已认证设备uuid集合
     fun saveAuthedUuids(uuids: Set<String>) {
-        StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids)
+        StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids, StorageManager.PrefsType.DEVICE)
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {

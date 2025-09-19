@@ -41,7 +41,7 @@ import top.yukonga.miuix.kmp.basic.Text
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true)
+        val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true, StorageManager.PrefsType.GENERAL)
         val fromInternal = intent.getBooleanExtra("fromInternal", false)
         // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
         if (!fromInternal && PermissionHelper.checkAllPermissions(this) && !isFirstLaunch) {
@@ -74,7 +74,7 @@ class GuideActivity : ComponentActivity() {
                 }
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
-                    StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false)
+                    StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false, StorageManager.PrefsType.GENERAL)
                     startActivity(Intent(this@GuideActivity, MainActivity::class.java))
                     finish()
                 })

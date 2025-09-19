@@ -174,6 +174,7 @@ object NotificationRepository {
             device = device
         )
         // 改进判重逻辑：对于活跃通知，允许时间戳有一定差异（5秒内），避免因时间戳微差导致重复
+        // 注意：这里不删除历史记录，只是不添加重复的通知
         var existed = false
         val timeTolerance = 5000L // 5秒容差
         notifications.forEach {
@@ -183,20 +184,25 @@ object NotificationRepository {
                 // 时间戳在容差范围内认为相同
                 if (Math.abs(it.time - time) <= timeTolerance) {
                     existed = true
-                    if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 被判重的历史通知: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time差=${Math.abs(it.time - time)}ms")
+                    if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 发现重复通知，不添加到历史: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time差=${Math.abs(it.time - time)}ms")
                 }
             }
         }
-        notifications.removeAll {
-            it.key == key || (
-                it.packageName == packageName &&
-                (it.title ?: "") == (title ?: "") &&
-                (it.text ?: "") == (text ?: "") &&
-                Math.abs(it.time - time) <= timeTolerance
-            )
+
+        // 只有在没有重复时才添加新通知
+        if (!existed) {
+            notifications.removeAll {
+                it.key == key || (
+                    it.packageName == packageName &&
+                    (it.title ?: "") == (title ?: "") &&
+                    (it.text ?: "") == (text ?: "") &&
+                    Math.abs(it.time - time) <= timeTolerance
+                )
+            }
+            notifications.add(0, record)
+            syncToCache(context)
         }
-        notifications.add(0, record)
-        syncToCache(context)
+
         notifyHistoryChanged(device, context)
         return !existed
     }
