@@ -2,52 +2,39 @@ package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
 import android.util.Log
-import androidx.fragment.app.Fragment
-import androidx.compose.ui.platform.ComposeView
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import androidx.compose.runtime.Composable
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.Button
-import androidx.compose.runtime.*
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.*
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.fragment.app.Fragment
+import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
-import top.yukonga.miuix.kmp.basic.Text
-import androidx.compose.runtime.saveable.rememberSaveable
-import kotlinx.coroutines.launch
-import androidx.compose.foundation.background
-import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Surface
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
-import com.xzyht.notifyrelay.BuildConfig
-import top.yukonga.miuix.kmp.basic.TabRow
-import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
-import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
-import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
-import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
-import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
-import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
-import com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter
-import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.core.repository.AppRepository
-import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
+import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
+import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
+import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 
 class DeviceForwardFragment : Fragment() {
@@ -85,12 +72,12 @@ class DeviceForwardFragment : Fragment() {
 
     // 加载已认证设备uuid集合
     fun loadAuthedUuids(): Set<String> {
-        return StorageManager.getStringSet(requireContext(), KEY_AUTHED_UUIDS)
+        return StorageManager.getStringSet(requireContext(), KEY_AUTHED_UUIDS, emptySet(), StorageManager.PrefsType.DEVICE)
     }
 
     // 保存已认证设备uuid集合
     fun saveAuthedUuids(uuids: Set<String>) {
-        StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids)
+        StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids, StorageManager.PrefsType.DEVICE)
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -135,6 +122,11 @@ fun DeviceForwardScreen(
     saveAuthedUuids: (Set<String>) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    // 确保RemoteFilterConfig已加载
+    if (!RemoteFilterConfig.isLoaded) {
+        RemoteFilterConfig.load(context)
+        RemoteFilterConfig.isLoaded = true
+    }
     // 手动发现提示相关状态
     val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
     val snackbarVisible = remember { mutableStateOf(false) }
@@ -144,14 +136,14 @@ fun DeviceForwardScreen(
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
     val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤")
-    var selectedTabIndex by remember { mutableStateOf(0) }
+    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // NotificationFilterPager 状态，持久化与后端同步
     var filterSelf by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSelf) }
     var filterOngoing by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterOngoing) }
     var filterNoTitleOrText by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterNoTitleOrText) }
     var filterImportanceNone by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterImportanceNone) }
 
-    // 持久化监听
+    // 持久化监听 - 直接更新后端状态
     LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone) {
         BackendLocalFilter.filterSelf = filterSelf
         BackendLocalFilter.filterOngoing = filterOngoing
@@ -162,15 +154,6 @@ fun DeviceForwardScreen(
             StorageManager.putBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
-        }
-    }
-    // 启动时加载本地持久化
-    LaunchedEffect(Unit) {
-        context?.let {
-            filterSelf = StorageManager.getBoolean(it, "filter_self", filterSelf, StorageManager.PrefsType.FILTER)
-            filterOngoing = StorageManager.getBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
-            filterNoTitleOrText = StorageManager.getBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
-            filterImportanceNone = StorageManager.getBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
         }
     }
     // 连接弹窗与错误弹窗相关状态
@@ -210,8 +193,8 @@ fun DeviceForwardScreen(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     // 聊天区相关状态
-    var chatInput by remember { mutableStateOf("") }
-    var chatExpanded by remember { mutableStateOf(false) }
+    var chatInput by rememberSaveable { mutableStateOf("") }
+    var chatExpanded by rememberSaveable { mutableStateOf(false) }
     val chatHistoryState = remember { mutableStateOf<List<String>>(emptyList()) }
     // 协程作用域（必须在 @Composable 作用域内声明）
     val coroutineScope = rememberCoroutineScope()
@@ -241,31 +224,38 @@ fun DeviceForwardScreen(
     }
 
     // 聊天区UI+过滤设置（可折叠）
-    var filterExpanded by remember { mutableStateOf(false) }
+    var filterExpanded by rememberSaveable { mutableStateOf(false) }
 
-    // UI状态变量
-    var filterMode by remember { mutableStateOf("") }
-    var enableDedup by remember { mutableStateOf(true) }
-    var enablePackageGroupMapping by remember { mutableStateOf(true) }
-    var allGroups by remember { mutableStateOf<List<MutableList<String>>>(emptyList()) }
-    var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(emptyList()) }
-    var filterListText by remember { mutableStateOf("") }
+    // UI状态变量 - 直接从后端获取，不自己持久化
+    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
+    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
+    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
+    var allGroups by remember { mutableStateOf<List<MutableList<String>>>(
+        (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
+         RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+    ) }
+    var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(
+        (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+    ) }
+    var filterListText by remember { mutableStateOf(
+        RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
+    ) }
+    var enableLockScreenOnly by remember { mutableStateOf(RemoteFilterConfig.enableLockScreenOnly) }
 
-    var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
-    var appSearchQuery by remember { mutableStateOf("") }
+    // 直接更新后端状态，不需要额外的持久化监听
 
-    // 首次进入时加载持久化设置
-    LaunchedEffect(context) {
-        RemoteFilterConfig.load(context)
-        // 初始化UI状态，使用加载后的配置
-        filterMode = RemoteFilterConfig.filterMode
-        enableDedup = RemoteFilterConfig.enableDeduplication
-        enablePackageGroupMapping = RemoteFilterConfig.enablePackageGroupMapping
-        allGroups = (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
-                    RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
-        allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
-        filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
-    }
+    // 状态已实时同步，不需要重置加载标志
+
+    var showAppPickerForGroup by rememberSaveable(stateSaver = Saver(
+        save = { "${it.first},${it.second}" },
+        restore = { value ->
+            val parts = value.split(",")
+            (parts[0].toBoolean()) to (parts.getOrNull(1)?.toInt() ?: -1)
+        }
+    )) { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
+    var appSearchQuery by rememberSaveable { mutableStateOf("") }
+
+    // 前端状态已直接从后端初始化，不需要额外加载
 
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
@@ -299,7 +289,11 @@ fun DeviceForwardScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         top.yukonga.miuix.kmp.basic.Switch(
                             checked = enablePackageGroupMapping,
-                            onCheckedChange = { enablePackageGroupMapping = it },
+                            onCheckedChange = { 
+                                RemoteFilterConfig.enablePackageGroupMapping = it
+                                RemoteFilterConfig.save(context)
+                                enablePackageGroupMapping = it
+                            },
                             modifier = Modifier.size(width = 24.dp, height = 12.dp)
                         )
                     }
@@ -327,7 +321,13 @@ fun DeviceForwardScreen(
                                         top.yukonga.miuix.kmp.basic.Checkbox(
                                             checked = allGroupEnabled[idx],
                                             onCheckedChange = { v ->
-                                                allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
+                                                val newEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
+                                                allGroupEnabled = newEnabled
+                                                // 更新后端状态
+                                                val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
+                                                RemoteFilterConfig.defaultGroupEnabled = newEnabled.take(defaultSize).toMutableList()
+                                                RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
+                                                RemoteFilterConfig.save(context)
                                             },
                                             modifier = Modifier.size(20.dp),
                                             colors = top.yukonga.miuix.kmp.basic.CheckboxDefaults.checkboxColors(
@@ -357,8 +357,15 @@ fun DeviceForwardScreen(
                                             }
                                             top.yukonga.miuix.kmp.basic.Button(
                                                 onClick = {
-                                                    allGroups = allGroups.toMutableList().apply { removeAt(idx) }
-                                                    allGroupEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
+                                                    val newGroups = allGroups.toMutableList().apply { removeAt(idx) }
+                                                    val newEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
+                                                    allGroups = newGroups
+                                                    allGroupEnabled = newEnabled
+                                                    // 更新后端状态
+                                                    val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
+                                                    RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
+                                                    RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
+                                                    RemoteFilterConfig.save(context)
                                                 },
                                                 modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp).padding(start = 2.dp),
                                                 enabled = enablePackageGroupMapping
@@ -394,8 +401,15 @@ fun DeviceForwardScreen(
                     // 添加新组按钮
                     top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
-                            allGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
-                            allGroupEnabled = allGroupEnabled.toMutableList().apply { add(true) }
+                            val newGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
+                            val newEnabled = allGroupEnabled.toMutableList().apply { add(true) }
+                            allGroups = newGroups
+                            allGroupEnabled = newEnabled
+                            // 更新后端状态
+                            val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
+                            RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
+                            RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
+                            RemoteFilterConfig.save(context)
                         },
                         modifier = Modifier.padding(vertical = 2.dp),
                         enabled = enablePackageGroupMapping
@@ -409,9 +423,16 @@ fun DeviceForwardScreen(
                             visible = true,
                             onDismiss = { showAppPickerForGroup = false to -1 },
                             onAppSelected = { pkg: String ->
-                                allGroups = allGroups.toMutableList().apply {
-                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) this[groupIdx] = (this[groupIdx] + pkg).toMutableList()
+                                val newGroups = allGroups.toMutableList().apply {
+                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) {
+                                        this[groupIdx] = (this[groupIdx] + pkg).toMutableList()
+                                    }
                                 }
+                                allGroups = newGroups
+                                // 更新后端状态
+                                val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
+                                RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
+                                RemoteFilterConfig.save(context)
                                 showAppPickerForGroup = false to -1
                             },
                             title = "选择应用"
@@ -423,7 +444,12 @@ fun DeviceForwardScreen(
                         val modes = listOf("none" to "无", "black" to "黑名单", "white" to "白名单", "peer" to "对等")
                         modes.forEach { (value, label) ->
                             top.yukonga.miuix.kmp.basic.Button(
-                                onClick = { filterMode = value },
+                                onClick = { 
+                                    RemoteFilterConfig.filterMode = value
+                                    RemoteFilterConfig.enablePeerMode = (value == "peer")
+                                    RemoteFilterConfig.save(context)
+                                    filterMode = value
+                                },
                                 modifier = Modifier.padding(horizontal = 2.dp),
                                 colors = if (filterMode == value) top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary() else top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
                             ) {
@@ -444,7 +470,14 @@ fun DeviceForwardScreen(
                         Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             top.yukonga.miuix.kmp.basic.TextField(
                                 value = filterListText,
-                                onValueChange = { filterListText = it },
+                                onValueChange = { 
+                                    filterListText = it
+                                    RemoteFilterConfig.filterList = it.lines().filter { line -> line.isNotBlank() }.map { line ->
+                                        val arr = line.split(",", limit=2)
+                                        arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
+                                    }
+                                    RemoteFilterConfig.save(context)
+                                },
                                 modifier = Modifier.weight(1f),
                                 label = "com.a,关键字\ncom.b"
                             )
@@ -476,7 +509,14 @@ fun DeviceForwardScreen(
                                 onConfirm = { keyword ->
                                     // 追加到名单
                                     val line = if (keyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + keyword.trim()
-                                    filterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                    val newFilterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
+                                    filterListText = newFilterListText
+                                    // 更新后端状态
+                                    RemoteFilterConfig.filterList = newFilterListText.lines().filter { it.isNotBlank() }.map { it ->
+                                        val arr = it.split(",", limit=2)
+                                        arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
+                                    }
+                                    RemoteFilterConfig.save(context)
                                     showKeywordDialog.value = false
                                     pendingFilterPkg = null
                                 },
@@ -491,27 +531,32 @@ fun DeviceForwardScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         top.yukonga.miuix.kmp.basic.Switch(
                             checked = enableDedup,
-                            onCheckedChange = { enableDedup = it },
+                            onCheckedChange = { 
+                                RemoteFilterConfig.enableDeduplication = it
+                                RemoteFilterConfig.save(context)
+                                enableDedup = it
+                            },
                             modifier = Modifier.padding(end = 4.dp)
                         )
                         Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
                     }
+                    // 锁屏通知过滤
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        top.yukonga.miuix.kmp.basic.Switch(
+                            checked = enableLockScreenOnly,
+                            onCheckedChange = { 
+                                RemoteFilterConfig.enableLockScreenOnly = it
+                                RemoteFilterConfig.save(context)
+                                enableLockScreenOnly = it
+                            },
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("仅复刻锁屏通知（非锁屏通知仅存储不复刻）", style = textStyles.body2, color = colorScheme.onSurface)
+                    }
                     // 应用按钮
                     top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
-                            RemoteFilterConfig.enablePackageGroupMapping = enablePackageGroupMapping
-                            // 拆分allGroups和allGroupEnabled为默认组和自定义组
-                            val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
-                            RemoteFilterConfig.defaultGroupEnabled = allGroupEnabled.take(defaultSize).toMutableList()
-                            RemoteFilterConfig.customGroupEnabled = allGroupEnabled.drop(defaultSize).toMutableList()
-                            RemoteFilterConfig.customPackageGroups = allGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
-                            RemoteFilterConfig.filterMode = filterMode
-                            RemoteFilterConfig.enableDeduplication = enableDedup
-                            RemoteFilterConfig.enablePeerMode = (filterMode == "peer")
-                            RemoteFilterConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
-                                val arr = it.split(",", limit=2)
-                                arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
-                            }
+                            // 所有状态已经实时同步到后端，这里只需要确保最终保存
                             RemoteFilterConfig.save(context)
                         },
                         modifier = Modifier.padding(top = 8.dp)

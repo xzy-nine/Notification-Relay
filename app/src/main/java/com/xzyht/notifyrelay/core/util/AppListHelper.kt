@@ -1,8 +1,6 @@
 package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 

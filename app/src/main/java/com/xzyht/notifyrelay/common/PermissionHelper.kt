@@ -179,4 +179,23 @@ object PermissionHelper {
         intent.data = android.net.Uri.parse("package:${activity.packageName}")
         activity.startActivity(intent)
     }
+
+    /**
+     * 检查后台无限制权限（电池优化）
+     */
+    fun checkBackgroundUnlimitedPermission(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    /**
+     * 检查通知监听服务是否能正常启动（作为自启动权限的间接验证，通过检查通知监听器是否启用）
+     */
+    fun checkNotificationListenerServiceCanStart(context: Context): Boolean {
+        val enabledListeners = Settings.Secure.getString(
+            context.contentResolver,
+            "enabled_notification_listeners"
+        )
+        return enabledListeners?.contains(context.packageName) == true
+    }
 }

@@ -55,10 +55,6 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        <service
-            android:name=".feature.device.service.DeviceConnectionService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
         <!-- 注册通知点击广播接收器 -->
         <receiver
             android:name=".feature.device.receiver.RemoteNotificationClickReceiver"

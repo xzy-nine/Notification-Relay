@@ -5,7 +5,6 @@ import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
-import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import org.json.JSONObject
 import kotlinx.coroutines.*
@@ -187,6 +186,10 @@ object MessageSender {
                 return
             }
 
+            // 获取锁屏状态
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val isLocked = keyguardManager.isKeyguardLocked
+
             // 构建标准 JSON 格式的通知数据
             val json = JSONObject().apply {
                 put("packageName", packageName)
@@ -194,6 +197,7 @@ object MessageSender {
                 put("title", title ?: "")
                 put("text", text ?: "")
                 put("time", time)
+                put("isLocked", isLocked)
             }.toString()
 
             // 将发送任务加入队列

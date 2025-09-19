@@ -1,40 +1,35 @@
 package com.xzyht.notifyrelay
 
+import android.content.Intent
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.fragment.app.FragmentActivity
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.core.util.ServiceManager
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
-import android.content.Intent
-import android.util.Log
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationHistoryFragment
-import androidx.compose.foundation.background
-import androidx.compose.ui.Modifier
-import android.os.Bundle
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.fragment.app.FragmentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import top.yukonga.miuix.kmp.basic.Surface
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
-import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
-import android.content.Context
-import androidx.compose.ui.graphics.toArgb
+import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 class MainActivity : FragmentActivity() {
     internal var showAutoStartBanner = false
@@ -89,7 +84,6 @@ class MainActivity : FragmentActivity() {
         }
 
         // 权限检查通过后再启动前台服务，保证设备发现线程正常
-        DeviceConnectionService.start(this)
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
 

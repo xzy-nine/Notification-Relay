@@ -2,7 +2,6 @@ package com.xzyht.notifyrelay.feature.notification.ui.dialog
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Text
@@ -12,7 +11,7 @@ import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 为包名添加关键词弹窗
+ * 为包名过滤后添加关键词的弹窗
  */
 @Composable
 fun AddKeywordDialog(

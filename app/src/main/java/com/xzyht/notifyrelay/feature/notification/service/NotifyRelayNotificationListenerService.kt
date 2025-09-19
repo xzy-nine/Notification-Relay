@@ -9,6 +9,7 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,19 +29,6 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             if (BuildConfig.DEBUG) Log.w("NotifyRelay", "前台服务通知被移除，自动补发！")
             // 立即补发本服务前台通知
             startForegroundService()
-            // 通知DeviceConnectionService延迟补发
-            try {
-                val intent = android.content.Intent(applicationContext, com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService::class.java)
-                intent.action = "com.xzyht.notifyrelay.ACTION_REISSUE_FOREGROUND"
-                intent.putExtra("delay", 3000L) // 延迟3秒
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    applicationContext.startForegroundService(intent)
-                } else {
-                    applicationContext.startService(intent)
-                }
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知DeviceConnectionService补发前台通知失败", e)
-            }
         } else {
             // 普通通知被移除时，从已处理缓存中移除，允许下次重新处理
             val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
@@ -78,6 +66,35 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
+        // 初始化设备连接管理器并启动发现
+        connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+        connectionManager.startDiscovery()
+
+        // 监听设备状态变化，更新通知
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            connectionManager.devices.collect { deviceMap ->
+                // 设备状态发生变化时更新通知
+                updateNotification()
+            }
+        }
+
+        // 监听网络状态变化，更新通知
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                updateNotification()
+            }
+
+            override fun onLost(network: android.net.Network) {
+                updateNotification()
+            }
+
+            override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: android.net.NetworkCapabilities) {
+                updateNotification()
+            }
+        }
+        connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
+
         super.onCreate()
     }
 
@@ -88,6 +105,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private var foregroundJob: Job? = null
     private val CHANNEL_ID = "notifyrelay_foreground"
     private val NOTIFY_ID = 1001
+
+    // 设备连接管理器
+    private lateinit var connectionManager: com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+
+    // 网络监听器
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
 
     // 新增：已处理通知缓存，避免重复处理 (改进版：带时间戳的LRU缓存)
     private val processedNotifications = mutableMapOf<String, Long>()
@@ -247,6 +270,18 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         super.onDestroy()
         foregroundJob?.cancel()
         stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
+        // 停止设备连接
+        try {
+            if (this::connectionManager.isInitialized) {
+                connectionManager.stopAll()
+            }
+        } catch (_: Exception) {}
+        // 注销网络监听器
+        try {
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            networkCallback?.let { connectivityManager.unregisterNetworkCallback(it) }
+            networkCallback = null
+        } catch (_: Exception) {}
     }
 
     private fun startForegroundService() {
@@ -258,16 +293,52 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
-        // 用 NotificationCompat.Builder 替换已废弃的 Notification.Builder
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("通知转发后台运行中")
-            .setContentText("保证通知实时同步")
+            .setContentTitle("通知监听/转发中")
+            .setContentText(getNotificationText())
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
         // Android 12+ 及以上不再指定特殊前台服务类型，避免权限崩溃
         startForeground(NOTIFY_ID, notification)
+    }
+
+    private fun getNotificationText(): String {
+        // 获取在线设备数量
+        val onlineDevices = connectionManager.devices.value.values.count { it.second }
+
+        // 优先显示设备连接数，如果有设备连接
+        if (onlineDevices > 0) {
+            return "当前${onlineDevices}台设备已连接"
+        }
+
+        // 没有设备连接时，显示网络状态
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        val isWifi = capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+        val isEthernet = capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val isWifiDirect = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) == true
+
+        // 如果不是WiFi、以太网或WLAN直连，则认为是移动数据等非局域网
+        if (!isWifi && !isEthernet && !isWifiDirect) {
+            return "非局域网连接"
+        }
+
+        return "无设备在线"
+    }
+
+    private fun updateNotification() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("通知监听中")
+            .setContentText(getNotificationText())
+            .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .build()
+        manager.notify(NOTIFY_ID, notification)
     }
 
     // 保留通知历史，不做移除处理
