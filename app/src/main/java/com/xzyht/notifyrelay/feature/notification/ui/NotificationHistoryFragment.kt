@@ -35,8 +35,9 @@ import top.yukonga.miuix.kmp.basic.Button
 import androidx.compose.foundation.clickable
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import com.xzyht.notifyrelay.R
-import androidx.fragment.app.Fragment
+import com.xzyht.notifyrelay.BuildConfig
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
@@ -51,16 +52,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.fragment.app.Fragment
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.exponentialDecay
-import androidx.compose.animation.core.spring
-import com.xzyht.notifyrelay.BuildConfig
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-
-// 拖拽值枚举
 enum class DragValue { Center, End }
 
 // 防抖 Toast（文件级顶层对象）
@@ -107,6 +102,14 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
     // 修正：单条通知卡片标题应为原始通知标题
     val displayTitle = record.title ?: "(无标题)"
     val displayAppName = record.appName ?: appName
+    
+    // 异步加载图标
+    var asyncIcon by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    AsyncAppIcon(record.packageName) { loadedIcon ->
+        asyncIcon = loadedIcon
+    }
+    
+    val finalIcon = asyncIcon ?: appIcon
     Surface(
         onClick = {
             // 跳转到对应应用主界面
@@ -150,9 +153,9 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (appIcon != null) {
+                if (finalIcon != null) {
                     Image(
-                        bitmap = appIcon.asImageBitmap(),
+                        bitmap = finalIcon.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
                     )
@@ -175,6 +178,19 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
                 text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(record.time)),
                 style = notificationTextStyles.body2.copy(color = cardColorScheme.outline)
             )
+        }
+    }
+}
+
+@Composable
+fun AsyncAppIcon(packageName: String?, onIconLoaded: (android.graphics.Bitmap?) -> Unit) {
+    val context = LocalContext.current
+    LaunchedEffect(packageName) {
+        if (packageName != null) {
+            val icon = withContext(Dispatchers.IO) {
+                getAppNameAndIcon(context, packageName).second
+            }
+            onIconLoaded(icon)
         }
     }
 }
@@ -264,14 +280,17 @@ fun NotificationHistoryScreen() {
     // 订阅当前分组的通知历史
     val notifications by NotificationRepository.notificationHistoryFlow.collectAsState()
 
-    val grouped = notifications.groupBy { it.packageName }
-    val unifiedList = mutableListOf<List<NotificationRecord>>()
-    for (entry in grouped.entries) {
-        val list = entry.value.sortedByDescending { it.time }
-        unifiedList.add(list)
+    val mixedList by remember(notifications) {
+        derivedStateOf {
+            val grouped = notifications.groupBy { it.packageName }
+            val unifiedList = mutableListOf<List<NotificationRecord>>()
+            for (entry in grouped.entries) {
+                val list = entry.value.sortedByDescending { it.time }
+                unifiedList.add(list)
+            }
+            unifiedList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+        }
     }
-    // 统一按最新时间降序排序
-    val mixedList = unifiedList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     // 包名到应用名和图标的缓存
     val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
@@ -504,7 +523,16 @@ fun NotificationHistoryScreen() {
                                                 )
                                             }
                                         } else {
-                                            list.sortedByDescending { it.time }.forEach { record ->
+                                            // 优化：限制展开时显示的通知数量，避免性能问题
+                                            val expandedList = list.sortedByDescending { it.time }
+                                            val maxExpandedItems = 50 // 限制最多显示50条通知
+                                            val displayList = if (expandedList.size > maxExpandedItems) {
+                                                expandedList.take(maxExpandedItems)
+                                            } else {
+                                                expandedList
+                                            }
+
+                                            displayList.forEach { record ->
                                                 val density = LocalDensity.current
                                                 val anchoredDraggableState = remember {
                                                     AnchoredDraggableState<DragValue>(
@@ -561,6 +589,15 @@ fun NotificationHistoryScreen() {
                                                         )
                                                     }
                                                 }
+                                            }
+
+                                            // 如果通知数量超过限制，显示提示信息
+                                            if (expandedList.size > maxExpandedItems) {
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                top.yukonga.miuix.kmp.basic.Text(
+                                                    text = "... 仅显示前${maxExpandedItems}条，共${expandedList.size}条通知",
+                                                    style = textStyles.body2.copy(color = colorScheme.outline)
+                                                )
                                             }
                                         }
                                     }
