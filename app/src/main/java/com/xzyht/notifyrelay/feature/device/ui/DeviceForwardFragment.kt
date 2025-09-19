@@ -250,6 +250,7 @@ fun DeviceForwardScreen(
     var allGroups by remember { mutableStateOf<List<MutableList<String>>>(emptyList()) }
     var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(emptyList()) }
     var filterListText by remember { mutableStateOf("") }
+    var enableLockScreenOnly by remember { mutableStateOf(false) }
 
     var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
     var appSearchQuery by remember { mutableStateOf("") }
@@ -265,6 +266,7 @@ fun DeviceForwardScreen(
                     RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
         allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
         filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
+        enableLockScreenOnly = RemoteFilterConfig.enableLockScreenOnly
     }
 
     androidx.compose.foundation.layout.Column(
@@ -496,6 +498,15 @@ fun DeviceForwardScreen(
                         )
                         Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
                     }
+                    // 锁屏通知过滤
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        top.yukonga.miuix.kmp.basic.Switch(
+                            checked = enableLockScreenOnly,
+                            onCheckedChange = { enableLockScreenOnly = it },
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                        Text("仅复刻锁屏通知（非锁屏通知仅存储不复刻）", style = textStyles.body2, color = colorScheme.onSurface)
+                    }
                     // 应用按钮
                     top.yukonga.miuix.kmp.basic.Button(
                         onClick = {
@@ -508,11 +519,13 @@ fun DeviceForwardScreen(
                             RemoteFilterConfig.filterMode = filterMode
                             RemoteFilterConfig.enableDeduplication = enableDedup
                             RemoteFilterConfig.enablePeerMode = (filterMode == "peer")
+                            RemoteFilterConfig.enableLockScreenOnly = enableLockScreenOnly
                             RemoteFilterConfig.filterList = filterListText.lines().filter { it.isNotBlank() }.map {
                                 val arr = it.split(",", limit=2)
                                 arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
                             }
                             RemoteFilterConfig.save(context)
+                            StorageManager.putBoolean(context, "enable_lock_screen_only", enableLockScreenOnly, StorageManager.PrefsType.FILTER)
                         },
                         modifier = Modifier.padding(top = 8.dp)
                     ) {

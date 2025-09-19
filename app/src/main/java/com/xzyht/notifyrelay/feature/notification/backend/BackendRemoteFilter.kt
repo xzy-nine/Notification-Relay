@@ -61,6 +61,7 @@ object BackendRemoteFilter {
             val title = json.optString("title")
             val text = json.optString("text")
             val time = System.currentTimeMillis()
+            val isLocked = json.optBoolean("isLocked", false)
 
             val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
@@ -159,6 +160,12 @@ object BackendRemoteFilter {
                 // 如果检查失败，默认通过并延迟验证
                 if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 检查失败，默认延迟验证 - title=$title text=$text")
                 return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
+            }
+
+            // 锁屏通知过滤
+            if (RemoteFilterConfig.enableLockScreenOnly && !isLocked) {
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤 - 非锁屏通知被过滤")
+                return FilterResult(false, mappedPkg, title, text, data)
             }
 
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 直接通过 - mappedPkg=$mappedPkg title=$title text=$text")
@@ -370,6 +377,8 @@ object RemoteFilterConfig {
 
     // 对等模式开关（仅本机存在的应用或通用应用）
     var enablePeerMode: Boolean = false
+    // 锁屏通知过滤开关
+    var enableLockScreenOnly: Boolean = false
 
     // 加载设置
     fun load(context: Context) {
@@ -393,6 +402,7 @@ object RemoteFilterConfig {
         filterMode = StorageManager.getString(context, KEY_FILTER_MODE, "none", StorageManager.PrefsType.FILTER)
         enableDeduplication = StorageManager.getBoolean(context, KEY_ENABLE_DEDUP, true, StorageManager.PrefsType.FILTER)
         enablePeerMode = StorageManager.getBoolean(context, KEY_ENABLE_PEER, false, StorageManager.PrefsType.FILTER)
+        enableLockScreenOnly = StorageManager.getBoolean(context, "enable_lock_screen_only", false, StorageManager.PrefsType.FILTER)
         val filterListStr = StorageManager.getStringSet(context, KEY_FILTER_LIST, emptySet(), StorageManager.PrefsType.FILTER)
         filterList = filterListStr.map {
             val arr = it.split("|", limit=2)
@@ -409,6 +419,7 @@ object RemoteFilterConfig {
         StorageManager.putString(context, KEY_FILTER_MODE, filterMode, StorageManager.PrefsType.FILTER)
         StorageManager.putBoolean(context, KEY_ENABLE_DEDUP, enableDeduplication, StorageManager.PrefsType.FILTER)
         StorageManager.putBoolean(context, KEY_ENABLE_PEER, enablePeerMode, StorageManager.PrefsType.FILTER)
+        StorageManager.putBoolean(context, "enable_lock_screen_only", enableLockScreenOnly, StorageManager.PrefsType.FILTER)
         StorageManager.putStringSet(context, KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet(), StorageManager.PrefsType.FILTER)
     }
 
