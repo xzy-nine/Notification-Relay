@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.feature.guide
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -110,6 +111,10 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasBluetoothConnect by remember { mutableStateOf(false) }
     // Android 15+ 敏感通知权限
     var hasSensitiveNotification by remember { mutableStateOf(true) }
+    // 自启动权限状态
+    var hasSelfStart by remember { mutableStateOf(false) }
+    // 后台无限制权限状态 (可选)
+    var hasBackgroundUnlimited by remember { mutableStateOf(false) }
     // Toast工具
     fun showToast(msg: String) {
         android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
@@ -146,7 +151,7 @@ fun GuideScreen(onContinue: () -> Unit) {
         // 使用 PermissionHelper 检查敏感通知权限
         hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
 
-        permissionsGranted = hasNotification && canQueryApps && hasPost
+        permissionsGranted = hasNotification && canQueryApps && hasPost && hasSelfStart
 
         // 使用 PermissionHelper 检查蓝牙连接权限
         hasBluetoothConnect = PermissionHelper.checkBluetoothConnectPermission(context)
@@ -320,7 +325,41 @@ fun GuideScreen(onContinue: () -> Unit) {
         )
         top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
-            title = "通知管理 (可选)",
+            title = "后台无限制权限 (可选)",
+            summary = if (hasBackgroundUnlimited) "已设置" else "用于确保应用在后台正常运行，防止被系统杀死",
+            summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
+                color = Color(0xFF888888),
+                disabledColor = Color(0xFFCCCCCC)
+            ),
+            rightActions = {
+                Switch(
+                    checked = hasBackgroundUnlimited,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            showToast("跳转到电池优化设置，请将应用设为无限制")
+                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = android.net.Uri.parse("package:" + context.packageName)
+                            context.startActivity(intent)
+                            hasBackgroundUnlimited = true
+                        } else {
+                            hasBackgroundUnlimited = false
+                        }
+                    },
+                    enabled = true
+                )
+            },
+            onClick = {
+                showToast("跳转到电池优化设置，请将应用设为无限制")
+                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                context.startActivity(intent)
+            },
+            enabled = true,
+            modifier = Modifier.padding(vertical = 0.dp)
+        )
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        BasicComponent(
+            title = "悬浮通知权限 (可选)",
             summary = "请手动选择并打开具体的通知类别的悬浮通知权限，以提升通知体验",
             summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
                 color = Color(0xFF888888),
@@ -344,78 +383,106 @@ fun GuideScreen(onContinue: () -> Unit) {
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-    top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
-            BasicComponent(
-                title = "敏感通知访问权限 (Android 15+，可选)",
-                summary = "未授权时部分通知内容只能获取到'已隐藏敏感通知',因此应用予以隐藏，建议开启以完整接收通知。如无法跳转可复制下方 adb 命令授权。",
-                // 不再用 rightActions，按钮放 summary 下方
-                onClick = {
-                    if (!hasSensitiveNotification) {
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        BasicComponent(
+            title = "敏感通知访问权限 (Android 15+，可选)",
+            summary = "未授权时部分通知内容只能获取到'已隐藏敏感通知',因此应用予以隐藏，建议开启以完整接收通知。如无法跳转可复制下方 adb 命令授权。",
+            // 不再用 rightActions，按钮放 summary 下方
+            onClick = {
+                if (!hasSensitiveNotification) {
+                    PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
+                }
+            },
+            enabled = true,
+            modifier = Modifier.padding(vertical = 0.dp)
+        )
+        if (!hasSensitiveNotification) {
+            // 按钮放在描述下方，横向一行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
                         PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
-                    }
-                },
-                enabled = true,
-                modifier = Modifier.padding(vertical = 0.dp)
-            )
-            if (!hasSensitiveNotification) {
-                // 按钮放在描述下方，横向一行
-                Row(
+                    },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
+                        .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
-                        },
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
-                    ) {
-                        Text("去设置", fontSize = 14.sp)
-                    }
-                    Button(
-                        onClick = {
-                            val adbCmd = "adb shell appops set ${context.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow"
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clip = android.content.ClipData.newPlainText("adb", adbCmd)
-                            clipboard.setPrimaryClip(clip)
-                            showToast("已复制adb命令到剪贴板")
-                        },
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
-                    ) {
-                        Text("复制adb命令", fontSize = 14.sp)
-                    }
+                    Text("去设置", fontSize = 14.sp)
+                }
+                Button(
+                    onClick = {
+                        val adbCmd = "adb shell appops set ${context.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow"
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("adb", adbCmd)
+                        clipboard.setPrimaryClip(clip)
+                        showToast("已复制adb命令到剪贴板")
+                    },
+                    modifier = Modifier
+                        .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
+                ) {
+                    Text("复制adb命令", fontSize = 14.sp)
+                }
             }
         }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                top.yukonga.miuix.kmp.basic.Button(onClick = {
-                    if (permissionsGranted) {
-                        onContinue()
-                    } else {
-                        val missing = buildList {
-                            if (!hasNotification) add("获取通知访问权限")
-                            if (!canQueryApps) add("获取应用列表权限")
-                            if (!hasPost) add("获取通知发送权限")
-                            // 敏感通知权限现在为可选，不再作为必要权限
-                            // if (!hasSensitiveNotification) add("获取敏感通知权限")
-                        }.joinToString(", ")
-                        if (missing.isNotEmpty()) {
-                            showToast("请先授权: $missing")
+        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+        BasicComponent(
+            title = "自启动权限",
+            summary = if (hasSelfStart) "已启用" else "必须启用，否则监听服务无法启动",
+            rightActions = {
+                Switch(
+                    checked = hasSelfStart,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            showToast("请在应用详情页启用自启动权限")
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            intent.data = android.net.Uri.parse("package:" + context.packageName)
+                            context.startActivity(intent)
+                            hasSelfStart = true
+                        } else {
+                            hasSelfStart = false
                         }
-                    }
-                }) {
-                    top.yukonga.miuix.kmp.basic.Text(
-                        if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
-                        style = MiuixTheme.textStyles.button
-                    )
+                    },
+                    enabled = true
+                )
+            },
+            onClick = {
+                showToast("请在应用详情页启用自启动权限")
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                context.startActivity(intent)
+            },
+            modifier = Modifier.padding(vertical = 0.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        top.yukonga.miuix.kmp.basic.Button(onClick = {
+            if (permissionsGranted) {
+                onContinue()
+            } else {
+                val missing = buildList {
+                    if (!hasNotification) add("获取通知访问权限")
+                    if (!canQueryApps) add("获取应用列表权限")
+                    if (!hasPost) add("获取通知发送权限")
+                    if (!hasSelfStart) add("启用自启动权限")
+                }.joinToString(", ")
+                if (missing.isNotEmpty()) {
+                    showToast("请先授权: $missing")
                 }
+            }
+        }) {
+            top.yukonga.miuix.kmp.basic.Text(
+                if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
+                style = MiuixTheme.textStyles.button
+            )
+        }
             }
         }
     }
+}
 }
 
 fun requestAllPermissions(activity: Activity) {

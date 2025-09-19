@@ -31,6 +31,9 @@ object BackendLocalFilter {
         "应用商店 正在安装",
         "新消息 你有一条新消息",
         "已隐藏敏感通知",
+        "查找 正在处理",
+        "小米汽车互联服务 小米汽车互联服务",
+        "您有一条新消息 请点击查看",
         "正在运行", "服务运行中", "后台运行", "点按即可了解详情", "正在同步", "运行中", "service running", "is running", "tap for more info"
     )
 
@@ -45,10 +48,24 @@ object BackendLocalFilter {
     fun getBuiltinKeywords(): Set<String> = builtinCustomKeywords
 
     fun getEnabledForegroundKeywords(context: Context): Set<String> {
-        val enabled = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER)
+        val enabled = StorageManager.getStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         val all = getForegroundKeywords(context)
-        // 首次无任何启用集时，默认启用全部（含内置）；否则严格以持久化内容为准（内置项可被禁用）
-        return if (enabled.isEmpty()) all else enabled.intersect(all)
+        val builtinKeywords = getBuiltinKeywords()
+
+        // 首次无任何启用集时，默认启用全部（含内置）；否则确保新添加的内置关键词默认启用
+        if (enabled.isEmpty()) {
+            return all
+        } else {
+            // 确保所有内置关键词都默认启用
+            builtinKeywords.forEach { keyword ->
+                if (!enabled.contains(keyword)) {
+                    enabled.add(keyword)
+                }
+            }
+            // 保存更新后的启用集
+            StorageManager.putStringSet(context, KEY_ENABLED_FOREGROUND_KEYWORDS, enabled, StorageManager.PrefsType.FILTER)
+            return enabled.intersect(all)
+        }
     }
 
     fun setKeywordEnabled(context: Context, keyword: String, enabled: Boolean) {
