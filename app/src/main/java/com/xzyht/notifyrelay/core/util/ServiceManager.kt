@@ -11,19 +11,6 @@ object ServiceManager {
     private const val AUTO_START_ERROR_MESSAGE = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
 
     /**
-     * 启动设备连接服务
-     */
-    fun startDeviceConnectionService(context: Context) {
-        try {
-            val serviceClass = Class.forName("com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService")
-            val startMethod = serviceClass.getMethod("start", Context::class.java)
-            startMethod.invoke(null, context)
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("ServiceManager", "Failed to start DeviceConnectionService", e)
-        }
-    }
-
-    /**
      * 启动通知监听服务
      */
     fun startNotificationListenerService(context: Context): Boolean {
@@ -63,16 +50,6 @@ object ServiceManager {
         var serviceStarted = false
         var errorMessage: String? = null
 
-        // 启动设备连接服务
-        try {
-            if (!isServiceRunning(context, "com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService")) {
-                startDeviceConnectionService(context)
-            }
-            serviceStarted = true
-        } catch (e: Exception) {
-            errorMessage = "设备连接服务启动失败: ${e.message}"
-        }
-
         // 启动通知监听服务
         try {
             val notificationStarted = startNotificationListenerService(context)
@@ -80,6 +57,8 @@ object ServiceManager {
                 if (errorMessage == null) {
                     errorMessage = AUTO_START_ERROR_MESSAGE
                 }
+            } else {
+                serviceStarted = true
             }
         } catch (e: Exception) {
             if (errorMessage == null) {

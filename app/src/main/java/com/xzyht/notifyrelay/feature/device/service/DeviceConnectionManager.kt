@@ -298,27 +298,59 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         startOfflineDeviceCleaner()
         // 新增：注册网络变化监听器
         registerNetworkCallback()
+        // 新增：启动WLAN直连定期重连检查
+        startWifiDirectReconnectionChecker()
     }
 
     // 新增：注册网络变化监听器
     private fun registerNetworkCallback() {
         val connectivityManager = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         networkCallback = object : ConnectivityManager.NetworkCallback() {
+            private var wasLanNetwork = false
+
             override fun onAvailable(network: android.net.Network) {
-                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络可用，重新获取IP并启动发现")
-                updateLocalIpAndRestartDiscovery()
+                val capabilities = connectivityManager.getNetworkCapabilities(network)
+                val isLanNetwork = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true ||
+                                 capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ||
+                                 capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) == true
+
+                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络可用，类型: ${if (isLanNetwork) "局域网/WLAN直连" else "非局域网"}")
+
+                // 从非局域网切换到局域网或WLAN直连时，主动触发设备连接
+                if (isLanNetwork && !wasLanNetwork) {
+                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "检测到从非局域网切换到局域网/WLAN直连，主动重新连接设备")
+                    updateLocalIpAndRestartDiscovery()
+                } else {
+                    updateLocalIpAndRestartDiscovery()
+                }
+
+                wasLanNetwork = isLanNetwork
             }
 
             override fun onLost(network: android.net.Network) {
                 if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络丢失")
+                wasLanNetwork = false
             }
 
             override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: NetworkCapabilities) {
-                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络能力变化，重新获取IP")
-                updateLocalIpAndRestartDiscovery()
+                val isLanNetwork = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                                 networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                                 networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P)
+
+                // 网络能力变化时，如果变为局域网或WLAN直连，主动触发连接
+                if (isLanNetwork && !wasLanNetwork) {
+                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络能力变化，检测到切换到局域网/WLAN直连，主动重新连接设备")
+                    updateLocalIpAndRestartDiscovery()
+                }
+
+                wasLanNetwork = isLanNetwork
             }
         }
-        connectivityManager.registerDefaultNetworkCallback(networkCallback!!)
+        // 改为监听所有网络变化，而不仅仅是默认网络
+        connectivityManager.registerNetworkCallback(
+            android.net.NetworkRequest.Builder().build(),
+            networkCallback!!
+        )
     }
 
     // 新增：更新本地IP并重新启动发现
@@ -337,6 +369,52 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 重新启动发现
         stopDiscovery()
         startDiscovery()
+
+        // 只有在有有效网络连接时才输出网络恢复日志
+        val hasValidNetwork = newIp != "0.0.0.0" && newIp.isNotEmpty()
+        if (hasValidNetwork) {
+            // 网络恢复时，主动尝试连接所有已认证设备
+            coroutineScope.launch {
+                delay(1000) // 等待1秒让发现启动
+                val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络恢复，主动连接 ${authed.size} 个已认证设备")
+                for ((deviceUuid, auth) in authed) {
+                    if (deviceUuid == this@DeviceConnectionManager.uuid) continue
+                    if (heartbeatedDevices.contains(deviceUuid)) continue
+
+                    val info = getDeviceInfo(deviceUuid)
+                    val ip = info?.ip ?: auth.lastIp
+                    val port = info?.port ?: auth.lastPort ?: 23333
+
+                    if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络恢复后主动connectToDevice: $deviceUuid, $ip:$port")
+                        connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "已认证设备", ip, port))
+                        delay(500) // 短暂延迟避免并发过多
+                    }
+                }
+
+                // 新增：WLAN直连模式下额外处理网络共享场景
+                if (isWifiDirectNetwork()) {
+                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连模式，启动额外重连逻辑")
+                    // 在WLAN直连下，定期检查所有已认证设备，即使它们当前在线
+                    // 这可以处理设备通过网络共享连接但IP可能变化的情况
+                    delay(2000) // 等待初始连接尝试完成
+                    for ((deviceUuid, auth) in authed) {
+                        if (deviceUuid == this@DeviceConnectionManager.uuid) continue
+                        // WLAN直连下，即使设备当前在线也尝试重连，以处理网络共享场景
+                        val info = getDeviceInfo(deviceUuid)
+                        val ip = info?.ip ?: auth.lastIp
+                        val port = info?.port ?: auth.lastPort ?: 23333
+
+                        if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连额外重连尝试: $deviceUuid, $ip:$port")
+                            connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "WLAN直连设备", ip, port))
+                            delay(1000) // WLAN直连下增加延迟
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // 新增：停止发现
@@ -1258,5 +1336,36 @@ if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "connectToDevice重试 $retry
     // 获取当前加密类型
     fun getCurrentEncryptionType(): com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType {
         return com.xzyht.notifyrelay.core.util.EncryptionManager.getCurrentEncryptionType()
+    }
+
+    // 新增：WLAN直连定期重连检查器
+    private fun startWifiDirectReconnectionChecker() {
+        coroutineScope.launch {
+            while (true) {
+                delay(30_000) // 每30秒检查一次
+                if (isWifiDirectNetwork()) {
+                    val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连定期检查：${authed.size}个认证设备")
+
+                    for ((deviceUuid, auth) in authed) {
+                        if (deviceUuid == this@DeviceConnectionManager.uuid) continue
+
+                        // 检查设备是否离线（基于心跳状态）
+                        val isOnline = heartbeatedDevices.contains(deviceUuid)
+                        if (!isOnline) {
+                            val info = getDeviceInfo(deviceUuid)
+                            val ip = info?.ip ?: auth.lastIp
+                            val port = info?.port ?: auth.lastPort ?: 23333
+
+                            if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连定期重连离线设备: $deviceUuid, $ip:$port")
+                                connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "WLAN直连设备", ip, port))
+                                delay(2000) // 每次重连后等待2秒
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

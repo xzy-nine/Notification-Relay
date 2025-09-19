@@ -5,7 +5,6 @@ import com.xzyht.notifyrelay.core.util.ServiceManager
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import android.content.Intent
 import android.util.Log
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionService
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationHistoryFragment
 import androidx.compose.foundation.background
@@ -89,7 +88,6 @@ class MainActivity : FragmentActivity() {
         }
 
         // 权限检查通过后再启动前台服务，保证设备发现线程正常
-        DeviceConnectionService.start(this)
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
 
