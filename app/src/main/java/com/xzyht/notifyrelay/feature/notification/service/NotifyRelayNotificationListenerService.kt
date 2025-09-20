@@ -138,7 +138,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
-        if (!BackendLocalFilter.shouldForward(sbn, applicationContext)) {
+        if (!BackendLocalFilter.shouldForward(sbn, applicationContext, checkProcessed)) {
             logSbnDetail("法鸡-黑影 被过滤", sbn)
             return
         }

@@ -164,8 +164,9 @@ object BackendLocalFilter {
 
     /**
      * 判断本机通知是否应该被转发
+     * @param isFromPeriodicCheck 是否来自定时检查，避免调试日志刷屏
      */
-    fun shouldForward(sbn: StatusBarNotification, context: Context): Boolean {
+    fun shouldForward(sbn: StatusBarNotification, context: Context, isFromPeriodicCheck: Boolean = false): Boolean {
         if (filterSelf && sbn.packageName == context.packageName) return false
 
         // 包名过滤
@@ -175,8 +176,10 @@ object BackendLocalFilter {
         val flags = sbn.notification.flags
         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
-        // 日志辅助排查过滤内容
-        if (BuildConfig.DEBUG) Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
+        // 日志辅助排查过滤内容 - 只在非定时检查时输出，避免刷屏
+        if (BuildConfig.DEBUG && !isFromPeriodicCheck) {
+            Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
+        }
 
         // 过滤媒体通知（不存储，避免蓝牙歌词等标题频繁变化）
         if (sbn.notification.category == Notification.CATEGORY_TRANSPORT) return false

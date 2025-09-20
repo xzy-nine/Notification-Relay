@@ -3,22 +3,9 @@ package com.xzyht.notifyrelay.feature.notification.backend
 import android.content.Context
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.n                // 直接转换为正确的类型
-                val record = notification as? com.xzyht.notifyrelay.feature.device.model.NotificationRecord
-                record?.let {
-                    // 去除标题中的应用名称前缀再比较
-                    val normalizedLocalTitle = normalizeTitle(it.title ?: "")
-                    val normalizedPendingTitle = normalizeTitle(title)
-                    val match = it.device == "本机" && normalizedLocalTitle == normalizedPendingTitle && (it.text ?: "") == text
-                    // 允许5秒的时间容差
-                    val timeMatch = Math.abs(it.time - now) <= 5000L
-                    val finalMatch = match && timeMatch
-                    if (finalMatch && BuildConfig.DEBUG) {
-                        Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(it.time - now)}ms")
-                    }
-                    finalMatch
-                } ?: falseommon.data.StorageManager
+import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -188,24 +175,20 @@ object BackendRemoteFilter {
     /**
      * 检查内存中的重复通知（优化性能）
      */
-    private fun checkDuplicateInMemory(localList: List<Any>, title: String, text: String, now: Long): Boolean {
+    private fun checkDuplicateInMemory(localList: List<NotificationRecord>, title: String, text: String, now: Long): Boolean {
         return localList.any { notification ->
             try {
-                // 直接转换为正确的类型
-                val record = notification as? com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
-                record?.let {
-                    // 去除标题中的应用名称前缀再比较
-                    val normalizedLocalTitle = normalizeTitle(it.title ?: "")
-                    val normalizedPendingTitle = normalizeTitle(title)
-                    val match = it.device == "本机" && normalizedLocalTitle == normalizedPendingTitle && (it.text ?: "") == text
-                    // 允许5秒的时间容差
-                    val timeMatch = Math.abs(it.time - now) <= 5000L
-                    val finalMatch = match && timeMatch
-                    if (finalMatch && BuildConfig.DEBUG) {
-                        Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(it.time - now)}ms")
-                    }
-                    finalMatch
-                } ?: false
+                // 去除标题中的应用名称前缀再比较
+                val normalizedLocalTitle = normalizeTitle(notification.title ?: "")
+                val normalizedPendingTitle = normalizeTitle(title)
+                val match = notification.device == "本机" && normalizedLocalTitle == normalizedPendingTitle && (notification.text ?: "") == text
+                // 允许5秒的时间容差
+                val timeMatch = Math.abs(notification.time - now) <= 5000L
+                val finalMatch = match && timeMatch
+                if (finalMatch && BuildConfig.DEBUG) {
+                    Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(notification.time - now)}ms")
+                }
+                finalMatch
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e("智能去重", "内存检查异常", e)
                 false
