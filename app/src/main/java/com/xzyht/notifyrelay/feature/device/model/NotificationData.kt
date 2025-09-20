@@ -126,7 +126,8 @@ object NotificationRepository {
                 time = time,
                 device = fileKey
             ))
-            runBlocking { store.writeAll(oldList, fileKey) }
+            // writeAll是同步的，不需要runBlocking
+            store.writeAll(oldList, fileKey)
             if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
@@ -321,6 +322,11 @@ object NotificationRepository {
         notifications.removeAll { it.device == device }
         syncToCache(context)
 
+        // 对于清除操作，等待写入完成确保数据确实被清除
+        if (device == "本机") {
+            PersistenceManager.waitForAllWrites(2000) // 等待最多2秒
+        }
+
         // 仅在本机设备时清理processedNotifications缓存（非本机设备没有缓存）
         if (device == "本机") {
             // 对于本机设备，直接清除全部缓存（处理遗留问题）
@@ -337,6 +343,7 @@ object NotificationRepository {
     /**
      * 将当前通知列表同步到本地缓存
      */
+    @Synchronized
     internal fun syncToCache(context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
@@ -357,7 +364,8 @@ object NotificationRepository {
                     )
                 }
                 val fileKey = if (device == "本机") "local" else device
-                runBlocking { store.writeAll(entities, fileKey) }
+                // 移除不必要的runBlocking，writeAll已经是同步的
+                store.writeAll(entities, fileKey)
                 if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
             }
             scanDeviceList(context)
