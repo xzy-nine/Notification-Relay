@@ -3,7 +3,21 @@ package com.xzyht.notifyrelay.feature.notification.backend
 import android.content.Context
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.n                // 直接转换为正确的类型
+                val record = notification as? com.xzyht.notifyrelay.feature.device.model.NotificationRecord
+                record?.let {
+                    // 去除标题中的应用名称前缀再比较
+                    val normalizedLocalTitle = normalizeTitle(it.title ?: "")
+                    val normalizedPendingTitle = normalizeTitle(title)
+                    val match = it.device == "本机" && normalizedLocalTitle == normalizedPendingTitle && (it.text ?: "") == text
+                    // 允许5秒的时间容差
+                    val timeMatch = Math.abs(it.time - now) <= 5000L
+                    val finalMatch = match && timeMatch
+                    if (finalMatch && BuildConfig.DEBUG) {
+                        Log.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(it.time - now)}ms")
+                    }
+                    finalMatch
+                } ?: falseommon.data.StorageManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -180,7 +194,10 @@ object BackendRemoteFilter {
                 // 直接转换为正确的类型
                 val record = notification as? com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
                 record?.let {
-                    val match = it.device == "本机" && it.title == title && it.text == text
+                    // 去除标题中的应用名称前缀再比较
+                    val normalizedLocalTitle = normalizeTitle(it.title ?: "")
+                    val normalizedPendingTitle = normalizeTitle(title)
+                    val match = it.device == "本机" && normalizedLocalTitle == normalizedPendingTitle && (it.text ?: "") == text
                     // 允许5秒的时间容差
                     val timeMatch = Math.abs(it.time - now) <= 5000L
                     val finalMatch = match && timeMatch
@@ -194,6 +211,14 @@ object BackendRemoteFilter {
                 false
             }
         }
+    }
+
+    /**
+     * 标准化标题：去除应用名称前缀，如"(微博)" -> ""
+     */
+    private fun normalizeTitle(title: String): String {
+        val prefixPattern = Regex("^\\([^)]+\\)")
+        return title.replace(prefixPattern, "").trim()
     }
 
     /**
