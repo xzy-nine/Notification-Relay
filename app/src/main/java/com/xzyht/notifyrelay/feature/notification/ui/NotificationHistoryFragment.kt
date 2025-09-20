@@ -82,36 +82,42 @@ if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
 }
 
 @Composable
-fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?) {
+fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?, context: android.content.Context, getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
-    val context = LocalContext.current
+    
+    // 对包名进行等价映射
+    val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+    val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
+    
+    // 使用映射后的包名获取应用信息
+    val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
+    val (mappedAppName, mappedAppIcon) = appInfo
+    
+    val displayAppName = record.appName ?: mappedAppName
+    val displayAppIcon = mappedAppIcon ?: appIcon
+    
     // 修正：单条通知卡片标题应为原始通知标题
     val displayTitle = record.title ?: "(无标题)"
-    val displayAppName = record.appName ?: appName
-    
-    // 异步加载图标
-    var asyncIcon by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    AsyncAppIcon(record.packageName) { loadedIcon ->
-        asyncIcon = loadedIcon
-    }
-    
-    val finalIcon = asyncIcon ?: appIcon
     Surface(
         onClick = {
             // 跳转到对应应用主界面
             val pkg = record.packageName
             if (!pkg.isNullOrEmpty()) {
+                // 应用等价映射
+                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+                
                 var canOpen = false
                 var intent: android.content.Intent? = null
                 try {
-                    intent = context.packageManager.getLaunchIntentForPackage(pkg)
+                    intent = context.packageManager.getLaunchIntentForPackage(mappedPkg)
                     if (intent != null) {
                         canOpen = true
                     } else {
                         val now = System.currentTimeMillis()
                         if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
-                            android.widget.Toast.makeText(context, "无法打开应用：$pkg", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, "无法打开应用：$mappedPkg", android.widget.Toast.LENGTH_SHORT).show()
                             ToastDebounce.lastToastTime = now
                         }
                     }
@@ -140,9 +146,9 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (finalIcon != null) {
+                if (displayAppIcon != null) {
                     Image(
-                        bitmap = finalIcon.asImageBitmap(),
+                        bitmap = displayAppIcon.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
                     )
@@ -200,22 +206,35 @@ fun getAppNameAndIcon(context: android.content.Context, packageName: String?): P
                     packageName
                 }
             } else {
-                // 如果没有缓存，尝试直接获取
-                val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(packageName, 0)
-                name = pm.getApplicationLabel(appInfo).toString()
-                val drawable = pm.getApplicationIcon(appInfo)
-                icon = drawableToBitmap(drawable)
+                // 尝试获取外部应用图标（来自其他设备的同步）
+                icon = AppRepository.getExternalAppIcon(packageName)
+                if (icon != null) {
+                    // 如果有外部图标，使用记录中的应用名或包名
+                    name = packageName // 外部应用使用包名作为应用名
+                } else {
+                    // 如果都没有，尝试直接获取（本地安装的应用）
+                    val pm = context.packageManager
+                    val appInfo = pm.getApplicationInfo(packageName, 0)
+                    name = pm.getApplicationLabel(appInfo).toString()
+                    val drawable = pm.getApplicationIcon(appInfo)
+                    icon = drawableToBitmap(drawable)
+                }
             }
         } catch (_: Exception) {
-            try {
-                val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(context.packageName, 0)
-                name = pm.getApplicationLabel(appInfo).toString()
-                val drawable = pm.getApplicationIcon(appInfo)
-                icon = drawableToBitmap(drawable)
-            } catch (_: Exception) {
-                icon = null
+            // 如果本地应用不存在，尝试获取外部应用图标
+            icon = AppRepository.getExternalAppIcon(packageName)
+            if (icon != null) {
+                name = packageName // 外部应用使用包名作为应用名
+            } else {
+                try {
+                    val pm = context.packageManager
+                    val appInfo = pm.getApplicationInfo(context.packageName, 0)
+                    name = pm.getApplicationLabel(appInfo).toString()
+                    val drawable = pm.getApplicationIcon(appInfo)
+                    icon = drawableToBitmap(drawable)
+                } catch (_: Exception) {
+                    icon = null
+                }
             }
         }
     }
@@ -261,7 +280,6 @@ fun NotificationHistoryScreen() {
     // 切换设备时，先切换 currentDevice，再刷新 flow
     LaunchedEffect(selectedDevice) {
         NotificationRepository.currentDevice = selectedDevice
-        NotificationRepository.init(context)
         NotificationRepository.notifyHistoryChanged(selectedDevice, context)
     }
     // 订阅当前分组的通知历史
@@ -269,7 +287,11 @@ fun NotificationHistoryScreen() {
 
     val mixedList by remember(notifications) {
         derivedStateOf {
-            val grouped = notifications.groupBy { it.packageName }
+            val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+            val grouped = notifications.groupBy { record ->
+                // 使用映射后的包名进行分组
+                com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
+            }
             val unifiedList = mutableListOf<List<NotificationRecord>>()
             for (entry in grouped.entries) {
                 val list = entry.value.sortedByDescending { it.time }
@@ -415,16 +437,20 @@ fun NotificationHistoryScreen() {
                             if (list.size == 1) {
                                 val record = list[0]
                                 val (localAppName, appIcon) = getCachedAppInfo(record.packageName)
-                                NotificationCard(record, localAppName, appIcon)
+                                NotificationCard(record, localAppName, appIcon, context, getCachedAppInfo)
                             } else {
                                 val latest = list.maxByOrNull { it.time }
                                 var expanded by remember { mutableStateOf(false) }
-                                val (appName, appIcon) = getCachedAppInfo(latest?.packageName)
+                                // 使用映射后的包名获取应用信息
+                                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPkgs)
+                                val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
+                                val (appName, appIcon) = appInfo
                                 // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
                                 val groupTitle = when {
                                     !latest?.appName.isNullOrBlank() -> latest?.appName!!
                                     !appName.isNullOrBlank() -> appName
-                                    !latest?.packageName.isNullOrBlank() -> latest?.packageName!!
+                                    !mappedPkg.isNullOrBlank() -> mappedPkg
                                     else -> "(未知应用)"
                                 }
                                 Card(
@@ -561,7 +587,7 @@ fun NotificationHistoryScreen() {
                                                             .offset { IntOffset(offset.roundToInt(), 0) }
                                                     ) {
                                                         val (localAppName, appIcon1) = getCachedAppInfo(record.packageName)
-                                                        NotificationCard(record, localAppName, appIcon1)
+                                                        NotificationCard(record, localAppName, appIcon1, context, getCachedAppInfo)
                                                     }
                                                     // 删除按钮
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {

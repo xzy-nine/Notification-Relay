@@ -31,7 +31,11 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
             // 优先使用缓存的图标（同步版本）
             appIcon = AppRepository.getAppIconSync(context, pkg)
             if (appIcon == null) {
-                // 如果缓存中没有，尝试直接获取
+                // 如果缓存中没有，尝试获取外部应用图标（来自其他设备的同步）
+                appIcon = AppRepository.getExternalAppIcon(pkg)
+            }
+            if (appIcon == null) {
+                // 如果还是没有，尝试直接获取（本地安装的应用）
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(pkg, 0)
                 val drawable = pm.getApplicationIcon(appInfo)
