@@ -928,6 +928,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             processNotificationQueue()
         }
+
+        // 启动图标同步过期请求清理协程
+        coroutineScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60000) // 每分钟清理一次
+                com.xzyht.notifyrelay.core.sync.IconSyncManager.cleanupExpiredRequests()
+            }
+        }
     }
 
     private data class NotificationData(
@@ -977,11 +985,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                 }
 
+                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+
                 val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationRepository")
                 val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
                 // 修复：NotificationRepository是object（单例），需要获取实例
                 val repoInstance = repoClass.getDeclaredField("INSTANCE").get(null)
-                addMethod.invoke(repoInstance, pkg, appName, title, text, time, remoteUuid, context)
+                addMethod.invoke(repoInstance, mappedPkg, appName, title, text, time, remoteUuid, context)
 
                 // 减少UI刷新频率，批处理时只在最后刷新
                 // 强制刷新设备列表和UI
@@ -1000,6 +1011,23 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         if (result.shouldShow) {
             // 智能去重：先发送后撤回机制
             replicateNotification(context, result, null)
+
+            // 图标同步：检查本地是否有该应用的图标，如果没有则请求
+            if (remoteUuid != null) {
+                try {
+                    val sourceDevice = getDeviceInfo(remoteUuid)
+                    if (sourceDevice != null) {
+                        com.xzyht.notifyrelay.core.sync.IconSyncManager.checkAndSyncIcon(
+                            context,
+                            result.mappedPkg,
+                            this@DeviceConnectionManager,
+                            sourceDevice
+                        )
+                    }
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.e("秩序之光 死神-NotifyRelay", "图标同步检查失败", e)
+                }
+            }
         } else {
             ChatMemory.append(context, "收到: ${result.rawData}")
         }
@@ -1189,6 +1217,43 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                                     if (!auth.isAccepted) append("isAccepted=false; ")
                                                 }
                                                 if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
+                                            }
+                                        }
+                                    }
+                                    reader.close()
+                                    client.close()
+                                } else if (line.startsWith("DATA_ICON_REQUEST:")) {
+                                    // 处理图标请求
+                                    val parts = line.split(":", limit = 5)
+                                    if (parts.size >= 5) {
+                                        val remoteUuid = parts[1]
+                                        val remotePubKey = parts[2]
+                                        val sharedSecret = parts[3]
+                                        val payload = parts[4]
+                                        val auth = authenticatedDevices[remoteUuid]
+                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, sharedSecret) } catch (_: Exception) { null }
+                                            if (decrypted != null) {
+                                                val sourceDevice = getDeviceInfo(remoteUuid) ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress, 23333)
+                                                com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconRequest(decrypted, this@DeviceConnectionManager, sourceDevice, context)
+                                            }
+                                        }
+                                    }
+                                    reader.close()
+                                    client.close()
+                                } else if (line.startsWith("DATA_ICON_RESPONSE:")) {
+                                    // 处理图标响应
+                                    val parts = line.split(":", limit = 5)
+                                    if (parts.size >= 5) {
+                                        val remoteUuid = parts[1]
+                                        val remotePubKey = parts[2]
+                                        val sharedSecret = parts[3]
+                                        val payload = parts[4]
+                                        val auth = authenticatedDevices[remoteUuid]
+                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, sharedSecret) } catch (_: Exception) { null }
+                                            if (decrypted != null) {
+                                                com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconResponse(decrypted, context)
                                             }
                                         }
                                     }
