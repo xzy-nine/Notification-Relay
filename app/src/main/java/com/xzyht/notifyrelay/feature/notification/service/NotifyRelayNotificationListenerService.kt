@@ -331,8 +331,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     private fun updateNotification() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 根据是否有转发条件决定标题
+        val canForward = getNotificationText().let { text ->
+            !text.contains("无设备在线") && !text.contains("非局域网连接")
+        }
+        val title = if (canForward) "通知监听/转发中" else "通知监听中"
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("通知监听中")
+            .setContentTitle(title)
             .setContentText(getNotificationText())
             .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
             .setOngoing(true)
