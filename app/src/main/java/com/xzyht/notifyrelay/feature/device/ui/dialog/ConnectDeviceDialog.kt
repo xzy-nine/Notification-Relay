@@ -26,7 +26,7 @@ fun ConnectDeviceDialog(
     SuperDialog(
         show = showDialog,
         title = "连接设备",
-        summary = "是否连接设备：${device.displayName}？\n对方将收到认证请求。",
+        summary = "是否连接设备：${device.displayName} \n(${device.uuid})？\n对方将收到认证请求。",
         onDismissRequest = onDismiss
     ) {
         Row(
