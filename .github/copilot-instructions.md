@@ -1,6 +1,7 @@
 # Copilot Instructions
 ## ai的agent要求
 - 要求修改时直接修改不二次征求同意
+- 尽量最小化改动以避免无法预料的错误
 ## UI与交互约定
 - 所有 Compose 组件优先使用 Miuix 主题库（如 `MiuixTheme`、`MiuixIcons`、`Button`、`Card` 等），详见[官方组件文档](https://miuix-kotlin-multiplatform.github.io/miuix/zh_CN/components/)。
 

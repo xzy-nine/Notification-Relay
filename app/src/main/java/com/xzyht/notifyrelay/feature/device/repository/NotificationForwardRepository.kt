@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.device.repository
 
 import android.content.Context
+import kotlinx.coroutines.delay
 import android.util.Log
 import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.BuildConfig
@@ -16,7 +17,7 @@ fun remoteNotificationFilter(data: String, context: Context): com.xzyht.notifyre
 }
 
 // 通知复刻处理函数
-fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
+suspend fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
     try {
         if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
         val json = org.json.JSONObject(result.rawData)
@@ -34,8 +35,33 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
                 // 如果缓存中没有，尝试获取外部应用图标（来自其他设备的同步）
                 appIcon = AppRepository.getExternalAppIcon(pkg)
             }
+
+            // 如果初次没有获得图标，等待外部图标同步（最多等待2秒，每100ms轮询一次）。
+            // 目的：在第一次获取不到远程同步到的图标时，给它短暂时间到达再复刻，避免某些情况下一直不复刻图标。
             if (appIcon == null) {
-                // 如果还是没有，尝试直接获取（本地安装的应用）
+                val waitMaxMs = 2000L
+                val intervalMs = 100L
+                val start = System.currentTimeMillis()
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "未找到图标，等待最多 ${waitMaxMs}ms 以尝试获取外部图标: $pkg")
+                try {
+                    while (System.currentTimeMillis() - start < waitMaxMs) {
+                        // 尝试从外部缓存再次获取
+                        appIcon = AppRepository.getExternalAppIcon(pkg)
+                        if (appIcon != null) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "等待期间获取到外部图标: $pkg")
+                            break
+                        }
+                        delay(intervalMs)
+                    }
+                } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                    // 协程被取消，记录并重新抛出以尊重取消
+                    if (BuildConfig.DEBUG) Log.w("NotifyRelay(狂鼠)", "等待图标时协程被取消", ce)
+                    throw ce
+                }
+            }
+
+            // 如果仍然没有图标，尝试直接获取（本地安装的应用）
+            if (appIcon == null) {
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(pkg, 0)
                 val drawable = pm.getApplicationIcon(appInfo)
@@ -52,7 +78,12 @@ fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.featur
                     appIcon = bitmap
                 }
             }
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
+
+            if (appIcon != null) {
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
+            } else {
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "未能获取到应用图标（将使用系统默认图标回退）: $pkg")
+            }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取应用图标失败: $pkg", e)
             // 如果图标获取失败，尝试使用默认图标
