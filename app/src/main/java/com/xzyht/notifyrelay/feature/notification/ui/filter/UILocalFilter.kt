@@ -4,6 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,29 +47,43 @@ fun UILocalFilter(
         var filterNoTitleOrText by remember { mutableStateOf(BackendLocalFilter.filterNoTitleOrText) }
         var filterImportanceNone by remember { mutableStateOf(BackendLocalFilter.filterImportanceNone) }
 
-        // 关键词相关状态
-        var keywordList by remember { mutableStateOf(BackendLocalFilter.getForegroundKeywords(context).toList()) }
-        var enabledKeywords by remember { mutableStateOf(BackendLocalFilter.getEnabledForegroundKeywords(context)) }
+        // 过滤条目相关状态（统一管理关键词+包名）
+        var allEntries by remember { mutableStateOf(BackendLocalFilter.getFilterEntries(context).toList()) }
+        var enabledEntries by remember { mutableStateOf(BackendLocalFilter.getEnabledFilterEntries(context)) }
         var newKeyword by remember { mutableStateOf("") }
-        var builtinKeywordsExpanded by remember { mutableStateOf(false) }
-        var customKeywordsExpanded by remember { mutableStateOf(false) }
-        
-        // 包名过滤相关状态
-        var packageFilterList by remember { mutableStateOf(BackendLocalFilter.getPackageFilterList(context).toList()) }
-        var enabledPackages by remember { mutableStateOf(BackendLocalFilter.getEnabledPackageFilters(context)) }
-        var showAppPickerDialog by remember { mutableStateOf(false) }
-        var builtinPackagesExpanded by remember { mutableStateOf(false) }
-        var customPackagesExpanded by remember { mutableStateOf(false) }
-        
+        var newPackage by remember { mutableStateOf("") }
+        var newPackageIcon by remember { mutableStateOf<ImageBitmap?>(null) }
+        val coroutineScope = rememberCoroutineScope()
+        val pm = context.packageManager
+        val defaultAppIconBitmap = remember {
+            val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
+            if (drawable is android.graphics.drawable.BitmapDrawable) {
+                drawable.bitmap.asImageBitmap()
+            } else {
+                // convert other drawables to a small placeholder bitmap
+                val width = drawable?.intrinsicWidth?.takeIf { it > 0 } ?: 48
+                val height = drawable?.intrinsicHeight?.takeIf { it > 0 } ?: 48
+                val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bmp)
+                drawable?.setBounds(0, 0, width, height)
+                drawable?.draw(canvas)
+                bmp.asImageBitmap()
+            }
+        }
+        var entryIcons by remember { mutableStateOf<Map<BackendLocalFilter.FilterEntry, ImageBitmap?>>(emptyMap()) }
+    var showAppPickerDialog by remember { mutableStateOf(false) }
+    var builtinDefaultsExpanded by remember { mutableStateOf(false) }
+
         val builtinKeywords = remember { BackendLocalFilter.getBuiltinKeywords() }
-        val customKeywords = remember(keywordList, builtinKeywords) { 
-            keywordList.filter { !builtinKeywords.contains(it) } 
+        val builtinPackages = remember { BackendLocalFilter.getDefaultPackageFilters() }
+        val builtinDefaultEntries = remember(allEntries, builtinKeywords, builtinPackages) {
+            allEntries.filter { entry -> (entry.keyword.isNotBlank() && builtinKeywords.contains(entry.keyword)) || (entry.packageName.isNotBlank() && builtinPackages.contains(entry.packageName)) }
         }
 
-        val builtinPackages = remember { BackendLocalFilter.getDefaultPackageFilters() }
-        val customPackages = remember(packageFilterList, builtinPackages) { 
-            packageFilterList.filter { !builtinPackages.contains(it) } 
-        }
+        // 分组：内置关键词条目、内置包名条目、自定义条目
+        val builtinKeywordEntries = remember(allEntries, builtinKeywords) { allEntries.filter { it.packageName.isBlank() && builtinKeywords.contains(it.keyword) } }
+        val builtinPackageEntries = remember(allEntries, builtinPackages) { allEntries.filter { it.keyword.isBlank() && builtinPackages.contains(it.packageName) } }
+        val customEntries = remember(allEntries, builtinKeywordEntries, builtinPackageEntries) { allEntries.filter { !builtinKeywordEntries.contains(it) && !builtinPackageEntries.contains(it) } }
 
     LazyColumn(
         modifier = modifier
@@ -162,215 +183,163 @@ fun UILocalFilter(
             }
         }
 
-        // 关键词过滤设置
+        // 统一过滤条目设置：标题行
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "过滤条目(文本 + 应用包名)",
+                    style = MiuixTheme.textStyles.title3,
+                    color = MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // 文本输入独占一行，避免被按钮压缩
+        item {
+            TextField(
+                value = newKeyword,
+                onValueChange = { newKeyword = it },
+                label = "关键词(可空)",
+                backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest,
+                textStyle = MiuixTheme.textStyles.main.copy(color = MiuixTheme.colorScheme.onSurfaceContainerHighest),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+        }
+
+        // 按钮行：选择应用与添加
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "文本关键词过滤(黑名单)",
-                    style = MiuixTheme.textStyles.title3,
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                TextField(
-                    value = newKeyword,
-                    onValueChange = { newKeyword = it },
-                    label = "新关键词",
-                    backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest,
-                    textStyle = MiuixTheme.textStyles.main.copy(color = MiuixTheme.colorScheme.onSurfaceContainerHighest),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
-                Button(
-                    onClick = {
-                        if (newKeyword.isNotBlank()) {
-                            BackendLocalFilter.addForegroundKeyword(context, newKeyword.trim())
-                            keywordList = BackendLocalFilter.getForegroundKeywords(context).toList()
-                            enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                            newKeyword = ""
-                        }
-                    },
-                    enabled = newKeyword.isNotBlank(),
-                    colors = if (newKeyword.isNotBlank()) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                ) {
-                    Text("添加")
-                }
-            }
-        }
-
-        // 默认关键词
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "默认关键词 (${builtinKeywords.size})",
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick = { builtinKeywordsExpanded = !builtinKeywordsExpanded }
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Useful.More,
-                        contentDescription = if (builtinKeywordsExpanded) "折叠" else "展开",
-                        tint = MiuixTheme.colorScheme.onBackground
-                    )
-                }
-            }
-        }
-
-        if (builtinKeywordsExpanded) {
-            builtinKeywords.forEach { keyword ->
-                item {
-                    val isEnabled = enabledKeywords.contains(keyword)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = keyword,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = isEnabled,
-                            onCheckedChange = { enabled ->
-                                BackendLocalFilter.setKeywordEnabled(context, keyword, enabled)
-                                enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        // 自定义关键词
-        if (customKeywords.isNotEmpty()) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "自定义关键词 (${customKeywords.size})",
-                        color = MiuixTheme.colorScheme.onBackground,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = { customKeywordsExpanded = !customKeywordsExpanded }
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Useful.More,
-                            contentDescription = if (customKeywordsExpanded) "折叠" else "展开",
-                            tint = MiuixTheme.colorScheme.onBackground
-                        )
-                    }
-                }
-            }
-
-            if (customKeywordsExpanded) {
-                customKeywords.forEach { keyword ->
-                    item {
-                        val isEnabled = enabledKeywords.contains(keyword)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = keyword,
-                                color = MiuixTheme.colorScheme.onBackground,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Switch(
-                                checked = isEnabled,
-                                onCheckedChange = { enabled ->
-                                    BackendLocalFilter.setKeywordEnabled(context, keyword, enabled)
-                                    enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                                }
-                            )
-                            IconButton(
-                                onClick = {
-                                    BackendLocalFilter.removeForegroundKeyword(context, keyword)
-                                    keywordList = BackendLocalFilter.getForegroundKeywords(context).toList()
-                                    enabledKeywords = BackendLocalFilter.getEnabledForegroundKeywords(context)
-                                }
-                            ) {
-                                Text("删除", color = MiuixTheme.colorScheme.onBackground)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 包名过滤设置
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "应用包名过滤(黑名单)",
-                    style = MiuixTheme.textStyles.title3,
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f)
-                )
                 Button(
                     onClick = { showAppPickerDialog = true },
-                    enabled = true,
-                    colors = ButtonDefaults.buttonColorsPrimary()
+                    colors = ButtonDefaults.buttonColors()
+                ) {
+                    if (newPackage.isBlank()) {
+                        Text("选择应用(可空)")
+                    } else {
+                        // 显示真实应用图标（如果加载到的话）
+                        newPackageIcon?.let { bmp ->
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = "已选应用图标",
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("已选")
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        BackendLocalFilter.addFilterEntry(context, newKeyword.trim(), newPackage.trim())
+                        allEntries = BackendLocalFilter.getFilterEntries(context).toList()
+                        enabledEntries = BackendLocalFilter.getEnabledFilterEntries(context)
+                        newKeyword = ""
+                        newPackage = ""
+                        newPackageIcon = null
+                    },
+                    enabled = newKeyword.isNotBlank() || newPackage.isNotBlank(),
+                    colors = if (newKeyword.isNotBlank() || newPackage.isNotBlank()) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
                 ) {
                     Text("添加")
                 }
             }
         }
 
-        // 默认包名
+        // 默认黑名单（内置文本关键词 + 内置包名）
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "默认包名 (${builtinPackages.size})",
+                    text = "默认黑名单 (${builtinDefaultEntries.size})",
                     color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
-                    onClick = { builtinPackagesExpanded = !builtinPackagesExpanded }
+                    onClick = { builtinDefaultsExpanded = !builtinDefaultsExpanded }
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Useful.More,
-                        contentDescription = if (builtinPackagesExpanded) "折叠" else "展开",
+                        contentDescription = if (builtinDefaultsExpanded) "折叠" else "展开",
                         tint = MiuixTheme.colorScheme.onBackground
                     )
                 }
             }
         }
 
-        if (builtinPackagesExpanded) {
-            builtinPackages.forEach { pkg ->
+        if (builtinDefaultsExpanded) {
+            builtinDefaultEntries.forEach { entry ->
                 item {
-                    val isEnabled = enabledPackages.contains(pkg)
+                    val isEnabled = enabledEntries.contains(entry)
+                    LaunchedEffect(entry.packageName) {
+                        if (entry.packageName.isNotBlank() && entryIcons[entry] == null) {
+                            try {
+                                val bmp = com.xzyht.notifyrelay.core.repository.AppRepository.getAppIconAsync(context, entry.packageName)
+                                entryIcons = entryIcons + (entry to (bmp?.asImageBitmap() ?: defaultAppIconBitmap))
+                            } catch (_: Exception) {
+                                entryIcons = entryIcons + (entry to defaultAppIconBitmap)
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = pkg,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (entry.keyword.isNotBlank()) {
+                                Text(
+                                    text = entry.keyword,
+                                    color = MiuixTheme.colorScheme.onBackground
+                                )
+                                if (entry.packageName.isNotBlank()) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    entryIcons[entry]?.let { bmp ->
+                                        Image(
+                                            bitmap = bmp,
+                                            contentDescription = "应用图标",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = entry.packageName,
+                                        color = MiuixTheme.colorScheme.onBackground
+                                    )
+                                }
+                            } else if (entry.packageName.isNotBlank()) {
+                                entryIcons[entry]?.let { bmp ->
+                                    Image(
+                                        bitmap = bmp,
+                                        contentDescription = "应用图标",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = entry.packageName,
+                                    color = MiuixTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
                         Switch(
                             checked = isEnabled,
                             onCheckedChange = { enabled ->
-                                BackendLocalFilter.setPackageEnabled(context, pkg, enabled)
-                                enabledPackages = BackendLocalFilter.getEnabledPackageFilters(context)
+                                BackendLocalFilter.setFilterEntryEnabled(context, entry, enabled)
+                                enabledEntries = BackendLocalFilter.getEnabledFilterEntries(context)
                             }
                         )
                     }
@@ -378,59 +347,92 @@ fun UILocalFilter(
             }
         }
 
-        // 自定义包名
-        if (customPackages.isNotEmpty()) {
+        // 自定义条目
+        if (customEntries.isNotEmpty()) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "自定义包名 (${customPackages.size})",
+                        text = "自定义条目 (${customEntries.size})",
                         color = MiuixTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(
-                        onClick = { customPackagesExpanded = !customPackagesExpanded }
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Useful.More,
-                            contentDescription = if (customPackagesExpanded) "折叠" else "展开",
-                            tint = MiuixTheme.colorScheme.onBackground
-                        )
-                    }
                 }
             }
 
-            if (customPackagesExpanded) {
-                customPackages.forEach { pkg ->
-                    item {
-                        val isEnabled = enabledPackages.contains(pkg)
+            customEntries.forEach { entry ->
+                item {
+                    val isEnabled = enabledEntries.contains(entry)
+                    LaunchedEffect(entry.packageName) {
+                        if (entry.packageName.isNotBlank() && entryIcons[entry] == null) {
+                            try {
+                                val bmp = com.xzyht.notifyrelay.core.repository.AppRepository.getAppIconAsync(context, entry.packageName)
+                                entryIcons = entryIcons + (entry to (bmp?.asImageBitmap() ?: defaultAppIconBitmap))
+                            } catch (_: Exception) {
+                                entryIcons = entryIcons + (entry to defaultAppIconBitmap)
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = pkg,
-                                color = MiuixTheme.colorScheme.onBackground,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Switch(
-                                checked = isEnabled,
-                                onCheckedChange = { enabled ->
-                                    BackendLocalFilter.setPackageEnabled(context, pkg, enabled)
-                                    enabledPackages = BackendLocalFilter.getEnabledPackageFilters(context)
+                            if (entry.keyword.isNotBlank()) {
+                                Text(
+                                    text = entry.keyword,
+                                    color = MiuixTheme.colorScheme.onBackground
+                                )
+                                if (entry.packageName.isNotBlank()) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    entryIcons[entry]?.let { bmp ->
+                                        Image(
+                                            bitmap = bmp,
+                                            contentDescription = "应用图标",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = entry.packageName,
+                                        color = MiuixTheme.colorScheme.onBackground
+                                    )
                                 }
-                            )
-                            IconButton(
-                                onClick = {
-                                    BackendLocalFilter.removePackageFilter(context, pkg)
-                                    packageFilterList = BackendLocalFilter.getPackageFilterList(context).toList()
-                                    enabledPackages = BackendLocalFilter.getEnabledPackageFilters(context)
+                            } else if (entry.packageName.isNotBlank()) {
+                                entryIcons[entry]?.let { bmp ->
+                                    Image(
+                                        bitmap = bmp,
+                                        contentDescription = "应用图标",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
                                 }
-                            ) {
-                                Text("删除", color = MiuixTheme.colorScheme.onBackground)
+                                Text(
+                                    text = entry.packageName,
+                                    color = MiuixTheme.colorScheme.onBackground
+                                )
                             }
+                        }
+                        Switch(
+                            checked = isEnabled,
+                            onCheckedChange = { enabled ->
+                                BackendLocalFilter.setFilterEntryEnabled(context, entry, enabled)
+                                enabledEntries = BackendLocalFilter.getEnabledFilterEntries(context)
+                            }
+                        )
+                        IconButton(
+                            onClick = {
+                                BackendLocalFilter.removeFilterEntry(context, entry.keyword, entry.packageName)
+                                allEntries = BackendLocalFilter.getFilterEntries(context).toList()
+                                enabledEntries = BackendLocalFilter.getEnabledFilterEntries(context)
+                            }
+                        ) {
+                            Text("删除", color = MiuixTheme.colorScheme.onBackground)
                         }
                     }
                 }
@@ -439,13 +441,21 @@ fun UILocalFilter(
     }
 
     // 应用选择弹窗
-    AppPickerDialog(
+        AppPickerDialog(
         visible = showAppPickerDialog,
         onDismiss = { showAppPickerDialog = false },
         onAppSelected = { packageName ->
-            BackendLocalFilter.addPackageFilter(context, packageName)
-            packageFilterList = BackendLocalFilter.getPackageFilterList(context).toList()
-            enabledPackages = BackendLocalFilter.getEnabledPackageFilters(context)
+            newPackage = packageName
+            // 先使用占位图，异步加载真实图标以避免阻塞主线程
+            newPackageIcon = defaultAppIconBitmap
+            coroutineScope.launch {
+                try {
+                    val bmp = com.xzyht.notifyrelay.core.repository.AppRepository.getAppIconAsync(context, packageName)
+                    newPackageIcon = bmp?.asImageBitmap() ?: defaultAppIconBitmap
+                } catch (_: Exception) {
+                    newPackageIcon = defaultAppIconBitmap
+                }
+            }
         },
         title = "选择要过滤的应用"
     )
