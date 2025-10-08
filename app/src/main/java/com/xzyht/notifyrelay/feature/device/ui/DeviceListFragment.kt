@@ -269,51 +269,17 @@ fun DeviceListScreen() {
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
-                        if (selectedDevice?.uuid == device.uuid) {
+                                        if (selectedDevice?.uuid == device.uuid) {
                             Spacer(Modifier.width(4.dp))
                             Button(
                                 onClick = {
                                     try {
-                                        // 停止心跳任务
-                                        val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
-                                        heartbeatJobsField.isAccessible = true
-                                        val rawHeartbeatJobs = heartbeatJobsField.get(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val heartbeatJobs = if (rawHeartbeatJobs is MutableMap<*, *>) rawHeartbeatJobs as MutableMap<String, *> else null
-                                        heartbeatJobs?.remove(device.uuid)
-
-                                        // 从心跳设备集合中移除
-                                        val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
-                                        heartbeatedDevicesField.isAccessible = true
-                                        val rawHeartbeatedDevices = heartbeatedDevicesField.get(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val heartbeatedDevices = if (rawHeartbeatedDevices is MutableSet<*>) rawHeartbeatedDevices as MutableSet<String> else mutableSetOf()
-                                        heartbeatedDevices.remove(device.uuid)
-
-                                        // 从认证设备表中移除
-                                        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                        field.isAccessible = true
-                                        val rawMap = field.get(deviceManager)
-                                        if (rawMap is MutableMap<*, *>) {
-                                            @Suppress("UNCHECKED_CAST")
-                                            val map = rawMap as MutableMap<String, *>
-                                            map.remove(device.uuid)
+                                        // 使用 DeviceConnectionManager 提供的安全 API 移除已认证设备
+                                        val removed = deviceManager.removeAuthenticatedDevice(device.uuid)
+                                        if (removed) {
+                                            // 更新本地 UI 用的已认证 uuid 集合
+                                            authedDeviceUuids = authedDeviceUuids - device.uuid
                                         }
-                                        val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                        saveMethod.isAccessible = true
-                                        saveMethod.invoke(deviceManager)
-                                        val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                                        updateMethod.isAccessible = true
-                                        updateMethod.invoke(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val map = if (rawMap is MutableMap<*, *>) rawMap as MutableMap<String, *> else null
-                                        authedDeviceUuids = map?.filter { entry: Map.Entry<String, *> ->
-                                            val v = entry.value
-                                            v?.let {
-                                                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                                isAcceptedField.getBoolean(v)
-                                            } ?: false
-                                        }?.keys?.toSet() ?: emptySet()
                                     } catch (_: Exception) {}
                                     selectedDevice = null
                                     GlobalSelectedDeviceHolder.selectedDevice = null

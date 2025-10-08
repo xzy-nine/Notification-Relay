@@ -179,6 +179,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 }
             }
         } catch (_: Exception) {}
+        // 认证设备加载完成后，更新设备列表状态，确保 listeners（例如通知服务）能及时感知认证状态
+        try {
+            coroutineScope.launch { updateDeviceList() }
+        } catch (_: Exception) {}
     }
 
     // 保存已认证设备
@@ -209,6 +213,11 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      * 新增：服务端握手请求回调，UI层应监听此回调并弹窗确认，参数为请求设备uuid/displayName/公钥，回调参数true=同意，false=拒绝
      */
     var onHandshakeRequest: ((DeviceInfo, String, (Boolean) -> Unit) -> Unit)? = null
+    /**
+     * 新增：设备列表变化回调，设备列表（认证/在线状态）发生改变时触发。
+     * UI 或服务可注册该回调以在设备数变化时立即刷新通知/界面。
+     */
+    var onDeviceListChanged: (() -> Unit)? = null
     /**
      * 设备发现/连接/数据发送/接收，全部本地实现。
      */
@@ -593,12 +602,18 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     private fun updateDeviceList() {
         val now = System.currentTimeMillis()
-        val authed = synchronized(authenticatedDevices) { authenticatedDevices.keys.toSet() }
+        if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "[updateDeviceList] invoked at $now")
+    val authSnapshot = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+    val authed = authSnapshot.keys.toSet()
         val allUuids = (deviceLastSeen.keys + authed).toSet()
         val newMap = mutableMapOf<String, Pair<DeviceInfo, Boolean>>()
         val unauthedTimeout = 5000L // 未认证设备保留两次UDP广播周期（2*2000ms）
         val authedHeartbeatTimeout = 12_000L // 已认证设备心跳超时阈值
         val oldMap = _devices.value
+        // 计算旧的已认证且在线数量快照
+        val oldAuthOnlineCount = try {
+            oldMap.count { (uuid, pair) -> pair.second && (authSnapshot[uuid]?.isAccepted == true) }
+        } catch (_: Exception) { 0 }
         for (uuid in allUuids) {
             val lastSeen = deviceLastSeen[uuid]
             val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
@@ -634,7 +649,26 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 }
             }
         }
-        _devices.value = newMap
+        // 仅在设备列表或在线状态发生实际变化时触发回调，避免频繁刷新
+        // 计算新的已认证且在线数量快照
+        val newAuthOnlineCount = try {
+            newMap.count { (uuid, pair) -> pair.second && (authSnapshot[uuid]?.isAccepted == true) }
+        } catch (_: Exception) { 0 }
+
+        // 仅在设备列表或认证在线数量发生实际变化时触发回调，避免频繁刷新
+        if (oldMap != newMap || oldAuthOnlineCount != newAuthOnlineCount) {
+            if (BuildConfig.DEBUG) {
+                try { android.util.Log.d("死神-NotifyRelay", "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount") } catch (_: Exception) {}
+            }
+            _devices.value = newMap
+            try {
+                onDeviceListChanged?.invoke()
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "onDeviceListChanged callback failed: ${e.message}")
+            }
+        } else {
+            _devices.value = newMap
+        }
     }
 
     private fun getDeviceInfo(uuid: String): DeviceInfo? {
@@ -756,6 +790,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         startHeartbeatToDevice(device.uuid, device.ip, device.port, remotePubKey, sharedSecret)
                         // 立即刷新lastSeen，保证认证后立刻在线
                         deviceLastSeen[device.uuid] = System.currentTimeMillis()
+                        // 认证成功后触发更新设备列表，确保 StateFlow _devices 立刻反映认证并在线的状态
+                        try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
                         // 自动反向connectToDevice本机，确保双向链路
                         if (device.uuid != this@DeviceConnectionManager.uuid) {
                             val myInfo = getDeviceInfo(this@DeviceConnectionManager.uuid)
@@ -1115,6 +1151,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                                         authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
                                                         saveAuthedDevices()
                                                     }
+                                                    // 被动接受握手后，立即更新设备列表，确保 StateFlow 反映已认证状态
+                                                    try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
                                                 } else {
                                                     synchronized(rejectedDevices) {
                                                         rejectedDevices.add(remoteUuid)
@@ -1420,6 +1458,61 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             }
         }
         return "192.168.43.1" // 默认值
+    }
+
+    /**
+     * 获取在线且已认证的设备数量（线程安全）。
+     * 该方法读取当前设备列表快照和认证表快照，只把同时在线并且认证通过（isAccepted==true）的设备计入。
+     */
+    fun getAuthenticatedOnlineCount(): Int {
+        try {
+            val devsSnapshot = devices.value
+            val authSnapshot = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+            return devsSnapshot.count { (uuid, pair) ->
+                val isOnline = pair.second
+                isOnline && (authSnapshot[uuid]?.isAccepted == true)
+            }
+        } catch (_: Exception) {
+            return 0
+        }
+    }
+
+    /**
+     * 公开API：移除已认证设备（线程安全）。
+     * - 取消与该设备相关的心跳任务
+     * - 从已认证表中移除并持久化
+     * - 触发 updateDeviceList() 以通知观察者
+     * 返回 true 表示存在并已移除，false 表示没有该uuid
+     */
+    fun removeAuthenticatedDevice(uuid: String): Boolean {
+        try {
+            var existed = false
+            // 取消心跳任务
+            try {
+                heartbeatJobs[uuid]?.cancel()
+                heartbeatJobs.remove(uuid)
+            } catch (_: Exception) {}
+            // 从已建立心跳集合移除
+            try { heartbeatedDevices.remove(uuid) } catch (_: Exception) {}
+
+            synchronized(authenticatedDevices) {
+                if (authenticatedDevices.containsKey(uuid)) {
+                    authenticatedDevices.remove(uuid)
+                    existed = true
+                    try { saveAuthedDevices() } catch (_: Exception) {}
+                }
+            }
+
+            // 清理 deviceLastSeen
+            try { deviceLastSeen.remove(uuid) } catch (_: Exception) {}
+
+            // 触发更新，确保 StateFlow 与回调被通知
+            try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
+            return existed
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "removeAuthenticatedDevice failed: ${e.message}")
+            return false
+        }
     }
 
     // 设置加密类型（可通过UI调用）

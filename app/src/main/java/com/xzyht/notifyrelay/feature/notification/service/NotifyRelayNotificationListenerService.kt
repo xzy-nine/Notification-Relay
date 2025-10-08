@@ -70,6 +70,21 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
         connectionManager.startDiscovery()
 
+        // 注册设备列表变化回调：立即刷新持久化通知（确保在主线程更新UI/通知）
+        try {
+            if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "注册 onDeviceListChanged 回调到 connectionManager=$connectionManager")
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            connectionManager.onDeviceListChanged = {
+                try {
+                    mainHandler.post {
+                        try { updateNotification() } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "注册 onDeviceListChanged 失败: ${e.message}")
+        }
+
         // 监听设备状态变化，更新通知
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
             connectionManager.devices.collect { deviceMap ->
@@ -274,6 +289,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         try {
             if (this::connectionManager.isInitialized) {
                 connectionManager.stopAll()
+                // 注销设备列表变化回调
+                try {
+                    if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")
+                    connectionManager.onDeviceListChanged = null
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w("黑影 NotifyRelay", "注销 onDeviceListChanged 失败: ${e.message}")
+                }
             }
         } catch (_: Exception) {}
         // 注销网络监听器
@@ -305,8 +327,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun getNotificationText(): String {
-        // 获取在线设备数量
-        val onlineDevices = connectionManager.devices.value.values.count { it.second }
+        // 使用 DeviceConnectionManager 提供的线程安全方法获取在线且已认证的设备数量
+        val onlineDevices = try { connectionManager.getAuthenticatedOnlineCount() } catch (_: Exception) { 0 }
+        if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "getNotificationText: authenticatedOnlineCount=$onlineDevices")
 
         // 优先显示设备连接数，如果有设备连接
         if (onlineDevices > 0) {
@@ -330,6 +353,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun updateNotification() {
+        if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "updateNotification called")
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         // 根据是否有转发条件决定标题
         val canForward = getNotificationText().let { text ->
@@ -344,6 +368,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
         manager.notify(NOTIFY_ID, notification)
+        if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "notify posted: id=$NOTIFY_ID, text=${getNotificationText()}")
     }
 
     // 保留通知历史，不做移除处理
