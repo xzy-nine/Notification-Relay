@@ -13,6 +13,11 @@ android {
     defaultConfig {
         minSdk = 26
     }
+    buildFeatures {
+        // Ensure buildConfig is explicitly enabled to avoid relying on deprecated
+        // global defaults and suppress the deprecation warning.
+        buildConfig = true
+    }
 }
 
 java {
