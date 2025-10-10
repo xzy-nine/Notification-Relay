@@ -26,7 +26,12 @@ object IconCacheManager {
     private lateinit var cacheDir: File
 
     /**
-     * 初始化缓存管理器
+     * 初始化缓存管理器。
+     *
+     * @param context 应用上下文，用于获取缓存目录（Context.cacheDir）。
+     *
+     * 该方法会在应用的缓存目录下创建一个用于存放应用图标的子目录。
+     * 仅在 Debug 模式下打印初始化路径的日志。
      */
     fun init(context: Context) {
         cacheDir = File(context.cacheDir, CACHE_DIR).apply {
@@ -34,11 +39,16 @@ object IconCacheManager {
                 mkdirs()
             }
         }
-        if (BuildConfig.DEBUG) Log.d(TAG, "Icon cache initialized at: ${cacheDir.absolutePath}")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "图标缓存已初始化，路径: ${cacheDir.absolutePath}")
+        }
     }
 
     /**
-     * 获取缓存文件路径
+     * 获取给定包名对应的缓存文件对象。
+     *
+     * @param packageName 应用包名（用于生成缓存文件名）。
+     * @return 对应的缓存文件（File），以包名的 MD5 哈希作为文件名，后缀为 .png。
      */
     private fun getCacheFile(packageName: String): File {
         val hash = packageName.md5()
@@ -46,14 +56,23 @@ object IconCacheManager {
     }
 
     /**
-     * 获取缓存元数据文件
+     * 获取用于保存元数据的文件对象。
+     *
+     * @return 元数据文件（File），文件名为 cache_metadata.txt。
      */
     private fun getMetadataFile(): File {
         return File(cacheDir, "cache_metadata.txt")
     }
 
     /**
-     * 保存图标到缓存
+     * 将图标 Bitmap 保存到缓存。
+     *
+     * @param packageName 应用包名（用于关联缓存条目）。
+     * @param bitmap 要保存的图标 Bitmap 对象。
+     * @return 保存成功返回 true，失败返回 false。
+     *
+     * 该方法在 IO 线程（Dispatchers.IO）执行：会把 Bitmap 压缩为 PNG 并写入文件，
+     * 然后更新对应的元数据（最近访问/保存时间），并触发过期及大小检查清理。
      */
     suspend fun saveIcon(packageName: String, bitmap: Bitmap): Boolean {
         return withContext(Dispatchers.IO) {
@@ -72,17 +91,27 @@ object IconCacheManager {
                 // 检查并清理过期缓存
                 cleanupExpiredCacheInternal()
 
-                if (BuildConfig.DEBUG) Log.d(TAG, "Icon saved to cache: $packageName")
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "图标已缓存: $packageName")
+                }
                 true
             } catch (e: IOException) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to save icon: $packageName", e)
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "保存图标失败: $packageName", e)
+                }
                 false
             }
         }
     }
 
     /**
-     * 从缓存加载图标
+     * 从缓存加载图标。
+     *
+     * @param packageName 应用包名（用于定位缓存文件）。
+     * @return 若缓存存在且未过期则返回 Bitmap，否则返回 null。
+     *
+     * 该方法在 IO 线程（Dispatchers.IO）执行：会检测文件是否存在与是否过期，
+     * 若存在则解码 Bitmap 并更新访问时间戳。
      */
     suspend fun loadIcon(packageName: String): Bitmap? {
         return withContext(Dispatchers.IO) {
@@ -96,6 +125,9 @@ object IconCacheManager {
                 if (isCacheExpired(packageName)) {
                     cacheFile.delete()
                     removeMetadata(packageName)
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "缓存已过期并已删除: $packageName")
+                    }
                     return@withContext null
                 }
 
@@ -104,18 +136,25 @@ object IconCacheManager {
                 if (bitmap != null) {
                     // 更新访问时间
                     updateMetadata(packageName, System.currentTimeMillis())
-                    if (BuildConfig.DEBUG) Log.d(TAG, "Icon loaded from cache: $packageName")
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "从缓存加载图标: $packageName")
+                    }
                 }
                 bitmap
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load icon: $packageName", e)
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "加载图标失败: $packageName", e)
+                }
                 null
             }
         }
     }
 
     /**
-     * 检查图标是否存在于缓存中
+     * 检查指定包名的图标是否存在于缓存且未过期。
+     *
+     * @param packageName 应用包名。
+     * @return 若存在且未过期返回 true，否则返回 false。
      */
     fun hasIcon(packageName: String): Boolean {
         val cacheFile = getCacheFile(packageName)
@@ -123,7 +162,10 @@ object IconCacheManager {
     }
 
     /**
-     * 删除缓存的图标
+     * 删除指定包名的缓存图标。
+     *
+     * @param packageName 应用包名。
+     * @return 删除成功返回 true，否则返回 false。
      */
     suspend fun removeIcon(packageName: String): Boolean {
         return withContext(Dispatchers.IO) {
@@ -132,18 +174,24 @@ object IconCacheManager {
                 val deleted = cacheFile.delete()
                 if (deleted) {
                     removeMetadata(packageName)
-                    if (BuildConfig.DEBUG) Log.d(TAG, "Icon removed from cache: $packageName")
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "已从缓存移除图标: $packageName")
+                    }
                 }
                 deleted
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to remove icon: $packageName", e)
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "移除图标失败: $packageName", e)
+                }
                 false
             }
         }
     }
 
     /**
-     * 清空所有缓存
+     * 清空所有图标缓存。
+     *
+     * @return 若所有文件均成功删除返回 true，若有文件删除失败则返回 false。
      */
     suspend fun clearAllCache(): Boolean {
         return withContext(Dispatchers.IO) {
@@ -155,39 +203,47 @@ object IconCacheManager {
                     }
                 }
                 if (success && BuildConfig.DEBUG) {
-                    Log.d(TAG, "All icon cache cleared")
+                    Log.d(TAG, "已清空所有图标缓存")
                 }
                 success
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to clear cache", e)
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "清空缓存失败", e)
+                }
                 false
             }
         }
     }
 
     /**
-     * 获取缓存大小（字节）
+     * 获取缓存总大小（字节）。
+     *
+     * @return 缓存目录下所有文件的总字节数（Long）。
      */
     fun getCacheSize(): Long {
         return cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
     }
 
     /**
-     * 获取缓存大小（MB）
+     * 获取缓存总大小（MB）。
+     *
+     * @return 缓存目录大小，单位为 MB（Double）。
      */
     fun getCacheSizeMB(): Double {
         return getCacheSize() / (1024.0 * 1024.0)
     }
 
     /**
-     * 清理过期缓存（公共方法）
+     * 公共接口：触发一次过期缓存清理。
      */
     suspend fun cleanupExpiredCache() {
         cleanupExpiredCacheInternal()
     }
 
     /**
-     * 清理过期缓存（内部方法）
+     * 内部实现：清理超过年龄限制的缓存，并在总大小超出限制时按最旧先清理。
+     *
+     * 该方法在 IO 线程执行。
      */
     private suspend fun cleanupExpiredCacheInternal() {
         withContext(Dispatchers.IO) {
@@ -210,19 +266,21 @@ object IconCacheManager {
                 saveMetadata(updatedMetadata)
 
                 if (BuildConfig.DEBUG && expiredPackages.isNotEmpty()) {
-                    Log.d(TAG, "Cleaned up ${expiredPackages.size} expired cache entries")
+                    Log.d(TAG, "已清理 ${expiredPackages.size} 个过期缓存条目")
                 }
 
                 // 检查总缓存大小，如果超过限制，清理最旧的文件
                 cleanupBySize()
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "Failed to cleanup expired cache", e)
+                if (BuildConfig.DEBUG) {
+                    Log.e(TAG, "清理过期缓存失败", e)
+                }
             }
         }
     }
 
     /**
-     * 根据大小清理缓存
+     * 根据总大小清理缓存，直到总大小低于限制（按文件最后修改时间，从最旧开始删除）。
      */
     private fun cleanupBySize() {
         try {
@@ -245,15 +303,20 @@ object IconCacheManager {
             }
 
             if (BuildConfig.DEBUG && totalSize <= maxSizeBytes) {
-                Log.d(TAG, "Cache size cleaned up to ${getCacheSizeMB()}MB")
+                Log.d(TAG, "缓存大小已清理至 ${getCacheSizeMB()} MB")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to cleanup cache by size", e)
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "按大小清理缓存失败", e)
+            }
         }
     }
 
     /**
-     * 检查缓存是否过期
+     * 检查指定包名的缓存是否已过期。
+     *
+     * @param packageName 应用包名。
+     * @return 若元数据中未找到时间戳或已超过最大允许年龄则返回 true，表示已过期。
      */
     private fun isCacheExpired(packageName: String): Boolean {
         val metadata = loadMetadata()
@@ -263,7 +326,10 @@ object IconCacheManager {
     }
 
     /**
-     * 更新元数据
+     * 更新单个包名的元数据（时间戳）。
+     *
+     * @param packageName 应用包名。
+     * @param timestamp 时间戳（毫秒），通常使用 System.currentTimeMillis()。
      */
     private fun updateMetadata(packageName: String, timestamp: Long) {
         val metadata = loadMetadata().toMutableMap()
@@ -272,7 +338,9 @@ object IconCacheManager {
     }
 
     /**
-     * 移除元数据
+     * 从元数据中移除指定包名的记录。
+     *
+     * @param packageName 应用包名。
      */
     private fun removeMetadata(packageName: String) {
         val metadata = loadMetadata().toMutableMap()
@@ -281,7 +349,12 @@ object IconCacheManager {
     }
 
     /**
-     * 加载元数据
+     * 读取并解析元数据文件，返回包名到时间戳的映射。
+     *
+     * 元数据文件格式为每行一条记录："<packageName>:<timestamp>"。
+     * 若文件不存在或解析出错则返回空映射。
+     *
+     * @return Map<String, Long> 包名 -> 时间戳（毫秒）。
      */
     private fun loadMetadata(): Map<String, Long> {
         val metadataFile = getMetadataFile()
@@ -302,13 +375,17 @@ object IconCacheManager {
                 }
                 .toMap()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to load metadata", e)
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "读取元数据失败", e)
+            }
             emptyMap()
         }
     }
 
     /**
-     * 保存元数据
+     * 将元数据写入到磁盘（覆盖写入）。
+     *
+     * @param metadata 包名 -> 时间戳 的映射，将被序列化为每行一条记录的文本文件。
      */
     private fun saveMetadata(metadata: Map<String, Long>) {
         try {
@@ -317,12 +394,16 @@ object IconCacheManager {
                 metadata.entries.joinToString("\n") { "${it.key}:${it.value}" }
             )
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "Failed to save metadata", e)
+            if (BuildConfig.DEBUG) {
+                Log.e(TAG, "保存元数据失败", e)
+            }
         }
     }
 
     /**
-     * 获取缓存统计信息
+     * 获取缓存统计信息：文件数、总字节数、总 MB、过期条目数、缓存目录路径。
+     *
+     * @return CacheStats 包含统计数据的不可变数据类。
      */
     fun getCacheStats(): CacheStats {
         val metadata = loadMetadata()
@@ -343,7 +424,10 @@ object IconCacheManager {
     }
 
     /**
-     * 字符串的MD5哈希
+     * 计算字符串的 MD5 哈希值（小写十六进制表示）。
+     *
+     * @receiver 要进行哈希的字符串。
+     * @return 哈希字符串（小写十六进制）。
      */
     private fun String.md5(): String {
         val md = MessageDigest.getInstance("MD5")
@@ -352,7 +436,13 @@ object IconCacheManager {
     }
 
     /**
-     * 缓存统计信息
+     * 缓存统计信息数据类。
+     *
+     * @param totalFiles 缓存中图标文件的数量（不包括元数据文件）。
+     * @param totalSizeBytes 缓存总大小（字节）。
+     * @param totalSizeMB 缓存总大小（MB）。
+     * @param expiredCount 元数据中标记为过期的条目数量。
+     * @param cacheDir 缓存目录的绝对路径。
      */
     data class CacheStats(
         val totalFiles: Int,

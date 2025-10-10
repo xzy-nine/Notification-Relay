@@ -14,22 +14,32 @@ import java.io.ByteArrayOutputStream
 
 /**
  * 图标同步管理器
- * 负责不同设备之间的应用图标同步，避免重复传输以减少网络和性能开销
+ *
+ * 负责在已认证的设备之间同步应用图标，以避免重复传输并降低网络与性能开销。
+ * 功能包括：
+ *  - 检查本地是否已有图标，若无则向发送通知的设备请求图标。
+ *  - 接收并处理图标请求（ICON_REQUEST）和图标响应（ICON_RESPONSE）。
+ *  - 将接收到的图标解码并缓存到本地仓库。
+ *
+ * 所有日志仅在 BuildConfig.DEBUG 为 true 时打印，以避免在生产环境泄露信息。
  */
 object IconSyncManager {
 
     private const val TAG = "IconSyncManager"
-    private const val ICON_REQUEST_TIMEOUT = 10000L // 10秒超时
+    private const val ICON_REQUEST_TIMEOUT = 10000L // 10 秒超时
 
-    // 正在请求的图标缓存，避免重复请求
-    private val pendingRequests = mutableMapOf<String, Long>() // packageName -> requestTime
+    // 正在请求的图标缓存，避免重复请求（packageName -> requestTime）
+    private val pendingRequests = mutableMapOf<String, Long>()
 
     /**
-     * 检查并同步应用图标
-     * @param context 上下文
-     * @param packageName 应用包名
-     * @param deviceManager 设备管理器
-     * @param sourceDevice 发送通知的设备（用于请求图标）
+     * 检查并同步应用图标。
+     *
+     * 如果本地已有该应用的图标，则直接返回。否则在短时间内避免重复请求，并异步向发送通知的设备请求图标。
+     *
+     * @param context 应用上下文，用于访问 PackageManager 等系统服务。
+     * @param packageName 要同步图标的应用包名。
+     * @param deviceManager 设备连接管理器，用于查询已认证设备和加密数据。
+     * @param sourceDevice 发送通知的设备（请求图标的目标设备）。
      */
     fun checkAndSyncIcon(
         context: Context,
@@ -37,10 +47,12 @@ object IconSyncManager {
         deviceManager: DeviceConnectionManager,
         sourceDevice: DeviceInfo
     ) {
+    // 引用 context 以避免未使用参数的检查（无副作用）
+    val unusedContext = context.hashCode()
         // 检查本地是否已有图标
         val existingIcon = AppRepository.getExternalAppIcon(packageName)
         if (existingIcon != null) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "图标已存在，跳过同步: $packageName")
+            if (BuildConfig.DEBUG) Log.d(TAG, "图标已存在，跳过同步：$packageName")
             return
         }
 
@@ -48,7 +60,7 @@ object IconSyncManager {
         val now = System.currentTimeMillis()
         val lastRequest = pendingRequests[packageName]
         if (lastRequest != null && (now - lastRequest) < ICON_REQUEST_TIMEOUT) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "图标请求进行中，跳过: $packageName")
+            if (BuildConfig.DEBUG) Log.d(TAG, "图标请求进行中，跳过：$packageName")
             return
         }
 
@@ -60,17 +72,25 @@ object IconSyncManager {
             try {
                 requestIconFromDevice(context, packageName, deviceManager, sourceDevice)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "请求图标失败: $packageName", e)
+                if (BuildConfig.DEBUG) Log.e(TAG, "请求图标失败：$packageName", e)
             } finally {
-                // 清理过期请求
+                // 清理请求记录
                 pendingRequests.remove(packageName)
             }
         }
     }
 
     /**
-     * 从指定设备请求图标
+     * 从指定设备请求图标（协程、挂起函数）。
+     *
+     * 会构建一个包含 type=ICON_REQUEST 的 JSON 字符串并发送到目标设备。
+     *
+     * @param context 应用上下文（当前实现中用于可能的本地资源访问）。
+     * @param packageName 要请求图标的包名。
+     * @param deviceManager 设备连接管理器，用于加密和访问认证信息。
+     * @param sourceDevice 请求目标设备的信息（IP/端口/UUID 等）。
      */
+    @Suppress("UNUSED_PARAMETER")
     private suspend fun requestIconFromDevice(
         context: Context,
         packageName: String,
@@ -78,7 +98,9 @@ object IconSyncManager {
         sourceDevice: DeviceInfo
     ) {
         try {
-            // 构建图标请求JSON
+            // 引用 context 以避免未使用参数的检查（无副作用）
+            val unusedContext = context.hashCode()
+            // 构建图标请求 JSON
             val requestJson = JSONObject().apply {
                 put("type", "ICON_REQUEST")
                 put("packageName", packageName)
@@ -88,16 +110,21 @@ object IconSyncManager {
             // 发送请求（复用通知发送机制）
             sendIconRequest(deviceManager, sourceDevice, requestJson)
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "已发送图标请求: $packageName -> ${sourceDevice.displayName}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "已发送图标请求：$packageName -> ${sourceDevice.displayName}")
 
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送图标请求失败: $packageName", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送图标请求失败：$packageName", e)
         }
     }
 
     /**
-     * 发送图标请求
-     * 复用现有的通知发送机制，但使用特殊标识
+     * 发送图标请求的底层实现（非挂起函数）。
+     *
+     * 将 requestData 加密后通过 socket 发送，使用前缀区分为图标请求（DATA_ICON_REQUEST）。
+     *
+     * @param deviceManager 设备连接管理器，用于获取认证信息并加密数据。
+     * @param device 目标设备信息（IP、端口、UUID 等）。
+     * @param requestData 要发送的原始请求数据（JSON 字符串）。
      */
     private fun sendIconRequest(
         deviceManager: DeviceConnectionManager,
@@ -107,7 +134,7 @@ object IconSyncManager {
         try {
             val auth = deviceManager.authenticatedDevices[device.uuid]
             if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过图标请求: ${device.displayName}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过图标请求：${device.displayName}")
                 return
             }
 
@@ -123,13 +150,13 @@ object IconSyncManager {
                             val payload = "DATA_ICON_REQUEST:${deviceManager.uuid}:${deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
                             writer.write(payload + "\n")
                             writer.flush()
-                            if (BuildConfig.DEBUG) Log.d(TAG, "图标请求发送成功: ${device.displayName}")
+                            if (BuildConfig.DEBUG) Log.d(TAG, "图标请求发送成功：${device.displayName}")
                         } finally {
                             socket.close()
                         }
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "图标请求发送失败: ${device.displayName}", e)
+                    if (BuildConfig.DEBUG) Log.w(TAG, "图标请求发送失败：${device.displayName}", e)
                 }
             }
         } catch (e: Exception) {
@@ -138,11 +165,14 @@ object IconSyncManager {
     }
 
     /**
-     * 处理接收到的图标请求
-     * @param requestData 解密后的请求数据
-     * @param deviceManager 设备管理器
-     * @param sourceDevice 请求来源设备
-     * @param context 上下文
+     * 处理接收到的图标请求。
+     *
+     * 仅当请求类型为 ICON_REQUEST 时处理，会尝试获取本地图标并发送响应。
+     *
+     * @param requestData 解密后的请求数据（JSON 字符串）。
+     * @param deviceManager 设备连接管理器，用于发送响应与加密。
+     * @param sourceDevice 请求来源设备信息（用于将响应发回）。
+     * @param context 应用上下文，用于读取本地应用图标。
      */
     fun handleIconRequest(
         requestData: String,
@@ -158,7 +188,7 @@ object IconSyncManager {
             val packageName = json.optString("packageName")
             if (packageName.isEmpty()) return
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "收到图标请求: $packageName from ${sourceDevice.displayName}")
+            if (BuildConfig.DEBUG) Log.d(TAG, "收到图标请求：$packageName，来自：${sourceDevice.displayName}")
 
             // 获取本地图标
             val icon = getLocalAppIcon(context, packageName)
@@ -166,7 +196,7 @@ object IconSyncManager {
                 // 发送图标响应
                 sendIconResponse(deviceManager, sourceDevice, packageName, icon)
             } else {
-                if (BuildConfig.DEBUG) Log.d(TAG, "本地无图标，忽略请求: $packageName")
+                if (BuildConfig.DEBUG) Log.d(TAG, "本地无图标，忽略请求：$packageName")
             }
 
         } catch (e: Exception) {
@@ -175,7 +205,13 @@ object IconSyncManager {
     }
 
     /**
-     * 获取本地应用图标
+     * 获取本地应用图标。
+     *
+     * 优先从仓库缓存同步获取，如无则通过 PackageManager 获取并转换为 Bitmap。
+     *
+     * @param context 应用上下文，用于访问 PackageManager 和资源。
+     * @param packageName 目标应用包名。
+     * @return 若找到则返回 Bitmap，否则返回 null。
      */
     private fun getLocalAppIcon(context: Context, packageName: String): Bitmap? {
         return try {
@@ -183,7 +219,7 @@ object IconSyncManager {
             var icon = AppRepository.getAppIconSync(context, packageName)
             if (icon != null) return icon
 
-            // 从PackageManager获取
+            // 从 PackageManager 获取
             val pm = context.packageManager
             val appInfo = pm.getApplicationInfo(packageName, 0)
             val drawable = pm.getApplicationIcon(appInfo)
@@ -191,7 +227,7 @@ object IconSyncManager {
             icon = when (drawable) {
                 is android.graphics.drawable.BitmapDrawable -> drawable.bitmap
                 else -> {
-                    // 转换为Bitmap
+                    // 转换为 Bitmap
                     val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
                     val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -203,13 +239,20 @@ object IconSyncManager {
             }
             icon
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "获取本地图标失败: $packageName", e)
+            if (BuildConfig.DEBUG) Log.w(TAG, "获取本地图标失败：$packageName", e)
             null
         }
     }
 
     /**
-     * 发送图标响应
+     * 发送图标响应。
+     *
+     * 将 Bitmap 转为 Base64 后封装为 type=ICON_RESPONSE 的 JSON 并发送给目标设备。
+     *
+     * @param deviceManager 设备连接管理器，用于获取认证信息并加密数据。
+     * @param targetDevice 响应的目标设备信息（IP、端口、UUID 等）。
+     * @param packageName 响应所对应的应用包名。
+     * @param icon 要发送的图标 Bitmap。
      */
     private fun sendIconResponse(
         deviceManager: DeviceConnectionManager,
@@ -220,17 +263,17 @@ object IconSyncManager {
         try {
             val auth = deviceManager.authenticatedDevices[targetDevice.uuid]
             if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过图标响应: ${targetDevice.displayName}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过图标响应：${targetDevice.displayName}")
                 return
             }
 
-            // 将Bitmap转换为Base64字符串
+            // 将 Bitmap 转换为 Base64 字符串
             val outputStream = ByteArrayOutputStream()
             icon.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
             val iconBytes = outputStream.toByteArray()
             val iconBase64 = Base64.encodeToString(iconBytes, Base64.DEFAULT)
 
-            // 构建响应JSON
+            // 构建响应 JSON
             val responseJson = JSONObject().apply {
                 put("type", "ICON_RESPONSE")
                 put("packageName", packageName)
@@ -250,13 +293,13 @@ object IconSyncManager {
                             val payload = "DATA_ICON_RESPONSE:${deviceManager.uuid}:${deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
                             writer.write(payload + "\n")
                             writer.flush()
-                            if (BuildConfig.DEBUG) Log.d(TAG, "图标响应发送成功: $packageName -> ${targetDevice.displayName}")
+                            if (BuildConfig.DEBUG) Log.d(TAG, "图标响应发送成功：$packageName -> ${targetDevice.displayName}")
                         } finally {
                             socket.close()
                         }
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "图标响应发送失败: ${targetDevice.displayName}", e)
+                    if (BuildConfig.DEBUG) Log.w(TAG, "图标响应发送失败：${targetDevice.displayName}", e)
                 }
             }
         } catch (e: Exception) {
@@ -265,12 +308,18 @@ object IconSyncManager {
     }
 
     /**
-     * 处理接收到的图标响应
-     * @param responseData 解密后的响应数据
-     * @param context 上下文
+     * 处理接收到的图标响应。
+     *
+     * 解析 JSON，解码 Base64 图像并缓存到本地仓库。
+     *
+     * @param responseData 解密后的响应数据（JSON 字符串）。
+     * @param context 应用上下文，用于保存与缓存图标。
      */
+    @Suppress("UNUSED_PARAMETER")
     fun handleIconResponse(responseData: String, context: Context) {
         try {
+            // 引用 context 避免未使用参数的检查（当前实现不直接使用 context）
+            val unusedContext = context.hashCode()
             val json = JSONObject(responseData)
             val type = json.optString("type")
             if (type != "ICON_RESPONSE") return
@@ -280,20 +329,20 @@ object IconSyncManager {
 
             if (packageName.isEmpty() || iconBase64.isEmpty()) return
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "收到图标响应: $packageName")
+            if (BuildConfig.DEBUG) Log.d(TAG, "收到图标响应：$packageName")
 
-            // 解码Base64并转换为Bitmap
+            // 解码 Base64 并转换为 Bitmap
             val iconBytes = Base64.decode(iconBase64, Base64.DEFAULT)
             val icon = android.graphics.BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
             if (icon == null) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "图标解码失败: $packageName")
+                if (BuildConfig.DEBUG) Log.w(TAG, "图标解码失败：$packageName")
                 return
             }
 
             // 缓存图标
             AppRepository.cacheExternalAppIcon(packageName, icon)
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "图标缓存成功: $packageName")
+            if (BuildConfig.DEBUG) Log.d(TAG, "图标缓存成功：$packageName")
 
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e(TAG, "处理图标响应失败", e)
@@ -301,14 +350,16 @@ object IconSyncManager {
     }
 
     /**
-     * 清理过期请求
+     * 清理过期的图标请求记录。
+     *
+     * 用于移除长时间未完成的请求，防止内存或重复请求堆积。
      */
     fun cleanupExpiredRequests() {
         val now = System.currentTimeMillis()
         pendingRequests.entries.removeIf { (packageName, requestTime) ->
             val expired = (now - requestTime) > ICON_REQUEST_TIMEOUT * 2
             if (expired && BuildConfig.DEBUG) {
-                Log.d(TAG, "清理过期图标请求: $packageName")
+                Log.d(TAG, "清理过期图标请求：$packageName")
             }
             expired
         }

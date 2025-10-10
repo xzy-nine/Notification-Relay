@@ -12,8 +12,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * 应用数据仓库
- * 封装应用列表的缓存、搜索过滤、数据更新逻辑
+ * 应用数据仓库。
+ *
+ * 封装了应用列表和应用图标的内存缓存与持久化缓存操作，提供加载、过滤、查询、缓存管理等功能。
+ * 所有对外提供的方法均设计为在主进程/UI 线程或协程中安全使用（按方法注释中的说明）。
+ *
+ * 功能概览：
+ * - 加载已安装的应用列表并按应用名称排序
+ * - 加载并缓存应用图标（内存 + 持久化）
+ * - 提供同步/异步的图标与包名查询方法
+ * - 清理和统计缓存
  */
 object AppRepository {
     private const val TAG = "AppRepository"
@@ -34,7 +42,14 @@ object AppRepository {
     val apps: StateFlow<List<ApplicationInfo>> = _apps.asStateFlow()
 
     /**
-     * 加载应用列表
+     * 加载应用列表并缓存。
+     *
+     * 说明：该方法为挂起函数，会从 PackageManager 读取已安装应用信息并按应用标签排序，
+     *       同时初始化图标缓存管理器并异步触发图标加载（内部会调用 [loadAppIcons]）。
+     *
+     * @param context Android 上下文，用于访问 PackageManager 和持久化缓存（非空）。
+     * @return 无（在成功或失败后会更新内部状态流 `_apps` 与 `_isLoading`）。
+     * @throws Exception 当 PackageManager 访问或缓存初始化发生严重错误时向上抛出（调用方可选择捕获）。
      */
     suspend fun loadApps(context: Context) {
         if (isLoaded && cachedApps != null) {
@@ -77,7 +92,12 @@ object AppRepository {
     }
 
     /**
-     * 获取过滤后的应用列表
+     * 获取过滤后的应用列表。
+     *
+     * @param query 搜索关键字；若为空或仅空白字符则返回所有满足条件的应用。
+     * @param showSystemApps 是否展示系统应用（true 包含系统应用，false 仅显示用户安装的应用）。
+     * @param context Android 上下文，用于获取应用标签进行匹配（非空）。
+     * @return 符合查询与系统/用户筛选条件的应用列表（不可为 null，可能为空）。
      */
     fun getFilteredApps(
         query: String,
@@ -85,7 +105,7 @@ object AppRepository {
         context: Context
     ): List<ApplicationInfo> {
         val allApps = _apps.value
-        if (allApps.isEmpty()) return emptyList()
+    if (allApps.isEmpty()) return emptyList()
 
         // 区分用户应用和系统应用
         val userApps = allApps.filter { app ->
@@ -100,20 +120,22 @@ object AppRepository {
 
         // 搜索过滤
         return displayApps.filter { app ->
-            try {
-                val label = context.packageManager.getApplicationLabel(app).toString()
-                val matchesLabel = label.contains(query, ignoreCase = true)
-                val matchesPackage = app.packageName.contains(query, ignoreCase = true)
-                matchesLabel || matchesPackage
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
-                app.packageName.contains(query, ignoreCase = true)
-            }
+                try {
+                    val label = context.packageManager.getApplicationLabel(app).toString()
+                    val matchesLabel = label.contains(query, ignoreCase = true)
+                    val matchesPackage = app.packageName.contains(query, ignoreCase = true)
+                    matchesLabel || matchesPackage
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
+                    app.packageName.contains(query, ignoreCase = true)
+                }
         }
     }
 
     /**
-     * 清除缓存
+     * 清除所有缓存（内存缓存与持久化缓存）。
+     *
+     * 说明：该方法会清空内存中的应用与图标缓存，并同步清理持久化的图标缓存（通过 [IconCacheManager.clearAllCache]）。
      */
     fun clearCache() {
         cachedApps = null
@@ -131,26 +153,38 @@ object AppRepository {
     }
 
     /**
-     * 检查是否已加载
+     * 检查应用数据（应用列表）是否已加载。
+     *
+     * @return 如果已加载返回 true，否则返回 false。
      */
     fun isDataLoaded(): Boolean = isLoaded
 
     /**
-     * 获取应用标签
+     * 获取指定包名的应用标签（显示名）。
+     *
+     * @param context Android 上下文，用于访问 PackageManager（非空）。
+     * @param packageName 目标应用的包名（非空）。
+     * @return 应用的标签字符串；若无法获取则返回包名或空字符串，具体由 [AppListHelper.getApplicationLabel] 决定。
      */
     fun getAppLabel(context: Context, packageName: String): String {
         return AppListHelper.getApplicationLabel(context, packageName)
     }
 
     /**
-     * 获取已安装应用包名集合
+     * 获取已缓存的已安装应用包名集合（同步返回）。
+     *
+     * @param context Android 上下文（未使用，仅为 API 对称性保留）。
+     * @return 当前缓存的已安装应用包名集合，若尚未加载返回空集合。
      */
     fun getInstalledPackageNames(context: Context): Set<String> {
         return cachedApps?.map { it.packageName }?.toSet() ?: emptySet()
     }
 
     /**
-     * 异步获取已安装应用包名集合（确保数据已加载）
+     * 异步获取已安装应用包名集合（确保在返回前数据已加载）。
+     *
+     * @param context Android 上下文，用于在必要时调用 [loadApps] 加载数据。
+     * @return 已安装应用的包名集合（非空）。
      */
     suspend fun getInstalledPackageNamesAsync(context: Context): Set<String> {
         if (!isLoaded) {
@@ -160,7 +194,12 @@ object AppRepository {
     }
 
     /**
-     * 同步获取已安装应用包名集合（如果未加载则同步加载）
+     * 同步获取已安装应用包名集合。如果尚未加载，则会在当前线程同步加载数据（阻塞）。
+     *
+     * 注意：该方法会在必要时使用 runBlocking 在当前线程执行加载，请谨慎在 UI 线程中使用以避免卡顿。
+     *
+     * @param context Android 上下文，用于调用 [loadApps]。
+     * @return 已安装应用的包名集合（非空）。
      */
     fun getInstalledPackageNamesSync(context: Context): Set<String> {
         if (!isLoaded || cachedApps == null) {
@@ -173,7 +212,13 @@ object AppRepository {
     }
 
     /**
-     * 加载应用图标
+     * 加载并缓存应用图标（内存 + 持久化）。
+     *
+     * 说明：该方法为挂起函数，会尝试优先从持久化缓存加载图标，若不存在则从 PackageManager 获取并转换为 Bitmap，
+     *       最后保存到持久化缓存以便下次读取加速。
+     *
+     * @param context Android 上下文，用于访问 PackageManager 与持久化缓存（非空）。
+     * @param apps 需要加载图标的应用列表（非空，可为空列表）。
      */
     private suspend fun loadAppIcons(context: Context, apps: List<ApplicationInfo>) {
         if (iconsLoaded) {
@@ -181,8 +226,8 @@ object AppRepository {
             return
         }
 
-        try {
-            if (BuildConfig.DEBUG) Log.d(TAG, "开始加载应用图标")
+            try {
+                if (BuildConfig.DEBUG) Log.d(TAG, "开始加载应用图标")
             val pm = context.packageManager
             val newIcons = mutableMapOf<String, android.graphics.Bitmap?>()
 
@@ -191,32 +236,32 @@ object AppRepository {
                     val packageName = appInfo.packageName
 
                     // 首先尝试从持久化缓存加载
-                    var bitmap = IconCacheManager.loadIcon(packageName)
+                    var iconBitmap = IconCacheManager.loadIcon(packageName)
 
-                    if (bitmap == null) {
+                    if (iconBitmap == null) {
                         // 如果持久化缓存中没有，从PackageManager获取
                         val drawable = pm.getApplicationIcon(appInfo)
-                        bitmap = when (drawable) {
+                        iconBitmap = when (drawable) {
                             is android.graphics.drawable.BitmapDrawable -> drawable.bitmap
                             else -> {
                                 // 将其他类型的drawable转换为bitmap
                                 val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
                                 val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                                val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                                val canvas = android.graphics.Canvas(bitmap)
+                                val createdBitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                                val canvas = android.graphics.Canvas(createdBitmap)
                                 drawable.setBounds(0, 0, width, height)
                                 drawable.draw(canvas)
-                                bitmap
+                                createdBitmap
                             }
                         }
 
                         // 保存到持久化缓存
-                        if (bitmap != null) {
-                            IconCacheManager.saveIcon(packageName, bitmap)
+                        if (iconBitmap != null) {
+                            IconCacheManager.saveIcon(packageName, iconBitmap)
                         }
                     }
 
-                    newIcons[packageName] = bitmap
+                    newIcons[packageName] = iconBitmap
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) Log.w(TAG, "获取应用图标失败: ${appInfo.packageName}", e)
                     newIcons[appInfo.packageName] = null
@@ -234,13 +279,19 @@ object AppRepository {
     }
 
     /**
-     * 获取应用图标
+     * 获取应用图标（非阻塞版本）。
+     *
+     * 说明：该方法为非阻塞的同步接口，优先返回内存缓存中的图标；若内存缓存和持久化缓存都不存在，则返回 null，
+     *       调用方可使用 [getAppIconAsync] 或 [getAppIconSync] 获取图标的异步/同步版本。
+     *
+     * @param packageName 目标应用的包名（非空）。
+     * @return 若内存缓存中存在则返回 Bitmap，否则返回 null（不进行阻塞加载）。
      */
     fun getAppIcon(packageName: String): android.graphics.Bitmap? {
         // 首先检查内存缓存
-        var bitmap = cachedIcons[packageName]
-        if (bitmap != null) {
-            return bitmap
+        var iconBitmap = cachedIcons[packageName]
+        if (iconBitmap != null) {
+            return iconBitmap
         }
 
         // 如果内存缓存中没有，尝试从持久化缓存加载
@@ -254,7 +305,11 @@ object AppRepository {
     }
 
     /**
-     * 获取应用图标（异步，确保数据已加载）
+     * 异步获取应用图标（确保在返回前数据已加载）。
+     *
+     * @param context Android 上下文，用于在必要时加载应用列表与访问持久化缓存。
+     * @param packageName 目标应用的包名（非空）。
+     * @return 应用图标的 Bitmap；若不存在则返回 null。
      */
     suspend fun getAppIconAsync(context: Context, packageName: String): android.graphics.Bitmap? {
         if (!isLoaded) {
@@ -262,23 +317,29 @@ object AppRepository {
         }
 
         // 首先检查内存缓存
-        var bitmap = cachedIcons[packageName]
-        if (bitmap != null) {
-            return bitmap
+        var iconBitmap = cachedIcons[packageName]
+        if (iconBitmap != null) {
+            return iconBitmap
         }
 
         // 如果内存缓存中没有，从持久化缓存加载
-        bitmap = IconCacheManager.loadIcon(packageName)
-        if (bitmap != null) {
+        iconBitmap = IconCacheManager.loadIcon(packageName)
+        if (iconBitmap != null) {
             // 更新内存缓存
-            cachedIcons[packageName] = bitmap
+            cachedIcons[packageName] = iconBitmap
         }
 
-        return bitmap
+        return iconBitmap
     }
 
     /**
-     * 获取应用图标（同步，如果未加载则同步加载）
+     * 同步获取应用图标（若未加载应用列表则会同步加载，可能阻塞当前线程）。
+     *
+     * 注意：该方法在必要时会使用 runBlocking 加载数据，请谨慎在 UI 线程中直接调用以避免卡顿。
+     *
+     * @param context Android 上下文，用于加载应用列表与访问持久化缓存。
+     * @param packageName 目标应用的包名（非空）。
+     * @return 应用图标的 Bitmap；若不存在则返回 null。
      */
     fun getAppIconSync(context: Context, packageName: String): android.graphics.Bitmap? {
         if (!isLoaded || cachedApps == null) {
@@ -289,37 +350,44 @@ object AppRepository {
         }
 
         // 首先检查内存缓存
-        var bitmap = cachedIcons[packageName]
-        if (bitmap != null) {
-            return bitmap
+        var iconBitmap = cachedIcons[packageName]
+        if (iconBitmap != null) {
+            return iconBitmap
         }
 
         // 如果内存缓存中没有，从持久化缓存加载
-        bitmap = kotlinx.coroutines.runBlocking {
+        iconBitmap = kotlinx.coroutines.runBlocking {
             IconCacheManager.loadIcon(packageName)
         }
-        if (bitmap != null) {
+        if (iconBitmap != null) {
             // 更新内存缓存
-            cachedIcons[packageName] = bitmap
+            cachedIcons[packageName] = iconBitmap
         }
 
-        return bitmap
+        return iconBitmap
     }
 
     /**
-     * 检查图标是否已加载
+     * 检查图标是否已加载完成。
+     *
+     * @return 若图标加载过程已完成返回 true，否则返回 false。
      */
     fun isIconsLoaded(): Boolean = iconsLoaded
 
     /**
-     * 获取所有缓存的图标
+     * 获取所有已缓存的图标（只读拷贝）。
+     *
+     * @return 包名 -> Bitmap 的映射拷贝，Bitmap 可能为 null 表示缓存占位或失败。
      */
     fun getAllCachedIcons(): Map<String, android.graphics.Bitmap?> {
         return cachedIcons.toMap()
     }
 
     /**
-     * 缓存外部应用图标（为后续扩展存储本机未安装的应用图标信息）
+     * 缓存外部应用的图标（内存 + 持久化），用于保存未安装应用或来自远端的图标数据。
+     *
+     * @param packageName 外部应用的包名（用于作为键）。
+     * @param icon 要缓存的 Bitmap，若为 null 则只在内存中移除对应条目。
      */
     fun cacheExternalAppIcon(packageName: String, icon: android.graphics.Bitmap?) {
         cachedIcons[packageName] = icon
@@ -335,7 +403,9 @@ object AppRepository {
     }
 
     /**
-     * 移除外部应用图标缓存
+     * 移除外部应用图标的缓存（内存 + 持久化）。
+     *
+     * @param packageName 目标包名，会从内存缓存移除并从持久化缓存删除对应文件/记录。
      */
     fun removeExternalAppIcon(packageName: String) {
         cachedIcons.remove(packageName)
@@ -349,36 +419,43 @@ object AppRepository {
     }
 
     /**
-     * 获取外部应用图标（优先从缓存获取，如果没有则返回null）
+     * 获取外部应用图标（优先从内存缓存获取，如果没有则同步从持久化缓存加载）。
+     *
+     * @param packageName 目标应用包名。
+     * @return 若存在则返回 Bitmap，否则返回 null。
      */
     fun getExternalAppIcon(packageName: String): android.graphics.Bitmap? {
         // 首先检查内存缓存
-        var bitmap = cachedIcons[packageName]
-        if (bitmap != null) {
-            return bitmap
+        var iconBitmap = cachedIcons[packageName]
+        if (iconBitmap != null) {
+            return iconBitmap
         }
 
         // 如果内存缓存中没有，从持久化缓存加载
-        bitmap = kotlinx.coroutines.runBlocking {
+        iconBitmap = kotlinx.coroutines.runBlocking {
             IconCacheManager.loadIcon(packageName)
         }
-        if (bitmap != null) {
+        if (iconBitmap != null) {
             // 更新内存缓存
-            cachedIcons[packageName] = bitmap
+            cachedIcons[packageName] = iconBitmap
         }
 
-        return bitmap
+        return iconBitmap
     }
 
     /**
-     * 获取缓存统计信息
+     * 获取持久化图标缓存的统计信息。
+     *
+     * @return [IconCacheManager.CacheStats] 包含缓存大小、条目数、命中率等统计信息。
      */
     fun getCacheStats(): com.xzyht.notifyrelay.core.cache.IconCacheManager.CacheStats {
         return IconCacheManager.getCacheStats()
     }
 
     /**
-     * 清理过期缓存
+     * 清理过期的持久化图标缓存（挂起函数）。
+     *
+     * 说明：会删除满足过期策略的缓存文件/记录以释放磁盘空间。
      */
     suspend fun cleanupExpiredCache() {
         IconCacheManager.cleanupExpiredCache()
