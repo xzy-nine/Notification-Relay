@@ -235,11 +235,30 @@ object BackendLocalFilter {
         // - entry.keyword 为空 且 packageName 非空 -> 只匹配包名
         // - 两者均非空 -> 同时匹配才命中
         val enabledEntries = getEnabledFilterEntries(context)
+        // 新的匹配逻辑：支持关键字按空格分词后跨标题/内容匹配。
+        // 例如 keyword = "米家 手表" 时，如果 title 包含 "米家" 且 text 包含 "手表" 也应视为命中。
+        fun keywordMatchesAcrossFields(keyword: String, title: String, text: String): Boolean {
+            val kw = keyword.trim()
+            if (kw.isEmpty()) return false
+            // 如果 keyword 没有空白，则使用原来的包含匹配
+            if (!kw.contains(' ')) return title.contains(kw, true) || text.contains(kw, true)
+
+            // 含空格：把 keyword 按空白分词，要求所有 token 都能在 title 或 text 中找到（任意分布）
+            val tokens = kw.split(Regex("\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) return false
+
+            // 对于每个 token，只要在 title 或 text 中存在即可；所有 token 都必须满足
+            for (t in tokens) {
+                if (!title.contains(t, true) && !text.contains(t, true)) return false
+            }
+            return true
+        }
+
         for (entry in enabledEntries) {
             val kw = entry.keyword.trim()
             val pkg = entry.packageName.trim()
 
-            val kwMatches = kw.isNotEmpty() && (title.contains(kw, true) || text.contains(kw, true))
+            val kwMatches = kw.isNotEmpty() && keywordMatchesAcrossFields(kw, title, text)
             val pkgMatches = pkg.isNotEmpty() && sbn.packageName == pkg
 
             // 仅关键字
