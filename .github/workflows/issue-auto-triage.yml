@@ -1,0 +1,123 @@
+name: Issue Auto Triage
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  auto-close-invalid:
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check issue and close invalid ones
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            if (!issue) {
+              core.info('No issue data in payload.');
+              return;
+            }
+            if (issue.state === 'closed') {
+              core.info('Issue already closed. Skip.');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Conditions from .github/ISSUE_TEMPLATE/bug-report.yml
+            const defaultTitle = '请记得修改标题,否则可能被直接关闭';
+            const titleIsDefault = (issue.title || '').trim() === defaultTitle;
+
+            const body = (issue.body || '');
+            // If user checked: "未认真阅读此处选项随意勾选"
+            const uncheckedReadingTrap = /\[(?:x|X)\]\s*未认真阅读此处选项随意勾选/.test(body);
+
+            // Check if "应用版本" not filled (from issue forms section)
+            // Typical GitHub Issue Forms renders as:
+            // ### 应用版本\n<value>\n### 其他字段
+            const versionSectionMatch = body.match(/(^|\n)###\s*应用版本\s*\n([\s\S]*?)(\n###\s|$)/);
+            const versionText = versionSectionMatch ? versionSectionMatch[2].trim() : '';
+            const versionMissing = !versionText ||
+              // only dashes or bullets with no real content
+              /^[-*\s]*$/.test(versionText) ||
+              // common empty words
+              /^(?:无|没有|未填|不填|N\/?A|null|none)$/i.test(versionText);
+
+            // Only act when at least one invalid signal is present
+            if (!(titleIsDefault || uncheckedReadingTrap || versionMissing)) {
+              core.info('Issue looks valid. No action taken.');
+              return;
+            }
+
+            const invalidLabel = 'invalid-无效';
+
+            async function ensureInvalidLabel() {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: invalidLabel });
+                core.info(`Label "${invalidLabel}" exists.`);
+              } catch (e) {
+                if (e.status === 404) {
+                  core.info(`Label "${invalidLabel}" not found. Creating...`);
+                  await github.rest.issues.createLabel({
+                    owner,
+                    repo,
+                    name: invalidLabel,
+                    color: 'd73a4a',
+                    description: '自动标记为无效的 Issue'
+                  });
+                } else {
+                  throw e;
+                }
+              }
+            }
+
+            await ensureInvalidLabel();
+
+            // Add label to the issue
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: issue.number,
+              labels: [invalidLabel]
+            });
+
+            const reasons = [];
+            if (titleIsDefault) reasons.push('未修改默认标题');
+            if (uncheckedReadingTrap) reasons.push('勾选了“未认真阅读此处选项随意勾选”');
+            if (versionMissing) reasons.push('未填写“应用版本”');
+            const reasonText = reasons.join('、');
+
+            // Leave a comment explaining the auto-close
+            const commentBody = [
+              '感谢反馈。',
+              `检测到该 Issue ${reasonText}，根据模板说明已被自动标记为 invalid 并关闭。`,
+              '',
+              '请按以下规范重新提交：',
+              '- 修改标题为问题的简要概述；',
+              '- 按模板要求完整填写并勿勾选“未认真阅读…”；',
+              '- 填写“应用版本”字段（系统设置 -> 应用详情右上角可复制）；',
+              '',
+              '如仍需反馈请新建 Issue并按照规范提交。'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: commentBody
+            });
+
+            // Close the issue
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: issue.number,
+              state: 'closed'
+            });

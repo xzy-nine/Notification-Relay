@@ -1,6 +1,6 @@
-name: 问题反馈
-description: 请记得填写你的标题
-title: "[Bug]: "
+name: 问题反馈或建议
+description: 请填写以下模板以便我们更好地理解和处理您的反馈
+title: "请记得修改标题,否则会被直接关闭"
 labels:
   - bug
   - triage
