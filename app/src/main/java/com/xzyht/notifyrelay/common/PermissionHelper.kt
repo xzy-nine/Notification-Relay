@@ -159,6 +159,27 @@ object PermissionHelper {
     }
 
     /**
+     * 请求使用情况访问权限（可选）。
+     * 会打开系统的「使用情况访问」设置页面，用户需在其中为应用开启访问权限。
+     * 该权限为可选项，用于提升诸如智能去重功能的准确性。
+     */
+    fun requestUsageAccess(activity: Activity) {
+        try {
+            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(activity, "无法打开使用情况访问设置，请手动前往设置-特殊应用权限-使用情况访问", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * 返回用于 ADB 授权使用情况访问的命令（方便复制）。
+     */
+    fun getUsageAccessAdbCommand(packageName: String): String {
+        return "adb shell appops set $packageName GET_USAGE_STATS allow"
+    }
+
+    /**
      * 检查蓝牙连接权限（Android 12+）。
      *
      * @param context 用于检查权限的上下文。
