@@ -10,6 +10,8 @@ import org.json.JSONObject
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -28,6 +30,8 @@ object MessageSender {
     private val sendChannel = Channel<SendTask>(Channel.UNLIMITED)
     private val sendSemaphore = Semaphore(MAX_CONCURRENT_SENDS)
     private val activeSends = AtomicInteger(0)
+    // 去重集合：防止同一设备、同一数据在未完成前被重复入队
+    private val pendingKeys = ConcurrentHashMap.newKeySet<String>()
 
     init {
         // 启动队列处理协程
@@ -40,7 +44,8 @@ object MessageSender {
         val device: DeviceInfo,
         val data: String,
         val deviceManager: DeviceConnectionManager,
-        val retryCount: Int = 0
+        val retryCount: Int = 0,
+        val dedupKey: String
     )
 
     /**
@@ -55,6 +60,8 @@ object MessageSender {
                 try {
                     sendNotificationDataWithRetry(task)
                 } finally {
+                    // 任务结束，移除去重键
+                    pendingKeys.remove(task.dedupKey)
                     sendSemaphore.release()
                     activeSends.decrementAndGet()
                 }
@@ -87,7 +94,7 @@ object MessageSender {
                         writer.write(payload + "\n")
                         writer.flush()
                         success = true
-                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}")
+                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
                     } finally {
                         socket.close()
                     }
@@ -136,14 +143,21 @@ object MessageSender {
                 put("time", System.currentTimeMillis())
             }.toString()
 
-            // 将发送任务加入队列
+            // 将发送任务加入队列（带去重）
             allDevices.forEach { device ->
-                val task = SendTask(device, json, deviceManager)
+                val dedupKey = buildDedupKey(device.uuid, json)
+                if (!pendingKeys.add(dedupKey)) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复聊天消息入队: ${device.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(device, json, deviceManager, dedupKey = dedupKey)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
                         if (BuildConfig.DEBUG) Log.d(TAG, "聊天消息已加入发送队列: ${device.displayName}, 消息: $message")
                     } catch (e: Exception) {
+                        // 入队失败时及时移除去重键
+                        pendingKeys.remove(dedupKey)
                         if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${device.displayName}", e)
                     }
                 }
@@ -200,14 +214,21 @@ object MessageSender {
                 put("isLocked", isLocked)
             }.toString()
 
-            // 将发送任务加入队列
+            // 将发送任务加入队列（带去重）
             authenticatedDevices.forEach { deviceInfo ->
-                val task = SendTask(deviceInfo, json, deviceManager)
+                val dedupKey = buildDedupKey(deviceInfo.uuid, json)
+                if (!pendingKeys.add(dedupKey)) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复通知入队: ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(deviceInfo, json, deviceManager, dedupKey = dedupKey)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
                         if (BuildConfig.DEBUG) Log.d(TAG, "通知已加入发送队列: ${deviceInfo.displayName}")
                     } catch (e: Exception) {
+                        // 入队失败时及时移除去重键
+                        pendingKeys.remove(dedupKey)
                         if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${deviceInfo.displayName}", e)
                     }
                 }
@@ -326,5 +347,15 @@ object MessageSender {
      */
     fun isValidMessage(message: String?): Boolean {
         return !message.isNullOrBlank()
+    }
+
+    // 根据设备UUID与数据内容构建去重键（SHA-256）
+    private fun buildDedupKey(deviceUuid: String, data: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest((deviceUuid + "|" + data).toByteArray())
+        return digest.joinToString(separator = "") { byte ->
+            val v = (byte.toInt() and 0xFF)
+            val s = v.toString(16)
+            if (s.length == 1) "0$s" else s
+        }
     }
 }
