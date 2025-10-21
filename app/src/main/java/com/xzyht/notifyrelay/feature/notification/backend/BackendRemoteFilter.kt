@@ -155,7 +155,14 @@ object BackendRemoteFilter {
                         return FilterResult(false, mappedPkg, title, text, data)
                     }
 
-                    // 内存无重复，标记为需要延迟验证
+                    // 内存无重复，默认情况下标记为需要延迟验证（先发送后监控机制）。
+                    // 但如果该远端通知标记为锁屏（isLocked），则避免先发送再撤回，改为不立即展示，
+                    // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
+                    if (isLocked) {
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "锁屏场景：内存无重复，改为不立即展示，等待超期后再复刻")
+                        return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
+                    }
+
                     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
                     return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
 

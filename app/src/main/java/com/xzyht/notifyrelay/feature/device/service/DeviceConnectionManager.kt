@@ -1045,23 +1045,77 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         val result = remoteNotificationFilter(decrypted, context)
         if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "remoteNotificationFilter result: $result")
         if (result.shouldShow) {
-            // 智能去重：先发送后撤回机制
-            replicateNotification(context, result, null)
+            // 如果过滤器建议延迟验证（先发送后撤回机制），并且本机当前为锁屏场景，
+            // 则不立即复刻以避免在锁屏时触发手环震动等副作用。
+            // 注意：这里依据的是“本机是否锁屏”，不影响远端“仅锁屏通知复刻”的独立逻辑。
+            // 改为等待监控超时后再检查本机历史，若无重复再复刻。
+            val keyguardManager = context.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val localIsLocked = keyguardManager.isKeyguardLocked
+            if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏分支检查: shouldShow=${result.shouldShow}, needsDelay=${result.needsDelay}, localIsLocked=${localIsLocked}, 标题:${result.title}")
 
-            // 图标同步：检查本地是否有该应用的图标，如果没有则请求
-            if (remoteUuid != null) {
-                try {
-                    val sourceDevice = getDeviceInfo(remoteUuid)
-                    if (sourceDevice != null) {
-                        com.xzyht.notifyrelay.core.sync.IconSyncManager.checkAndSyncIcon(
-                            context,
-                            result.mappedPkg,
-                            this@DeviceConnectionManager,
-                            sourceDevice
-                        )
+            if (result.needsDelay && localIsLocked) {
+                if (BuildConfig.DEBUG) Log.d("智能去重", "本机锁屏：延迟复刻，等待监控期后再检查重复再复刻 - 标题:${result.title}")
+                // 在后台异步等待监控期（与 BackendRemoteFilter 相同的 15s），然后检查本机历史是否已有重复，
+                // 若无重复则执行复刻；若有则跳过复刻。这样避免在锁屏时先发后撤回的副作用。
+                coroutineScope.launch {
+                    try {
+                        val waitMs = 15_000L
+                        if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻等待 ${waitMs}ms - 标题:${result.title}")
+                        delay(waitMs)
+
+                        val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
+                        // 简化的重复检查：标题去除可能的应用名前缀后比较 + 内容相等
+                        fun normalizeTitleLocal(t: String?): String {
+                            if (t == null) return ""
+                            val prefixPattern = Regex("^\\([^)]+\\)")
+                            return t.replace(prefixPattern, "").trim()
+                        }
+                        val normalizedPendingTitle = normalizeTitleLocal(result.title)
+                        val pendingText = result.text
+                        val duplicateFound = localList.any { nr ->
+                            try {
+                                nr.device == "本机" && normalizeTitleLocal(nr.title) == normalizedPendingTitle && (nr.text ?: "") == (pendingText ?: "")
+                            } catch (_: Exception) { false }
+                        }
+
+                        if (!duplicateFound) {
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：超期无重复，进行复刻 - 标题:${result.title}")
+                            try {
+                                // 锁屏延迟复刻：不再启动先发后撤回监控，避免重复开启监控协程
+                                replicateNotification(context, result, null, startMonitoring = false)
+                            } catch (e: Exception) {
+                                if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻执行复刻时发生错误", e)
+                            }
+                        } else {
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：发现重复，跳过复刻 - 标题:${result.title}")
+                        }
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻异常", e)
                     }
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("秩序之光 死神-NotifyRelay", "图标同步检查失败", e)
+                }
+
+                // 同时将原始数据写入聊天记录，保持与之前的行为一致（但不立即展示）
+                ChatMemory.append(context, "收到: ${result.rawData}")
+            } else {
+                // 非锁屏或不需要延迟验证的情况沿用原有逻辑：立即复刻并启动先发后撤回机制
+                // 立即复刻路径：保留先发后撤回监控
+                replicateNotification(context, result, null, startMonitoring = true)
+
+                // 图标同步：检查本地是否有该应用的图标，如果没有则请求
+                if (remoteUuid != null) {
+                    try {
+                        val sourceDevice = getDeviceInfo(remoteUuid)
+                        if (sourceDevice != null) {
+                            com.xzyht.notifyrelay.core.sync.IconSyncManager.checkAndSyncIcon(
+                                context,
+                                result.mappedPkg,
+                                this@DeviceConnectionManager,
+                                sourceDevice
+                            )
+                        }
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e("秩序之光 死神-NotifyRelay", "图标同步检查失败", e)
+                    }
                 }
             }
         } else {

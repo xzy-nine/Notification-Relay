@@ -17,7 +17,12 @@ fun remoteNotificationFilter(data: String, context: Context): com.xzyht.notifyre
 }
 
 // 通知复刻处理函数
-suspend fun replicateNotification(context: Context, result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult, chatHistoryState: MutableState<List<String>>? = null) {
+suspend fun replicateNotification(
+    context: Context,
+    result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult,
+    chatHistoryState: MutableState<List<String>>? = null,
+    startMonitoring: Boolean = true // 是否启动先发后撤回监控（锁屏延迟复刻时可关闭以节省性能）
+) {
     try {
         if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
         val json = org.json.JSONObject(result.rawData)
@@ -64,17 +69,17 @@ suspend fun replicateNotification(context: Context, result: com.xzyht.notifyrela
             if (appIcon == null) {
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(pkg, 0)
-                val drawable = pm.getApplicationIcon(appInfo)
-                if (drawable is android.graphics.drawable.BitmapDrawable) {
-                    appIcon = drawable.bitmap
+                val icon = pm.getApplicationIcon(appInfo)
+                if (icon is android.graphics.drawable.BitmapDrawable) {
+                    appIcon = icon.bitmap
                 } else {
-                    val drawable = drawable as android.graphics.drawable.Drawable
-                    val width: Int = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
-                    val height: Int = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
+                    val iconDrawable = icon
+                    val width: Int = if (iconDrawable.intrinsicWidth > 0) iconDrawable.intrinsicWidth else 96
+                    val height: Int = if (iconDrawable.intrinsicHeight > 0) iconDrawable.intrinsicHeight else 96
                     val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
                     val canvas = android.graphics.Canvas(bitmap)
-                    drawable.setBounds(0, 0, width, height)
-                    drawable.draw(canvas)
+                    iconDrawable.setBounds(0, 0, width, height)
+                    iconDrawable.draw(canvas)
                     appIcon = bitmap
                 }
             }
@@ -154,15 +159,17 @@ suspend fun replicateNotification(context: Context, result: com.xzyht.notifyrela
         if (pendingIntent != null) {
             builder.setContentIntent(pendingIntent)
         }
-        if (BuildConfig.DEBUG) Log.d("智能去重", "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
+        if (BuildConfig.DEBUG) Log.d("智能去重", if (startMonitoring) "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId" else "发送通知（不启用监控） - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
         com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(title, text)
         notificationManager.notify(notifyId, builder.build())
         if (BuildConfig.DEBUG) Log.d("智能去重", "通知已发送 - 通知ID:$notifyId")
 
-        // 添加到待监控队列，准备撤回机制
-        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPendingNotification(notifyId, title, text, pkg, context)
-        if (BuildConfig.DEBUG) Log.d("智能去重", "已添加到监控队列 - 通知ID:$notifyId, 将监控15秒内重复")
+        // 添加到待监控队列，准备撤回机制（可按需关闭）
+        if (startMonitoring) {
+            com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPendingNotification(notifyId, title, text, pkg, context)
+            if (BuildConfig.DEBUG) Log.d("智能去重", "已添加到监控队列 - 通知ID:$notifyId, 将监控15秒内重复")
+        }
     } catch (e: Exception) {
         if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)
     }
