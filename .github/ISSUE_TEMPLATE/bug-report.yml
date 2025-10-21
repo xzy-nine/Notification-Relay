@@ -15,6 +15,8 @@ body:
           required: true
         - label: 已搜索过 issue 中无人提出相似问题或无解决方案
           required: true
+        - label: [Q&A](https://github.com/xzy-nine/Notification-Relay/discussions/categories/q-a) 中无类似问题.
+          required: true
         - label: 已为更新至最新版版本
           required: true
         - label: 未认真阅读此处选项随意勾选
@@ -35,21 +37,21 @@ body:
       description: 请选择你反馈的问题类型，这将帮助我们更快处理。
       options:
         - "Bug"
-        - "更新建议"
-        - "新版本修改"
+        - "新功能请求"
+        - "有疑问"
     validations:
       required: true
 
   - type: dropdown
     id: issue-scope
     attributes:
-      label: 问题范围
-      description: 问题出现在哪个功能？
+      label: 范围
+      description: 有关于哪个功能？
       options:
         - "UI"
         - "通知转发"
         - "通知存储"
-        - "过滤机制"
+        - "通知过滤机制"
         - "其他"
     validations:
       required: true
@@ -57,7 +59,7 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: "问题描述"
+      label: "详细描述"
       description: "请理解每个人的运行环境都不一样，为了知道如何修复问题，需要你详细描述重现这个问题的步骤，请让作者能够重现，否则大概率不受理。"
       placeholder: |
         1. xxx
@@ -70,11 +72,11 @@ body:
     attributes:
       label: "运行日志"
       description: "目前还没有封装log模块,请自行安装debug版本后使用adb工具的catlog上传"
-      placeholder: "运行日志"
+      placeholder: "如有运行日志"
 
   - type: textarea
     id: suggestion
     attributes:
       label: "你的建议"
       description: "针对这个场景，你觉得合适的解决方案是"
-      placeholder: "你的建议"
+      placeholder: "你的建议(若无可不填)"
