@@ -1,0 +1,80 @@
+name: 问题反馈
+description: 请记得填写你的标题
+title: "[Bug]: "
+labels:
+  - bug
+  - triage
+
+body:
+  - type: checkboxes
+    id: check
+    attributes:
+      label: 请确认您已完成以下几件事并勾选项目，未按要求勾选可能被认作无效反馈直接关闭
+      options:
+        - label: 正在使用最新的应用
+          required: true
+        - label: 已搜索过 issue 中无人提出相似问题或无解决方案
+          required: true
+        - label: 已为更新至最新版版本
+          required: true
+        - label: 未认真阅读此处选项随意勾选
+        - label: 已经修改了此issue的标题为想要反馈的问题简述
+          required: true
+  - type: input
+    id: code-version
+    attributes:
+      label: 应用版本
+      description: "系统设置的应用详情的右上角中 点击可复制到粘贴板 不填入大概率不受理"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: 问题类型
+      description: 请选择你反馈的问题类型，这将帮助我们更快处理。
+      options:
+        - "Bug"
+        - "更新建议"
+        - "新版本修改"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-scope
+    attributes:
+      label: 问题范围
+      description: 问题出现在哪个功能？
+      options:
+        - "UI"
+        - "通知转发"
+        - "通知存储"
+        - "过滤机制"
+        - "其他"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "问题描述"
+      description: "请理解每个人的运行环境都不一样，为了知道如何修复问题，需要你详细描述重现这个问题的步骤，请让作者能够重现，否则大概率不受理。"
+      placeholder: |
+        1. xxx
+        2. xxx
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "运行日志"
+      description: "目前还没有封装log模块,请自行安装debug版本后使用adb工具的catlog上传"
+      placeholder: "运行日志"
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: "你的建议"
+      description: "针对这个场景，你觉得合适的解决方案是"
+      placeholder: "你的建议"

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 讨论区（Q&A / 讨论 / 建议）
+    url: https://github.com/xzy-nine/Notification-Relay/discussions
+    about: 非缺陷问题请转至 Discussions，避免占用 issue 列表。
+
+# 可选：按需定义模板排序或别名（当前仅一个模板，无需设置）
+# issue_template: bug-report.yml
