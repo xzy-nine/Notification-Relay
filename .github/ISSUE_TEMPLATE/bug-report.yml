@@ -15,7 +15,7 @@ body:
           required: true
         - label: 已搜索过 issue 中无人提出相似问题或无解决方案
           required: true
-        - label: [Q&A](https://github.com/xzy-nine/Notification-Relay/discussions/categories/q-a) 中无类似问题.
+        - label: "[Q&A](https://github.com/xzy-nine/Notification-Relay/discussions/categories/q-a) 中无类似问题."
           required: true
         - label: 已为更新至最新版版本
           required: true
