@@ -1,0 +1,124 @@
+name: 将带有标签的issue添加到项目的Todo中
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  add_to_project:
+    name: Add to Project when labeled
+    if: >-
+      ${{ github.event.label.name == 'bug-错误' || github.event.label.name == 'enhancement-增强' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to user Project and set Status=Todo
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            // Preconditions
+            if (!process.env.PROJECTS_TOKEN) {
+              core.setFailed('Missing PROJECTS_TOKEN secret. Create a classic PAT (project, repo) or a fine-grained PAT with Projects: Read/Write and add it as repository secret PROJECTS_TOKEN.');
+            }
+
+            const issue = context.payload.issue;
+            const issueNodeId = issue.node_id; // GraphQL node id
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const login = 'xzy-nine';
+            const projectNumber = 1;
+
+            // 1) Get ProjectV2 id and Status field option ids
+            const projectData = await github.graphql(
+              `query($login: String!, $number: Int!) {
+                user(login: $login) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { login, number: projectNumber }
+            );
+
+            const project = projectData?.user?.projectV2;
+            if (!project?.id) {
+              core.setFailed(`Project not found: https://github.com/users/${login}/projects/${projectNumber}`);
+              return;
+            }
+            const projectId = project.id;
+            const statusField = project.fields.nodes.find(f => ['Status', '状态'].includes(f?.name));
+            const todoOption = statusField?.options?.find(o => ['todo', 'to do', '待办'].includes(o.name.toLowerCase()));
+
+            // 2) Add item to project (idempotent) or retrieve existing item id
+            let itemId = null;
+            try {
+              const addRes = await github.graphql(
+                `mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item { id }
+                  }
+                }`,
+                { projectId, contentId: issueNodeId }
+              );
+              itemId = addRes?.addProjectV2ItemById?.item?.id || null;
+            } catch (e) {
+              core.info(`Item may already be in project, attempting to locate existing item. Error: ${e.message}`);
+            }
+
+            if (!itemId) {
+              // Fallback: try to locate the item within the project by searching by repo+issue number
+              const searchItems = await github.graphql(
+                `query($login: String!, $number: Int!, $q: String!) {
+                  user(login: $login) {
+                    projectV2(number: $number) {
+                      items(first: 50, query: $q) {
+                        nodes { id content { ... on Issue { number url } } }
+                      }
+                    }
+                  }
+                }`,
+                { login, number: projectNumber, q: `repo:${owner}/${repo} is:issue number:${issue.number}` }
+              );
+              const nodes = searchItems?.user?.projectV2?.items?.nodes || [];
+              const match = nodes.find(n => n?.content?.number === issue.number);
+              itemId = match?.id || null;
+            }
+
+            if (!itemId) {
+              core.setFailed('Failed to add or locate the project item for this issue.');
+              return;
+            }
+
+            // 3) Set Status = Todo if Status field exists and has Todo option
+            if (statusField?.id && todoOption?.id) {
+              await github.graphql(
+                `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId,
+                    itemId: $itemId,
+                    fieldId: $fieldId,
+                    value: { singleSelectOptionId: $optionId }
+                  }) { clientMutationId }
+                }`,
+                { projectId, itemId, fieldId: statusField.id, optionId: todoOption.id }
+              );
+              core.info('Set Status to Todo.');
+            } else {
+              core.info('Status field or Todo option not found; skipping Status update.');
+            }
+
+            core.info(`Issue #${issue.number} added to Project and set to Todo.`);

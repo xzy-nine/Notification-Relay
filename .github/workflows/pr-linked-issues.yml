@@ -1,0 +1,169 @@
+name: 将与PR相关的issue进入 In Progress阶段
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  move_linked_issues:
+    name: Label and move linked issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label issues and set Project status to In Progress
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECTS_TOKEN }}
+          script: |
+            if (!process.env.PROJECTS_TOKEN) {
+              core.setFailed('Missing PROJECTS_TOKEN secret.');
+            }
+
+            const pr = context.payload.pull_request;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const login = 'xzy-nine';
+            const projectNumber = 1;
+            const inProgressLabel = 'In Progress-已在进行中';
+
+            // Helper to find a Status option id by flexible names
+            const findOptionId = (options, names) => {
+              const low = names.map(n => n.toLowerCase());
+              const hit = options.find(o => low.includes(o.name.toLowerCase()));
+              return hit?.id;
+            };
+
+            // 1) Resolve the issues linked/closing for this PR
+            const data = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    id
+                    number
+                    closingIssuesReferences(first: 50) {
+                      nodes { id number }
+                    }
+                    body
+                  }
+                }
+              }`,
+              { owner, repo, number: pr.number }
+            );
+
+            const prNode = data?.repository?.pullRequest;
+            let issues = prNode?.closingIssuesReferences?.nodes || [];
+
+            // Fallback: parse PR body for #123 references
+            const body = prNode?.body || '';
+            const refs = [...body.matchAll(/#(\d+)/g)].map(m => parseInt(m[1], 10));
+            const uniqueNums = Array.from(new Set(refs));
+            for (const num of uniqueNums) {
+              if (!issues.some(i => i.number === num)) {
+                const issueRes = await github.rest.issues.get({ owner, repo, issue_number: num }).catch(() => null);
+                if (issueRes && issueRes.data && !issueRes.data.pull_request) {
+                  issues.push({ id: issueRes.data.node_id, number: num });
+                }
+              }
+            }
+
+            if (!issues.length) {
+              core.info('No linked issues found for this PR.');
+              return;
+            }
+
+            // 2) Fetch Project and Status field/options
+            const projectData = await github.graphql(
+              `query($login: String!, $number: Int!) {
+                user(login: $login) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 50) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`,
+              { login, number: projectNumber }
+            );
+            const project = projectData?.user?.projectV2;
+            if (!project?.id) {
+              core.setFailed(`Project not found: https://github.com/users/${login}/projects/${projectNumber}`);
+              return;
+            }
+            const projectId = project.id;
+            const statusField = project.fields.nodes.find(f => ['Status', '状态'].includes(f?.name));
+            const inProgressOptionId = statusField ? findOptionId(statusField.options, ['In Progress', '进行中', '已在进行中']) : null;
+
+            for (const iss of issues) {
+              // 3) Add label to the issue (idempotent)
+              try {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: iss.number, labels: [inProgressLabel] });
+              } catch (e) {
+                core.info(`Label add skipped/failed for #${iss.number}: ${e.message}`);
+              }
+
+              // 4) Add issue to Project (idempotent) and set Status=In Progress
+              let itemId = null;
+              try {
+                const addRes = await github.graphql(
+                  `mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                      item { id }
+                    }
+                  }`,
+                  { projectId, contentId: iss.id }
+                );
+                itemId = addRes?.addProjectV2ItemById?.item?.id || null;
+              } catch (e) {
+                core.info(`Project add may be duplicate for #${iss.number}: ${e.message}`);
+              }
+              if (!itemId) {
+                // Try locating existing item by query
+                const searchItems = await github.graphql(
+                  `query($login: String!, $number: Int!, $q: String!) {
+                    user(login: $login) {
+                      projectV2(number: $number) {
+                        items(first: 50, query: $q) {
+                          nodes { id content { ... on Issue { number } } }
+                        }
+                      }
+                    }
+                  }`,
+                  { login, number: projectNumber, q: `repo:${owner}/${repo} is:issue number:${iss.number}` }
+                );
+                const nodes = searchItems?.user?.projectV2?.items?.nodes || [];
+                const match = nodes.find(n => n?.content?.number === iss.number);
+                itemId = match?.id || null;
+              }
+
+              if (itemId && statusField?.id && inProgressOptionId) {
+                try {
+                  await github.graphql(
+                    `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                      updateProjectV2ItemFieldValue(input: {
+                        projectId: $projectId,
+                        itemId: $itemId,
+                        fieldId: $fieldId,
+                        value: { singleSelectOptionId: $optionId }
+                      }) { clientMutationId }
+                    }`,
+                    { projectId, itemId, fieldId: statusField.id, optionId: inProgressOptionId }
+                  );
+                  core.info(`Moved #${iss.number} to In Progress.`);
+                } catch (e) {
+                  core.info(`Failed to set Status for #${iss.number}: ${e.message}`);
+                }
+              } else {
+                core.info(`Status field/option missing or item not found for #${iss.number}; skipped.`);
+              }
+            }
