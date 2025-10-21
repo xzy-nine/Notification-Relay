@@ -87,7 +87,7 @@ object MessageSender {
                         writer.write(payload + "\n")
                         writer.flush()
                         success = true
-                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}")
+                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
                     } finally {
                         socket.close()
                     }
