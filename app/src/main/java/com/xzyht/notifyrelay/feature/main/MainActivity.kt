@@ -66,7 +66,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+    private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { _ ->
         // 授权页返回后重新检查权限
         recreate()
     }
@@ -87,12 +87,11 @@ class MainActivity : FragmentActivity() {
         // 启动时加载本地历史通知
         NotificationRepository.init(this)
 
-        // 沉浸式虚拟键和状态栏设置
-    val window = this@MainActivity.window
-    // 允许内容延伸到状态栏和导航栏区域，统一用 WindowCompat 控制系统栏外观
-    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    // 颜色设置放到 Compose SideEffect 里统一管理
+            // 沉浸式虚拟键和状态栏设置
+            // 允许内容延伸到状态栏和导航栏区域，统一用 WindowCompat 控制系统栏外观
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(this.window, false)
+            this.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            // 颜色设置放到 Compose SideEffect 里统一管理
 
         // 仅使用 Compose 管理主页面和通知历史页面
         setContent {
@@ -105,14 +104,15 @@ class MainActivity : FragmentActivity() {
                 val colorScheme = MiuixTheme.colorScheme
                 // 统一在 Composable 作用域设置 window decor
                 SideEffect {
-                    val window = this@MainActivity.window
-                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    val win = this@MainActivity.window
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
-                    window.statusBarColor = colorScheme.background.toArgb()
-                    window.navigationBarColor = colorScheme.background.toArgb()
+                    val barColor = colorScheme.background.toArgb()
+                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setStatusBarColor(win, barColor, false)
+                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setNavigationBarColor(win, barColor, false)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        window.isNavigationBarContrastEnforced = false
+                        win.isNavigationBarContrastEnforced = false
                     }
                 }
                 // 根布局加 systemBarsPadding，避免内容被遮挡，强制背景色一致
@@ -204,9 +204,9 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
     )
     val colorScheme = MiuixTheme.colorScheme
     
-    // 自定义错误颜色常量
-    val errorColor = Color(0xFFD32F2F)
-    val onErrorColor = Color.White
+            // 自定义错误颜色常量（用于顶部 banner）
+            val errorColor = Color(0xFFD32F2F)
+            val onErrorColor = Color.White
     
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE

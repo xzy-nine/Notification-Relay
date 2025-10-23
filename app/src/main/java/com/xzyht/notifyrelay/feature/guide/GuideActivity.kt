@@ -55,14 +55,15 @@ class GuideActivity : ComponentActivity() {
                 val colorScheme = MiuixTheme.colorScheme
                 // 统一在 Composable 作用域设置 window decor
                 SideEffect {
-                    val window = this@GuideActivity.window
-                    val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    val win = this@GuideActivity.window
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
                     controller.isAppearanceLightStatusBars = !isDarkTheme
-                    window.statusBarColor = colorScheme.background.toArgb()
-                    window.navigationBarColor = colorScheme.background.toArgb()
+                    val barColor = colorScheme.background.toArgb()
+                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setStatusBarColor(win, barColor, false)
+                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setNavigationBarColor(win, barColor, false)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        window.isNavigationBarContrastEnforced = false
+                        win.isNavigationBarContrastEnforced = false
                     }
                 }
                 GuideScreen(onContinue = {
