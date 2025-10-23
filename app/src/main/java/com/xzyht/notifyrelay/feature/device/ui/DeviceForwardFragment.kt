@@ -25,7 +25,6 @@ import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
-import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.feature.notification.ui.filter.UILocalFilter
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
@@ -166,42 +165,13 @@ fun DeviceForwardScreen(
         }
     }
     val colorScheme = MiuixTheme.colorScheme
-    val textStyles = MiuixTheme.textStyles
-    // 聊天区相关状态
-    var chatInput by rememberSaveable { mutableStateOf("") }
-    val chatHistoryState = remember { mutableStateOf<List<String>>(emptyList()) }
-    // 协程作用域（必须在 @Composable 作用域内声明）
-    // 聊天内容持久化到本地文件，应用退出前都保留
-    LaunchedEffect(context) {
-        chatHistoryState.value = ChatMemory.getChatHistory(context)
-    }
+    // textStyles 由各子组件或直接使用 MiuixTheme.textStyles 引用，避免未使用警告
     // 只监听全局选中设备（保持调用以触发任何订阅逻辑）
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
     // 读取 value 以保持订阅/避免未使用变量警告
     selectedDeviceState.value
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     // 远程通知过滤与复刻到系统通知中心
-    val notificationCallback: (String) -> Unit = remember {
-        { data: String ->
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "onNotificationDataReceived: $data")
-            // 通知处理已在后台完成，这里只更新UI聊天历史
-            chatHistoryState.value = ChatMemory.getChatHistory(context)
-        }
-    }
-    DisposableEffect(deviceManager) {
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注册通知数据接收回调")
-        deviceManager.registerOnNotificationDataReceived(notificationCallback)
-        onDispose {
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "注销通知数据接收回调")
-            deviceManager.unregisterOnNotificationDataReceived(notificationCallback)
-        }
-    }
-
-    // 聊天区UI+过滤设置（可折叠）
-
-    // 远程过滤 UI 已迁移到 UIRemoteFilter，相关状态由该组件管理
-
-    // 前端状态已直接从后端初始化，不需要额外加载
 
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
@@ -222,90 +192,11 @@ fun DeviceForwardScreen(
                 com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
             }
             1 -> {
-                // 聊天测试 Tab 内容
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 8.dp)
-                ) {
-                    // 填满剩余空间的聊天历史，自动滚动到底部
-                    val listState = remember { androidx.compose.foundation.lazy.LazyListState() }
-                    val chatList = chatHistoryState.value
-                    // 聊天内容变动时自动滚动到底部，首次进入直接定位
-                    var firstLoad by remember { mutableStateOf(true) }
-                    LaunchedEffect(chatList.size) {
-                        if (chatList.isNotEmpty()) {
-                            if (firstLoad) {
-                                listState.scrollToItem(chatList.lastIndex)
-                                firstLoad = false
-                            } else {
-                                listState.animateScrollToItem(chatList.lastIndex)
-                            }
-                        }
-                    }
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp)
-                    ) {
-                        items(chatList) { msg ->
-                            val isSend = msg.startsWith("发送:")
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = if (isSend) Arrangement.End else Arrangement.Start
-                            ) {
-                                top.yukonga.miuix.kmp.basic.Surface(
-                                    color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                                    modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
-                                ) {
-                                    Text(
-                                        msg.removePrefix("发送:").removePrefix("收到:"),
-                                        style = textStyles.body2,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        color = if (isSend) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    // 输入区始终底部
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        top.yukonga.miuix.kmp.basic.TextField(
-                            value = chatInput,
-                            onValueChange = { chatInput = it },
-                            modifier = Modifier.weight(1f),
-                            label = "输入消息..."
-                        )
-                        top.yukonga.miuix.kmp.basic.Button(
-                            onClick = {
-                                // 使用整合的消息发送工具
-                                com.xzyht.notifyrelay.core.util.MessageSender.sendChatMessage(
-                                    context,
-                                    chatInput,
-                                    deviceManager
-                                )
-                                chatHistoryState.value = ChatMemory.getChatHistory(context)
-                                chatInput = ""
-                            },
-                            enabled = com.xzyht.notifyrelay.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
-                                    com.xzyht.notifyrelay.core.util.MessageSender.isValidMessage(chatInput),
-                            modifier = Modifier.align(Alignment.CenterVertically)
-                        ) {
-                            top.yukonga.miuix.kmp.basic.Text("发送")
-                        }
-                    }
-                }
+                // 聊天测试 Tab：独立到 UIChatTest 组件
+                com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
             }
             2 -> {
                 // 本地通知过滤 Tab
-                // 直接使用 UILocalFilter，原 NotificationFilterPager 为薄封装
                 UILocalFilter()
             }
         }
