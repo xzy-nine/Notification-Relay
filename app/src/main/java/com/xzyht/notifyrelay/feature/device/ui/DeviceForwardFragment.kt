@@ -26,7 +26,7 @@ import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
-import com.xzyht.notifyrelay.feature.notification.ui.NotificationFilterPager
+import com.xzyht.notifyrelay.feature.notification.ui.filter.UILocalFilter
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
 import top.yukonga.miuix.kmp.basic.Button
@@ -305,7 +305,8 @@ fun DeviceForwardScreen(
             }
             2 -> {
                 // 本地通知过滤 Tab
-                NotificationFilterPager()
+                // 直接使用 UILocalFilter，原 NotificationFilterPager 为薄封装
+                UILocalFilter()
             }
         }
     }
