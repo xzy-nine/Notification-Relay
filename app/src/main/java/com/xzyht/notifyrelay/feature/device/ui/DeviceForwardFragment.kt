@@ -107,9 +107,7 @@ class DeviceForwardFragment : Fragment() {
             setContent {
                 MiuixTheme {
                     DeviceForwardScreen(
-                        deviceManager = getDeviceManager(requireContext()),
-                        loadAuthedUuids = { loadAuthedUuids() },
-                        saveAuthedUuids = { saveAuthedUuids(it) }
+                        deviceManager = getDeviceManager(requireContext())
                     )
                 }
             }
@@ -117,11 +115,11 @@ class DeviceForwardFragment : Fragment() {
     }
 @Composable
 fun DeviceForwardScreen(
-    deviceManager: DeviceConnectionManager,
-    loadAuthedUuids: () -> Set<String>,
-    saveAuthedUuids: (Set<String>) -> Unit
+    deviceManager: DeviceConnectionManager
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    // 触发一次读取以避免未使用参数提示（保持原有持久化行为）
+        // loadAuthedUuids/saveAuthedUuids 留作接口使用，具体操作在需要时调用
     // 确保RemoteFilterConfig已加载
     if (!RemoteFilterConfig.isLoaded) {
         RemoteFilterConfig.load(context)
@@ -130,36 +128,13 @@ fun DeviceForwardScreen(
     // 手动发现提示相关状态
     val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
     val snackbarVisible = remember { mutableStateOf(false) }
-    val coroutineScopeSnackbar = rememberCoroutineScope()
-
-     
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
     val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤")
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
-    // NotificationFilterPager 状态，持久化与后端同步
-    var filterSelf by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterSelf) }
-    var filterOngoing by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterOngoing) }
-    var filterNoTitleOrText by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterNoTitleOrText) }
-    var filterImportanceNone by remember { mutableStateOf<Boolean>(BackendLocalFilter.filterImportanceNone) }
-
-    // 持久化监听 - 直接更新后端状态
-    LaunchedEffect(filterSelf, filterOngoing, filterNoTitleOrText, filterImportanceNone) {
-        BackendLocalFilter.filterSelf = filterSelf
-        BackendLocalFilter.filterOngoing = filterOngoing
-        BackendLocalFilter.filterNoTitleOrText = filterNoTitleOrText
-        BackendLocalFilter.filterImportanceNone = filterImportanceNone
-        context?.let {
-            StorageManager.putBoolean(it, "filter_self", filterSelf, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(it, "filter_ongoing", filterOngoing, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(it, "filter_no_title_or_text", filterNoTitleOrText, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(it, "filter_importance_none", filterImportanceNone, StorageManager.PrefsType.FILTER)
-        }
-    }
-    // 连接弹窗与错误弹窗相关状态
-    var showConfirmDialog by remember { mutableStateOf<DeviceInfo?>(null) }
-    var connectingDevice by remember { mutableStateOf<DeviceInfo?>(null) }
-    var connectError by rememberSaveable { mutableStateOf<String?>(null) }
+    // NotificationFilterPager 的状态由其内部组件管理
+        // 只监听全局选中设备（订阅由需要的组件进行）
+    // 连接弹窗与错误弹窗相关状态（暂不在此处管理具体弹窗）
     // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
 
     // Miuix风格通知弹窗
@@ -194,17 +169,16 @@ fun DeviceForwardScreen(
     val textStyles = MiuixTheme.textStyles
     // 聊天区相关状态
     var chatInput by rememberSaveable { mutableStateOf("") }
-    var chatExpanded by rememberSaveable { mutableStateOf(false) }
     val chatHistoryState = remember { mutableStateOf<List<String>>(emptyList()) }
     // 协程作用域（必须在 @Composable 作用域内声明）
-    val coroutineScope = rememberCoroutineScope()
     // 聊天内容持久化到本地文件，应用退出前都保留
     LaunchedEffect(context) {
         chatHistoryState.value = ChatMemory.getChatHistory(context)
     }
-    // 只监听全局选中设备
+    // 只监听全局选中设备（保持调用以触发任何订阅逻辑）
     val selectedDeviceState = GlobalSelectedDeviceHolder.current()
-    val selectedDevice = selectedDeviceState.value
+    // 读取 value 以保持订阅/避免未使用变量警告
+    selectedDeviceState.value
     // 复刻lancomm事件监听风格，Compose事件流监听消息
     // 远程通知过滤与复刻到系统通知中心
     val notificationCallback: (String) -> Unit = remember {
@@ -224,36 +198,8 @@ fun DeviceForwardScreen(
     }
 
     // 聊天区UI+过滤设置（可折叠）
-    var filterExpanded by rememberSaveable { mutableStateOf(false) }
 
-    // UI状态变量 - 直接从后端获取，不自己持久化
-    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
-    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
-    var allGroups by remember { mutableStateOf<List<MutableList<String>>>(
-        (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
-         RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
-    ) }
-    var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(
-        (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
-    ) }
-    var filterListText by remember { mutableStateOf(
-        RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
-    ) }
-    var enableLockScreenOnly by remember { mutableStateOf(RemoteFilterConfig.enableLockScreenOnly) }
-
-    // 直接更新后端状态，不需要额外的持久化监听
-
-    // 状态已实时同步，不需要重置加载标志
-
-    var showAppPickerForGroup by rememberSaveable(stateSaver = Saver(
-        save = { "${it.first},${it.second}" },
-        restore = { value ->
-            val parts = value.split(",")
-            (parts[0].toBoolean()) to (parts.getOrNull(1)?.toInt() ?: -1)
-        }
-    )) { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
-    var appSearchQuery by rememberSaveable { mutableStateOf("") }
+    // 远程过滤 UI 已迁移到 UIRemoteFilter，相关状态由该组件管理
 
     // 前端状态已直接从后端初始化，不需要额外加载
 
@@ -272,298 +218,8 @@ fun DeviceForwardScreen(
         // 移除Spacer，改为内容区顶部padding
         when (selectedTabIndex) {
             0 -> {
-                // 远程通知过滤 Tab 内容，支持整体上下滚动
-                val scrollState = androidx.compose.foundation.rememberScrollState()
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                        .padding(top = 12.dp)
-                ) {
-                    // 包名等价功能总开关
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
-                    ) {
-                        Text("启用包名等价映射", style = textStyles.body2, color = colorScheme.onSurface)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        top.yukonga.miuix.kmp.basic.Switch(
-                            checked = enablePackageGroupMapping,
-                            onCheckedChange = { 
-                                RemoteFilterConfig.enablePackageGroupMapping = it
-                                RemoteFilterConfig.save(context)
-                                enablePackageGroupMapping = it
-                            },
-                            modifier = Modifier.size(width = 24.dp, height = 12.dp)
-                        )
-                    }
-                    // 滚动区域：包名组配置
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 320.dp) // 限高，避免撑满整个屏幕
-                    ) {
-                        items(allGroups.size) { idx ->
-                            val group = allGroups[idx]
-                            val groupEnabled = enablePackageGroupMapping
-                            top.yukonga.miuix.kmp.basic.Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp)
-                                    .then(
-                                        if (groupEnabled) Modifier.clickable {
-                                            allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
-                                        } else Modifier
-                                    )
-                            ) {
-                                Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        top.yukonga.miuix.kmp.basic.Checkbox(
-                                            checked = allGroupEnabled[idx],
-                                            onCheckedChange = { v ->
-                                                val newEnabled = allGroupEnabled.toMutableList().apply { set(idx, v) }
-                                                allGroupEnabled = newEnabled
-                                                // 更新后端状态
-                                                val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
-                                                RemoteFilterConfig.defaultGroupEnabled = newEnabled.take(defaultSize).toMutableList()
-                                                RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
-                                                RemoteFilterConfig.save(context)
-                                            },
-                                            modifier = Modifier.size(20.dp),
-                                            colors = top.yukonga.miuix.kmp.basic.CheckboxDefaults.checkboxColors(
-                                                checkedBackgroundColor = colorScheme.primary,
-                                                checkedForegroundColor = colorScheme.onPrimary,
-                                                uncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
-                                                uncheckedForegroundColor = colorScheme.outline,
-                                                disabledCheckedBackgroundColor = colorScheme.surface,
-                                                disabledUncheckedBackgroundColor = colorScheme.outline.copy(alpha = 0.8f),
-                                                disabledCheckedForegroundColor = colorScheme.outline,
-                                                disabledUncheckedForegroundColor = colorScheme.outline
-                                            ),
-                                            enabled = enablePackageGroupMapping
-                                        )
-                                        Text(
-                                            if (idx < RemoteFilterConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-RemoteFilterConfig.defaultPackageGroups.size}",
-                                            style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
-                                        )
-                                        Spacer(Modifier.weight(1f))
-                                        if (idx >= RemoteFilterConfig.defaultPackageGroups.size) {
-                                            top.yukonga.miuix.kmp.basic.Button(
-                                                onClick = { showAppPickerForGroup = true to idx },
-                                                modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
-                                                enabled = enablePackageGroupMapping
-                                            ) {
-                                                top.yukonga.miuix.kmp.basic.Text("+")
-                                            }
-                                            top.yukonga.miuix.kmp.basic.Button(
-                                                onClick = {
-                                                    val newGroups = allGroups.toMutableList().apply { removeAt(idx) }
-                                                    val newEnabled = allGroupEnabled.toMutableList().apply { removeAt(idx) }
-                                                    allGroups = newGroups
-                                                    allGroupEnabled = newEnabled
-                                                    // 更新后端状态
-                                                    val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
-                                                    RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
-                                                    RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
-                                                    RemoteFilterConfig.save(context)
-                                                },
-                                                modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp).padding(start = 2.dp),
-                                                enabled = enablePackageGroupMapping
-                                            ) {
-                                                top.yukonga.miuix.kmp.basic.Text("×")
-                                            }
-                                        }
-                                    }
-                                    // 包名自动换行显示
-                                    androidx.compose.foundation.layout.FlowRow(
-                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        val pm = context.packageManager
-                                        val installedPkgs = remember { AppRepository.getInstalledPackageNamesSync(context) }
-                                        group.forEach { pkg ->
-                                            val isInstalled = installedPkgs.contains(pkg)
-                                            // 使用缓存的图标（同步版本）
-                                            val iconBitmap = AppRepository.getAppIconSync(context, pkg)
-                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                                                if (iconBitmap != null) {
-                                                    Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp))
-                                                }
-                                                Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // 添加新组按钮
-                    top.yukonga.miuix.kmp.basic.Button(
-                        onClick = {
-                            val newGroups = allGroups.toMutableList().apply { add(mutableListOf()) }
-                            val newEnabled = allGroupEnabled.toMutableList().apply { add(true) }
-                            allGroups = newGroups
-                            allGroupEnabled = newEnabled
-                            // 更新后端状态
-                            val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
-                            RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
-                            RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
-                            RemoteFilterConfig.save(context)
-                        },
-                        modifier = Modifier.padding(vertical = 2.dp),
-                        enabled = enablePackageGroupMapping
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Text("添加新组")
-                    }
-                    // 应用选择弹窗（封装组件调用）
-                    if (showAppPickerForGroup.first) {
-                        val groupIdx = showAppPickerForGroup.second
-                        AppPickerDialog(
-                            visible = true,
-                            onDismiss = { showAppPickerForGroup = false to -1 },
-                            onAppSelected = { pkg: String ->
-                                val newGroups = allGroups.toMutableList().apply {
-                                    if (groupIdx in indices && !this[groupIdx].contains(pkg)) {
-                                        this[groupIdx] = (this[groupIdx] + pkg).toMutableList()
-                                    }
-                                }
-                                allGroups = newGroups
-                                // 更新后端状态
-                                val defaultSize = RemoteFilterConfig.defaultPackageGroups.size
-                                RemoteFilterConfig.customPackageGroups = newGroups.drop(defaultSize).map { it.toMutableList() }.toMutableList()
-                                RemoteFilterConfig.save(context)
-                                showAppPickerForGroup = false to -1
-                            },
-                            title = "选择应用"
-                        )
-                    }
-                    // 过滤模式
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("过滤模式:", style = textStyles.body2, color = colorScheme.onSurface)
-                        val modes = listOf("none" to "无", "black" to "黑名单", "white" to "白名单", "peer" to "对等")
-                        modes.forEach { (value, label) ->
-                            top.yukonga.miuix.kmp.basic.Button(
-                                onClick = { 
-                                    RemoteFilterConfig.filterMode = value
-                                    RemoteFilterConfig.enablePeerMode = (value == "peer")
-                                    RemoteFilterConfig.save(context)
-                                    filterMode = value
-                                },
-                                modifier = Modifier.padding(horizontal = 2.dp),
-                                colors = if (filterMode == value) top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary() else top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
-                            ) {
-                                top.yukonga.miuix.kmp.basic.Text(label)
-                            }
-                        }
-                    }
-                    // 黑白名单
-                    if (filterMode == "black" || filterMode == "white") {
-                        var showFilterAppPicker by remember { mutableStateOf(false) }
-                        var pendingFilterPkg by remember { mutableStateOf<String?>(null) }
-                        var pendingKeyword by remember { mutableStateOf("") }
-                        Text(
-                            "${if (filterMode=="black")"黑" else "白"}名单(每行:包名,可选关键词):",
-                            style = textStyles.body2,
-                            color = colorScheme.onSurface
-                        )
-                        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            top.yukonga.miuix.kmp.basic.TextField(
-                                value = filterListText,
-                                onValueChange = { 
-                                    filterListText = it
-                                    RemoteFilterConfig.filterList = it.lines().filter { line -> line.isNotBlank() }.map { line ->
-                                        val arr = line.split(",", limit=2)
-                                        arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
-                                    }
-                                    RemoteFilterConfig.save(context)
-                                },
-                                modifier = Modifier.weight(1f),
-                                label = "com.a,关键字\ncom.b"
-                            )
-                            top.yukonga.miuix.kmp.basic.Button(
-                                onClick = { showFilterAppPicker = true },
-                                modifier = Modifier.padding(start = 6.dp)
-                            ) {
-                                top.yukonga.miuix.kmp.basic.Text("添加包名")
-                            }
-                        }
-                        if (showFilterAppPicker) {
-                            AppPickerDialog(
-                                visible = true,
-                                onDismiss = { showFilterAppPicker = false },
-                                onAppSelected = { pkg: String ->
-                                    pendingFilterPkg = pkg
-                                    pendingKeyword = ""
-                                    showFilterAppPicker = false
-                                },
-                                title = "选择包名"
-                            )
-                        }
-                        if (pendingFilterPkg != null) {
-                            val showKeywordDialog = remember { mutableStateOf(true) }
-                            AddKeywordDialog(
-                                showDialog = showKeywordDialog,
-                                packageName = pendingFilterPkg!!,
-                                initialKeyword = pendingKeyword,
-                                onConfirm = { keyword ->
-                                    // 追加到名单
-                                    val line = if (keyword.isBlank()) pendingFilterPkg!! else pendingFilterPkg!! + "," + keyword.trim()
-                                    val newFilterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
-                                    filterListText = newFilterListText
-                                    // 更新后端状态
-                                    RemoteFilterConfig.filterList = newFilterListText.lines().filter { it.isNotBlank() }.map { it ->
-                                        val arr = it.split(",", limit=2)
-                                        arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
-                                    }
-                                    RemoteFilterConfig.save(context)
-                                    showKeywordDialog.value = false
-                                    pendingFilterPkg = null
-                                },
-                                onDismiss = {
-                                    showKeywordDialog.value = false
-                                    pendingFilterPkg = null
-                                }
-                            )
-                        }
-                    }
-                    // 延迟去重
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        top.yukonga.miuix.kmp.basic.Switch(
-                            checked = enableDedup,
-                            onCheckedChange = { 
-                                RemoteFilterConfig.enableDeduplication = it
-                                RemoteFilterConfig.save(context)
-                                enableDedup = it
-                            },
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                        Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
-                    }
-                    // 锁屏通知过滤
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        top.yukonga.miuix.kmp.basic.Switch(
-                            checked = enableLockScreenOnly,
-                            onCheckedChange = { 
-                                RemoteFilterConfig.enableLockScreenOnly = it
-                                RemoteFilterConfig.save(context)
-                                enableLockScreenOnly = it
-                            },
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                        Text("仅复刻锁屏通知（非锁屏通知仅存储不复刻）", style = textStyles.body2, color = colorScheme.onSurface)
-                    }
-                    // 应用按钮
-                    top.yukonga.miuix.kmp.basic.Button(
-                        onClick = {
-                            // 所有状态已经实时同步到后端，这里只需要确保最终保存
-                            RemoteFilterConfig.save(context)
-                        },
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Text("应用设置")
-                    }
-                }
+                // 远程通知过滤 Tab：重构为复用 UIRemoteFilter 组件
+                com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
             }
             1 -> {
                 // 聊天测试 Tab 内容
@@ -649,16 +305,7 @@ fun DeviceForwardScreen(
             }
             2 -> {
                 // 本地通知过滤 Tab
-                NotificationFilterPager(
-                    filterSelf = filterSelf,
-                    filterOngoing = filterOngoing,
-                    filterNoTitleOrText = filterNoTitleOrText,
-                    filterImportanceNone = filterImportanceNone,
-                    onFilterSelfChange = { filterSelf = it },
-                    onFilterOngoingChange = { filterOngoing = it },
-                    onFilterNoTitleOrTextChange = { filterNoTitleOrText = it },
-                    onFilterImportanceNoneChange = { filterImportanceNone = it }
-                )
+                NotificationFilterPager()
             }
         }
     }

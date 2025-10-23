@@ -8,22 +8,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 本地通知过滤设置Pager
  */
 @Composable
-fun NotificationFilterPager(
-    filterSelf: Boolean = true,
-    filterOngoing: Boolean = true,
-    filterNoTitleOrText: Boolean = true,
-    filterImportanceNone: Boolean = true,
-    onFilterSelfChange: (Boolean) -> Unit = {},
-    onFilterOngoingChange: (Boolean) -> Unit = {},
-    onFilterNoTitleOrTextChange: (Boolean) -> Unit = {},
-    onFilterImportanceNoneChange: (Boolean) -> Unit = {}
-) {
-    // 同步状态到BackendLocalFilter
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterSelf = filterSelf
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterOngoing = filterOngoing
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterNoTitleOrText = filterNoTitleOrText
-    com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter.filterImportanceNone = filterImportanceNone
-
+fun NotificationFilterPager() {
+    // NotificationFilterPager 不再接受父级状态参数，
+    // 保持与远程过滤相同的模式：由 UILocalFilter 自身读取/写入后端持久化。
     MiuixTheme {
         UILocalFilter()
     }
