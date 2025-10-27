@@ -317,7 +317,7 @@ fun UIRemoteFilter() {
                 },
                 modifier = androidx.compose.ui.Modifier.padding(end = 4.dp)
             )
-            Text("智能去重（先发送后撤回机制）", style = textStyles.body2, color = colorScheme.onSurface)
+            Text("智能去重", style = textStyles.body2, color = colorScheme.onSurface)
         }
 
         // 锁屏通知过滤
@@ -331,7 +331,7 @@ fun UIRemoteFilter() {
                 },
                 modifier = androidx.compose.ui.Modifier.padding(end = 4.dp)
             )
-            Text("仅复刻锁屏通知（非锁屏通知仅存储不复刻）", style = textStyles.body2, color = colorScheme.onSurface)
+            Text("仅复刻锁屏通知到通知栏", style = textStyles.body2, color = colorScheme.onSurface)
         }
 
         // 应用按钮
@@ -342,7 +342,7 @@ fun UIRemoteFilter() {
             },
             modifier = androidx.compose.ui.Modifier.padding(top = 8.dp)
         ) {
-            top.yukonga.miuix.kmp.basic.Text("应用设置")
+            top.yukonga.miuix.kmp.basic.Text("应用")
         }
     }
     }
