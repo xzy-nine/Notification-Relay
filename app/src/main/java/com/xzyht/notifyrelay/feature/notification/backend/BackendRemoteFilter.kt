@@ -117,59 +117,77 @@ object BackendRemoteFilter {
             if (RemoteFilterConfig.enableDeduplication) {
                 val now = System.currentTimeMillis()
 
-                // 1. 快速缓存检查（10秒内）
-                synchronized(dedupCache) {
-                    dedupCache.removeAll { now - it.third > 10_000 } // 清理过期缓存
-                    val cacheDup = dedupCache.any { it.first == title && it.second == text }
-                    if (BuildConfig.DEBUG) Log.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
-                    if (cacheDup) {
-                        // 撤回匹配的待监控通知
-                        synchronized(pendingNotifications) {
-                            val toCancel = pendingNotifications.filter { it.title == title && it.text == text }
-                            toCancel.forEach { cancelNotification(it.notifyId, context) }
-                            pendingNotifications.removeAll(toCancel)
-                        }
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
-                        return FilterResult(false, mappedPkg, title, text, data)
-                    }
+                // 性能优化：仅在满足以下情况时跳过去重：
+                //  - 开启了包名等价组映射
+                //  - 远端包名不属于任何等价组
+                //  - 且映射到的本地包未安装
+                // 对于本机已安装映射包（包括 mappedPkg == pkg 的同包名场景）仍然执行去重。
+                val pkgInGroups = if (RemoteFilterConfig.enablePackageGroupMapping) {
+                    RemoteFilterConfig.packageGroups.any { pkg in it }
+                } else {
+                    true
                 }
 
-                // 2. 历史重复检查优化
-                try {
-                    // 预先检查历史同步可靠性
-                    val isHistoryReliable = checkHistorySyncReliability(context)
-                    if (!isHistoryReliable) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
-                        // Note: This line references a non-existent method, commenting out
-                        // com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifyHistoryChanged("本机", context)
+                val shouldSkipDedup = RemoteFilterConfig.enablePackageGroupMapping && !pkgInGroups && (mappedPkg !in installedPkgs)
+
+                if (shouldSkipDedup) {
+                    if (BuildConfig.DEBUG) Log.d("智能去重", "跳过去重：包名不属于等价组且本机未安装映射包，包名=$pkg, mappedPkg=$mappedPkg")
+                    // 跳过去重，继续走后续流程（如锁屏过滤和最终通过）
+                } else {
+                    // 1. 快速缓存检查（10秒内）
+                    synchronized(dedupCache) {
+                        dedupCache.removeAll { now - it.third > 10_000 } // 清理过期缓存
+                        val cacheDup = dedupCache.any { it.first == title && it.second == text }
+                        if (BuildConfig.DEBUG) Log.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
+                        if (cacheDup) {
+                            // 撤回匹配的待监控通知
+                            synchronized(pendingNotifications) {
+                                val toCancel = pendingNotifications.filter { it.title == title && it.text == text }
+                                toCancel.forEach { cancelNotification(it.notifyId, context) }
+                                pendingNotifications.removeAll(toCancel)
+                            }
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
+                            return FilterResult(false, mappedPkg, title, text, data)
+                        }
                     }
 
-                    // 获取内存历史数据
-                    // Note: This references non-existent classes, need to handle appropriately
-                    val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
-                    val memoryDup = checkDuplicateInMemory(localList, title, text, now)
+                    // 2. 历史重复检查优化
+                    try {
+                        // 预先检查历史同步可靠性
+                        val isHistoryReliable = checkHistorySyncReliability(context)
+                        if (!isHistoryReliable) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
+                            // Note: This line references a non-existent method, commenting out
+                            // com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifyHistoryChanged("本机", context)
+                        }
 
-                    // 如果内存中有重复，直接过滤
-                    if (memoryDup) {
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "命中内存历史重复")
-                        return FilterResult(false, mappedPkg, title, text, data)
+                        // 获取内存历史数据
+                        // Note: This references non-existent classes, need to handle appropriately
+                        val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
+                        val memoryDup = checkDuplicateInMemory(localList, title, text, now)
+
+                        // 如果内存中有重复，直接过滤
+                        if (memoryDup) {
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "命中内存历史重复")
+                            return FilterResult(false, mappedPkg, title, text, data)
+                        }
+
+                        // 内存无重复，默认情况下标记为需要延迟验证（先发送后监控机制）。
+                        // 但如果该远端通知标记为锁屏（isLocked），则避免先发送再撤回，改为不立即展示，
+                        // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
+                        if (isLocked) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "锁屏场景：内存无重复，改为不立即展示，等待超期后再复刻")
+                            return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
+                        }
+
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
+                        return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
+
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e("智能去重", "历史检查异常", e)
+                        // 异常情况下默认延迟验证
+                        return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
                     }
-
-                    // 内存无重复，默认情况下标记为需要延迟验证（先发送后监控机制）。
-                    // 但如果该远端通知标记为锁屏（isLocked），则避免先发送再撤回，改为不立即展示，
-                    // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
-                    if (isLocked) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "锁屏场景：内存无重复，改为不立即展示，等待超期后再复刻")
-                        return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
-                    }
-
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
-                    return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
-
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("智能去重", "历史检查异常", e)
-                    // 异常情况下默认延迟验证
-                    return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
                 }
             }
 
