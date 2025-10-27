@@ -26,37 +26,15 @@ fun gitOutput(vararg args: String): String {
     val stdout = ByteArrayOutputStream()
     try {
         exec {
-            commandLine = listOf("git", *args)
             isIgnoreExitValue = true
-            standardOutput = stdout
-        }
-    } catch (e: Exception) {
-        // 如果没有 git 或执行失败，返回空字符串
-    }
-    return stdout.toString().trim()
-}
-
-val gitBranch: String = runCatching { gitOutput("rev-parse", "--abbrev-ref", "HEAD") }.getOrNull()?.ifBlank { "" } ?: ""
-val mainCommits: Int = runCatching { gitOutput("rev-list", "--count", "main").toInt() }.getOrElse { 0 }
-val currentCommits: Int = runCatching { gitOutput("rev-list", "--count", "HEAD").toInt() }.getOrElse { 0 }
-
-val patch: Int = if (gitBranch == "main") {
     // main 分支使用 MMdd 格式的日期作为 patch，和之前仓库示例一致（例如 1027 -> Oct 27）
-    val fmt = DateTimeFormatter.ofPattern("MMdd")
-    LocalDate.now().format(fmt).toInt()
-} else {
     // dev 等分支使用当前分支的提交计数
-    currentCommits
-}
-
-val computedVersionName = "$versionMajor.$mainCommits.$patch"
-val computedVersionCode = (versionMajor * 10_000_000) + (mainCommits * 1000) + patch
-
-
-android {
     namespace = "com.xzyht.notifyrelay"
-    compileSdk = 35
-
+    // 使用 buildSrc 的 JGit 实现计算版本信息（避免启动外部进程，兼容 configuration-cache）
+    val versionMajor: Int = (project.findProperty("versionMajor") as String?)?.toIntOrNull() ?: 0
+    val _versionInfo = Versioning.compute(rootProject.projectDir, versionMajor)
+    val computedVersionName = _versionInfo.versionName
+    val computedVersionCode = _versionInfo.versionCode
     defaultConfig {
         applicationId = "com.xzyht.notifyrelay"
         minSdk = 26
