@@ -2,10 +2,6 @@ package com.xzyht.notifyrelay.feature.notification.backend
 
 import android.content.Context
 import android.util.Log
-import android.app.AppOpsManager
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
-import android.os.Process
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
@@ -80,7 +76,6 @@ object BackendRemoteFilter {
 
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 开始过滤 pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=$text")
 
-
             // 对等模式过滤
             if (RemoteFilterConfig.filterMode == "peer" || RemoteFilterConfig.enablePeerMode) {
                 if (mappedPkg !in installedPkgs) {
@@ -139,20 +134,6 @@ object BackendRemoteFilter {
                     }
                 }
 
-                // 前台抑制作为智能去重的子项：仅在启用去重时执行
-                if (RemoteFilterConfig.enableForegroundSkip) {
-                    val topPkg = getForegroundAppPackage(context)
-                    if (topPkg != null) {
-                        val sameOrEquivalent = isSameOrEquivalentPackage(mappedPkg, topPkg)
-                        if (sameOrEquivalent) {
-                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "智能去重-前台抑制: 本机前台应用 $topPkg 与远端映射 $mappedPkg 等价，改为仅存储")
-                            return FilterResult(false, mappedPkg, title, text, data)
-                        }
-                    } else if (BuildConfig.DEBUG) {
-                        Log.d("NotifyRelay(狂鼠)", "智能去重-前台抑制: 无法获取前台应用或未授权使用情况访问，跳过前台抑制")
-                    }
-                }
-
                 // 2. 历史重复检查优化
                 try {
                     // 预先检查历史同步可靠性
@@ -205,130 +186,6 @@ object BackendRemoteFilter {
             if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "filterRemoteNotification: 解析异常 - data=$data", e)
             return FilterResult(true, "", "", "", data)
         }
-    }
-
-    /**
-     * 获取当前前台应用包名（需要“使用情况访问权限”）
-     * 若无权限或获取失败，返回 null
-     */
-    private fun getForegroundAppPackage(context: Context): String? {
-        return try {
-            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
-            if (mode != AppOpsManager.MODE_ALLOWED) {
-                return null
-            }
-            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val end = System.currentTimeMillis()
-            val begin = end - 10_000 // 最近10秒事件
-            try {
-                val events: UsageEvents = usm.queryEvents(begin, end)
-                var lastPkg: String? = null
-                var lastTime = 0L
-                val event = UsageEvents.Event()
-                while (events.hasNextEvent()) {
-                    events.getNextEvent(event)
-                    val type = event.eventType
-                    val isFg = type == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                            type == UsageEvents.Event.ACTIVITY_RESUMED
-                    if (isFg && event.timeStamp >= lastTime) {
-                        lastTime = event.timeStamp
-                        lastPkg = event.packageName
-                    }
-                }
-                if (!lastPkg.isNullOrBlank() && lastPkg != context.packageName) {
-                    return lastPkg
-                }
-
-                // 如果 UsageEvents 没有结果或返回的是本应用，尝试使用 queryAndAggregateUsageStats 挑选最近使用的非本应用包名
-                try {
-                    val agg = usm.queryAndAggregateUsageStats(begin, end)
-                    if (agg != null && agg.isNotEmpty()) {
-                        val candidate = agg.entries
-                            .mapNotNull { (pkgName, usage) ->
-                                pkgName to (usage?.lastTimeUsed ?: 0L)
-                            }
-                            .filter { it.first != context.packageName }
-                            .maxByOrNull { it.second }
-                        if (candidate != null && candidate.second > 0L) {
-                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "queryAndAggregateUsageStats 选中前台应用: ${candidate.first}")
-                            return candidate.first
-                        }
-                    }
-                } catch (e: Throwable) {
-                    if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "queryAndAggregateUsageStats 异常: ${e.message}")
-                }
-
-                // 如果以上方法都没有结果，继续回退到 ActivityManager（某些 ROM/厂商上需要）
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "queryEvents 异常: ${e.message}")
-            }
-
-            try {
-                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-                // 优先使用 getRunningAppProcesses（需要权限），选择 importance 为 foreground 且不是本应用的进程
-                val running = am.runningAppProcesses
-                if (running != null) {
-                    val fgCandidates = running.filter { info ->
-                        info.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-                                !info.pkgList.isNullOrEmpty()
-                    }
-                    // 选第一个包名不是本应用的候选
-                    val candidatePkg = fgCandidates
-                        .asSequence()
-                        .flatMap { it.pkgList.asSequence() }
-                        .firstOrNull { it != context.packageName }
-
-                    if (!candidatePkg.isNullOrBlank()) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "回退到 ActivityManager 获取前台应用: $candidatePkg")
-                        return candidatePkg
-                    }
-                }
-
-                // 如果上述未命中，尝试选择 importance 值最低(最靠前)且包名不是本应用的进程
-                if (running != null) {
-                    val fallback = running
-                        .sortedBy { it.importance }
-                        .flatMap { it.pkgList.asSequence() }
-                        .firstOrNull { it != context.packageName }
-                    if (!fallback.isNullOrBlank()) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "ActivityManager 备选前台应用: $fallback")
-                        return fallback
-                    }
-                }
-
-                // 兼容旧 API：getRunningTasks
-                @Suppress("DEPRECATION")
-                val tasks = am.getRunningTasks(1)
-                if (!tasks.isNullOrEmpty()) {
-                    val top = tasks[0].topActivity
-                    if (top != null && !top.packageName.isNullOrBlank() && top.packageName != context.packageName) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "回退到 getRunningTasks 获取前台应用: ${top.packageName}")
-                        return top.packageName
-                    }
-                }
-            } catch (e: Throwable) {
-                if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "ActivityManager 回退获取前台应用失败: ${e.message}")
-            }
-
-            null
-        } catch (e: Throwable) {
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay(狂鼠)", "获取前台应用失败: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * 判断两个包名是否相同或处于同一等价组
-     */
-    private fun isSameOrEquivalentPackage(mappedPkg: String, otherPkg: String): Boolean {
-        if (mappedPkg == otherPkg) return true
-        val groups = RemoteFilterConfig.packageGroups
-        return groups.any { mappedPkg in it && otherPkg in it }
     }
 
     /**
@@ -516,7 +373,6 @@ object RemoteFilterConfig {
     private const val KEY_FILTER_LIST = "filter_list"
     private const val KEY_ENABLE_DEDUP = "enable_dedup"
     private const val KEY_ENABLE_PEER = "enable_peer"
-    private const val KEY_ENABLE_FOREGROUND_SKIP = "enable_foreground_skip"
 
     // 标记配置是否已加载，避免重复加载
     var isLoaded: Boolean = false
@@ -555,9 +411,6 @@ object RemoteFilterConfig {
     var enablePeerMode: Boolean = false
     // 锁屏通知过滤开关
     var enableLockScreenOnly: Boolean = false
-    // 前台抑制（智能去重子项）：当前台是相同或等价应用时，仅存储不复刻
-    // 注意：该开关仅在 enableDeduplication 为 true 时生效
-    var enableForegroundSkip: Boolean = true
 
     // 加载设置
     fun load(context: Context) {
@@ -582,7 +435,6 @@ object RemoteFilterConfig {
         enableDeduplication = StorageManager.getBoolean(context, KEY_ENABLE_DEDUP, true, StorageManager.PrefsType.FILTER)
         enablePeerMode = StorageManager.getBoolean(context, KEY_ENABLE_PEER, false, StorageManager.PrefsType.FILTER)
         enableLockScreenOnly = StorageManager.getBoolean(context, "enable_lock_screen_only", false, StorageManager.PrefsType.FILTER)
-        enableForegroundSkip = StorageManager.getBoolean(context, KEY_ENABLE_FOREGROUND_SKIP, true, StorageManager.PrefsType.FILTER)
         val filterListStr = StorageManager.getStringSet(context, KEY_FILTER_LIST, emptySet(), StorageManager.PrefsType.FILTER)
         filterList = filterListStr.map {
             val arr = it.split("|", limit=2)
@@ -602,7 +454,6 @@ object RemoteFilterConfig {
             StorageManager.putBoolean(context, KEY_ENABLE_DEDUP, enableDeduplication, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(context, KEY_ENABLE_PEER, enablePeerMode, StorageManager.PrefsType.FILTER)
             StorageManager.putBoolean(context, "enable_lock_screen_only", enableLockScreenOnly, StorageManager.PrefsType.FILTER)
-            StorageManager.putBoolean(context, KEY_ENABLE_FOREGROUND_SKIP, enableForegroundSkip, StorageManager.PrefsType.FILTER)
             StorageManager.putStringSet(context, KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet(), StorageManager.PrefsType.FILTER)
 
             if (BuildConfig.DEBUG) Log.d("RemoteFilterConfig", "Configuration saved successfully")
