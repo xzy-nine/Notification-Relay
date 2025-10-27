@@ -199,6 +199,16 @@ object NotificationRepository {
             }
             notifications.add(0, record)
             syncToCache(context)
+            // 被动去重：仅在智能去重开启时，通知 BackendRemoteFilter 检查是否命中可撤回队列并撤回复刻通知
+            try {
+                if (com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.enableDeduplication) {
+                    com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.onLocalNotificationEnqueued(title, text, packageName, time, context)
+                } else {
+                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "智能去重已关闭，跳过被动去重推送")
+                }
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.e("NotifyRelay", "调用 onLocalNotificationEnqueued 失败", e)
+            }
         }
 
         notifyHistoryChanged(device, context)

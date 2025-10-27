@@ -1057,6 +1057,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 if (BuildConfig.DEBUG) Log.d("智能去重", "本机锁屏：延迟复刻，等待监控期后再检查重复再复刻 - 标题:${result.title}")
                 // 在后台异步等待监控期（与 BackendRemoteFilter 相同的 15s），然后检查本机历史是否已有重复，
                 // 若无重复则执行复刻；若有则跳过复刻。这样避免在锁屏时先发后撤回的副作用。
+                // 添加延迟复刻占位（可被本机入队取消）
+                try {
+                    if (com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.enableDeduplication) {
+                        com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPlaceholder(result.title, result.text, result.mappedPkg, 15_000L)
+                    }
+                } catch (_: Exception) {}
+
                 coroutineScope.launch {
                     try {
                         val waitMs = 15_000L
@@ -1079,18 +1086,34 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         }
 
                         if (!duplicateFound) {
-                            if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：超期无重复，进行复刻 - 标题:${result.title}")
-                            try {
-                                // 锁屏延迟复刻：不再启动先发后撤回监控，避免重复开启监控协程
-                                replicateNotification(context, result, null, startMonitoring = false)
-                            } catch (e: Exception) {
-                                if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻执行复刻时发生错误", e)
+                            // 最终检查：占位可能已被本机入队移除，若已被移除则跳过发送
+                            val placeholderStillExists = try {
+                                com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.isPlaceholderPresent(result.title, result.text, result.mappedPkg)
+                            } catch (e: Exception) { true }
+
+                            if (!placeholderStillExists) {
+                                if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：占位已被取消，跳过复刻 - 标题:${result.title}")
+                            } else {
+                                if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：超期无重复，进行复刻 - 标题:${result.title}")
+                                try {
+                                    // 锁屏延迟复刻：不再启动先发后撤回监控，避免重复开启监控协程
+                                    replicateNotification(context, result, null, startMonitoring = false)
+                                } catch (e: Exception) {
+                                    if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻执行复刻时发生错误", e)
+                                } finally {
+                                    // 发送或确认后清理占位
+                                    try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
+                                }
                             }
                         } else {
+                            // 若发现重复则清理占位并跳过复刻
+                            try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
                             if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：发现重复，跳过复刻 - 标题:${result.title}")
                         }
                     } catch (e: Exception) {
                         if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻异常", e)
+                        // 出错时确保占位被清理
+                        try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
                     }
                 }
 

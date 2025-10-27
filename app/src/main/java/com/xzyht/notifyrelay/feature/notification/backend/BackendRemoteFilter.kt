@@ -19,8 +19,18 @@ object BackendRemoteFilter {
     // 延迟去重缓存（10秒内）- 用于智能去重机制
     private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
 
-    // 待监控的通知撤回队列 - 先发送后撤回机制的核心
+    // 待监控的通知撤回队列
     private val pendingNotifications = mutableListOf<PendingNotification>()
+    // 延迟复刻占位队列（用于锁屏延迟复刻的占位，15s 可被本机入队取消）
+    private val pendingPlaceholders = mutableListOf<Placeholder>()
+
+    data class Placeholder(
+        val title: String,
+        val text: String,
+        val packageName: String,
+        val createTime: Long,
+        val ttl: Long
+    )
 
     data class PendingNotification(
         val notifyId: Int,
@@ -109,7 +119,7 @@ object BackendRemoteFilter {
 
             // 锁屏通知过滤
             if (RemoteFilterConfig.enableLockScreenOnly && !isLocked) {
-                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤 - 非锁屏通知被过滤")
+                if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤开启 - 非锁屏通知被过滤")
                 return FilterResult(false, mappedPkg, title, text, data)
             }
 
@@ -117,59 +127,76 @@ object BackendRemoteFilter {
             if (RemoteFilterConfig.enableDeduplication) {
                 val now = System.currentTimeMillis()
 
-                // 1. 快速缓存检查（10秒内）
-                synchronized(dedupCache) {
-                    dedupCache.removeAll { now - it.third > 10_000 } // 清理过期缓存
-                    val cacheDup = dedupCache.any { it.first == title && it.second == text }
-                    if (BuildConfig.DEBUG) Log.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
-                    if (cacheDup) {
-                        // 撤回匹配的待监控通知
-                        synchronized(pendingNotifications) {
-                            val toCancel = pendingNotifications.filter { it.title == title && it.text == text }
-                            toCancel.forEach { cancelNotification(it.notifyId, context) }
-                            pendingNotifications.removeAll(toCancel)
-                        }
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
-                        return FilterResult(false, mappedPkg, title, text, data)
-                    }
+                // 性能优化：仅在满足以下情况时跳过去重：
+                //  - 开启了包名等价组映射
+                //  - 远端包名不属于任何等价组
+                //  - 且映射到的本地包未安装
+                // 对于本机已安装映射包（包括 mappedPkg == pkg 的同包名场景）仍然执行去重。
+                val pkgInGroups = if (RemoteFilterConfig.enablePackageGroupMapping) {
+                    RemoteFilterConfig.packageGroups.any { pkg in it }
+                } else {
+                    true
                 }
 
-                // 2. 历史重复检查优化
-                try {
-                    // 预先检查历史同步可靠性
-                    val isHistoryReliable = checkHistorySyncReliability(context)
-                    if (!isHistoryReliable) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
-                        // Note: This line references a non-existent method, commenting out
-                        // com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifyHistoryChanged("本机", context)
+                val shouldSkipDedup = RemoteFilterConfig.enablePackageGroupMapping && !pkgInGroups && (mappedPkg !in installedPkgs)
+
+                if (shouldSkipDedup) {
+                    if (BuildConfig.DEBUG) Log.d("智能去重", "跳过去重：包名不属于等价组且本机未安装映射包，包名=$pkg, mappedPkg=$mappedPkg")
+                    // 跳过去重，继续走后续流程（如锁屏过滤和最终通过）
+                } else {
+                    // 1. 快速缓存检查（10秒内）
+                    synchronized(dedupCache) {
+                        dedupCache.removeAll { now - it.third > 10_000 } // 清理过期缓存
+                        val cacheDup = dedupCache.any { it.first == title && it.second == text }
+                        if (BuildConfig.DEBUG) Log.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
+                        if (cacheDup) {
+                            // 撤回匹配的待监控通知
+                            synchronized(pendingNotifications) {
+                                val toCancel = pendingNotifications.filter { it.title == title && it.text == text }
+                                toCancel.forEach { cancelNotification(it.notifyId, context) }
+                                pendingNotifications.removeAll(toCancel)
+                            }
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
+                            return FilterResult(false, mappedPkg, title, text, data)
+                        }
                     }
 
-                    // 获取内存历史数据
-                    // Note: This references non-existent classes, need to handle appropriately
-                    val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
-                    val memoryDup = checkDuplicateInMemory(localList, title, text, now)
+                    // 2. 历史重复检查优化
+                    try {
+                        val isHistoryReliable = checkHistorySyncReliability(context)
+                        if (!isHistoryReliable) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
+                            // Note: This line references a non-existent method, commenting out
+                            // com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifyHistoryChanged("本机", context)
+                        }
 
-                    // 如果内存中有重复，直接过滤
-                    if (memoryDup) {
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "命中内存历史重复")
-                        return FilterResult(false, mappedPkg, title, text, data)
+                        // 获取内存历史数据
+                        // Note: This references non-existent classes, need to handle appropriately
+                        val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
+                        val memoryDup = checkDuplicateInMemory(localList, title, text, now)
+
+                        // 如果内存中有重复，直接过滤
+                        if (memoryDup) {
+                            if (BuildConfig.DEBUG) Log.d("智能去重", "命中内存历史重复")
+                            return FilterResult(false, mappedPkg, title, text, data)
+                        }
+
+                        // 内存无重复，默认情况下标记为需要延迟验证（先发送后监控机制）。
+                        // 但如果该远端通知接受到时本机锁屏，则避免先发送再撤回，改为不立即展示，
+                        // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
+                        if (isLocked) {
+                            if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "本机锁屏：内存无重复，改为不立即展示，等待超期后再复刻")
+                            return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
+                        }
+
+                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
+                        return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
+
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e("智能去重", "历史检查异常", e)
+                        // 异常情况下默认延迟验证
+                        return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
                     }
-
-                    // 内存无重复，默认情况下标记为需要延迟验证（先发送后监控机制）。
-                    // 但如果该远端通知标记为锁屏（isLocked），则避免先发送再撤回，改为不立即展示，
-                    // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
-                    if (isLocked) {
-                        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "锁屏场景：内存无重复，改为不立即展示，等待超期后再复刻")
-                        return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
-                    }
-
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
-                    return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
-
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("智能去重", "历史检查异常", e)
-                    // 异常情况下默认延迟验证
-                    return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
                 }
             }
 
@@ -220,15 +247,6 @@ object BackendRemoteFilter {
 
         if (BuildConfig.DEBUG) Log.d("智能去重", "内存检查完成 - 历史数量:${localList.size}, 是否重复:$hasDuplicate")
 
-        // 打印时间区间内的可能通知
-        if (BuildConfig.DEBUG && timeWindowNotifications.isNotEmpty()) {
-            Log.d("智能去重", "时间区间内可能通知 (${timeWindowNotifications.size}个):")
-            timeWindowNotifications.forEach { notification ->
-                val timeDiff = Math.abs(notification.time - now)
-                Log.d("智能去重", "  - 标题:${notification.title}, 内容:${notification.text}, 时间差:${timeDiff}ms, 设备:${notification.device}")
-            }
-        }
-
         return hasDuplicate
     }
 
@@ -261,6 +279,102 @@ object BackendRemoteFilter {
     }
 
     /**
+     * 添加占位（用于锁屏延迟复刻场景）。
+     */
+    fun addPlaceholder(title: String, text: String, packageName: String, ttl: Long = 15_000L) {
+        if (!RemoteFilterConfig.enableDeduplication) return
+        val ph = Placeholder(title = title, text = text, packageName = packageName, createTime = System.currentTimeMillis(), ttl = ttl)
+        synchronized(pendingPlaceholders) {
+            pendingPlaceholders.add(ph)
+        }
+        if (BuildConfig.DEBUG) Log.d("智能去重", "添加延迟复刻占位 - 标题:$title, 包名:$packageName, ttl=${ttl}ms")
+    }
+
+    /**
+     * 移除匹配的占位（通常由本机入队触发），返回是否有移除项
+     */
+    fun removePlaceholderMatching(title: String?, text: String?, packageName: String): Boolean {
+        val normalizedTitle = normalizeTitle(title ?: "")
+        val pendingText = text ?: ""
+        synchronized(pendingPlaceholders) {
+            val matches = pendingPlaceholders.filter { ph -> normalizeTitle(ph.title) == normalizedTitle && ph.text == pendingText && ph.packageName == packageName }
+            if (matches.isNotEmpty()) {
+                pendingPlaceholders.removeAll(matches)
+                if (BuildConfig.DEBUG) Log.d("智能去重", "移除占位 - 标题:${title}, 包名:$packageName, 数量:${matches.size}")
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * 检查占位是否仍然存在（并清理过期项）
+     */
+    fun isPlaceholderPresent(title: String?, text: String?, packageName: String): Boolean {
+        val now = System.currentTimeMillis()
+        val normalizedTitle = normalizeTitle(title ?: "")
+        val pendingText = text ?: ""
+        synchronized(pendingPlaceholders) {
+            // 清理过期占位
+            pendingPlaceholders.removeAll { now - it.createTime > it.ttl }
+            return pendingPlaceholders.any { ph -> normalizeTitle(ph.title) == normalizedTitle && ph.text == pendingText && ph.packageName == packageName }
+        }
+    }
+
+    /**
+     * 被动匹配：当本机通知入队（已完成本地过滤并写入历史/内存）时调用。
+     * 如果与待撤回队列命中，则立即撤回对应通知并移除待监控项，进入被动撤回模式，减少轮询与IO。
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun onLocalNotificationEnqueued(title: String?, text: String?, packageName: String, time: Long, context: Context) {
+        if (!RemoteFilterConfig.enableDeduplication) return
+        val normalizedPendingTitle = normalizeTitle(title ?: "")
+        val pendingText = text ?: ""
+        // 先处理占位匹配（用于延迟复刻的占位）——在单独的锁上操作以避免并发问题
+        synchronized(pendingPlaceholders) {
+            val placeholderMatches = pendingPlaceholders.filter { ph ->
+                normalizeTitle(ph.title) == normalizedPendingTitle && ph.text == pendingText && ph.packageName == packageName
+            }
+            if (placeholderMatches.isNotEmpty()) {
+                if (BuildConfig.DEBUG) Log.d("智能去重", "被动命中占位（阻止延迟复刻） - 标题:${title}, 内容:${text}, 匹配数量:${placeholderMatches.size}")
+            }
+            // 移除命中的占位并将其写入去重缓存
+            placeholderMatches.forEach { ph ->
+                try {
+                    pendingPlaceholders.remove(ph)
+                    addToDedupCache(ph.title, ph.text)
+                    if (BuildConfig.DEBUG) Log.d("智能去重", "占位已取消 - 标题:${ph.title}")
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.e("智能去重", "取消占位失败 - 标题:${ph.title}", e)
+                }
+            }
+        }
+
+        // 再处理已发送但在可撤回期的通知
+        synchronized(pendingNotifications) {
+            val matches = pendingNotifications.filter { pending ->
+                normalizeTitle(pending.title) == normalizedPendingTitle && pending.text == pendingText && pending.packageName == packageName
+            }
+            if (matches.isNotEmpty() && BuildConfig.DEBUG) {
+                Log.d("智能去重", "被动命中待撤回通知 - 本机入队 标题:${title}, 内容:${text}, 匹配数量:${matches.size}")
+            }
+            matches.forEach { matched ->
+                try {
+                    cancelNotification(matched.notifyId, matched.context)
+                    if (BuildConfig.DEBUG) Log.d("智能去重", "被动撤回成功 - 通知ID:${matched.notifyId}, 标题:${matched.title}")
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.e("智能去重", "被动撤回失败 - 通知ID:${matched.notifyId}", e)
+                }
+            }
+            // 移除已命中的待监控通知
+            if (matches.isNotEmpty()) pendingNotifications.removeAll(matches)
+
+            // 对于命中的通知，也可以把本地这条记录记入去重缓存，避免短时间内再次复刻
+            matches.forEach { addToDedupCache(it.title, it.text) }
+        }
+    }
+
+    /**
      * 添加待监控的通知
      */
     fun addPendingNotification(notifyId: Int, title: String, text: String, packageName: String, context: Context) {
@@ -279,7 +393,7 @@ object BackendRemoteFilter {
                 context = context
             ))
         }
-        if (BuildConfig.DEBUG) Log.d("智能去重", "添加待监控通知 - 包名:$packageName, 标题:$title, 内容:$text, 通知ID:$notifyId")
+    if (BuildConfig.DEBUG) Log.d("智能去重", "添加待监控通知 - 进入可撤回期(15s) 包名:$packageName, 标题:$title, 通知ID:$notifyId")
         // 启动监控协程
         startNotificationMonitoring()
     }
@@ -301,31 +415,20 @@ object BackendRemoteFilter {
      * 启动通知监控协程
      */
     private fun startNotificationMonitoring() {
-        if (BuildConfig.DEBUG) Log.d("智能去重", "启动通知监控协程 - 当前待监控通知数量:${pendingNotifications.size}")
+    if (BuildConfig.DEBUG) Log.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
         GlobalScope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
                 val toRemove = mutableListOf<PendingNotification>()
 
                 synchronized(pendingNotifications) {
-                    for (pending in pendingNotifications) {
-                        // 检查是否超过监控时间（15秒）
-                        if (now - pending.sendTime > 15_000) {
-                            if (BuildConfig.DEBUG) Log.d("智能去重", "监控超时移除 - 包名:${pending.packageName}, 标题:${pending.title}, 通知ID:${pending.notifyId}, 监控时长:${now - pending.sendTime}ms")
-                            toRemove.add(pending)
-                            continue
+                        for (pending in pendingNotifications) {
+                            // 仅处理监控超时逻辑：我们改为被动匹配（由本机历史入队触发匹配），减少频繁IO读取历史
+                            if (now - pending.sendTime > 15_000) {
+                                if (BuildConfig.DEBUG) Log.d("智能去重", "监控超时移除 - 包名:${pending.packageName}, 标题:${pending.title}, 通知ID:${pending.notifyId}, 监控时长:${now - pending.sendTime}ms")
+                                toRemove.add(pending)
+                            }
                         }
-
-                        // 检查是否有重复的本机通知
-                        val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
-                        val duplicateFound = checkDuplicateInMemory(localList, pending.title, pending.text, pending.sendTime)
-
-                        if (duplicateFound) {
-                            if (BuildConfig.DEBUG) Log.d("智能去重", "命中并撤回通知 - 包名:${pending.packageName}, 标题:${pending.title}, 内容:${pending.text}, 通知ID:${pending.notifyId}, 发送后${now - pending.sendTime}ms发现重复")
-                            cancelNotification(pending.notifyId, pending.context)
-                            toRemove.add(pending)
-                        }
-                    }
 
                     // 移除已处理的待监控通知
                     pendingNotifications.removeAll(toRemove)
@@ -338,13 +441,19 @@ object BackendRemoteFilter {
                 }
 
                 // 如果没有待监控的通知，退出监控
+                // 清理过期占位，避免内存泄露
+                val now2 = System.currentTimeMillis()
+                synchronized(pendingPlaceholders) {
+                    val before = pendingPlaceholders.size
+                    pendingPlaceholders.removeAll { now2 - it.createTime > it.ttl }
+                    val after = pendingPlaceholders.size
+                    if (BuildConfig.DEBUG && before != after) Log.d("智能去重", "清理过期占位: removed=${before - after}")
+                }
+
                 if (pendingNotifications.isEmpty()) {
                     if (BuildConfig.DEBUG) Log.d("智能去重", "监控协程结束 - 所有通知已处理完成")
                     break
                 }
-
-                // 每秒检查一次
-                delay(1_000)
             }
         }
     }
