@@ -32,11 +32,25 @@ object MessageSender {
     private val activeSends = AtomicInteger(0)
     // 去重集合：防止同一设备、同一数据在未完成前被重复入队
     private val pendingKeys = ConcurrentHashMap.newKeySet<String>()
+    // 已发送记录（带 TTL），防止短时间内重复发送已成功发送的通知
+    private const val SENT_KEY_TTL_MS = 60_000L // 60秒内视为已发送，避免重复
+    private val sentKeys = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     init {
         // 启动队列处理协程
         CoroutineScope(Dispatchers.IO).launch {
             processSendQueue()
+        }
+        // 定期清理已发送记录，避免内存无限增长
+        CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                try {
+                    val now = System.currentTimeMillis()
+                    val toRemove = sentKeys.entries.filter { now - it.value > SENT_KEY_TTL_MS }.map { it.key }
+                    toRemove.forEach { sentKeys.remove(it) }
+                } catch (_: Exception) {}
+                delay(10_000L)
+            }
         }
     }
 
@@ -94,6 +108,10 @@ object MessageSender {
                         writer.write(payload + "\n")
                         writer.flush()
                         success = true
+                        // 发送成功后记录到已发送缓存，避免短时间重复发送
+                        try {
+                            sentKeys[task.dedupKey] = System.currentTimeMillis()
+                        } catch (_: Exception) {}
                         if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
                     } finally {
                         socket.close()
@@ -146,6 +164,12 @@ object MessageSender {
             // 将发送任务加入队列（带去重）
             allDevices.forEach { device ->
                 val dedupKey = buildDedupKey(device.uuid, json)
+                // 检查最近是否已发送过相同消息，避免短时间内重复
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复聊天消息(短期内): ${device.displayName}")
+                    return@forEach
+                }
                 if (!pendingKeys.add(dedupKey)) {
                     if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复聊天消息入队: ${device.displayName}")
                     return@forEach
@@ -217,6 +241,12 @@ object MessageSender {
             // 将发送任务加入队列（带去重）
             authenticatedDevices.forEach { deviceInfo ->
                 val dedupKey = buildDedupKey(deviceInfo.uuid, json)
+                // 检查是否正在等待发送或最近已发送过
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复通知(短期内): ${deviceInfo.displayName}")
+                    return@forEach
+                }
                 if (!pendingKeys.add(dedupKey)) {
                     if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复通知入队: ${deviceInfo.displayName}")
                     return@forEach
