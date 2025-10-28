@@ -1023,6 +1023,11 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
                 val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+                try {
+                    if (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) {
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
+                    }
+                } catch (_: Exception) {}
 
                 val repoClass = Class.forName("com.xzyht.notifyrelay.feature.device.model.NotificationRepository")
                 val addMethod = repoClass.getDeclaredMethod("addRemoteNotification", String::class.java, String::class.java, String::class.java, String::class.java, Long::class.java, String::class.java, android.content.Context::class.java)
@@ -1044,6 +1049,11 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 处理通知过滤和复刻
         val result = remoteNotificationFilter(decrypted, context)
         if (BuildConfig.DEBUG) Log.d("秩序之光 死神-NotifyRelay", "remoteNotificationFilter result: $result")
+        try {
+            if (!result.mappedPkg.isNullOrEmpty() && result.mappedPkg.startsWith("superisland:")) {
+                if (BuildConfig.DEBUG) Log.i("超级岛", "remoteNotificationFilter 判定为超级岛: mappedPkg=${result.mappedPkg}, needsDelay=${result.needsDelay}, title=${result.title}")
+            }
+        } catch (_: Exception) {}
         if (result.shouldShow) {
             // 如果过滤器建议延迟验证（先发送后撤回机制），并且本机当前为锁屏场景，
             // 则不立即复刻以避免在锁屏时触发手环震动等副作用。
@@ -1160,7 +1170,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             try {
                 notificationProcessingQueue.send(notificationData)
-                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "通知已加入处理队列: remoteUuid=$remoteUuid")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("秩序之光 死神-NotifyRelay", "通知已加入处理队列: remoteUuid=$remoteUuid")
+                    Log.d("超级岛", "超级岛: 通知已加入处理队列: remoteUuid=$remoteUuid, dataPreview=${if (data.length > 200) data.substring(0,200) + "..." else data}")
+                }
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) android.util.Log.e("秩序之光 死神-NotifyRelay", "加入通知处理队列失败: ${e.message}")
             }

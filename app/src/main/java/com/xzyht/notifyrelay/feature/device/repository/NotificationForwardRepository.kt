@@ -30,7 +30,7 @@ suspend fun replicateNotification(
         val pkg = result.mappedPkg
         // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
         if (pkg != null && pkg.startsWith("superisland:")) {
-                try {
+            try {
                 val title = json.optString("title")
                 val text = json.optString("text")
                 val paramV2 = if (json.has("param_v2_raw")) json.optString("param_v2_raw") else null
@@ -46,12 +46,13 @@ suspend fun replicateNotification(
                         } catch (_: Exception) {}
                     }
                 }
+                if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title")
                 com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text, paramV2, picMap)
                 // 记录收到日志并返回（不再发送系统通知）
                 com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
                 return
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "超级岛: 复刻失败，回退到普通复刻: ${e.message}")
+                if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 复刻失败，回退到普通复刻: ${e.message}")
             }
         }
         val appName = json.optString("appName", pkg)

@@ -201,6 +201,7 @@ fun DeviceForwardScreen(
             }
             3 -> {
                 // 超级岛设置 Tab
+                if (BuildConfig.DEBUG) Log.d("超级岛", "UI: 打开超级岛设置 Tab")
                 com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
             }
         }
