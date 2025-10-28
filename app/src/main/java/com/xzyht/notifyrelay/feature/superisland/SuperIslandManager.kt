@@ -156,14 +156,17 @@ object SuperIslandManager {
             for (k in extras.keySet()) {
                 if (k.startsWith("miui.focus.pic_") || k.startsWith("miui.focus.pic")) {
                     try {
-                        val v = extras.get(k)
-                        if (v is String) {
-                            rawExtras[k] = v
-                            picMap[k] = v
-                        } else if (v is android.os.Parcelable) {
-                            rawExtras[k] = v.toString()
+                        // 优先使用 getString，以避免使用已弃用的 get(key)
+                        val s = extras.getString(k)
+                        if (!s.isNullOrEmpty()) {
+                            rawExtras[k] = s
+                            picMap[k] = s
                         } else {
-                            rawExtras[k] = v
+                            // 回退：尝试获取 CharSequence 或 Parcelable 并 toString()
+                            val cs = extras.getCharSequence(k)
+                            if (!cs.isNullOrEmpty()) {
+                                rawExtras[k] = cs.toString()
+                            }
                         }
                     } catch (_: Exception) {}
                 }
@@ -188,7 +191,7 @@ object SuperIslandManager {
                 text = text,
                 rawExtras = rawExtras,
                 paramV2Raw = rawExtras["param_v2_raw"] as? String,
-                picMap = (rawExtras["pic_map"] as? Map<String, String>)?.toMap()
+                picMap = picMap.toMap()
             )
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w("SuperIsland", "extractSuperIslandData error: ${e.message}")

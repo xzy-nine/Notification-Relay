@@ -30,10 +30,23 @@ suspend fun replicateNotification(
         val pkg = result.mappedPkg
         // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
         if (pkg != null && pkg.startsWith("superisland:")) {
-            try {
+                try {
                 val title = json.optString("title")
                 val text = json.optString("text")
-                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text)
+                val paramV2 = if (json.has("param_v2_raw")) json.optString("param_v2_raw") else null
+                val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
+                val picMap = mutableMapOf<String, String>()
+                if (pics != null) {
+                    val keys = pics.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        try {
+                            val v = pics.optString(k)
+                            if (!v.isNullOrEmpty()) picMap[k] = v
+                        } catch (_: Exception) {}
+                    }
+                }
+                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text, paramV2, picMap)
                 // 记录收到日志并返回（不再发送系统通知）
                 com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
                 return
