@@ -1045,7 +1045,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         }
                         try {
                             // 直接在本地显示悬浮复刻
-                            com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text, paramV2, picMap)
+                            com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, mappedPkg, title, text, paramV2, picMap)
                         } catch (e: Exception) {
                             if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
                         }

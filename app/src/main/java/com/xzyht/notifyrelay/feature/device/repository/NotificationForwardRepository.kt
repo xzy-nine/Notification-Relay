@@ -47,7 +47,7 @@ suspend fun replicateNotification(
                     }
                 }
                 if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title")
-                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text, paramV2, picMap)
+                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, pkg, title, text, paramV2, picMap)
                 // 记录收到日志并返回（不再发送系统通知）
                 com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
                 return

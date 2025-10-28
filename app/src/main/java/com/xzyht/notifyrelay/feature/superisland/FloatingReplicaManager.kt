@@ -32,7 +32,8 @@ object FloatingReplicaManager {
      * paramV2Raw: miui.focus.param 中 param_v2 的原始 JSON 字符串（可为 null）
      * picMap: 从 extras 中解析出的图片键->URL 映射（可为 null）
      */
-    fun showFloating(context: Context, title: String?, text: String?, paramV2Raw: String? = null, picMap: Map<String, String>? = null) {
+    // sourceId: 用于区分不同来源的超级岛通知（通常传入 superPkg），用于刷新/去重同一来源的浮窗
+    fun showFloating(context: Context, sourceId: String?, title: String?, text: String?, paramV2Raw: String? = null, picMap: Map<String, String>? = null) {
         try {
             if (!canShowOverlay(context)) {
                 // 没有权限时：弹出设置意图并回退成高优先级通知
@@ -41,14 +42,139 @@ object FloatingReplicaManager {
                 return
             }
 
-            // 异步准备图片资源并显示浮窗
+            // 异步准备图片资源并显示浮窗（在主线程更新 UI）
             CoroutineScope(Dispatchers.Main).launch {
                 val bitmap = downloadFirstAvailableImage(picMap)
-                tryShowOverlay(context, title, text, bitmap)
+                ensureOverlayExists(context)
+                addOrUpdateEntry(context, sourceId ?: (title + "|" + text), title, text, bitmap)
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
             MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
+        }
+    }
+
+    // ---- 多条浮窗管理实现 ----
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var stackContainer: LinearLayout? = null
+    // key -> Pair(view, Runnable removal)
+    private val entries = mutableMapOf<String, Pair<View, Runnable>>()
+
+    private fun ensureOverlayExists(context: Context) {
+        if (overlayView != null && stackContainer != null) return
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            // 移除已存在浮窗
+            try { overlayView?.let { wm.removeView(it) } } catch (_: Exception) {}
+
+            val container = FrameLayout(context)
+            container.setBackgroundColor(0x00000000)
+
+            val padding = (12 * (context.resources.displayMetrics.density)).toInt()
+            val innerStack = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, padding, padding, padding)
+            }
+
+            container.addView(innerStack)
+
+            val layoutParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            )
+            layoutParams.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            layoutParams.x = 0
+            layoutParams.y = 100
+
+            overlayView = container
+            stackContainer = innerStack
+            try { wm.addView(container, layoutParams) } catch (_: Exception) {}
+            if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 创建浮窗容器失败: ${e.message}")
+        }
+    }
+
+    private fun addOrUpdateEntry(context: Context, key: String, title: String?, text: String?, image: android.graphics.Bitmap?) {
+        try {
+            val stack = stackContainer ?: return
+
+            // 如果已有相同key，更新内容并重置定时移除
+            val existing = entries[key]
+            if (existing != null) {
+                val (view, oldRunnable) = existing
+                // 更新文本和图片
+                try {
+                    val img = view.findViewById<ImageView>(android.R.id.icon)
+                    val tvTitle = view.findViewById<TextView>(android.R.id.text1)
+                    val tvText = view.findViewById<TextView>(android.R.id.text2)
+                    if (image != null) img.setImageBitmap(image)
+                    tvTitle.text = title ?: "(无标题)"
+                    tvText.text = text ?: "(无内容)"
+                } catch (_: Exception) {}
+
+                // 取消旧的移除任务并重新排期
+                handler.removeCallbacks(oldRunnable)
+                val removal = Runnable {
+                    try {
+                        stack.removeView(view)
+                        entries.remove(key)
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 自动移除浮窗条目 key=$key")
+                    } catch (_: Exception) {}
+                }
+                entries[key] = view to removal
+                handler.postDelayed(removal, 5000)
+                if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 刷新浮窗条目 key=$key")
+                return
+            }
+
+            // 创建新的条目视图（水平排列）
+            val item = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                val innerPadding = (8 * context.resources.displayMetrics.density).toInt()
+                setPadding(innerPadding, innerPadding, innerPadding, innerPadding)
+                setBackgroundColor(0xEE000000.toInt())
+            }
+            val iv = ImageView(context).apply {
+                id = android.R.id.icon
+                if (image != null) setImageBitmap(image)
+                val size = (56 * context.resources.displayMetrics.density).toInt()
+                this.layoutParams = FrameLayout.LayoutParams(size, size)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }
+            val tvs = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                lp.setMargins((8 * context.resources.displayMetrics.density).toInt(), 0, 0, 0)
+                this.layoutParams = lp
+            }
+            val tt = TextView(context).apply { id = android.R.id.text1; setTextColor(0xFFFFFFFF.toInt()); textSize = 14f; this.text = title ?: "(无标题)" }
+            val tx = TextView(context).apply { id = android.R.id.text2; setTextColor(0xFFDDDDDD.toInt()); textSize = 12f; this.text = text ?: "(无内容)" }
+            tvs.addView(tt)
+            tvs.addView(tx)
+            item.addView(iv)
+            item.addView(tvs)
+
+            // 支持拖动整个stack（按条目拖动暂时不实现，仅支持整体）
+            // 将新条目添加到顶部（最新在上）
+            stack.addView(item, 0)
+
+            val removal = Runnable {
+                try {
+                    stack.removeView(item)
+                    entries.remove(key)
+                    if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 自动移除浮窗条目 key=$key")
+                } catch (_: Exception) {}
+            }
+            entries[key] = item to removal
+            handler.postDelayed(removal, 5000)
+            if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 新增浮窗条目 key=$key, title=${title}")
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: addOrUpdateEntry 出错: ${e.message}")
         }
     }
 
