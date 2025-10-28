@@ -1,4 +1,6 @@
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.ObjectId
+import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import java.io.File
 import java.time.LocalDate
@@ -28,6 +30,33 @@ object Versioning {
         return if (repo != null) Git(repo) else null
     }
 
+    // 统计 includeRef 可达但 excludeRef 不可达的提交数（等同于 git rev-list --count includeRef ^excludeRef）
+    private fun countExclusiveCommits(git: Git?, includeRef: String, excludeRef: String?): Int {
+        if (git == null) return 0
+        val repository = try { git.repository } catch (e: Exception) { return 0 }
+        return try {
+            val includeId: ObjectId? = repository.resolve(includeRef)
+            if (includeId == null) return 0
+            val revWalk = RevWalk(repository)
+            val includeCommit = revWalk.parseCommit(includeId)
+            revWalk.markStart(includeCommit)
+            if (!excludeRef.isNullOrBlank()) {
+                val excludeId = repository.resolve(excludeRef)
+                if (excludeId != null) {
+                    val excludeCommit = revWalk.parseCommit(excludeId)
+                    revWalk.markUninteresting(excludeCommit)
+                }
+            }
+
+            var cnt = 0
+            for (c in revWalk) cnt++
+            revWalk.close()
+            cnt
+        } catch (e: Exception) {
+            0
+        }
+    }
+
     // 计算 version 信息
     fun compute(rootProjectDir: File, majorOverride: Int = 0): VersionInfo {
         val gitDir = findGitDir(rootProjectDir) ?: return VersionInfo("$majorOverride.0.0", 0)
@@ -40,26 +69,25 @@ object Versioning {
             ""
         }
 
-        val mainCount = try {
-            // count commits on main (if exists)
-            val revList = git?.log()?.add(git.repository.resolve("refs/heads/main"))?.call()
-            revList?.count() ?: 0
-        } catch (e: Exception) {
-            0
-        }
+        // 统计 main 分支提交数（如果存在）
+        val mainCount = countExclusiveCommits(git, "refs/heads/main", null)
 
-        val headCount = try {
-            val revList = git?.log()?.call()
-            revList?.count() ?: 0
-        } catch (e: Exception) {
-            0
-        }
+        // 非 main 分支的修订号应为该分支相对于 main 的独有提交数（等同于 git rev-list --count HEAD ^main）
+        val exclusiveHeadCount = try {
+            // 如果 main 分支不存在，回退到 HEAD 的全部可达提交数
+            val mainRefExists = try { git?.repository?.resolve("refs/heads/main") != null } catch (_: Exception) { false }
+            if (mainRefExists) {
+                countExclusiveCommits(git, "HEAD", "refs/heads/main")
+            } else {
+                countExclusiveCommits(git, "HEAD", null)
+            }
+        } catch (e: Exception) { 0 }
 
         val patch = if (branch == "main") {
             val fmt = DateTimeFormatter.ofPattern("MMdd")
             LocalDate.now().format(fmt).toInt()
         } else {
-            headCount
+            exclusiveHeadCount
         }
 
         val versionName = "$majorOverride.$mainCount.$patch"
