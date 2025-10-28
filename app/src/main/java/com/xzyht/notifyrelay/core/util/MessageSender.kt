@@ -310,26 +310,26 @@ object MessageSender {
                 val dedupKey = buildDedupKey(deviceInfo.uuid, payloadJson)
                 val lastSent = sentKeys[dedupKey]
                 if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复超级岛数据(短期内): ${deviceInfo.displayName}")
+                    if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 跳过已发送的重复超级岛数据（短期内）：${deviceInfo.displayName}")
                     return@forEach
                 }
                 if (!pendingKeys.add(dedupKey)) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复超级岛数据入队: ${deviceInfo.displayName}")
+                    if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 跳过重复超级岛数据入队：${deviceInfo.displayName}")
                     return@forEach
                 }
                 val task = SendTask(deviceInfo, payloadJson, deviceManager, dedupKey = dedupKey)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
-                        if (BuildConfig.DEBUG) Log.d(TAG, "超级岛数据已加入发送队列: ${deviceInfo.displayName}")
+                        if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 数据已加入超级岛发送队列：${deviceInfo.displayName}")
                     } catch (e: Exception) {
                         pendingKeys.remove(dedupKey)
-                        if (BuildConfig.DEBUG) Log.e(TAG, "加入超级岛发送队列失败: ${deviceInfo.displayName}", e)
+                        if (BuildConfig.DEBUG) Log.e(TAG, "超级岛: 加入超级岛发送队列失败：${deviceInfo.displayName}", e)
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送超级岛数据失败", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "超级岛: 发送超级岛数据失败", e)
         }
     }
 

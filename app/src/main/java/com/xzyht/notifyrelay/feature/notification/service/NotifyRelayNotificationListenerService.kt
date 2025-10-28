@@ -157,7 +157,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         try {
             val superData = com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
                 if (superData != null) {
-                if (BuildConfig.DEBUG) Log.i("NotifyRelay-Super", "检测到超级岛数据，准备转发: pkg=${superData.sourcePackage}, title=${superData.title}")
+                if (BuildConfig.DEBUG) Log.i("NotifyRelay-Super", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
                 try {
                     val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
                     // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
@@ -175,7 +175,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         deviceManager
                     )
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "转发超级岛数据失败: ${e.message}")
+                    if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "超级岛: 转发超级岛数据失败: ${e.message}")
                 }
             }
         } catch (_: Exception) {}

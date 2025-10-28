@@ -51,7 +51,7 @@ suspend fun replicateNotification(
                 com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
                 return
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "超级岛复刻失败，回退到普通复刻: ${e.message}")
+                if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "超级岛: 复刻失败，回退到普通复刻: ${e.message}")
             }
         }
         val appName = json.optString("appName", pkg)

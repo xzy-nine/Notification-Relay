@@ -42,12 +42,12 @@ object FloatingReplicaManager {
             }
 
             // 异步准备图片资源并显示浮窗
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            CoroutineScope(Dispatchers.Main).launch {
                 val bitmap = downloadFirstAvailableImage(picMap)
                 tryShowOverlay(context, title, text, bitmap)
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("FloatingReplica", "显示浮窗失败，退化为通知: ${e.message}")
+            if (BuildConfig.DEBUG) Log.w("超级岛-复刻", "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
             MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
         }
     }
@@ -66,7 +66,7 @@ object FloatingReplicaManager {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("FloatingReplica", "请求悬浮窗权限失败: ${e.message}")
+            if (BuildConfig.DEBUG) Log.w("超级岛-复刻", "超级岛: 请求悬浮窗权限失败: ${e.message}")
         }
     }
 
@@ -74,9 +74,11 @@ object FloatingReplicaManager {
         if (picMap.isNullOrEmpty()) return null
         for ((_, url) in picMap) {
             try {
-                val bmp = withContext(kotlinx.coroutines.Dispatchers.IO) { downloadBitmap(url, 5000) }
+                val bmp = withContext(Dispatchers.IO) { downloadBitmap(url, 5000) }
                 if (bmp != null) return bmp
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w("超级岛-复刻", "超级岛: 下载图片失败: ${e.message}")
+            }
         }
         return null
     }
@@ -150,7 +152,7 @@ object FloatingReplicaManager {
                 try { wm.removeView(container); overlayView = null } catch (_: Exception) {}
             }, 5000)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("FloatingReplica", "tryShowOverlay error: ${e.message}")
+            if (BuildConfig.DEBUG) Log.w("超级岛-复刻", "超级岛: 显示悬浮窗出错: ${e.message}")
             MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
         }
     }
@@ -171,7 +173,7 @@ object FloatingReplicaManager {
             conn.disconnect()
             return bmp
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("FloatingReplica", "downloadBitmap failed: ${e.message}")
+            if (BuildConfig.DEBUG) Log.w("超级岛-复刻", "超级岛: 下载图片失败: ${e.message}")
             return null
         }
     }
