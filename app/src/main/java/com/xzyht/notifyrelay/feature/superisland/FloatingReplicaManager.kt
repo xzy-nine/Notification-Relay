@@ -10,6 +10,12 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.ImageView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.MessageSender
 
