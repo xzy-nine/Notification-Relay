@@ -1,40 +1,19 @@
-import java.io.ByteArrayOutputStream
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.21"
     id("kotlin-kapt")
 }
-
-
-
-// 自动生成版本号：遵循仓库约定
-// 规则摘要（来自项目说明）：
-// version = major.minor.patch
-// - major: 可通过 gradle.properties 的 versionMajor 覆盖，默认 0
-// - minor: main 分支的提交数（主线提交计数）
-// - patch: 如果当前分支为 main，则使用当前日期的 MMdd（例如 1027 -> Oct 27）；否则使用当前 HEAD 的提交数（dev 分支下）
-// 生成的 versionCode 采用如下编码：major*10_000_000 + minor*1000 + patch
-// 这个值应在 32-bit int 范围内（对于常见 repo 提交量是安全的）。
-
+// 使用 buildSrc 的 JGit 实现计算版本信息（避免启动外部进程，兼容 configuration-cache）
 val versionMajor: Int = (project.findProperty("versionMajor") as String?)?.toIntOrNull() ?: 0
+val _versionInfo = Versioning.compute(rootProject.projectDir, versionMajor)
+val computedVersionName = _versionInfo.versionName
+val computedVersionCode = _versionInfo.versionCode
 
-fun gitOutput(vararg args: String): String {
-    val stdout = ByteArrayOutputStream()
-    try {
-        exec {
-            isIgnoreExitValue = true
-    // main 分支使用 MMdd 格式的日期作为 patch，和之前仓库示例一致（例如 1027 -> Oct 27）
-    // dev 等分支使用当前分支的提交计数
+android {
     namespace = "com.xzyht.notifyrelay"
-    // 使用 buildSrc 的 JGit 实现计算版本信息（避免启动外部进程，兼容 configuration-cache）
-    val versionMajor: Int = (project.findProperty("versionMajor") as String?)?.toIntOrNull() ?: 0
-    val _versionInfo = Versioning.compute(rootProject.projectDir, versionMajor)
-    val computedVersionName = _versionInfo.versionName
-    val computedVersionCode = _versionInfo.versionCode
+    compileSdk = 35
+
     defaultConfig {
         applicationId = "com.xzyht.notifyrelay"
         minSdk = 26
@@ -47,9 +26,9 @@ fun gitOutput(vararg args: String): String {
     }
 
     buildTypes {
-        debug {
+        getByName("debug") {
         }
-        release {
+        getByName("release") {
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -64,7 +43,7 @@ fun gitOutput(vararg args: String): String {
         targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "11"
+        (this as org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions).jvmTarget = "11"
     }
     buildFeatures {
         compose = true
