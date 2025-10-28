@@ -146,3 +146,12 @@ configurations.all {
         }
     }
 }
+
+// CI helper task: print the computed version name to stdout.
+// This allows CI workflows to obtain the resolved versionName (computed by Versioning)
+// by running `./gradlew -q :app:printVersionName`.
+tasks.register("printVersionName") {
+    doLast {
+        println(computedVersionName)
+    }
+}

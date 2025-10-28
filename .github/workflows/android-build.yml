@@ -28,10 +28,12 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
-      - name: Get versionName from build.gradle.kts
+      - name: Get versionName from Gradle (resolved value)
         id: version
         run: |
-          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          # Use the Gradle task added to app/build.gradle.kts to print the computed version name.
+          # -q silences extra Gradle output, leaving only the printed version on stdout.
+          VERSION=$(./gradlew -q :app:printVersionName)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
 
