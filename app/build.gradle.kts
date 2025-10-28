@@ -8,6 +8,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.21"
     id("kotlin-kapt")
 }
+// 使用 buildSrc 的 JGit 实现计算版本信息（避免启动外部进程，兼容 configuration-cache）
+    // 修改此处的常量即可改变应用的大版本号。
+    val versionMajor: Int = 0
+    // majorSubtract: 手动设置的减量，用于在大版本号更新后减去一定量，避免次版本号无条件增长。
+    // 例如：当你把大版本从 0 -> 1 时，如果希望次版本号回退到较小值，可以把此处设置为需要减去的提交数。
+    val versionMajorSubtract: Int = 0
+val _versionInfo = Versioning.compute(rootProject.projectDir, versionMajor, versionMajorSubtract)
+val computedVersionName = _versionInfo.versionName
+val computedVersionCode = _versionInfo.versionCode
 
 
 
@@ -69,9 +78,9 @@ android {
     }
 
     buildTypes {
-        debug {
+        getByName("debug") {
         }
-        release {
+        getByName("release") {
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -86,7 +95,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions {
-        jvmTarget = "11"
+        (this as org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions).jvmTarget = "11"
     }
     buildFeatures {
         compose = true

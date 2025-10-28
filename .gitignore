@@ -15,3 +15,13 @@ lancomm/
 /.kotlin
 /app/debug
 .vscode/
+
+# Ignore buildSrc build outputs
+/buildSrc/build/
+/buildSrc/.gradle/
+
+# Gradle build logic lock files (can be created during parallel builds)
+.gradle/**/buildLogic.lock
+
+# Other generated Gradle files
+/gradle-app.setting
