@@ -271,6 +271,69 @@ object MessageSender {
     }
 
     /**
+     * 发送超级岛专用数据（包含 param_v2 原始 JSON 与图片 map）
+     */
+    fun sendSuperIslandData(
+        context: Context,
+        superPkg: String,
+        appName: String?,
+        title: String?,
+        text: String?,
+        time: Long,
+        paramV2Raw: String?,
+        picMap: Map<String, String>?,
+        deviceManager: DeviceConnectionManager
+    ) {
+        try {
+            val authenticatedDevices = getAuthenticatedDevices(deviceManager)
+            if (authenticatedDevices.isEmpty()) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "没有已认证的设备")
+                return
+            }
+
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val isLocked = keyguardManager.isKeyguardLocked
+
+            val payloadJson = JSONObject().apply {
+                put("packageName", superPkg)
+                put("appName", appName ?: superPkg)
+                put("title", title ?: "")
+                put("text", text ?: "")
+                put("time", time)
+                put("isLocked", isLocked)
+                if (paramV2Raw != null) put("param_v2_raw", paramV2Raw)
+                if (picMap != null) put("pics", JSONObject(picMap))
+            }.toString()
+
+            // 将发送任务加入队列（带去重）
+            authenticatedDevices.forEach { deviceInfo ->
+                val dedupKey = buildDedupKey(deviceInfo.uuid, payloadJson)
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复超级岛数据(短期内): ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                if (!pendingKeys.add(dedupKey)) {
+                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复超级岛数据入队: ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(deviceInfo, payloadJson, deviceManager, dedupKey = dedupKey)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        if (BuildConfig.DEBUG) Log.d(TAG, "超级岛数据已加入发送队列: ${deviceInfo.displayName}")
+                    } catch (e: Exception) {
+                        pendingKeys.remove(dedupKey)
+                        if (BuildConfig.DEBUG) Log.e(TAG, "加入超级岛发送队列失败: ${deviceInfo.displayName}", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.e(TAG, "发送超级岛数据失败", e)
+        }
+    }
+
+    /**
      * 发送高优先级悬浮通知（用于应用跳转指示）
      * @param context 上下文
      * @param title 通知标题

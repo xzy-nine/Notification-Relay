@@ -153,6 +153,33 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
+        // 在本机本地过滤前，尝试读取超级岛信息并单独转发（即使后续本地过滤会拦截该通知也要先获取超岛数据）
+        try {
+            val superData = com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
+                if (superData != null) {
+                if (BuildConfig.DEBUG) Log.i("NotifyRelay-Super", "检测到超级岛数据，准备转发: pkg=${superData.sourcePackage}, title=${superData.title}")
+                try {
+                    val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+                    // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
+                    val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
+                    com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
+                        applicationContext,
+                        superPkg,
+                        superData.appName ?: "超级岛",
+                        superData.title,
+                        superData.text,
+                        sbn.postTime,
+                        superData.paramV2Raw,
+                        // 尝试把 simple pic map 提取为 string map（仅支持 string/url 类值）
+                        (superData.picMap ?: emptyMap()),
+                        deviceManager
+                    )
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "转发超级岛数据失败: ${e.message}")
+                }
+            }
+        } catch (_: Exception) {}
+
         if (!BackendLocalFilter.shouldForward(sbn, applicationContext, checkProcessed)) {
             logSbnDetail("法鸡-黑影 被过滤", sbn)
             return

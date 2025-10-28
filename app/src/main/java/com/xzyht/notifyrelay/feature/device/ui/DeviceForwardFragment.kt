@@ -129,7 +129,7 @@ fun DeviceForwardScreen(
     val snackbarVisible = remember { mutableStateOf(false) }
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     // TabRow相关状态
-    val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤")
+    val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤", "超级岛")
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     // NotificationFilterPager 的状态由其内部组件管理
         // 只监听全局选中设备（订阅由需要的组件进行）
@@ -198,6 +198,10 @@ fun DeviceForwardScreen(
             2 -> {
                 // 本地通知过滤 Tab
                 UILocalFilter()
+            }
+            3 -> {
+                // 超级岛设置 Tab
+                com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
             }
         }
     }

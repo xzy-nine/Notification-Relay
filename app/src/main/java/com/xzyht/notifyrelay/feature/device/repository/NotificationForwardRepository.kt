@@ -28,6 +28,19 @@ suspend fun replicateNotification(
         val json = org.json.JSONObject(result.rawData)
         json.put("packageName", result.mappedPkg)
         val pkg = result.mappedPkg
+        // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
+        if (pkg != null && pkg.startsWith("superisland:")) {
+            try {
+                val title = json.optString("title")
+                val text = json.optString("text")
+                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text)
+                // 记录收到日志并返回（不再发送系统通知）
+                com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${result.rawData}")
+                return
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w("NotifyRelay-Super", "超级岛复刻失败，回退到普通复刻: ${e.message}")
+            }
+        }
         val appName = json.optString("appName", pkg)
         val title = json.optString("title")
         val text = json.optString("text")
