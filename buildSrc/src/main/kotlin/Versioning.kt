@@ -20,7 +20,8 @@ object Versioning {
         return null
     }
 
-    private fun openGit(repoRoot: File): Git? {
+    private fun openGit(repoRoot: File?): Git? {
+        if (repoRoot == null) return null
         val builder = FileRepositoryBuilder()
         val repo = try {
             builder.setGitDir(File(repoRoot, ".git")).readEnvironment().findGitDir().build()
@@ -61,8 +62,8 @@ object Versioning {
     // majorSubtract: 手动设置的减量（用于在大版本号更新后减去一定量，防止次版本号持续增长）
     fun compute(rootProjectDir: File, majorOverride: Int = 0, majorSubtract: Int = 0): VersionInfo {
         val gitDir = findGitDir(rootProjectDir) ?: return VersionInfo("$majorOverride.0.0", 0)
-        val repoRoot = gitDir.parentFile
-        val git = openGit(repoRoot)
+    // parentFile 可为空（理论上不会，因为 gitDir 是 .git 文件夹），直接在调用时提供回退值以避免可空性问题
+    val git = openGit(gitDir.parentFile ?: rootProjectDir)
 
         val branch = try {
             git?.repository?.branch ?: ""
