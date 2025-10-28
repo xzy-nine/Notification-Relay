@@ -58,7 +58,8 @@ object Versioning {
     }
 
     // 计算 version 信息
-    fun compute(rootProjectDir: File, majorOverride: Int = 0): VersionInfo {
+    // majorSubtract: 手动设置的减量（用于在大版本号更新后减去一定量，防止次版本号持续增长）
+    fun compute(rootProjectDir: File, majorOverride: Int = 0, majorSubtract: Int = 0): VersionInfo {
         val gitDir = findGitDir(rootProjectDir) ?: return VersionInfo("$majorOverride.0.0", 0)
         val repoRoot = gitDir.parentFile
         val git = openGit(repoRoot)
@@ -69,8 +70,10 @@ object Versioning {
             ""
         }
 
-        // 统计 main 分支提交数（如果存在）
-        val mainCount = countExclusiveCommits(git, "refs/heads/main", null)
+    // 统计 main 分支提交数（如果存在）
+    val mainCount = countExclusiveCommits(git, "refs/heads/main", null)
+    // 应用手动减量，确保不小于 0
+    val mainCountAdjusted = kotlin.math.max(0, mainCount - majorSubtract)
 
         // 非 main 分支的修订号应为该分支相对于 main 的独有提交数（等同于 git rev-list --count HEAD ^main）
         val exclusiveHeadCount = try {
@@ -90,8 +93,8 @@ object Versioning {
             exclusiveHeadCount
         }
 
-        val versionName = "$majorOverride.$mainCount.$patch"
-        val versionCode = (majorOverride * 10_000_000) + (mainCount * 1000) + patch
+    val versionName = "$majorOverride.$mainCountAdjusted.$patch"
+    val versionCode = (majorOverride * 10_000_000) + (mainCountAdjusted * 1000) + patch
 
         // Close repository resources
         try { git?.repository?.close() } catch (_: Exception) {}
