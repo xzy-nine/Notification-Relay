@@ -84,14 +84,6 @@ object BackendRemoteFilter {
             val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
 
-            // 如果是超级岛数据（接收端约定的特殊前缀），跳过所有普通远程过滤与去重，直接通过并且不延迟
-            try {
-                if (!mappedPkg.isNullOrEmpty() && (mappedPkg.startsWith("superisland:") || (pkg?.startsWith("superisland:") == true))) {
-                    if (BuildConfig.DEBUG) Log.i("超级岛", "远程过滤器检测到超级岛: pkg=$pkg, mappedPkg=$mappedPkg，跳过远程过滤，直接通过")
-                    return FilterResult(true, mappedPkg, title, text, data, needsDelay = false)
-                }
-            } catch (_: Exception) {}
-
             if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 开始过滤 pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=$text")
 
             // 对等模式过滤

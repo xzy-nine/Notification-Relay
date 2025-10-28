@@ -1023,9 +1023,35 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
                 val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+
+                // 如果是超级岛通知，直接走悬浮复刻流程，跳过 BackendRemoteFilter 的普通过滤/去重逻辑
                 try {
-                    if (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) {
-                        if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
+                    val isSuper = (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
+                    if (isSuper) {
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据（直接复刻）: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
+                        // 尝试提取 param_v2_raw 与 pics（与 NotificationForwardRepository 保持一致的解析）
+                        val paramV2 = try { json.optString("param_v2_raw") } catch (_: Exception) { null }
+                        val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
+                        val picMap = mutableMapOf<String, String>()
+                        if (pics != null) {
+                            val keys = pics.keys()
+                            while (keys.hasNext()) {
+                                val k = keys.next()
+                                try {
+                                    val v = pics.optString(k)
+                                    if (!v.isNullOrEmpty()) picMap[k] = v
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        try {
+                            // 直接在本地显示悬浮复刻
+                            com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, title, text, paramV2, picMap)
+                        } catch (e: Exception) {
+                            if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
+                        }
+                        // 记录收到日志并返回（不再走后续复刻或过滤）
+                        com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${decrypted}")
+                        return
                     }
                 } catch (_: Exception) {}
 
