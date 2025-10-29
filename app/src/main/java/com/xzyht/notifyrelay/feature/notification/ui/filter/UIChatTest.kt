@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,10 +78,26 @@ fun UIChatTest(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = if (isSend) Arrangement.End else Arrangement.Start
                     ) {
+                        // 增强：支持长按复制消息文本
                         top.yukonga.miuix.kmp.basic.Surface(
                             color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
+                            modifier = Modifier
+                                .padding(vertical = 2.dp, horizontal = 4.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        try {
+                                            val toCopy = msg.removePrefix("发送:").removePrefix("收到:")
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("message", toCopy)
+                                            clipboard.setPrimaryClip(clip)
+                                            android.widget.Toast.makeText(context, "已复制消息", android.widget.Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.e("NotifyRelay", "复制失败", e)
+                                        }
+                                    }
+                                )
                         ) {
                             Text(
                                 msg.removePrefix("发送:").removePrefix("收到:"),

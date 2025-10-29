@@ -145,14 +145,25 @@ object SuperIslandManager {
             if (text == null) text = extras.getString("android.text") ?: extras.getCharSequence("android.text")?.toString()
 
             // 图片信息：支持 miui.focus.pics bundle 或者多个 miui.focus.pic_xxx string/url
+            val picMap = mutableMapOf<String, String>()
             try {
                 val picsBundle = extras.getBundle("miui.focus.pics")
                 if (picsBundle != null) {
                     rawExtras["miui.focus.pics"] = picsBundle.toString()
+                    // 将 bundle 中的图片项解析到 picMap，key/值均转换为字符串
+                    try {
+                        for (bk in picsBundle.keySet()) {
+                            try {
+                                val v = picsBundle.getString(bk) ?: picsBundle.get(bk)?.toString()
+                                if (!v.isNullOrEmpty()) {
+                                    picMap[bk] = v
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
             // 支持单独的 pic keys
-            val picMap = mutableMapOf<String, String>()
             for (k in extras.keySet()) {
                 if (k.startsWith("miui.focus.pic_") || k.startsWith("miui.focus.pic")) {
                     try {
