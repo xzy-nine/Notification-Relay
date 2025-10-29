@@ -3,6 +3,13 @@ package com.xzyht.notifyrelay.feature.superisland
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Icon
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -19,6 +26,29 @@ import org.json.JSONObject
  *  - 从通知 extras 中提取 miui.focus.param 内容并解析 param_v2 内容
  */
 object SuperIslandManager {
+    // helper: drawable/bitmap -> data uri (放在对象级别以便在函数中任意位置调用)
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        if (drawable is BitmapDrawable) return drawable.bitmap
+        val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 1
+        val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 1
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bmp
+    }
+
+    private fun bitmapToDataUri(bitmap: Bitmap): String {
+        return try {
+            val baos = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+            val b = baos.toByteArray()
+            val b64 = Base64.encodeToString(b, Base64.NO_WRAP)
+            "data:image/png;base64,$b64"
+        } catch (e: Exception) {
+            ""
+        }
+    }
     private const val STORAGE_KEY = "superisland_enabled"
 
     /**
@@ -154,10 +184,45 @@ object SuperIslandManager {
                     try {
                         for (bk in picsBundle.keySet()) {
                             try {
-                                val v = picsBundle.getString(bk) ?: picsBundle.get(bk)?.toString()
-                                if (!v.isNullOrEmpty()) {
-                                    picMap[bk] = v
+                                // 优先尝试字符串类型
+                                val s = picsBundle.getString(bk)
+                                if (!s.isNullOrEmpty()) {
+                                    picMap[bk] = s
+                                    continue
                                 }
+                                // 其次尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
+                                val obj = picsBundle.get(bk)
+                                if (obj is Bitmap) {
+                                    picMap[bk] = bitmapToDataUri(obj)
+                                    continue
+                                }
+                                if (obj is Drawable) {
+                                    try {
+                                        val bmp = drawableToBitmap(obj)
+                                        picMap[bk] = bitmapToDataUri(bmp)
+                                        continue
+                                    } catch (_: Exception) {}
+                                }
+                                if (obj is Icon) {
+                                    try {
+                                        val drawable = obj.loadDrawable(context)
+                                        if (drawable != null) {
+                                            val bmp = drawableToBitmap(drawable)
+                                            picMap[bk] = bitmapToDataUri(bmp)
+                                            continue
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                if (obj is ByteArray) {
+                                    try {
+                                        val b64 = Base64.encodeToString(obj, Base64.NO_WRAP)
+                                        picMap[bk] = "data:image/png;base64,$b64"
+                                        continue
+                                    } catch (_: Exception) {}
+                                }
+                                // 回退到字符串表示
+                                val fallback = obj?.toString()
+                                if (!fallback.isNullOrEmpty()) picMap[bk] = fallback
                             } catch (_: Exception) {}
                         }
                     } catch (_: Exception) {}
@@ -167,19 +232,79 @@ object SuperIslandManager {
             for (k in extras.keySet()) {
                 if (k.startsWith("miui.focus.pic_") || k.startsWith("miui.focus.pic")) {
                     try {
-                        // 优先使用 getString，以避免使用已弃用的 get(key)
+                        // 优先使用 getString
                         val s = extras.getString(k)
                         if (!s.isNullOrEmpty()) {
                             rawExtras[k] = s
                             picMap[k] = s
-                        } else {
-                            // 回退：尝试获取 CharSequence 或 Parcelable 并 toString()
-                            val cs = extras.getCharSequence(k)
-                            if (!cs.isNullOrEmpty()) {
-                                rawExtras[k] = cs.toString()
-                            }
+                            continue
+                        }
+                        // 其次尝试 CharSequence
+                        val cs = extras.getCharSequence(k)
+                        if (!cs.isNullOrEmpty()) {
+                            rawExtras[k] = cs.toString()
+                            picMap[k] = cs.toString()
+                            continue
+                        }
+                        // 再尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
+                        val p = try { extras.get(k) } catch (_: Exception) { null }
+                        if (p is Bitmap) {
+                            picMap[k] = bitmapToDataUri(p)
+                            continue
+                        }
+                        if (p is Drawable) {
+                            try {
+                                picMap[k] = bitmapToDataUri(drawableToBitmap(p))
+                                continue
+                            } catch (_: Exception) {}
+                        }
+                        if (p is Icon) {
+                            try {
+                                val drawable = p.loadDrawable(context)
+                                if (drawable != null) {
+                                    picMap[k] = bitmapToDataUri(drawableToBitmap(drawable))
+                                    continue
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        if (p is ByteArray) {
+                            try {
+                                val b64 = Base64.encodeToString(p, Base64.NO_WRAP)
+                                picMap[k] = "data:image/png;base64,$b64"
+                                continue
+                            } catch (_: Exception) {}
+                        }
+                        // 最后回退到 toString()
+                        val fallback = extras.get(k)?.toString()
+                        if (!fallback.isNullOrEmpty()) {
+                            rawExtras[k] = fallback
+                            picMap[k] = fallback
                         }
                     } catch (_: Exception) {}
+                }
+            }
+
+            // helper: drawable/bitmap -> data uri
+            fun drawableToBitmap(drawable: Drawable): Bitmap {
+                if (drawable is BitmapDrawable) return drawable.bitmap
+                val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 1
+                val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 1
+                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                return bmp
+            }
+
+            fun bitmapToDataUri(bitmap: Bitmap): String {
+                return try {
+                    val baos = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                    val b = baos.toByteArray()
+                    val b64 = Base64.encodeToString(b, Base64.NO_WRAP)
+                    "data:image/png;base64,$b64"
+                } catch (e: Exception) {
+                    ""
                 }
             }
 
@@ -194,6 +319,12 @@ object SuperIslandManager {
             } catch (_: Exception) {}
 
             if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
+            if (BuildConfig.DEBUG) {
+                try {
+                    val sample = picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
+                    Log.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
+                } catch (_: Exception) {}
+            }
 
             return SuperIslandData(
                 sourcePackage = pkg,
