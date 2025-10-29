@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.MessageSender
+import com.xzyht.notifyrelay.core.util.DataUrlUtils
 
 /**
  * 接收端的超级岛复刻实现骨架。
@@ -291,16 +292,8 @@ object FloatingReplicaManager {
         try {
             // 支持 data URI（base64）、以及常规 http/https URL
             if (url.startsWith("data:", ignoreCase = true)) {
-                val comma = url.indexOf(',')
-                if (comma <= 0) return null
-                val meta = url.substring(5, comma)
-                val data = url.substring(comma + 1)
-                // 仅处理 base64 编码的 data URI
-                if (meta.contains("base64")) {
-                    val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
-                    return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                }
-                return null
+                // delegate data URI decoding to DataUrlUtils (handles whitespace/newlines)
+                return DataUrlUtils.decodeDataUrlToBitmap(url)
             }
 
             val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection

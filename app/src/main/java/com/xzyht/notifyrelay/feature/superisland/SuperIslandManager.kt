@@ -6,10 +6,9 @@ import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Icon
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
-import java.io.ByteArrayOutputStream
+import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -26,29 +25,6 @@ import org.json.JSONObject
  *  - 从通知 extras 中提取 miui.focus.param 内容并解析 param_v2 内容
  */
 object SuperIslandManager {
-    // helper: drawable/bitmap -> data uri (放在对象级别以便在函数中任意位置调用)
-    private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        if (drawable is BitmapDrawable) return drawable.bitmap
-        val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 1
-        val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 1
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        drawable.setBounds(0, 0, canvas.width, canvas.height)
-        drawable.draw(canvas)
-        return bmp
-    }
-
-    private fun bitmapToDataUri(bitmap: Bitmap): String {
-        return try {
-            val baos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
-            val b = baos.toByteArray()
-            val b64 = Base64.encodeToString(b, Base64.NO_WRAP)
-            "data:image/png;base64,$b64"
-        } catch (e: Exception) {
-            ""
-        }
-    }
     private const val STORAGE_KEY = "superisland_enabled"
 
     /**
@@ -193,13 +169,13 @@ object SuperIslandManager {
                                 // 其次尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
                                 val obj = picsBundle.get(bk)
                                 if (obj is Bitmap) {
-                                    picMap[bk] = bitmapToDataUri(obj)
+                                    picMap[bk] = DataUrlUtils.bitmapToDataUri(obj)
                                     continue
                                 }
                                 if (obj is Drawable) {
                                     try {
-                                        val bmp = drawableToBitmap(obj)
-                                        picMap[bk] = bitmapToDataUri(bmp)
+                                        val bmp = DataUrlUtils.drawableToBitmap(obj)
+                                        picMap[bk] = DataUrlUtils.bitmapToDataUri(bmp)
                                         continue
                                     } catch (_: Exception) {}
                                 }
@@ -207,8 +183,8 @@ object SuperIslandManager {
                                     try {
                                         val drawable = obj.loadDrawable(context)
                                         if (drawable != null) {
-                                            val bmp = drawableToBitmap(drawable)
-                                            picMap[bk] = bitmapToDataUri(bmp)
+                                            val bmp = DataUrlUtils.drawableToBitmap(drawable)
+                                            picMap[bk] = DataUrlUtils.bitmapToDataUri(bmp)
                                             continue
                                         }
                                     } catch (_: Exception) {}
@@ -249,12 +225,12 @@ object SuperIslandManager {
                         // 再尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
                         val p = try { extras.get(k) } catch (_: Exception) { null }
                         if (p is Bitmap) {
-                            picMap[k] = bitmapToDataUri(p)
+                            picMap[k] = DataUrlUtils.bitmapToDataUri(p)
                             continue
                         }
                         if (p is Drawable) {
                             try {
-                                picMap[k] = bitmapToDataUri(drawableToBitmap(p))
+                                picMap[k] = DataUrlUtils.bitmapToDataUri(DataUrlUtils.drawableToBitmap(p))
                                 continue
                             } catch (_: Exception) {}
                         }
@@ -262,7 +238,7 @@ object SuperIslandManager {
                             try {
                                 val drawable = p.loadDrawable(context)
                                 if (drawable != null) {
-                                    picMap[k] = bitmapToDataUri(drawableToBitmap(drawable))
+                                    picMap[k] = DataUrlUtils.bitmapToDataUri(DataUrlUtils.drawableToBitmap(drawable))
                                     continue
                                 }
                             } catch (_: Exception) {}
@@ -284,29 +260,7 @@ object SuperIslandManager {
                 }
             }
 
-            // helper: drawable/bitmap -> data uri
-            fun drawableToBitmap(drawable: Drawable): Bitmap {
-                if (drawable is BitmapDrawable) return drawable.bitmap
-                val w = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 1
-                val h = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 1
-                val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                drawable.setBounds(0, 0, canvas.width, canvas.height)
-                drawable.draw(canvas)
-                return bmp
-            }
-
-            fun bitmapToDataUri(bitmap: Bitmap): String {
-                return try {
-                    val baos = ByteArrayOutputStream()
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
-                    val b = baos.toByteArray()
-                    val b64 = Base64.encodeToString(b, Base64.NO_WRAP)
-                    "data:image/png;base64,$b64"
-                } catch (e: Exception) {
-                    ""
-                }
-            }
+            // data URL / bitmap helpers moved to DataUrlUtils
 
             // 将 picMap 放入 rawExtras 以便上层读取，同时返回到 SuperIslandData
             rawExtras["pic_map"] = picMap
