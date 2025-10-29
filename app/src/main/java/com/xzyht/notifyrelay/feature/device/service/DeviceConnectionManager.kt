@@ -1049,8 +1049,28 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                         } catch (e: Exception) {
                             if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
                         }
-                        // 记录收到日志并返回（不再走后续复刻或过滤）
-                        com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${decrypted}")
+                        // 将写入聊天的内容与 FloatingReplicaManager 使用的字段保持一致：标题/正文/图片列表
+                        try {
+                            val chatBuilder = StringBuilder()
+                            chatBuilder.append("收到:")
+                            if (!title.isNullOrEmpty()) {
+                                chatBuilder.append(" 标题: ").append(title)
+                            }
+                            if (!text.isNullOrEmpty()) {
+                                if (!title.isNullOrEmpty()) chatBuilder.append("\n")
+                                chatBuilder.append(text)
+                            }
+                            if (picMap.isNotEmpty()) {
+                                chatBuilder.append("\n[图片]:")
+                                for ((_, v) in picMap) {
+                                    try { chatBuilder.append('\n').append(v) } catch (_: Exception) {}
+                                }
+                            }
+                            com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, chatBuilder.toString())
+                        } catch (_: Exception) {
+                            // 回退到原始数据（避免丢失日志）
+                            com.xzyht.notifyrelay.feature.notification.data.ChatMemory.append(context, "收到: ${decrypted}")
+                        }
                         return
                     }
                 } catch (_: Exception) {}

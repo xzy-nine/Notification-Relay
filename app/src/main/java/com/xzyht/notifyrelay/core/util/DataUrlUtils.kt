@@ -165,7 +165,7 @@ object DataUrlUtils {
 
                     // First try a straightforward decode
                     var bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    if (bmp != null) return bmp
+                    if (bmp != null) return ensureCpuBitmap(bmp)
 
                     // Extra fallback: try decode via InputStream (some platforms handle streams differently)
                     try {
@@ -173,7 +173,7 @@ object DataUrlUtils {
                         val optsStream = BitmapFactory.Options()
                         optsStream.inPreferredConfig = Bitmap.Config.ARGB_8888
                         bmp = BitmapFactory.decodeStream(`is`, null, optsStream)
-                        if (bmp != null) return bmp
+                        if (bmp != null) return ensureCpuBitmap(bmp)
                     } catch (_: Exception) {}
 
                     // Another fallback: try a more memory-efficient config (RGB_565) which sometimes helps decode
@@ -181,7 +181,7 @@ object DataUrlUtils {
                         val optsRGB = BitmapFactory.Options()
                         optsRGB.inPreferredConfig = Bitmap.Config.RGB_565
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, optsRGB)
-                        if (bmp != null) return bmp
+                        if (bmp != null) return ensureCpuBitmap(bmp)
                     } catch (_: Exception) {}
 
                     // If that failed, attempt a sampled decode to avoid OOMs and improve chances
@@ -208,7 +208,7 @@ object DataUrlUtils {
                         decodeOpts.inSampleSize = inSampleSize
                         decodeOpts.inPreferredConfig = Bitmap.Config.ARGB_8888
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
-                        return bmp
+                        return if (bmp != null) ensureCpuBitmap(bmp) else null
                     } catch (e: Exception) {
                         if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.d("NotifyRelay", "base64: sampled decode failed", e)
                         return null
@@ -220,6 +220,15 @@ object DataUrlUtils {
             }
         } catch (_: Exception) {}
         return null
+    }
+
+    // Ensure returned bitmap is CPU-accessible (not hardware-backed). If it's HARDWARE, return an ARGB_8888 copy.
+    private fun ensureCpuBitmap(bmp: Bitmap): Bitmap {
+        return try {
+            if (bmp.config == Bitmap.Config.HARDWARE) {
+                bmp.copy(Bitmap.Config.ARGB_8888, false) ?: bmp
+            } else bmp
+        } catch (_: Exception) { bmp }
     }
 
     /**

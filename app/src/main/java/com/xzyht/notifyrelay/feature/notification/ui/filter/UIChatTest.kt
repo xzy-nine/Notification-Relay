@@ -14,6 +14,8 @@ import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.ImageView
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
@@ -188,7 +190,22 @@ fun UIChatTest(
                                                                     try { android.util.Log.d("NotifyRelay", "base64: inner decoded bitmap: ${bmp.width}x${bmp.height} preview=${idata?.take(80) ?: ""}") } catch (_: Exception) {}
                                                                 }
                                                                 if (bmp != null) {
-                                                                    try { withContext(Dispatchers.Main) { if (!consumed.contains(cleanedCandidate)) consumed.add(cleanedCandidate) } } catch (_: Exception) {}
+                                                                    try {
+                                                                        withContext(Dispatchers.Main) {
+                                                                            try {
+                                                                                val variants = mutableListOf<String>()
+                                                                                variants.add(cleanedCandidate)
+                                                                                variants.add(candidate)
+                                                                                try { variants.add(java.net.URLDecoder.decode(candidate, "UTF-8")) } catch (_: Exception) {}
+                                                                                try { variants.add(candidate.replace("\\/", "/")) } catch (_: Exception) {}
+                                                                                // also include idata raw if present
+                                                                                try { if (!idata.isNullOrEmpty()) variants.add(idata) } catch (_: Exception) {}
+                                                                                for (v in variants) {
+                                                                                    if (v != null && v.isNotEmpty() && !consumed.contains(v)) consumed.add(v)
+                                                                                }
+                                                                            } catch (_: Exception) {}
+                                                                        }
+                                                                    } catch (_: Exception) {}
                                                                 }
                                                                 bmp
                                                             }
@@ -200,13 +217,25 @@ fun UIChatTest(
 
                                                     val ibmp = innerBitmap
                                                     if (ibmp != null) {
-                                                        val imageBitmap = remember(ibmp) { ibmp.asImageBitmap() }
-                                                        Image(
-                                                            imageBitmap,
-                                                            contentDescription = "image",
+                                                        // Ensure the Bitmap is in a CPU-accessible config for Compose
+                                                        val safeBitmap = try {
+                                                            if (ibmp.config == android.graphics.Bitmap.Config.HARDWARE) {
+                                                                ibmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                                                            } else ibmp
+                                                        } catch (_: Exception) { ibmp }
+                                                        // Use Android ImageView (same as FloatingReplicaManager) to display bitmap
+                                                        AndroidView(
+                                                            factory = { ctx ->
+                                                                ImageView(ctx).apply {
+                                                                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                                                                }
+                                                            },
                                                             modifier = Modifier
                                                                 .size(56.dp)
-                                                                .padding(start = 6.dp)
+                                                                .padding(start = 6.dp),
+                                                            update = { iv ->
+                                                                try { iv.setImageBitmap(safeBitmap) } catch (_: Exception) {}
+                                                            }
                                                         )
                                                     } else {
                                                         // 回退：将常见的 JSON/字符串转义还原为实际字符并显示完整文本（与外层回退一致）
@@ -259,6 +288,13 @@ fun UIChatTest(
                                                 for (c in consumed) {
                                                     try { t = t.replace(c, "") } catch (_: Exception) {}
                                                 }
+                                                // Remove any leftover data: URIs that weren't matched exactly in consumed.
+                                                try {
+                                                    // plain data:... until whitespace or quote
+                                                    t = t.replace(Regex("data:[^\\s\"']+"), "")
+                                                    // JSON-escaped slashes e.g. data:image\/png;... -> remove
+                                                    t = t.replace(Regex("data:\\\\/[^"]+"), "")
+                                                } catch (_: Exception) {}
                                                 t
                                             }
                                             if (displayText.isNotBlank()) {
@@ -366,7 +402,20 @@ fun UIChatTest(
                                                         } catch (_: Exception) {}
                                                     }
                                                     if (bmp != null) {
-                                                        try { withContext(Dispatchers.Main) { if (!consumed.contains(cleanedCandidate)) consumed.add(cleanedCandidate) } } catch (_: Exception) {}
+                                                        try {
+                                                            withContext(Dispatchers.Main) {
+                                                                try {
+                                                                    val variants = mutableListOf<String>()
+                                                                    variants.add(cleanedCandidate)
+                                                                    variants.add(candidate)
+                                                                    try { variants.add(java.net.URLDecoder.decode(candidate, "UTF-8")) } catch (_: Exception) {}
+                                                                    try { variants.add(candidate.replace("\\/", "/")) } catch (_: Exception) {}
+                                                                    for (v in variants) {
+                                                                        if (v != null && v.isNotEmpty() && !consumed.contains(v)) consumed.add(v)
+                                                                    }
+                                                                } catch (_: Exception) {}
+                                                            }
+                                                        } catch (_: Exception) {}
                                                     }
 
                                                     bmp
@@ -386,13 +435,24 @@ fun UIChatTest(
                                             }
 
                                             // cache the ImageBitmap so recomposition reliably updates the Image when bitmap changes
-                                            val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-                                            Image(
-                                                imageBitmap,
-                                                contentDescription = "image",
+                                            val safeBitmap = try {
+                                                if (bitmap.config == android.graphics.Bitmap.Config.HARDWARE) {
+                                                    bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                                                } else bitmap
+                                            } catch (_: Exception) { bitmap }
+                                            // Use Android ImageView to match FloatingReplicaManager behavior
+                                            AndroidView(
+                                                factory = { ctx ->
+                                                    ImageView(ctx).apply {
+                                                        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                                                    }
+                                                },
                                                 modifier = Modifier
                                                     .size(56.dp)
-                                                    .padding(start = 6.dp)
+                                                    .padding(start = 6.dp),
+                                                update = { iv ->
+                                                    try { iv.setImageBitmap(safeBitmap) } catch (_: Exception) {}
+                                                }
                                             )
                                         } else {
                                             // 无法解码则显示原始文本：尝试将常见的 JSON/字符串转义还原为实际字符（保留换行等），
