@@ -4,11 +4,13 @@ import android.graphics.Bitmap
 import android.text.format.DateFormat
 import android.widget.ImageView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +25,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -36,12 +40,20 @@ import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Date
+
+private data class SuperIslandHistoryGroup(
+    val packageName: String,
+    val entries: List<SuperIslandHistoryEntry>
+)
 
 @Composable
 fun UISuperIslandSettings() {
@@ -49,7 +61,19 @@ fun UISuperIslandSettings() {
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
-    val entries = remember(history) { history.sortedByDescending { it.id } }
+    val groups = remember(history) {
+        val sorted = history.sortedByDescending { it.id }
+        val grouped = sorted.groupBy { entry ->
+            entry.mappedPackage?.takeIf { it.isNotBlank() }
+                ?: entry.originalPackage?.takeIf { it.isNotBlank() }
+                ?: "(未知应用)"
+        }
+        grouped.entries
+            .map { (pkg, items) ->
+                SuperIslandHistoryGroup(pkg, items.sortedByDescending { it.id })
+            }
+            .sortedByDescending { it.entries.firstOrNull()?.id ?: Long.MIN_VALUE }
+    }
 
     MiuixTheme {
         val colorScheme = MiuixTheme.colorScheme
@@ -78,15 +102,15 @@ fun UISuperIslandSettings() {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (entries.isEmpty()) {
+                if (groups.isEmpty()) {
                     Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(entries) { entry ->
-                            SuperIslandHistoryCard(entry)
+                        items(groups, key = { it.packageName }) { group ->
+                            SuperIslandHistoryGroupCard(group)
                         }
                     }
                 }
@@ -97,123 +121,291 @@ fun UISuperIslandSettings() {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SuperIslandHistoryCard(entry: SuperIslandHistoryEntry) {
+private fun SuperIslandHistoryGroupCard(group: SuperIslandHistoryGroup) {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
+    val headerEntry = group.entries.firstOrNull()
+    val groupTitle = headerEntry?.appName?.takeIf { !it.isNullOrBlank() }
+        ?: headerEntry?.title?.takeIf { !it.isNullOrBlank() }
+        ?: group.packageName
+    var expanded by rememberSaveable(group.packageName) { mutableStateOf(false) }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            val titleText = entry.appName?.takeIf { it.isNotBlank() }
-                ?: entry.title?.takeIf { it.isNotBlank() }
-                ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
-                ?: entry.originalPackage?.takeIf { it.isNotBlank() }
-                ?: "超级岛事件"
-            Text(titleText, style = textStyles.body1, color = colorScheme.onSurface)
-
-                entry.text?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
-            }
-
-            if (entry.picMap.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    entry.picMap.values.forEach { data ->
-                        SuperIslandHistoryImage(data)
+                    Text(groupTitle, style = textStyles.body1, color = colorScheme.onSurface)
+                    Text(
+                        text = "${group.packageName} · ${group.entries.size} 条记录",
+                        style = textStyles.body2,
+                        color = colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (headerEntry != null) {
+                        Text(
+                            text = "最新时间: ${formatTimestamp(headerEntry.id)}",
+                            style = textStyles.body2,
+                            color = colorScheme.outline,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
-            }
-
-            entry.mappedPackage?.takeIf { it.isNotBlank() }?.let {
-                Text("映射包名: $it", style = textStyles.body2, color = colorScheme.outline)
-            }
-            entry.originalPackage?.takeIf { it.isNotBlank() }?.let {
-                Text("原始包名: $it", style = textStyles.body2, color = colorScheme.outline)
-            }
-            entry.sourceDeviceUuid?.takeIf { it.isNotBlank() }?.let {
-                Text("来源设备: $it", style = textStyles.body2, color = colorScheme.outline)
-            }
-
-            Text(
-                text = formatTimestamp(entry.id),
-                style = textStyles.body2,
-                color = colorScheme.outline
-            )
-
-            entry.paramV2Raw?.takeIf { it.isNotBlank() }?.let {
                 Text(
-                    text = it,
+                    text = if (expanded) "收起" else "展开",
                     style = textStyles.body2,
-                    color = colorScheme.onSurfaceVariantSummary,
-                    maxLines = 6,
-                    overflow = TextOverflow.Ellipsis
+                    color = colorScheme.primary
                 )
             }
 
-            entry.rawPayload?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceVariantSummary,
-                    maxLines = 6,
-                    overflow = TextOverflow.Ellipsis
-                )
+            HorizontalDivider(color = colorScheme.outline)
+
+            if (expanded) {
+                group.entries.forEachIndexed { index, entry ->
+                    SuperIslandHistoryEntryCard(entry)
+                    if (index < group.entries.lastIndex) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = colorScheme.outline)
+                    }
+                }
+            } else {
+                val previewList = group.entries.take(3)
+                previewList.forEachIndexed { index, entry ->
+                    SuperIslandHistorySummaryRow(entry)
+                    if (index < previewList.lastIndex) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = colorScheme.outline)
+                    }
+                }
+                if (group.entries.size > previewList.size) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "... 共${group.entries.size}条，点击展开",
+                        style = textStyles.body2,
+                        color = colorScheme.onSurfaceVariantSummary
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SuperIslandHistoryImage(data: String, modifier: Modifier = Modifier) {
+private fun SuperIslandHistorySummaryRow(entry: SuperIslandHistoryEntry) {
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
+
+    val titleText = entry.title?.takeIf { it.isNotBlank() }
+        ?: entry.appName?.takeIf { it.isNotBlank() }
+        ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
+        ?: entry.originalPackage?.takeIf { it.isNotBlank() }
+        ?: "超级岛事件"
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(titleText, style = textStyles.body2, color = colorScheme.onSurface)
+        val summaryText = entry.text
+        if (!summaryText.isNullOrBlank()) {
+            Text(
+                text = summaryText,
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = formatTimestamp(entry.id),
+            style = textStyles.body2,
+            color = colorScheme.outline,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (entry.picMap.isNotEmpty()) {
+            Text(
+                text = "包含图片 ${entry.picMap.size} 张",
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SuperIslandHistoryEntryCard(entry: SuperIslandHistoryEntry) {
+    val colorScheme = MiuixTheme.colorScheme
+    val textStyles = MiuixTheme.textStyles
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val titleText = entry.appName?.takeIf { it.isNotBlank() }
+            ?: entry.title?.takeIf { it.isNotBlank() }
+            ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
+            ?: entry.originalPackage?.takeIf { it.isNotBlank() }
+            ?: "超级岛事件"
+        Text(titleText, style = textStyles.body1, color = colorScheme.onSurface)
+
+        val detailText = entry.text
+        if (!detailText.isNullOrBlank()) {
+            Text(detailText, style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
+        }
+
+        if (entry.picMap.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                entry.picMap.forEach { (label, data) ->
+                    SuperIslandHistoryImage(label, data)
+                }
+            }
+        }
+
+        val mappedPackage = entry.mappedPackage
+        if (!mappedPackage.isNullOrBlank()) {
+            Text("映射包名: $mappedPackage", style = textStyles.body2, color = colorScheme.outline)
+        }
+        val originalPackage = entry.originalPackage
+        if (!originalPackage.isNullOrBlank()) {
+            Text("原始包名: $originalPackage", style = textStyles.body2, color = colorScheme.outline)
+        }
+        val sourceDevice = entry.sourceDeviceUuid
+        if (!sourceDevice.isNullOrBlank()) {
+            Text("来源设备: $sourceDevice", style = textStyles.body2, color = colorScheme.outline)
+        }
+
+        Text(
+            text = formatTimestamp(entry.id),
+            style = textStyles.body2,
+            color = colorScheme.outline
+        )
+
+        val paramV2Raw = entry.paramV2Raw
+        if (!paramV2Raw.isNullOrBlank()) {
+            Text(
+                text = paramV2Raw,
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 6,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        val rawPayload = entry.rawPayload
+        if (!rawPayload.isNullOrBlank()) {
+            Text(
+                text = rawPayload,
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 6,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun SuperIslandHistoryImage(label: String?, data: String, modifier: Modifier = Modifier) {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
 
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = data) {
         value = withContext(Dispatchers.IO) {
             try {
-                if (data.startsWith("data:", ignoreCase = true)) {
-                    DataUrlUtils.decodeDataUrlToBitmap(data)
-                } else null
+                when {
+                    DataUrlUtils.isDataUrl(data) -> DataUrlUtils.decodeDataUrlToBitmap(data)
+                    data.startsWith("http", ignoreCase = true) -> downloadBitmap(data)
+                    else -> null
+                }
             } catch (_: Exception) {
                 null
             }
         }
     }
 
-    if (bitmap != null) {
-        AndroidView(
-            factory = { ctx ->
-                ImageView(ctx).apply {
-                    scaleType = ImageView.ScaleType.CENTER_CROP
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (bitmap != null) {
+            AndroidView(
+                factory = { ctx ->
+                    ImageView(ctx).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                    }
+                },
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                update = { imageView ->
+                    try {
+                        imageView.setImageBitmap(bitmap)
+                    } catch (_: Exception) {}
                 }
-            },
-            modifier = modifier
-                .size(72.dp)
-                .clip(RoundedCornerShape(16.dp)),
-            update = { imageView ->
-                try {
-                    imageView.setImageBitmap(bitmap)
-                } catch (_: Exception) {}
+            )
+        } else {
+            Text(
+                text = data.take(120),
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colorScheme.surfaceVariant)
+                    .padding(8.dp)
+            )
+        }
+
+        if (!label.isNullOrBlank()) {
+            Text(
+                text = label,
+                style = textStyles.body2,
+                color = colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun downloadBitmap(urlString: String, timeoutMs: Int = 5_000): Bitmap? {
+    return try {
+        val connection = (URL(urlString).openConnection() as? HttpURLConnection)?.apply {
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+            instanceFollowRedirects = true
+            requestMethod = "GET"
+            doInput = true
+        } ?: return null
+
+        try {
+            connection.connect()
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
+            connection.inputStream.use { stream ->
+                android.graphics.BitmapFactory.decodeStream(stream)
             }
-        )
-    } else {
-        Text(
-            text = data.take(120),
-            style = textStyles.body2,
-            color = colorScheme.onSurfaceVariantSummary,
-            maxLines = 4,
-            overflow = TextOverflow.Ellipsis,
-            modifier = modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(colorScheme.surfaceVariant)
-                .padding(8.dp)
-        )
+        } finally {
+            try { connection.disconnect() } catch (_: Exception) {}
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 

@@ -25,7 +25,7 @@ data class SuperIslandHistoryEntry(
 
 object SuperIslandHistory {
     private const val STORAGE_DEVICE_KEY = "super_island_history"
-    private const val MAX_ENTRIES = 200
+    private const val MAX_ENTRIES = 600
 
     private val historyTypeToken = object : TypeToken<List<SuperIslandHistoryEntry>>() {}
 
