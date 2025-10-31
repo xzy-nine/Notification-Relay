@@ -1,6 +1,12 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Outline
+import android.view.Gravity
+import android.view.View
+import android.view.ViewOutlineProvider
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -10,6 +16,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.TimerInfo
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseTimerInfo
+import kotlin.math.roundToInt
 
 // 聊天信息模板：IM图文组件，显示头像、主要文本、次要文本
 data class ChatInfo(
@@ -42,32 +49,62 @@ fun parseChatInfo(json: JSONObject): ChatInfo {
 }
 
 // 构建ChatInfo视图
-fun buildChatInfoView(context: Context, chatInfo: ChatInfo, picMap: Map<String, String>?): LinearLayout {
+fun buildChatInfoView(
+    context: Context,
+    paramV2: ParamV2,
+    picMap: Map<String, String>?
+): ChatInfoViewResult {
+    val chatInfo = paramV2.chatInfo
+        ?: return ChatInfoViewResult(LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }, null)
+
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
     }
 
-    chatInfo.picProfile?.let { pic ->
-        picMap?.get(pic)?.let { url ->
-            CoroutineScope(Dispatchers.Main).launch {
-                val bitmap = downloadBitmap(url, 5000)
-                if (bitmap != null) {
-                    val iv = ImageView(context).apply {
-                        setImageBitmap(bitmap)
-                        val size = (48 * context.resources.displayMetrics.density).toInt()
-                        layoutParams = LinearLayout.LayoutParams(size, size)
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                    }
-                    container.addView(iv, 0) // 添加到开头
-                }
-            }
-        }
+    val density = context.resources.displayMetrics.density
+    val avatarSize = (48f * density).roundToInt()
+    val innerSize = (42f * density).roundToInt()
+    val completionSize = (28f * density).roundToInt()
+
+    val avatarFrame = FrameLayout(context).apply {
+        layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize)
     }
+
+    val progressView = CircularProgressView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        setStrokeWidthDp(3.5f)
+        visibility = View.GONE
+    }
+
+    val avatarView = ImageView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(innerSize, innerSize, Gravity.CENTER)
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        clipToOutline = true
+        outlineProvider = CircularOutlineProvider
+    }
+
+    val completionView = ImageView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(completionSize, completionSize, Gravity.CENTER)
+        visibility = View.GONE
+        scaleType = ImageView.ScaleType.FIT_CENTER
+    }
+
+    avatarFrame.addView(progressView)
+    avatarFrame.addView(avatarView)
+    avatarFrame.addView(completionView)
+
+    container.addView(avatarFrame)
 
     val textContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        lp.setMargins((8 * context.resources.displayMetrics.density).toInt(), 0, 0, 0)
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.setMargins((8 * density).roundToInt(), 0, 0, 0)
         layoutParams = lp
     }
 
@@ -90,5 +127,134 @@ fun buildChatInfoView(context: Context, chatInfo: ChatInfo, picMap: Map<String, 
     }
 
     container.addView(textContainer)
-    return container
+
+    loadProfileAsync(context, chatInfo, picMap, avatarView)
+
+    val actionWithProgress = paramV2.actions?.firstOrNull { it.progressInfo != null }
+    val progressInfo = actionWithProgress?.progressInfo ?: paramV2.progressInfo
+    val iconSource = actionWithProgress ?: paramV2.actions?.firstOrNull { !it.actionIcon.isNullOrBlank() || !it.actionIconDark.isNullOrBlank() }
+
+    val binding = if (
+        progressInfo != null ||
+        !iconSource?.actionIcon.isNullOrBlank() ||
+        !iconSource?.actionIconDark.isNullOrBlank()
+    ) {
+        CircularProgressBinding(
+            context = context,
+            progressView = progressView,
+            avatarView = avatarView,
+            completionView = completionView,
+            picMap = picMap,
+            progressInfo = progressInfo,
+            completionIcon = iconSource?.actionIcon,
+            completionIconDark = iconSource?.actionIconDark
+        )
+    } else {
+        progressView.visibility = View.GONE
+        completionView.visibility = View.GONE
+        null
+    }
+
+    return ChatInfoViewResult(container, binding)
 }
+
+private fun loadProfileAsync(
+    context: Context,
+    chatInfo: ChatInfo,
+    picMap: Map<String, String>?,
+    avatarView: ImageView
+) {
+    val key = selectProfileKey(context, chatInfo)
+    val url = key?.let { picMap?.get(it) } ?: chatInfo.picProfile?.let { picMap?.get(it) }
+    if (url.isNullOrEmpty()) return
+    CoroutineScope(Dispatchers.Main).launch {
+        val bitmap = downloadBitmap(url, 5000)
+        if (bitmap != null) {
+            avatarView.setImageBitmap(bitmap)
+        }
+    }
+}
+
+private fun selectProfileKey(context: Context, chatInfo: ChatInfo): String? {
+    val nightMask = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    val preferDark = nightMask == Configuration.UI_MODE_NIGHT_YES
+    return if (preferDark) chatInfo.picProfileDark ?: chatInfo.picProfile else chatInfo.picProfile ?: chatInfo.picProfileDark
+}
+
+data class ChatInfoViewResult(
+    val view: LinearLayout,
+    val progressBinding: CircularProgressBinding?
+)
+
+class CircularProgressBinding(
+    private val context: Context,
+    private val progressView: CircularProgressView,
+    private val avatarView: ImageView,
+    private val completionView: ImageView,
+    private val picMap: Map<String, String>?,
+    private val progressInfo: ProgressInfo?,
+    private val completionIcon: String?,
+    private val completionIconDark: String?
+) {
+    private val clockwise = progressInfo?.isCCW?.let { !it } ?: true
+    private val strokeColor = parseColor(progressInfo?.colorProgress) ?: DEFAULT_PROGRESS_COLOR
+    private val trackColor = parseColor(progressInfo?.colorProgressEnd)
+        ?: ((strokeColor and 0x00FFFFFF) or (0x33 shl 24))
+    private val animationDuration = if (progressInfo?.isAutoProgress == true) 280L else 420L
+    private var completionIconLoaded = false
+
+    var currentProgress: Int? = progressInfo?.progress?.coerceIn(0, 100)
+        private set
+
+    fun apply(previousProgress: Int?) {
+        val target = currentProgress
+        if (target != null) {
+            completionView.visibility = View.GONE
+            progressView.visibility = View.VISIBLE
+            avatarView.visibility = View.VISIBLE
+            progressView.setDirection(clockwise)
+            progressView.setColors(strokeColor, trackColor)
+            if (previousProgress != null) {
+                progressView.setProgressAnimated(previousProgress, target, animationDuration)
+            } else {
+                progressView.setProgressInstant(target)
+            }
+        } else {
+            progressView.visibility = View.GONE
+            completionView.visibility = View.VISIBLE
+            loadCompletionIconIfNeeded()
+        }
+    }
+
+    private fun loadCompletionIconIfNeeded() {
+        if (completionIconLoaded) return
+        val key = selectCompletionIconKey()
+        val url = key?.let { picMap?.get(it) }
+        if (url.isNullOrEmpty()) {
+            completionIconLoaded = true
+            return
+        }
+        CoroutineScope(Dispatchers.Main).launch {
+            val bitmap = downloadBitmap(url, 5000)
+            if (bitmap != null) {
+                completionView.setImageBitmap(bitmap)
+            }
+            completionIconLoaded = true
+        }
+    }
+
+    private fun selectCompletionIconKey(): String? {
+        val nightMask = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val preferDark = nightMask == Configuration.UI_MODE_NIGHT_YES
+        return if (preferDark) completionIconDark ?: completionIcon else completionIcon ?: completionIconDark
+    }
+
+}
+
+private object CircularOutlineProvider : ViewOutlineProvider() {
+    override fun getOutline(view: View, outline: Outline) {
+        outline.setOval(0, 0, view.width, view.height)
+    }
+}
+
+private const val DEFAULT_PROGRESS_COLOR = 0xFF3482FF.toInt()

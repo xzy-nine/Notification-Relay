@@ -27,13 +27,15 @@ data class ParamV2(
 )
 
 // 构建UI视图的函数
-fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): View {
+fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): TemplateViewResult {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         val padding = (8 * context.resources.displayMetrics.density).toInt()
         setPadding(padding, padding, padding, padding)
         setBackgroundColor(0xEE000000.toInt())
     }
+
+    var progressBinding: CircularProgressBinding? = null
 
     // 根据模板类型构建不同的布局，使用分支处理
     when {
@@ -42,8 +44,9 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
             container.addView(view)
         }
         paramV2.chatInfo != null -> {
-            val view = buildChatInfoView(context, paramV2.chatInfo, picMap)
-            container.addView(view)
+            val result = buildChatInfoView(context, paramV2, picMap)
+            container.addView(result.view)
+            progressBinding = result.progressBinding
         }
         paramV2.highlightInfo != null -> {
             val view = buildHighlightInfoView(context, paramV2.highlightInfo, picMap)
@@ -90,7 +93,7 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
         }
     }
 
-    return container
+    return TemplateViewResult(container, progressBinding)
 }
 
 // 解析param_v2总容器，根据不同字段选择对应的子组件解析
@@ -161,3 +164,8 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
         iconOnly = true
     )
 }
+
+data class TemplateViewResult(
+    val view: View,
+    val progressBinding: CircularProgressBinding? = null
+)

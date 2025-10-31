@@ -33,6 +33,7 @@ import com.xzyht.notifyrelay.core.util.MessageSender
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressBinding
 import kotlin.math.abs
 
 /**
@@ -44,6 +45,7 @@ object FloatingReplicaManager {
     private const val TAG = "超级岛"
     private const val EXPANDED_DURATION_MS = 3_000L
     private const val AUTO_DISMISS_DURATION_MS = 12_000L
+    private const val PROGRESS_RESET_THRESHOLD = 5
 
     private var overlayView: View? = null
     private var stackContainer: LinearLayout? = null
@@ -58,7 +60,9 @@ object FloatingReplicaManager {
         var summaryView: View,
         var isExpanded: Boolean = true,
         var collapseRunnable: Runnable? = null,
-        var removalRunnable: Runnable? = null
+        var removalRunnable: Runnable? = null,
+        var lastProgress: Int? = null,
+        var progressBinding: CircularProgressBinding? = null
     )
 
     private val entries = mutableMapOf<String, EntryRecord>()
@@ -93,7 +97,8 @@ object FloatingReplicaManager {
                 ensureOverlayExists(context)
 
                 val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                val expandedView = paramV2?.let { buildViewFromTemplate(context, it, picMap) }
+                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap) }
+                val expandedView = templateResult?.view
                     ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
                 val summaryView = buildSummaryView(
                     context,
@@ -103,7 +108,7 @@ object FloatingReplicaManager {
                     summaryBitmap ?: fallbackBitmap
                 )
 
-                addOrUpdateEntry(context, entryKey, expandedView, summaryView)
+                addOrUpdateEntry(context, entryKey, expandedView, summaryView, templateResult?.progressBinding)
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
@@ -154,7 +159,13 @@ object FloatingReplicaManager {
         }
     }
 
-    private fun addOrUpdateEntry(context: Context, key: String, expandedView: View, summaryView: View) {
+    private fun addOrUpdateEntry(
+        context: Context,
+        key: String,
+        expandedView: View,
+        summaryView: View,
+        progressBinding: CircularProgressBinding?
+    ) {
         try {
             val stack = stackContainer ?: return
             val existing = entries[key]
@@ -162,6 +173,8 @@ object FloatingReplicaManager {
                 val wasExpanded = existing.isExpanded
                 updateRecordContent(existing, expandedView, summaryView)
                 attachDragHandler(existing.container, context)
+                existing.progressBinding = progressBinding
+                applyProgressBinding(existing, progressBinding)
                 if (wasExpanded) {
                     scheduleCollapse(existing)
                 } else {
@@ -194,8 +207,9 @@ object FloatingReplicaManager {
 
             stack.addView(container, 0)
 
-            val record = EntryRecord(key, container, expandedView, summaryView)
+            val record = EntryRecord(key, container, expandedView, summaryView, progressBinding = progressBinding)
             entries[key] = record
+            applyProgressBinding(record, progressBinding)
             showExpanded(record)
             scheduleCollapse(record)
             scheduleRemoval(record, key)
@@ -221,6 +235,30 @@ object FloatingReplicaManager {
         } else {
             record.expandedView.visibility = View.GONE
             record.summaryView.visibility = View.VISIBLE
+        }
+    }
+
+    private fun applyProgressBinding(record: EntryRecord, binding: CircularProgressBinding?) {
+        if (binding == null) {
+            record.progressBinding = null
+            record.lastProgress = null
+            return
+        }
+        val target = binding.currentProgress
+        val previous = record.lastProgress
+        val effectivePrevious = if (
+            target != null && previous != null && target < previous && target <= PROGRESS_RESET_THRESHOLD
+        ) {
+            // 新一轮传输通常会重置到极小值，主动回退到0避免出现倒退动画
+            0
+        } else {
+            previous
+        }
+        binding.apply(effectivePrevious)
+        record.progressBinding = binding
+        record.lastProgress = binding.currentProgress
+        if (binding.currentProgress == null) {
+            record.lastProgress = null
         }
     }
 
