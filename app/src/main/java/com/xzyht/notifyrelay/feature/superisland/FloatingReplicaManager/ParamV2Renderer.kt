@@ -8,6 +8,10 @@ import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
 import org.json.JSONArray
 
+// 摘要态组件解析
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ParamIsland
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamIsland
+
 // 参数 V2 总容器，使用分支选择不同模板
 data class ParamV2(
     val baseInfo: BaseInfo? = null, // 文本组件
@@ -18,7 +22,8 @@ data class ParamV2(
     val multiProgressInfo: MultiProgressInfo? = null, // 多进度组件
     val actions: List<ActionInfo>? = null, // 按钮组件
     val hintInfo: HintInfo? = null, // 提示组件（按钮组件2/3）
-    val textButton: TextButton? = null // 文本按钮组件
+    val textButton: TextButton? = null, // 文本按钮组件
+    val paramIsland: ParamIsland? = null // 摘要态组件
 )
 
 // 构建UI视图的函数
@@ -101,7 +106,10 @@ fun parseParamV2(jsonString: String): ParamV2? {
             multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) },
             actions = json.optJSONArray("actions")?.let { parseActions(it) },
             hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) },
-            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) }
+            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) },
+            paramIsland = (json.optJSONObject("param_island")
+                ?: json.optJSONObject("paramIsland")
+                ?: json.optJSONObject("islandParam"))?.let { parseParamIsland(it) }
         )
     } catch (e: Exception) {
         if (BuildConfig.DEBUG) Log.w("超级岛", "解析param_v2失败: ${e.message}")
