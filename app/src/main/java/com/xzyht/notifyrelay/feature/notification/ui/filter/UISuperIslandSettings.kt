@@ -343,8 +343,9 @@ private fun SuperIslandHistoryEntryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                entry.picMap.forEach { (label, data) ->
-                    SuperIslandHistoryImage(label, data)
+                entry.picMap.forEach { (key, data) ->
+                    val displayKey = key.ifBlank { "(未命名图片)" }
+                    SuperIslandHistoryImage(displayKey, data)
                 }
             }
         }
@@ -395,7 +396,7 @@ private fun SuperIslandHistoryEntryCard(
 }
 
 @Composable
-private fun SuperIslandHistoryImage(label: String?, data: String, modifier: Modifier = Modifier) {
+private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Modifier = Modifier) {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
 
@@ -447,10 +448,9 @@ private fun SuperIslandHistoryImage(label: String?, data: String, modifier: Modi
                     .padding(8.dp)
             )
         }
-
-        if (!label.isNullOrBlank()) {
+        if (imageKey.isNotBlank()) {
             Text(
-                text = label,
+                text = imageKey,
                 style = textStyles.body2,
                 color = colorScheme.onSurfaceVariantSummary,
                 maxLines = 1,
