@@ -157,6 +157,7 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
         colorContent = iconText.optString("contentColor", "").takeIf { it.isNotBlank() },
         colorSubContent = iconText.optString("subtitleColor", "").takeIf { it.isNotBlank() },
         bigImageLeft = leftPic,
-        bigImageRight = rightPic
+        bigImageRight = rightPic,
+        iconOnly = true
     )
 }

@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.view.Gravity
 import android.view.View
@@ -28,7 +29,8 @@ data class HighlightInfo(
     val colorSubContent: String? = null, // 辅助文本2颜色
     val colorSubContentDark: String? = null, // 深色模式辅助文本2颜色
     val bigImageLeft: String? = null, // 大岛区域左侧图片
-    val bigImageRight: String? = null // 大岛区域右侧图片
+    val bigImageRight: String? = null, // 大岛区域右侧图片
+    val iconOnly: Boolean = false // 是否仅展示图标
 )
 
 // 解析高亮信息组件（强调图文组件）
@@ -48,108 +50,142 @@ fun parseHighlightInfo(json: JSONObject): HighlightInfo {
         colorSubContent = json.optString("colorSubContent", "").takeIf { it.isNotEmpty() },
         colorSubContentDark = json.optString("colorSubContentDark", "").takeIf { it.isNotEmpty() },
         bigImageLeft = json.optString("bigImageLeft", "").takeIf { it.isNotEmpty() },
-        bigImageRight = json.optString("bigImageRight", "").takeIf { it.isNotEmpty() }
+        bigImageRight = json.optString("bigImageRight", "").takeIf { it.isNotEmpty() },
+        iconOnly = json.optBoolean("iconOnly", false)
     )
 }
 
 // 构建HighlightInfo视图
 fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMap: Map<String, String>?): LinearLayout {
+    return buildHighlightLayout(context, highlightInfo, picMap)
+}
+
+private fun buildHighlightLayout(
+    context: Context,
+    highlightInfo: HighlightInfo,
+    picMap: Map<String, String>?
+): LinearLayout {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+        gravity = if (highlightInfo.iconOnly) Gravity.CENTER else Gravity.CENTER_VERTICAL
     }
 
     val density = context.resources.displayMetrics.density
-
-    decodeBitmap(picMap, highlightInfo.picFunction)?.let { bitmap ->
-        val iconSize = (40 * density).toInt()
+    val iconKey = selectIconKey(context, highlightInfo)
+    val bitmap = decodeBitmap(picMap, iconKey)
+    val hasLeadingIcon = bitmap != null
+    if (bitmap != null) {
+        val iconSize = if (highlightInfo.iconOnly) (48 * density).toInt() else (40 * density).toInt()
+        val width = if (highlightInfo.iconOnly) LinearLayout.LayoutParams.WRAP_CONTENT else iconSize
         val iconView = ImageView(context).apply {
             setImageBitmap(bitmap)
-            layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
+            layoutParams = LinearLayout.LayoutParams(width, iconSize)
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         container.addView(iconView)
     }
-
-    val hasLeadingIcon = container.childCount > 0
+    val textLayoutParams = if (highlightInfo.iconOnly) {
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            if (hasLeadingIcon) setMargins((12 * density).toInt(), 0, 0, 0)
+        }
+    } else {
+        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            if (hasLeadingIcon) setMargins((8 * density).toInt(), 0, 0, 0)
+        }
+    }
 
     val textContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        val marginStart = if (hasLeadingIcon) (8 * density).toInt() else 0
-        lp.setMargins(marginStart, 0, 0, 0)
-        layoutParams = lp
+        layoutParams = textLayoutParams
     }
 
     val primaryText = listOfNotNull(
         highlightInfo.title,
         highlightInfo.content,
         highlightInfo.subContent
-    ).firstOrNull { it.isNotBlank() } ?: "高亮信息"
+    ).firstOrNull { it.isNotBlank() } ?: if (highlightInfo.iconOnly) null else "高亮信息"
 
-    val primaryView = TextView(context).apply {
-        text = primaryText
+    primaryText?.let { text ->
         val primaryColor = parseColor(highlightInfo.colorTitle)
             ?: parseColor(highlightInfo.colorContent)
             ?: 0xFFFFFFFF.toInt()
-        setTextColor(primaryColor)
-        textSize = 15f
+        val tv = TextView(context).apply {
+            this.text = text
+            setTextColor(primaryColor)
+            textSize = if (highlightInfo.iconOnly) 15f else 15f
+        }
+        textContainer.addView(tv)
     }
-    textContainer.addView(primaryView)
 
     highlightInfo.content
         ?.takeIf { it.isNotBlank() && it != primaryText }
         ?.let { content ->
-            val contentView = TextView(context).apply {
+            val tv = TextView(context).apply {
                 text = content
                 setTextColor(parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
                 textSize = 12f
             }
-            textContainer.addView(contentView)
+            textContainer.addView(tv)
         }
 
     highlightInfo.subContent
         ?.takeIf { it.isNotBlank() && it != primaryText }
-        ?.let { subText ->
-            val subView = TextView(context).apply {
-                text = subText
+        ?.let { sub ->
+            val tv = TextView(context).apply {
+                text = sub
                 setTextColor(parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt())
                 textSize = 12f
             }
-            textContainer.addView(subView)
+            textContainer.addView(tv)
         }
 
-    highlightInfo.timerInfo?.let { timerInfo ->
-        val display = formatTimerInfo(timerInfo)
-        if (display.isNotBlank()) {
-            val timerView = TextView(context).apply {
-                text = display
-                setTextColor(parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
-                textSize = 16f
+    highlightInfo.timerInfo
+        ?.takeIf { !highlightInfo.iconOnly }
+        ?.let { timerInfo ->
+            val display = formatTimerInfo(timerInfo)
+            if (display.isNotBlank()) {
+                val timerView = TextView(context).apply {
+                    text = display
+                    setTextColor(parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
+                    textSize = 16f
+                }
+                bindTimerUpdater(timerView, timerInfo)
+                textContainer.addView(timerView)
             }
-            bindTimerUpdater(timerView, timerInfo)
-            textContainer.addView(timerView)
         }
+
+    if (textContainer.childCount > 0) {
+        container.addView(textContainer)
     }
 
-    container.addView(textContainer)
+    if (!highlightInfo.iconOnly) {
+        val bigArea = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins((8 * density).toInt(), 0, 0, 0)
+            layoutParams = lp
+            gravity = Gravity.CENTER_VERTICAL
+        }
 
-    val bigArea = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL
-        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        lp.setMargins((8 * density).toInt(), 0, 0, 0)
-        layoutParams = lp
-        gravity = Gravity.CENTER_VERTICAL
-    }
+        addBigAreaImage(context, bigArea, highlightInfo.bigImageLeft, picMap)
+        addBigAreaImage(context, bigArea, highlightInfo.bigImageRight, picMap)
 
-    addBigAreaImage(context, bigArea, highlightInfo.bigImageLeft, picMap)
-    addBigAreaImage(context, bigArea, highlightInfo.bigImageRight, picMap)
-
-    if (bigArea.childCount > 0) {
-        container.addView(bigArea)
+        if (bigArea.childCount > 0) {
+            container.addView(bigArea)
+        }
     }
 
     return container
+}
+
+private fun selectIconKey(context: Context, highlightInfo: HighlightInfo): String? {
+    val nightMask = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    val preferDark = nightMask == Configuration.UI_MODE_NIGHT_YES
+    return if (preferDark) {
+        highlightInfo.picFunctionDark ?: highlightInfo.picFunction
+    } else {
+        highlightInfo.picFunction ?: highlightInfo.picFunctionDark
+    }
 }
 
 private fun addBigAreaImage(
