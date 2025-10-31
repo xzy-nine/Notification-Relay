@@ -14,7 +14,8 @@ data class ParamIsland(
 data class SmallIslandArea(
     val primaryText: String? = null,
     val secondaryText: String? = null,
-    val iconKey: String? = null
+    val iconKey: String? = null,
+    val progressInfo: ProgressInfo? = null
 )
 
 fun parseParamIsland(json: JSONObject): ParamIsland {
@@ -28,7 +29,21 @@ private fun parseSmallIslandArea(obj: JSONObject): SmallIslandArea {
     val primary = extractPrimaryText(obj)
     val secondary = extractSecondaryText(obj)
     val icon = extractIconKey(obj)
-    return SmallIslandArea(primaryText = primary, secondaryText = secondary, iconKey = icon)
+    val combine = obj.optJSONObject("combinePicInfo")
+    val combineIcon = combine
+        ?.optJSONObject("picInfo")
+        ?.optString("pic", "")
+        ?.takeIf { it.isNotBlank() }
+    val progressInfo = combine
+        ?.optJSONObject("progressInfo")
+        ?.let { parseProgressInfo(it) }
+    val finalIcon = combineIcon ?: icon
+    return SmallIslandArea(
+        primaryText = primary,
+        secondaryText = secondary,
+        iconKey = finalIcon,
+        progressInfo = progressInfo
+    )
 }
 
 private fun extractPrimaryText(obj: JSONObject): String? {

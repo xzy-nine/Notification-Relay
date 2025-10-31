@@ -34,6 +34,7 @@ import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIsl
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressBinding
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressView
 import kotlin.math.abs
 
 /**
@@ -61,8 +62,13 @@ object FloatingReplicaManager {
         var isExpanded: Boolean = true,
         var collapseRunnable: Runnable? = null,
         var removalRunnable: Runnable? = null,
-        var lastProgress: Int? = null,
-        var progressBinding: CircularProgressBinding? = null
+        var lastExpandedProgress: Int? = null,
+        var lastSummaryProgress: Int? = null
+    )
+
+    private data class SummaryViewResult(
+        val view: View,
+        val progressBinding: CircularProgressBinding?
     )
 
     private val entries = mutableMapOf<String, EntryRecord>()
@@ -100,15 +106,23 @@ object FloatingReplicaManager {
                 val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap) }
                 val expandedView = templateResult?.view
                     ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                val summaryView = buildSummaryView(
+                val summaryResult = buildSummaryView(
                     context,
                     smallIsland,
                     title,
                     text,
-                    summaryBitmap ?: fallbackBitmap
+                    summaryBitmap ?: fallbackBitmap,
+                    picMap
                 )
 
-                addOrUpdateEntry(context, entryKey, expandedView, summaryView, templateResult?.progressBinding)
+                addOrUpdateEntry(
+                    context,
+                    entryKey,
+                    expandedView,
+                    summaryResult.view,
+                    templateResult?.progressBinding,
+                    summaryResult.progressBinding
+                )
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
@@ -164,7 +178,8 @@ object FloatingReplicaManager {
         key: String,
         expandedView: View,
         summaryView: View,
-        progressBinding: CircularProgressBinding?
+        expandedBinding: CircularProgressBinding?,
+        summaryBinding: CircularProgressBinding?
     ) {
         try {
             val stack = stackContainer ?: return
@@ -173,8 +188,8 @@ object FloatingReplicaManager {
                 val wasExpanded = existing.isExpanded
                 updateRecordContent(existing, expandedView, summaryView)
                 attachDragHandler(existing.container, context)
-                existing.progressBinding = progressBinding
-                applyProgressBinding(existing, progressBinding)
+                existing.lastExpandedProgress = applyProgressBinding(expandedBinding, existing.lastExpandedProgress)
+                existing.lastSummaryProgress = applyProgressBinding(summaryBinding, existing.lastSummaryProgress)
                 if (wasExpanded) {
                     scheduleCollapse(existing)
                 } else {
@@ -207,9 +222,15 @@ object FloatingReplicaManager {
 
             stack.addView(container, 0)
 
-            val record = EntryRecord(key, container, expandedView, summaryView, progressBinding = progressBinding)
+            val record = EntryRecord(
+                key = key,
+                container = container,
+                expandedView = expandedView,
+                summaryView = summaryView
+            )
             entries[key] = record
-            applyProgressBinding(record, progressBinding)
+            record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
+            record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
             showExpanded(record)
             scheduleCollapse(record)
             scheduleRemoval(record, key)
@@ -238,28 +259,22 @@ object FloatingReplicaManager {
         }
     }
 
-    private fun applyProgressBinding(record: EntryRecord, binding: CircularProgressBinding?) {
-        if (binding == null) {
-            record.progressBinding = null
-            record.lastProgress = null
-            return
-        }
+    private fun applyProgressBinding(
+        binding: CircularProgressBinding?,
+        previousProgress: Int?
+    ): Int? {
+        if (binding == null) return null
         val target = binding.currentProgress
-        val previous = record.lastProgress
         val effectivePrevious = if (
-            target != null && previous != null && target < previous && target <= PROGRESS_RESET_THRESHOLD
+            target != null && previousProgress != null && target < previousProgress && target <= PROGRESS_RESET_THRESHOLD
         ) {
             // 新一轮传输通常会重置到极小值，主动回退到0避免出现倒退动画
             0
         } else {
-            previous
+            previousProgress
         }
         binding.apply(effectivePrevious)
-        record.progressBinding = binding
-        record.lastProgress = binding.currentProgress
-        if (binding.currentProgress == null) {
-            record.lastProgress = null
-        }
+        return binding.currentProgress
     }
 
     private fun onEntryClicked(key: String) {
@@ -391,8 +406,9 @@ object FloatingReplicaManager {
         smallIsland: SmallIslandArea?,
         fallbackTitle: String?,
         fallbackText: String?,
-        bitmap: Bitmap?
-    ): View {
+        bitmap: Bitmap?,
+        picMap: Map<String, String>?
+    ): SummaryViewResult {
         val density = context.resources.displayMetrics.density
         val primary = listOfNotNull(
             smallIsland?.primaryText,
@@ -406,58 +422,91 @@ object FloatingReplicaManager {
             fallbackTitle?.takeIf { !it.isNullOrBlank() && it != primary }
         ).firstOrNull { !it.isNullOrBlank() }
 
-        return LinearLayout(context).apply {
+        var progressBinding: CircularProgressBinding? = null
+        val iconSize = (48 * density).toInt()
+        val iconContainer = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
+        }
+
+        val iconView = ImageView(context).apply {
+            layoutParams = FrameLayout.LayoutParams(iconSize, iconSize)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "focus_icon"
+        }
+        if (bitmap != null) {
+            iconView.setImageBitmap(bitmap)
+            iconContainer.addView(iconView)
+        }
+
+        val progressInfo = smallIsland?.progressInfo
+        if (progressInfo != null) {
+            val progressView = CircularProgressView(context).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                setStrokeWidthDp(3f)
+                visibility = View.GONE
+            }
+            iconContainer.addView(progressView)
+            progressBinding = CircularProgressBinding(
+                context = context,
+                progressView = progressView,
+                completionView = null,
+                picMap = picMap,
+                progressInfo = progressInfo,
+                completionIcon = null,
+                completionIconDark = null
+            )
+        }
+
+        val container = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             val padding = (8 * density).toInt()
             setPadding(padding, padding, padding, padding)
             setBackgroundColor(0xEE000000.toInt())
-
-            if (bitmap != null) {
-                val size = (48 * density).toInt()
-                val iconView = ImageView(context).apply {
-                    setImageBitmap(bitmap)
-                    layoutParams = LinearLayout.LayoutParams(size, size)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    contentDescription = "focus_icon"
-                }
-                addView(iconView)
+            gravity = Gravity.CENTER_VERTICAL
+            if (bitmap != null || progressInfo != null) {
+                addView(iconContainer)
             }
+        }
 
-            val textColumn = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                val marginStart = if (bitmap != null) (8 * density).toInt() else 0
-                lp.setMargins(marginStart, 0, 0, 0)
-                layoutParams = lp
-            }
+        val textColumn = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            val marginStart = if (bitmap != null || progressInfo != null) (8 * density).toInt() else 0
+            lp.setMargins(marginStart, 0, 0, 0)
+            layoutParams = lp
+        }
 
-            val primaryView = TextView(context).apply {
-                setTextColor(0xFFFFFFFF.toInt())
-                textSize = 13f
-                typeface = Typeface.DEFAULT_BOLD
+        val primaryView = TextView(context).apply {
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            ellipsize = TextUtils.TruncateAt.END
+            maxLines = 1
+            text = primary
+        }
+
+        textColumn.addView(primaryView)
+
+        if (!secondary.isNullOrBlank()) {
+            val secondaryView = TextView(context).apply {
+                setTextColor(0xFFDDDDDD.toInt())
+                textSize = 11f
                 ellipsize = TextUtils.TruncateAt.END
                 maxLines = 1
-                text = primary
+                text = secondary
             }
-
-            textColumn.addView(primaryView)
-
-            if (!secondary.isNullOrBlank()) {
-                val secondaryView = TextView(context).apply {
-                    setTextColor(0xFFDDDDDD.toInt())
-                    textSize = 11f
-                    ellipsize = TextUtils.TruncateAt.END
-                    maxLines = 1
-                    text = secondary
-                }
-                textColumn.addView(secondaryView)
-            }
-
-            addView(textColumn)
+            textColumn.addView(secondaryView)
         }
+
+        container.addView(textColumn)
+
+        return SummaryViewResult(container, progressBinding)
     }
 
     private fun canShowOverlay(context: Context): Boolean {

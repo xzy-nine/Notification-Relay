@@ -59,15 +59,26 @@ fun buildChatInfoView(
 
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
     }
 
     val density = context.resources.displayMetrics.density
     val avatarSize = (48f * density).roundToInt()
-    val innerSize = (42f * density).roundToInt()
+    val statusSize = (48f * density).roundToInt()
     val completionSize = (28f * density).roundToInt()
 
-    val avatarFrame = FrameLayout(context).apply {
+    val avatarView = ImageView(context).apply {
         layoutParams = LinearLayout.LayoutParams(avatarSize, avatarSize)
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        clipToOutline = true
+        outlineProvider = CircularOutlineProvider
+    }
+
+    val statusFrame = FrameLayout(context).apply {
+        val lp = LinearLayout.LayoutParams(statusSize, statusSize)
+        lp.setMargins((8 * density).roundToInt(), 0, 0, 0)
+        layoutParams = lp
+        visibility = View.GONE
     }
 
     val progressView = CircularProgressView(context).apply {
@@ -79,24 +90,19 @@ fun buildChatInfoView(
         visibility = View.GONE
     }
 
-    val avatarView = ImageView(context).apply {
-        layoutParams = FrameLayout.LayoutParams(innerSize, innerSize, Gravity.CENTER)
-        scaleType = ImageView.ScaleType.CENTER_CROP
-        clipToOutline = true
-        outlineProvider = CircularOutlineProvider
-    }
-
     val completionView = ImageView(context).apply {
-        layoutParams = FrameLayout.LayoutParams(completionSize, completionSize, Gravity.CENTER)
+        val size = completionSize
+        val lp = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
+        layoutParams = lp
         visibility = View.GONE
         scaleType = ImageView.ScaleType.FIT_CENTER
     }
 
-    avatarFrame.addView(progressView)
-    avatarFrame.addView(avatarView)
-    avatarFrame.addView(completionView)
+    statusFrame.addView(progressView)
+    statusFrame.addView(completionView)
 
-    container.addView(avatarFrame)
+    container.addView(avatarView)
+    container.addView(statusFrame)
 
     val textContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -139,10 +145,10 @@ fun buildChatInfoView(
         !iconSource?.actionIcon.isNullOrBlank() ||
         !iconSource?.actionIconDark.isNullOrBlank()
     ) {
+        statusFrame.visibility = View.VISIBLE
         CircularProgressBinding(
             context = context,
             progressView = progressView,
-            avatarView = avatarView,
             completionView = completionView,
             picMap = picMap,
             progressInfo = progressInfo,
@@ -152,6 +158,7 @@ fun buildChatInfoView(
     } else {
         progressView.visibility = View.GONE
         completionView.visibility = View.GONE
+        statusFrame.visibility = View.GONE
         null
     }
 
@@ -189,14 +196,12 @@ data class ChatInfoViewResult(
 class CircularProgressBinding(
     private val context: Context,
     private val progressView: CircularProgressView,
-    private val avatarView: ImageView,
-    private val completionView: ImageView,
+    private val completionView: ImageView?,
     private val picMap: Map<String, String>?,
     private val progressInfo: ProgressInfo?,
     private val completionIcon: String?,
     private val completionIconDark: String?
 ) {
-    private val clockwise = progressInfo?.isCCW?.let { !it } ?: true
     private val strokeColor = parseColor(progressInfo?.colorProgress) ?: DEFAULT_PROGRESS_COLOR
     private val trackColor = parseColor(progressInfo?.colorProgressEnd)
         ?: ((strokeColor and 0x00FFFFFF) or (0x33 shl 24))
@@ -209,10 +214,9 @@ class CircularProgressBinding(
     fun apply(previousProgress: Int?) {
         val target = currentProgress
         if (target != null) {
-            completionView.visibility = View.GONE
+            completionView?.visibility = View.GONE
             progressView.visibility = View.VISIBLE
-            avatarView.visibility = View.VISIBLE
-            progressView.setDirection(clockwise)
+            progressView.setDirection(true)
             progressView.setColors(strokeColor, trackColor)
             if (previousProgress != null) {
                 progressView.setProgressAnimated(previousProgress, target, animationDuration)
@@ -221,13 +225,15 @@ class CircularProgressBinding(
             }
         } else {
             progressView.visibility = View.GONE
-            completionView.visibility = View.VISIBLE
-            loadCompletionIconIfNeeded()
+            if (completionView != null) {
+                completionView.visibility = View.VISIBLE
+                loadCompletionIconIfNeeded()
+            }
         }
     }
 
     private fun loadCompletionIconIfNeeded() {
-        if (completionIconLoaded) return
+        if (completionView == null || completionIconLoaded) return
         val key = selectCompletionIconKey()
         val url = key?.let { picMap?.get(it) }
         if (url.isNullOrEmpty()) {
@@ -248,7 +254,6 @@ class CircularProgressBinding(
         val preferDark = nightMask == Configuration.UI_MODE_NIGHT_YES
         return if (preferDark) completionIconDark ?: completionIcon else completionIcon ?: completionIconDark
     }
-
 }
 
 private object CircularOutlineProvider : ViewOutlineProvider() {
