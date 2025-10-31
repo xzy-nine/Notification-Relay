@@ -1,8 +1,11 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.Locale
+import kotlin.math.max
 import org.json.JSONObject
 
 // 高亮信息模板：强调图文组件，强调显示数据或内容
@@ -47,12 +50,136 @@ fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMa
         orientation = LinearLayout.VERTICAL
     }
 
-    val tv = TextView(context).apply {
-        text = highlightInfo.title ?: "高亮信息"
-        setTextColor(parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
-        textSize = 14f
+    val primaryText = listOfNotNull(
+        highlightInfo.title,
+        highlightInfo.content,
+        highlightInfo.subContent
+    ).firstOrNull { it.isNotBlank() } ?: "高亮信息"
+
+    val primaryView = TextView(context).apply {
+        text = primaryText
+        val primaryColor = parseColor(highlightInfo.colorTitle)
+            ?: parseColor(highlightInfo.colorContent)
+            ?: 0xFFFFFFFF.toInt()
+        setTextColor(primaryColor)
+        textSize = 15f
     }
-    container.addView(tv)
+    container.addView(primaryView)
+
+    highlightInfo.content
+        ?.takeIf { it.isNotBlank() && it != primaryText }
+        ?.let { content ->
+            val contentView = TextView(context).apply {
+                text = content
+                setTextColor(parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
+                textSize = 12f
+            }
+            container.addView(contentView)
+        }
+
+    highlightInfo.subContent
+        ?.takeIf { it.isNotBlank() && it != primaryText }
+        ?.let { subText ->
+            val subView = TextView(context).apply {
+                text = subText
+                setTextColor(parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt())
+                textSize = 12f
+            }
+            container.addView(subView)
+        }
+
+    highlightInfo.timerInfo?.let { timerInfo ->
+        val display = formatTimerInfo(timerInfo)
+        if (display.isNotBlank()) {
+            val timerView = TextView(context).apply {
+                text = display
+                setTextColor(parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
+                textSize = 16f
+            }
+            bindTimerUpdater(timerView, timerInfo)
+            container.addView(timerView)
+        }
+    }
 
     return container
 }
+
+private fun formatTimerInfo(timerInfo: TimerInfo, nowMillis: Long = System.currentTimeMillis()): String {
+    val millis = calculateTimerMillis(timerInfo, nowMillis)
+    val totalSeconds = max(0L, millis / 1000L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0) {
+        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+    }
+}
+
+private fun calculateTimerMillis(timerInfo: TimerInfo, nowMillis: Long): Long {
+    val baseElapsed = max(0L, timerInfo.timerSystemCurrent - timerInfo.timerWhen)
+    val delta = max(0L, nowMillis - timerInfo.timerSystemCurrent)
+    return when (timerInfo.timerType) {
+        -2 -> resolveRemaining(timerInfo, includeDelta = false, baseElapsed = baseElapsed, nowMillis = nowMillis)
+        -1, 0 -> resolveRemaining(timerInfo, includeDelta = true, baseElapsed = baseElapsed, nowMillis = nowMillis)
+        2 -> max(0L, if (timerInfo.timerTotal > 0L) timerInfo.timerTotal else baseElapsed)
+        else -> baseElapsed + delta
+    }
+}
+
+private fun resolveRemaining(
+    timerInfo: TimerInfo,
+    includeDelta: Boolean,
+    baseElapsed: Long,
+    nowMillis: Long
+): Long {
+    val anchor = if (includeDelta) nowMillis else timerInfo.timerSystemCurrent
+    val total = timerInfo.timerTotal
+    val delta = max(0L, nowMillis - timerInfo.timerSystemCurrent)
+    val elapsed = baseElapsed + if (includeDelta) delta else 0L
+
+    return when {
+        total > ABSOLUTE_TIME_THRESHOLD -> max(0L, total - anchor)
+        total > 0L -> max(0L, total - elapsed)
+        else -> 0L
+    }
+}
+
+private fun bindTimerUpdater(view: TextView, timerInfo: TimerInfo) {
+    val updater = TimerTextUpdater(view, timerInfo)
+    view.addOnAttachStateChangeListener(updater)
+    if (view.isAttachedToWindow) {
+        updater.start()
+    }
+}
+
+private class TimerTextUpdater(
+    private val view: TextView,
+    private val timerInfo: TimerInfo
+) : Runnable, View.OnAttachStateChangeListener {
+
+    override fun run() {
+        if (!view.isAttachedToWindow) return
+        view.text = formatTimerInfo(timerInfo, System.currentTimeMillis())
+        view.postDelayed(this, TIMER_UPDATE_INTERVAL_MS)
+    }
+
+    fun start() {
+        view.removeCallbacks(this)
+        view.text = formatTimerInfo(timerInfo, System.currentTimeMillis())
+        view.postDelayed(this, TIMER_UPDATE_INTERVAL_MS)
+    }
+
+    override fun onViewAttachedToWindow(v: View) {
+        start()
+    }
+
+    override fun onViewDetachedFromWindow(v: View) {
+        view.removeCallbacks(this)
+        v.removeOnAttachStateChangeListener(this)
+    }
+}
+
+private const val ABSOLUTE_TIME_THRESHOLD = 1_000_000_000_000L
+private const val TIMER_UPDATE_INTERVAL_MS = 1_000L
