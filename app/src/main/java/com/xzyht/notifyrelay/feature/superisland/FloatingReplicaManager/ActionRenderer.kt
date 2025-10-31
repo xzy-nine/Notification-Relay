@@ -1,8 +1,5 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
-import android.content.Context
-import android.widget.Button
-import android.widget.LinearLayout
 import org.json.JSONObject
 
 // 操作信息：定义按钮或操作的行为和样式
@@ -41,15 +38,4 @@ fun parseActionInfo(json: JSONObject): ActionInfo {
     )
 }
 
-// 构建ActionInfo视图
-fun buildActionInfoView(context: Context, actionInfo: ActionInfo, picMap: Map<String, String>?): Button {
-    val btn = Button(context).apply {
-        text = actionInfo.actionTitle ?: "操作"
-        setTextColor(parseColor(actionInfo.actionTitleColor) ?: 0xFFFFFFFF.toInt())
-        actionInfo.actionBgColor?.let { setBackgroundColor(parseColor(it) ?: 0xFF333333.toInt()) }
-        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        lp.setMargins((4 * context.resources.displayMetrics.density).toInt(), 0, 0, 0)
-        layoutParams = lp
-    }
-    return btn
-}
+// 按钮UI构建已移除，仅保留数据解析逻辑

@@ -1,8 +1,5 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
-import android.content.Context
-import android.widget.Button
-import android.widget.LinearLayout
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -25,20 +22,4 @@ fun parseActions(jsonArray: JSONArray): List<ActionInfo> {
     return list
 }
 
-// 构建TextButton视图
-fun buildTextButtonView(context: Context, textButton: TextButton, picMap: Map<String, String>?): LinearLayout {
-    val container = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL
-    }
-
-    textButton.actions.forEach { action ->
-        val btn = Button(context).apply {
-            text = action.actionTitle ?: "按钮"
-            setTextColor(parseColor(action.actionTitleColor) ?: 0xFFFFFFFF.toInt())
-            action.actionBgColor?.let { setBackgroundColor(parseColor(it) ?: 0xFF333333.toInt()) }
-        }
-        container.addView(btn)
-    }
-
-    return container
-}
+// 按钮UI构建已移除，仅保留数据解析逻辑

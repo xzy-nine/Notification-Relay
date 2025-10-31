@@ -90,9 +90,9 @@ fun UISuperIslandSettings() {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("超级岛（Super Island）读取", style = textStyles.body1, color = colorScheme.onSurface)
+                Text("超级岛读取", style = textStyles.body1, color = colorScheme.onSurface)
                 Text(
-                    "说明：此开关控制是否尝试从本机通知中读取小米超级岛数据并转发到远端设备。该功能只读取数据并转发，不会触发任何系统聚焦或白名单行为。",
+                    "控制是否尝试从本机通知中读取小米超级岛数据并转发",
                     style = textStyles.body2,
                     color = colorScheme.onSurfaceVariantSummary
                 )

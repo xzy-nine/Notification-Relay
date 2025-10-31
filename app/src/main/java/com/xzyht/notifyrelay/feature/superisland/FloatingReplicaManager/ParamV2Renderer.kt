@@ -61,8 +61,11 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
             container.addView(view)
         }
         paramV2.textButton != null -> {
-            val view = buildTextButtonView(context, paramV2.textButton, picMap)
-            container.addView(view)
+            val tv = android.widget.TextView(context).apply {
+                text = "此通知包含不可用的按钮"
+                setTextColor(0xFFFFFFFF.toInt())
+            }
+            container.addView(tv)
         }
         else -> {
             // 默认模板：未支持的模板类型
@@ -86,13 +89,6 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
     }
 
     // 添加按钮如果有
-    paramV2.actions?.let { actions ->
-        actions.forEach { action ->
-            val btn = buildActionInfoView(context, action, picMap)
-            container.addView(btn)
-        }
-    }
-
     return TemplateViewResult(container, progressBinding)
 }
 
