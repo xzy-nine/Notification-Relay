@@ -151,11 +151,15 @@ object FloatingReplicaManager {
             val stack = stackContainer ?: return
             val existing = entries[key]
             if (existing != null) {
+                val wasExpanded = existing.isExpanded
                 updateRecordContent(existing, expandedView, summaryView)
-                showExpanded(existing)
-                scheduleCollapse(existing)
+                if (wasExpanded) {
+                    scheduleCollapse(existing)
+                } else {
+                    cancelCollapse(existing)
+                }
                 scheduleRemoval(existing, key)
-                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key")
+                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key，保持${if (wasExpanded) "展开" else "摘要"}态")
                 return
             }
 
@@ -192,16 +196,22 @@ object FloatingReplicaManager {
     }
 
     private fun updateRecordContent(record: EntryRecord, expandedView: View, summaryView: View) {
+        val wasExpanded = record.isExpanded
         detachFromParent(summaryView)
         detachFromParent(expandedView)
         record.container.removeAllViews()
-        summaryView.visibility = View.GONE
-        expandedView.visibility = View.VISIBLE
         record.container.addView(summaryView)
         record.container.addView(expandedView)
         record.expandedView = expandedView
         record.summaryView = summaryView
-        record.isExpanded = true
+        record.isExpanded = wasExpanded
+        if (wasExpanded) {
+            record.summaryView.visibility = View.GONE
+            record.expandedView.visibility = View.VISIBLE
+        } else {
+            record.expandedView.visibility = View.GONE
+            record.summaryView.visibility = View.VISIBLE
+        }
     }
 
     private fun onEntryClicked(key: String) {
@@ -225,11 +235,17 @@ object FloatingReplicaManager {
         record.isExpanded = false
     }
 
+    private fun cancelCollapse(record: EntryRecord) {
+        record.collapseRunnable?.let { handler.removeCallbacks(it) }
+        record.collapseRunnable = null
+    }
+
     private fun scheduleCollapse(record: EntryRecord, delayMs: Long = EXPANDED_DURATION_MS) {
         record.collapseRunnable?.let { handler.removeCallbacks(it) }
         val runnable = Runnable {
             if (!entries.containsKey(record.key)) return@Runnable
             showSummary(record)
+            record.collapseRunnable = null
         }
         record.collapseRunnable = runnable
         handler.postDelayed(runnable, delayMs)
