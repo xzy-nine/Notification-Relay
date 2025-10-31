@@ -14,7 +14,9 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -31,6 +33,7 @@ import com.xzyht.notifyrelay.core.util.MessageSender
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
+import kotlin.math.abs
 
 /**
  * 接收端的超级岛复刻实现骨架。
@@ -44,6 +47,8 @@ object FloatingReplicaManager {
 
     private var overlayView: View? = null
     private var stackContainer: LinearLayout? = null
+    private var overlayLayoutParams: WindowManager.LayoutParams? = null
+    private var windowManager: WindowManager? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private data class EntryRecord(
@@ -139,7 +144,10 @@ object FloatingReplicaManager {
 
             overlayView = container
             stackContainer = innerStack
+            overlayLayoutParams = layoutParams
+            windowManager = wm
             try { wm.addView(container, layoutParams) } catch (_: Exception) {}
+            entries.values.forEach { attachDragHandler(it.container, context) }
             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
@@ -153,6 +161,7 @@ object FloatingReplicaManager {
             if (existing != null) {
                 val wasExpanded = existing.isExpanded
                 updateRecordContent(existing, expandedView, summaryView)
+                attachDragHandler(existing.container, context)
                 if (wasExpanded) {
                     scheduleCollapse(existing)
                 } else {
@@ -181,6 +190,7 @@ object FloatingReplicaManager {
             container.addView(summaryView)
             container.addView(expandedView)
             container.setOnClickListener { onEntryClicked(key) }
+            attachDragHandler(container, context)
 
             stack.addView(container, 0)
 
@@ -271,6 +281,17 @@ object FloatingReplicaManager {
     private fun detachFromParent(view: View) {
         val parent = view.parent as? ViewGroup ?: return
         parent.removeView(view)
+    }
+
+    private fun attachDragHandler(target: View, context: Context) {
+        val params = overlayLayoutParams
+        val wm = windowManager
+        val root = overlayView
+        if (params != null && wm != null && root != null) {
+            target.setOnTouchListener(FloatingTouchListener(params, wm, root, context))
+        } else {
+            target.setOnTouchListener(null)
+        }
     }
 
     private fun buildLegacyExpandedView(context: Context, title: String?, content: String?, image: Bitmap?): View {
@@ -470,29 +491,45 @@ object FloatingReplicaManager {
     // 简单的触摸拖动实现
     private class FloatingTouchListener(
         private val params: WindowManager.LayoutParams,
-        private val wm: WindowManager
+        private val wm: WindowManager,
+        private val rootView: View,
+        context: Context
     ) : View.OnTouchListener {
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
         private var lastX = 0f
         private var lastY = 0f
-        override fun onTouch(v: View, event: android.view.MotionEvent): Boolean {
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> {
+        private var isDragging = false
+    override fun onTouch(v: View, event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
                     lastX = event.rawX
                     lastY = event.rawY
-                    return true
+                    isDragging = false
+                    return false
                 }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - lastX).toInt()
-                    val dy = (event.rawY - lastY).toInt()
-                    params.x += dx
-                    params.y += dy
-                    try {
-                        wm.updateViewLayout(v.rootView, params)
-                        if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
-                    } catch (_: Exception) {}
-                    lastX = event.rawX
-                    lastY = event.rawY
-                    return true
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - lastX
+                    val dy = event.rawY - lastY
+                    if (!isDragging && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        params.x += dx.toInt()
+                        params.y += dy.toInt()
+                        try {
+                            wm.updateViewLayout(rootView, params)
+                            if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
+                        } catch (_: Exception) {}
+                        lastX = event.rawX
+                        lastY = event.rawY
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDragging) {
+                        isDragging = false
+                        return true
+                    }
                 }
             }
             return false
