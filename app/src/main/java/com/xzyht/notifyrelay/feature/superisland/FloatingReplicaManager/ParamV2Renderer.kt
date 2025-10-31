@@ -97,10 +97,12 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
         val json = JSONObject(jsonString)
+        val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
+            ?: parseHighlightFromIconText(json)
         ParamV2(
             baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
             chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
-            highlightInfo = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) },
+            highlightInfo = highlight,
             picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) },
             progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) },
             multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) },
@@ -115,4 +117,46 @@ fun parseParamV2(jsonString: String): ParamV2? {
         if (BuildConfig.DEBUG) Log.w("超级岛", "解析param_v2失败: ${e.message}")
         null
     }
+}
+
+private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
+    val iconText = root.optJSONObject("iconTextInfo") ?: return null
+    val title = iconText.optString("title", "").takeIf { it.isNotBlank() }
+    val content = iconText.optString("content", "").takeIf { it.isNotBlank() }
+    val sub = sequenceOf("subTitle", "tip", "desc", "description")
+        .map { key -> iconText.optString(key, "") }
+        .firstOrNull { it.isNotBlank() }
+    if (title == null && content == null && sub == null) return null
+
+    val animIcon = iconText.optJSONObject("animIconInfo")
+    val iconKey = animIcon?.optString("src", "")?.takeIf { it.isNotBlank() }
+    val iconKeyDark = animIcon?.optString("srcDark", "")?.takeIf { it.isNotBlank() }
+
+    val paramIsland = (root.optJSONObject("param_island")
+        ?: root.optJSONObject("paramIsland")
+        ?: root.optJSONObject("islandParam"))
+    val bigIsland = paramIsland?.optJSONObject("bigIslandArea")
+    val leftPic = bigIsland
+        ?.optJSONObject("imageTextInfoLeft")
+        ?.optJSONObject("picInfo")
+        ?.optString("pic", "")
+        ?.takeIf { it.isNotBlank() }
+    val rightPic = bigIsland
+        ?.optJSONObject("imageTextInfoRight")
+        ?.optJSONObject("picInfo")
+        ?.optString("pic", "")
+        ?.takeIf { it.isNotBlank() }
+
+    return HighlightInfo(
+        title = title,
+        content = content,
+        subContent = sub,
+        picFunction = iconKey,
+        picFunctionDark = iconKeyDark,
+        colorTitle = iconText.optString("titleColor", "").takeIf { it.isNotBlank() },
+        colorContent = iconText.optString("contentColor", "").takeIf { it.isNotBlank() },
+        colorSubContent = iconText.optString("subtitleColor", "").takeIf { it.isNotBlank() },
+        bigImageLeft = leftPic,
+        bigImageRight = rightPic
+    )
 }

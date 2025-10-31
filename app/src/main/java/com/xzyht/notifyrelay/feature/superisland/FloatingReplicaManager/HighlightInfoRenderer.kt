@@ -1,12 +1,16 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ImageView
 import java.util.Locale
 import kotlin.math.max
 import org.json.JSONObject
+import com.xzyht.notifyrelay.core.util.DataUrlUtils
 
 // 高亮信息模板：强调图文组件，强调显示数据或内容
 data class HighlightInfo(
@@ -22,7 +26,9 @@ data class HighlightInfo(
     val colorContent: String? = null, // 辅助文本1颜色
     val colorContentDark: String? = null, // 深色模式辅助文本1颜色
     val colorSubContent: String? = null, // 辅助文本2颜色
-    val colorSubContentDark: String? = null // 深色模式辅助文本2颜色
+    val colorSubContentDark: String? = null, // 深色模式辅助文本2颜色
+    val bigImageLeft: String? = null, // 大岛区域左侧图片
+    val bigImageRight: String? = null // 大岛区域右侧图片
 )
 
 // 解析高亮信息组件（强调图文组件）
@@ -40,14 +46,39 @@ fun parseHighlightInfo(json: JSONObject): HighlightInfo {
         colorContent = json.optString("colorContent", "").takeIf { it.isNotEmpty() },
         colorContentDark = json.optString("colorContentDark", "").takeIf { it.isNotEmpty() },
         colorSubContent = json.optString("colorSubContent", "").takeIf { it.isNotEmpty() },
-        colorSubContentDark = json.optString("colorSubContentDark", "").takeIf { it.isNotEmpty() }
+        colorSubContentDark = json.optString("colorSubContentDark", "").takeIf { it.isNotEmpty() },
+        bigImageLeft = json.optString("bigImageLeft", "").takeIf { it.isNotEmpty() },
+        bigImageRight = json.optString("bigImageRight", "").takeIf { it.isNotEmpty() }
     )
 }
 
 // 构建HighlightInfo视图
 fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMap: Map<String, String>?): LinearLayout {
     val container = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
+
+    val density = context.resources.displayMetrics.density
+
+    decodeBitmap(picMap, highlightInfo.picFunction)?.let { bitmap ->
+        val iconSize = (40 * density).toInt()
+        val iconView = ImageView(context).apply {
+            setImageBitmap(bitmap)
+            layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        container.addView(iconView)
+    }
+
+    val hasLeadingIcon = container.childCount > 0
+
+    val textContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val marginStart = if (hasLeadingIcon) (8 * density).toInt() else 0
+        lp.setMargins(marginStart, 0, 0, 0)
+        layoutParams = lp
     }
 
     val primaryText = listOfNotNull(
@@ -64,7 +95,7 @@ fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMa
         setTextColor(primaryColor)
         textSize = 15f
     }
-    container.addView(primaryView)
+    textContainer.addView(primaryView)
 
     highlightInfo.content
         ?.takeIf { it.isNotBlank() && it != primaryText }
@@ -74,7 +105,7 @@ fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMa
                 setTextColor(parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
                 textSize = 12f
             }
-            container.addView(contentView)
+            textContainer.addView(contentView)
         }
 
     highlightInfo.subContent
@@ -85,7 +116,7 @@ fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMa
                 setTextColor(parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt())
                 textSize = 12f
             }
-            container.addView(subView)
+            textContainer.addView(subView)
         }
 
     highlightInfo.timerInfo?.let { timerInfo ->
@@ -97,11 +128,63 @@ fun buildHighlightInfoView(context: Context, highlightInfo: HighlightInfo, picMa
                 textSize = 16f
             }
             bindTimerUpdater(timerView, timerInfo)
-            container.addView(timerView)
+            textContainer.addView(timerView)
         }
     }
 
+    container.addView(textContainer)
+
+    val bigArea = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        lp.setMargins((8 * density).toInt(), 0, 0, 0)
+        layoutParams = lp
+        gravity = Gravity.CENTER_VERTICAL
+    }
+
+    addBigAreaImage(context, bigArea, highlightInfo.bigImageLeft, picMap)
+    addBigAreaImage(context, bigArea, highlightInfo.bigImageRight, picMap)
+
+    if (bigArea.childCount > 0) {
+        container.addView(bigArea)
+    }
+
     return container
+}
+
+private fun addBigAreaImage(
+    context: Context,
+    bigArea: LinearLayout,
+    key: String?,
+    picMap: Map<String, String>?
+) {
+    val bitmap = decodeBitmap(picMap, key) ?: return
+    val density = context.resources.displayMetrics.density
+    val size = (44 * density).toInt()
+    val imageView = ImageView(context).apply {
+        val lp = LinearLayout.LayoutParams(size, size)
+        if (bigArea.childCount > 0) {
+            lp.setMargins((6 * density).toInt(), 0, 0, 0)
+        }
+        layoutParams = lp
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        setImageBitmap(bitmap)
+        clipToOutline = false
+    }
+    bigArea.addView(imageView)
+}
+
+private fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
+    if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
+    val raw = picMap[key] ?: return null
+    return try {
+        when {
+            raw.startsWith("data:", ignoreCase = true) -> DataUrlUtils.decodeDataUrlToBitmap(raw)
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
+    }
 }
 
 private fun formatTimerInfo(timerInfo: TimerInfo, nowMillis: Long = System.currentTimeMillis()): String {
