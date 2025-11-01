@@ -2,7 +2,9 @@ package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.drawable.GradientDrawable
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -11,7 +13,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import kotlin.math.max
+import kotlin.math.roundToInt
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF.toInt()
+private const val DEFAULT_NODE_COUNT = 3
+private const val IMAGE_MAX_DIMENSION = 320
+private const val DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
 
 // 多进度信息：多段进度条组件
 data class MultiProgressInfo(
@@ -50,7 +63,7 @@ fun parseMultiProgressInfo(json: JSONObject): MultiProgressInfo {
 }
 
 // 构建MultiProgressInfo视图
-fun buildMultiProgressInfoView(
+suspend fun buildMultiProgressInfoView(
     context: Context,
     multiProgressInfo: MultiProgressInfo,
     picMap: Map<String, String>?
@@ -154,7 +167,7 @@ fun ProgressInfo.toMultiProgressInfo(title: String? = null, pointsOverride: Int?
     )
 }
 
-private fun createNodeView(
+private suspend fun createNodeView(
     context: Context,
     size: Int,
     iconKey: String?,
@@ -209,7 +222,7 @@ private fun createNodeView(
     return frame
 }
 
-private fun createConnectorView(
+private suspend fun createConnectorView(
     context: Context,
     info: MultiProgressInfo,
     density: Float,
@@ -281,25 +294,46 @@ private fun createConnectorView(
     }
 }
 
-private fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
+private suspend fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
     if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
     val raw = picMap[key] ?: return null
     return try {
         if (raw.startsWith("data:", ignoreCase = true)) {
             DataUrlUtils.decodeDataUrlToBitmap(raw)
+        } else if (raw.startsWith("http", ignoreCase = true)) {
+            val cleanedUrl = raw.trim().replace("\n", "").replace("\r", "").replace(" ", "")
+            downloadBitmap(cleanedUrl, 10000)
         } else {
             null
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.e("MultiProgressRenderer", "Failed to decode bitmap for key $key: ${e.javaClass.simpleName}: ${e.message}")
         null
     }
 }
 
-private fun adjustAlpha(color: Int, alpha: Int): Int {
-    val clamped = alpha.coerceIn(0, 255)
-    val rgb = color and 0x00FFFFFF
-    return (clamped shl 24) or rgb
+private fun decodeSampledBitmap(bytes: ByteArray, maxDimension: Int): Bitmap? {
+    if (bytes.isEmpty()) return null
+    val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOptions)
+    val sampleSize = computeInSampleSize(boundsOptions.outWidth, boundsOptions.outHeight, maxDimension)
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
 }
 
-private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF.toInt()
-private const val DEFAULT_NODE_COUNT = 3
+private fun computeInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
+    if (width <= 0 || height <= 0) return 1
+    var sampleSize = 1
+    var largestSide = max(width, height)
+    while (largestSide / sampleSize > maxDimension) {
+        sampleSize *= 2
+    }
+    return sampleSize
+}
+
+private fun adjustAlpha(color: Int, alpha: Int): Int {
+    return (color and 0x00FFFFFF) or (alpha shl 24)
+}

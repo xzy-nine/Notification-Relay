@@ -1,5 +1,7 @@
 package com.xzyht.notifyrelay.feature.superisland
 
+import android.os.Bundle
+
 data class SuperIslandData(
     val sourcePackage: String?,
     val appName: String?,
@@ -7,5 +9,6 @@ data class SuperIslandData(
     val text: String?,
     val rawExtras: Map<String, Any?>,
     val paramV2Raw: String? = null,
-    val picMap: Map<String, String>? = null
+    val picMap: Map<String, String>? = null,
+    val pics: Bundle? = null
 )

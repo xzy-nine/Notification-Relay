@@ -27,7 +27,7 @@ data class ParamV2(
 )
 
 // 构建UI视图的函数
-fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): TemplateViewResult {
+suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): TemplateViewResult {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         val padding = (8 * context.resources.displayMetrics.density).toInt()
