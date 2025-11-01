@@ -87,7 +87,10 @@ object PersistenceManager {
             val file = getNotificationFile(task.context, task.device)
             // 使用原子写入：先写到临时文件，然后重命名
             val tempFile = File(file.parent, "${file.name}.tmp")
-            tempFile.writeText(gson.toJson(task.records))
+            tempFile.outputStream().bufferedWriter(Charsets.UTF_8).use { writer ->
+                gson.toJson(task.records, writer)
+                writer.flush()
+            }
             // 原子移动
             if (tempFile.renameTo(file)) {
                 if (BuildConfig.DEBUG) Log.d("PersistenceManager", "已成功保存设备 ${task.device} 的通知记录，条数=${task.records.size}")
@@ -191,8 +194,11 @@ object PersistenceManager {
         val file = getNotificationFile(context, device)
         if (!file.exists()) return emptyList()
         return try {
-            val json = file.readText()
-            gson.fromJson(json, typeToken.type) ?: emptyList()
+            file.reader(Charsets.UTF_8).use { reader ->
+                @Suppress("UNCHECKED_CAST")
+                val data = gson.fromJson<Any?>(reader, typeToken.type) as? List<T>
+                data ?: emptyList()
+            }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("PersistenceManager", "读取设备 $device 的通知记录失败: ${e.message}")
             // 直接删除损坏的文件
