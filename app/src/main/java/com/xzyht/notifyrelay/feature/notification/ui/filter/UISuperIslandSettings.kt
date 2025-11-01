@@ -2,12 +2,14 @@ package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.text.format.DateFormat
-import android.widget.ImageView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -25,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,7 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
@@ -45,8 +49,11 @@ import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.math.max
+import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Surface
@@ -54,6 +61,9 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Date
+
+private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
+private const val SUPER_ISLAND_DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
 
 private data class SuperIslandHistoryGroup(
     val packageName: String,
@@ -351,7 +361,7 @@ private fun SuperIslandHistoryEntryCard(
             ) {
                 entry.picMap.forEach { (key, data) ->
                     val displayKey = key.ifBlank { "(未命名图片)" }
-                    SuperIslandHistoryImage(displayKey, data)
+                        SuperIslandHistoryImage(displayKey, data)
                 }
             }
         }
@@ -406,40 +416,44 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
 
-    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = data) {
-        value = withContext(Dispatchers.IO) {
+    val bitmap by produceState<Bitmap?>(initialValue = SuperIslandImageCache.get(data), key1 = data) {
+        val cached = SuperIslandImageCache.get(data)
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+
+        val loaded = withContext(Dispatchers.IO) {
             try {
-                when {
+                val decoded = when {
                     DataUrlUtils.isDataUrl(data) -> DataUrlUtils.decodeDataUrlToBitmap(data)
                     data.startsWith("http", ignoreCase = true) -> downloadBitmap(data)
                     else -> null
                 }
+                decoded?.let { SuperIslandImageCache.put(data, it) }
             } catch (_: Exception) {
                 null
             }
         }
+
+        value = loaded
     }
+
+    val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (bitmap != null) {
-            AndroidView(
-                factory = { ctx ->
-                    ImageView(ctx).apply {
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                    }
-                },
+        if (imageBitmap != null) {
+            Image(
+                bitmap = imageBitmap,
+                contentDescription = imageKey,
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(16.dp)),
-                update = { imageView ->
-                    try {
-                        imageView.setImageBitmap(bitmap)
-                    } catch (_: Exception) {}
-                }
+                contentScale = ContentScale.Crop
             )
         } else {
             Text(
@@ -479,14 +493,102 @@ private fun downloadBitmap(urlString: String, timeoutMs: Int = 5_000): Bitmap? {
         try {
             connection.connect()
             if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-            connection.inputStream.use { stream ->
-                android.graphics.BitmapFactory.decodeStream(stream)
-            }
+            val bytes = connection.inputStream.use { stream ->
+                val buffer = ByteArrayOutputStream()
+                val temp = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = stream.read(temp)
+                    if (read == -1) break
+                    total += read
+                    if (total > SUPER_ISLAND_DOWNLOAD_MAX_BYTES) {
+                        return@use null
+                    }
+                    buffer.write(temp, 0, read)
+                }
+                buffer.toByteArray()
+            } ?: return null
+            if (bytes.isEmpty()) return null
+            decodeSampledBitmap(bytes, SUPER_ISLAND_IMAGE_MAX_DIMENSION)
         } finally {
             try { connection.disconnect() } catch (_: Exception) {}
         }
     } catch (_: Exception) {
         null
+    }
+}
+
+private fun decodeSampledBitmap(bytes: ByteArray, maxDimension: Int): Bitmap? {
+    if (bytes.isEmpty()) return null
+    val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOptions)
+    val sampleSize = computeInSampleSize(boundsOptions.outWidth, boundsOptions.outHeight, maxDimension)
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+}
+
+private fun computeInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
+    if (width <= 0 || height <= 0) return 1
+    var sampleSize = 1
+    var largestSide = max(width, height)
+    while (largestSide / sampleSize > maxDimension) {
+        sampleSize *= 2
+    }
+    return sampleSize
+}
+
+// Keeps a small in-memory cache of decoded bitmaps to avoid repeated work during recompositions.
+private object SuperIslandImageCache {
+    private const val MAX_CACHE_SIZE = 32
+    private val cache = object : LinkedHashMap<String, Bitmap>(MAX_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean {
+            return size > MAX_CACHE_SIZE
+        }
+    }
+
+    fun get(key: String): Bitmap? = synchronized(this) {
+        val cached = cache[key]
+        if (cached != null && cached.isRecycled) {
+            cache.remove(key)
+            return@synchronized null
+        }
+        cached
+    }
+
+    fun put(key: String, bitmap: Bitmap): Bitmap {
+        if (bitmap.isRecycled) return bitmap
+        val normalized = normalizeBitmap(bitmap)
+        synchronized(this) {
+            cache[key] = normalized
+        }
+        return normalized
+    }
+
+    private fun normalizeBitmap(source: Bitmap): Bitmap {
+        if (source.isRecycled) return source
+        val width = source.width
+        val height = source.height
+        if (width <= 0 || height <= 0) return source
+
+        var working = source
+        val largestSide = max(width, height)
+        if (largestSide > SUPER_ISLAND_IMAGE_MAX_DIMENSION) {
+            val scale = SUPER_ISLAND_IMAGE_MAX_DIMENSION.toFloat() / largestSide.toFloat()
+            val targetWidth = max(1, (width * scale).roundToInt())
+            val targetHeight = max(1, (height * scale).roundToInt())
+            working = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true)
+        }
+
+        if (working.config == Bitmap.Config.HARDWARE) {
+            working.copy(Bitmap.Config.ARGB_8888, false)?.let { working = it }
+        }
+        if (working !== source && !source.isRecycled) {
+            try { source.recycle() } catch (_: Exception) {}
+        }
+        return working
     }
 }
 
