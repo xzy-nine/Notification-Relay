@@ -139,6 +139,19 @@ private fun buildHighlightLayout(
             textContainer.addView(tv)
         }
 
+    val statusText = highlightInfo.timerInfo
+        ?.let { resolveStatusText(highlightInfo) }
+        ?.takeIf { it.isNotBlank() && it != primaryText }
+
+    statusText?.let { status ->
+        val tv = TextView(context).apply {
+            text = status
+            setTextColor(parseColor(highlightInfo.colorSubContent) ?: parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
+            textSize = 12f
+        }
+        textContainer.addView(tv)
+    }
+
     highlightInfo.timerInfo
         ?.takeIf { !highlightInfo.iconOnly }
         ?.let { timerInfo ->
@@ -176,6 +189,15 @@ private fun buildHighlightLayout(
     }
 
     return container
+}
+
+fun resolveHighlightIconBitmap(
+    context: Context,
+    highlightInfo: HighlightInfo,
+    picMap: Map<String, String>?
+): Bitmap? {
+    val key = selectIconKey(context, highlightInfo)
+    return decodeBitmap(picMap, key)
 }
 
 private fun selectIconKey(context: Context, highlightInfo: HighlightInfo): String? {
@@ -223,7 +245,7 @@ private fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
     }
 }
 
-private fun formatTimerInfo(timerInfo: TimerInfo, nowMillis: Long = System.currentTimeMillis()): String {
+fun formatTimerInfo(timerInfo: TimerInfo, nowMillis: Long = System.currentTimeMillis()): String {
     val millis = calculateTimerMillis(timerInfo, nowMillis)
     val totalSeconds = max(0L, millis / 1000L)
     val hours = totalSeconds / 3600L
@@ -265,12 +287,29 @@ private fun resolveRemaining(
     }
 }
 
-private fun bindTimerUpdater(view: TextView, timerInfo: TimerInfo) {
+fun bindTimerUpdater(view: TextView, timerInfo: TimerInfo) {
     val updater = TimerTextUpdater(view, timerInfo)
     view.addOnAttachStateChangeListener(updater)
     if (view.isAttachedToWindow) {
         updater.start()
     }
+}
+
+private fun resolveStatusText(highlightInfo: HighlightInfo): String? {
+    val preferred = listOfNotNull(
+        highlightInfo.title,
+        highlightInfo.content,
+        highlightInfo.subContent
+    ).firstOrNull { it.contains("进行") }
+    if (!preferred.isNullOrBlank()) {
+        return preferred
+    }
+    val base = listOfNotNull(
+        highlightInfo.subContent,
+        highlightInfo.title,
+        highlightInfo.content
+    ).firstOrNull { it.isNotBlank() } ?: return null
+    return if (base.contains("进行")) base else base + "进行中"
 }
 
 private class TimerTextUpdater(

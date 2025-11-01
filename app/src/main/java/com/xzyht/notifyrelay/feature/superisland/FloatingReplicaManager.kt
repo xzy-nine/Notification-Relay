@@ -35,6 +35,10 @@ import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildVie
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressBinding
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressView
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.HighlightInfo
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTimerUpdater
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTimerInfo
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.resolveHighlightIconBitmap
 import kotlin.math.abs
 
 /**
@@ -109,6 +113,7 @@ object FloatingReplicaManager {
                 val summaryResult = buildSummaryView(
                     context,
                     smallIsland,
+                    paramV2?.highlightInfo,
                     title,
                     text,
                     summaryBitmap ?: fallbackBitmap,
@@ -404,23 +409,40 @@ object FloatingReplicaManager {
     private fun buildSummaryView(
         context: Context,
         smallIsland: SmallIslandArea?,
+        highlightInfo: HighlightInfo?,
         fallbackTitle: String?,
         fallbackText: String?,
         bitmap: Bitmap?,
         picMap: Map<String, String>?
     ): SummaryViewResult {
         val density = context.resources.displayMetrics.density
-        val primary = listOfNotNull(
-            smallIsland?.primaryText,
-            fallbackTitle,
-            fallbackText
-        ).firstOrNull { !it.isNullOrBlank() } ?: "(无内容)"
+        val timerInfo = highlightInfo?.timerInfo
+        val timerLine = timerInfo?.let { formatTimerInfo(it) }?.takeIf { it.isNotBlank() }
+        val hasTimerLine = !timerLine.isNullOrBlank()
 
-        val secondary = listOfNotNull(
-            smallIsland?.secondaryText,
-            fallbackText?.takeIf { !it.isNullOrBlank() && it != primary },
-            fallbackTitle?.takeIf { !it.isNullOrBlank() && it != primary }
-        ).firstOrNull { !it.isNullOrBlank() }
+        val displayLines = mutableListOf<String>()
+        timerLine?.let { displayLines.add(it) }
+
+        fun addLineCandidate(value: String?) {
+            val line = sanitizeSummaryLine(value, hasTimerLine)
+            if (!line.isNullOrBlank() && !displayLines.contains(line)) {
+                displayLines.add(line)
+            }
+        }
+
+        addLineCandidate(smallIsland?.primaryText)
+        addLineCandidate(highlightInfo?.title)
+        addLineCandidate(highlightInfo?.content)
+        addLineCandidate(highlightInfo?.subContent)
+        addLineCandidate(smallIsland?.secondaryText)
+        addLineCandidate(fallbackTitle)
+        addLineCandidate(fallbackText)
+
+        if (displayLines.isEmpty()) {
+            displayLines.add("(无内容)")
+        }
+
+        val linesToRender = displayLines.take(2)
 
         var progressBinding: CircularProgressBinding? = null
         val iconSize = (48 * density).toInt()
@@ -428,14 +450,19 @@ object FloatingReplicaManager {
             layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
         }
 
-        val iconView = ImageView(context).apply {
-            layoutParams = FrameLayout.LayoutParams(iconSize, iconSize)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            contentDescription = "focus_icon"
-        }
-        if (bitmap != null) {
-            iconView.setImageBitmap(bitmap)
+        val highlightBitmap = highlightInfo?.let { resolveHighlightIconBitmap(context, it, picMap) }
+        val iconBitmap = highlightBitmap ?: bitmap
+        var hasIconContent = false
+
+        if (iconBitmap != null) {
+            val iconView = ImageView(context).apply {
+                layoutParams = FrameLayout.LayoutParams(iconSize, iconSize)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = "focus_icon"
+                setImageBitmap(iconBitmap)
+            }
             iconContainer.addView(iconView)
+            hasIconContent = true
         }
 
         val progressInfo = smallIsland?.progressInfo
@@ -458,6 +485,7 @@ object FloatingReplicaManager {
                 completionIcon = null,
                 completionIconDark = null
             )
+            hasIconContent = true
         }
 
         val container = LinearLayout(context).apply {
@@ -466,47 +494,53 @@ object FloatingReplicaManager {
             setPadding(padding, padding, padding, padding)
             setBackgroundColor(0xEE000000.toInt())
             gravity = Gravity.CENTER_VERTICAL
-            if (bitmap != null || progressInfo != null) {
+            if (hasIconContent) {
                 addView(iconContainer)
             }
         }
+        container.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
 
         val textColumn = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             val lp = LinearLayout.LayoutParams(
+                0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                1f
             )
-            val marginStart = if (bitmap != null || progressInfo != null) (8 * density).toInt() else 0
+            val marginStart = if (hasIconContent) (8 * density).toInt() else 0
             lp.setMargins(marginStart, 0, 0, 0)
             layoutParams = lp
         }
 
-        val primaryView = TextView(context).apply {
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 13f
-            typeface = Typeface.DEFAULT_BOLD
-            ellipsize = TextUtils.TruncateAt.END
-            maxLines = 1
-            text = primary
-        }
-
-        textColumn.addView(primaryView)
-
-        if (!secondary.isNullOrBlank()) {
-            val secondaryView = TextView(context).apply {
-                setTextColor(0xFFDDDDDD.toInt())
-                textSize = 11f
-                ellipsize = TextUtils.TruncateAt.END
+        linesToRender.forEachIndexed { index, text ->
+            val tv = TextView(context).apply {
+                setTextColor(if (index == 0) 0xFFFFFFFF.toInt() else 0xFFDDDDDD.toInt())
+                textSize = if (index == 0) 13f else 11f
+                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                 maxLines = 1
-                text = secondary
+                this.text = text
             }
-            textColumn.addView(secondaryView)
+            if (index == 0 && hasTimerLine && timerInfo != null && text == timerLine) {
+                tv.ellipsize = null
+                bindTimerUpdater(tv, timerInfo)
+            } else {
+                tv.ellipsize = TextUtils.TruncateAt.END
+            }
+            textColumn.addView(tv)
         }
 
         container.addView(textColumn)
 
         return SummaryViewResult(container, progressBinding)
+    }
+
+    private fun sanitizeSummaryLine(value: String?, suppressStatus: Boolean): String? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (suppressStatus && text.contains("进行中")) return null
+        return text
     }
 
     private fun canShowOverlay(context: Context): Boolean {
