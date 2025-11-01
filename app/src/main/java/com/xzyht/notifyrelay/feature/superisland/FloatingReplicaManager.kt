@@ -23,6 +23,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import org.json.JSONObject
 import android.widget.TextView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +104,7 @@ object FloatingReplicaManager {
 
             CoroutineScope(Dispatchers.Main).launch {
                 val paramV2 = paramV2Raw?.let { parseParamV2(it) }
+                val business = paramV2Raw?.let { try { JSONObject(it).optString("business", null) } catch (_: Exception) { null } }
                 val smallIsland = paramV2?.paramIsland?.smallIslandArea
                 val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(picMap, iconKey) }
                 val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(picMap)
@@ -110,7 +112,7 @@ object FloatingReplicaManager {
                 ensureOverlayExists(context)
 
                 val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap) }
+                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, business) }
                 val expandedView = templateResult?.view
                     ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
                 val summaryResult = buildSummaryView(

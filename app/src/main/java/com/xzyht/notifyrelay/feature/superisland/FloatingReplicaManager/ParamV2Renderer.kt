@@ -27,7 +27,7 @@ data class ParamV2(
 )
 
 // 构建UI视图的函数
-suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): TemplateViewResult {
+suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): TemplateViewResult {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         val padding = (8 * context.resources.displayMetrics.density).toInt()
@@ -81,7 +81,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
         ?: paramV2.progressInfo?.toMultiProgressInfo(paramV2.baseInfo?.title)
 
     if (resolvedMultiProgress != null) {
-        val multiView = buildMultiProgressInfoView(context, resolvedMultiProgress, picMap)
+        val multiView = buildMultiProgressInfoView(context, resolvedMultiProgress, picMap, business)
         container.addView(multiView)
     } else {
         paramV2.progressInfo?.let {
