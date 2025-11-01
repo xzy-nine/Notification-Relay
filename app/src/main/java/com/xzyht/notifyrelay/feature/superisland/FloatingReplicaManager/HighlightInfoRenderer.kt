@@ -180,8 +180,22 @@ private fun buildHighlightLayout(
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        addBigAreaImage(context, bigArea, highlightInfo.bigImageLeft, picMap)
-        addBigAreaImage(context, bigArea, highlightInfo.bigImageRight, picMap)
+        val leftAdded = addBigAreaImage(
+            context = context,
+            bigArea = bigArea,
+            highlightInfo = highlightInfo,
+            key = highlightInfo.bigImageLeft,
+            picMap = picMap,
+            allowFallback = true
+        )
+        addBigAreaImage(
+            context = context,
+            bigArea = bigArea,
+            highlightInfo = highlightInfo,
+            key = highlightInfo.bigImageRight,
+            picMap = picMap,
+            allowFallback = !leftAdded
+        )
 
         if (bigArea.childCount > 0) {
             container.addView(bigArea)
@@ -203,20 +217,30 @@ fun resolveHighlightIconBitmap(
 private fun selectIconKey(context: Context, highlightInfo: HighlightInfo): String? {
     val nightMask = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
     val preferDark = nightMask == Configuration.UI_MODE_NIGHT_YES
-    return if (preferDark) {
-        highlightInfo.picFunctionDark ?: highlightInfo.picFunction
+    val candidates = mutableListOf<String>()
+    if (preferDark) {
+        highlightInfo.picFunctionDark?.let(candidates::add)
+        highlightInfo.picFunction?.let(candidates::add)
     } else {
-        highlightInfo.picFunction ?: highlightInfo.picFunctionDark
+        highlightInfo.picFunction?.let(candidates::add)
+        highlightInfo.picFunctionDark?.let(candidates::add)
     }
+    highlightInfo.bigImageLeft?.let { if (!candidates.contains(it)) candidates.add(it) }
+    highlightInfo.bigImageRight?.let { if (!candidates.contains(it)) candidates.add(it) }
+    return candidates.firstOrNull()
 }
 
 private fun addBigAreaImage(
     context: Context,
     bigArea: LinearLayout,
+    highlightInfo: HighlightInfo,
     key: String?,
-    picMap: Map<String, String>?
-) {
-    val bitmap = decodeBitmap(picMap, key) ?: return
+    picMap: Map<String, String>?,
+    allowFallback: Boolean
+): Boolean {
+    val bitmap = decodeBitmap(picMap, key)
+        ?: if (allowFallback) resolveHighlightIconBitmap(context, highlightInfo, picMap) else null
+        ?: return false
     val density = context.resources.displayMetrics.density
     val size = (44 * density).toInt()
     val imageView = ImageView(context).apply {
@@ -230,6 +254,7 @@ private fun addBigAreaImage(
         clipToOutline = false
     }
     bigArea.addView(imageView)
+    return true
 }
 
 private fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
