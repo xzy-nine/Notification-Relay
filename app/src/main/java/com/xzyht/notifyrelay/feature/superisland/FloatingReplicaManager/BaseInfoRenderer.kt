@@ -69,6 +69,10 @@ fun parseBaseInfo(json: JSONObject): BaseInfo {
 fun buildBaseInfoView(context: Context, baseInfo: BaseInfo, picMap: Map<String, String>?): LinearLayout {
     val textContainer = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     baseInfo.title?.let {

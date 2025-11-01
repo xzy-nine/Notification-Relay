@@ -53,6 +53,7 @@ object FloatingReplicaManager {
     private const val EXPANDED_DURATION_MS = 3_000L
     private const val AUTO_DISMISS_DURATION_MS = 12_000L
     private const val PROGRESS_RESET_THRESHOLD = 5
+    private const val FIXED_WIDTH_DP = 320 // 固定悬浮窗宽度，以确保MultiProgressRenderer完整显示
 
     private var overlayView: View? = null
     private var stackContainer: LinearLayout? = null
@@ -158,7 +159,7 @@ object FloatingReplicaManager {
             container.addView(innerStack)
 
             val layoutParams = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                (FIXED_WIDTH_DP * (context.resources.displayMetrics.density)).toInt(),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -361,6 +362,10 @@ object FloatingReplicaManager {
             val padding = (8 * density).toInt()
             setPadding(padding, padding, padding, padding)
             setBackgroundColor(0xEE000000.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
 
             if (image != null) {
                 val size = (56 * density).toInt()
@@ -496,14 +501,14 @@ object FloatingReplicaManager {
             setPadding(padding, padding, padding, padding)
             setBackgroundColor(0xEE000000.toInt())
             gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
             if (hasIconContent) {
                 addView(iconContainer)
             }
         }
-        container.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        )
 
         val textColumn = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

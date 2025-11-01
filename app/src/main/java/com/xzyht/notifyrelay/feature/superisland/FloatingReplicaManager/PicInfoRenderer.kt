@@ -36,6 +36,10 @@ fun parsePicInfo(json: JSONObject): PicInfo {
 fun buildPicInfoView(context: Context, picInfo: PicInfo, picMap: Map<String, String>?): LinearLayout {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     picInfo.pic?.let { pic ->

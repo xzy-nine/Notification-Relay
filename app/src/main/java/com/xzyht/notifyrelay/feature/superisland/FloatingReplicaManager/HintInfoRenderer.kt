@@ -56,6 +56,10 @@ fun parseHintInfo(json: JSONObject): HintInfo {
 fun buildHintInfoView(context: Context, hintInfo: HintInfo, picMap: Map<String, String>?): LinearLayout {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     val tv = TextView(context).apply {

@@ -73,6 +73,10 @@ suspend fun buildMultiProgressInfoView(
     val primaryColor = parseColor(multiProgressInfo.color) ?: DEFAULT_PRIMARY_COLOR
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     multiProgressInfo.title.takeIf { it.isNotBlank() }?.let { title ->
@@ -101,6 +105,10 @@ suspend fun buildMultiProgressInfoView(
     val track = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     val nodeSize = (40 * density).toInt()
@@ -114,7 +122,7 @@ suspend fun buildMultiProgressInfoView(
         val baseIconKey = when {
             isLast && isCompleted -> multiProgressInfo.picEnd ?: multiProgressInfo.picMiddle
             isLast -> multiProgressInfo.picEndUnselected ?: multiProgressInfo.picMiddleUnselected
-            isCompleted || isPointer -> multiProgressInfo.picMiddle ?: multiProgressInfo.picForwardBox
+            isCompleted -> multiProgressInfo.picMiddle ?: multiProgressInfo.picForwardBox
             else -> multiProgressInfo.picMiddleUnselected ?: multiProgressInfo.picForwardBox
         }
         val nodeView = createNodeView(
@@ -235,20 +243,20 @@ private suspend fun createConnectorView(
     val completed = completion >= 0.999f
     val inProgress = completion > 0f && !completed
     val iconKey = when {
-        completed -> info.picForward ?: info.picForwardBox
-        inProgress -> info.picForward ?: info.picForwardBox
-        else -> info.picForwardWait ?: info.picForwardBox
+        completed -> info.picForwardBox
+        inProgress -> info.picForwardBox
+        else -> info.picForwardBox
     }
     val bitmap = decodeBitmap(picMap, iconKey)
     val width = (24 * density).toInt()
-    val height = if (bitmap != null) (8 * density).toInt() else (3 * density).toInt()
-    val params = LinearLayout.LayoutParams(width, height)
-    params.setMargins((4 * density).toInt(), 0, (4 * density).toInt(), 0)
+    val height = (8 * density).toInt()
+    val params = LinearLayout.LayoutParams(0, height, 1f)
+    params.setMargins(0, 0, 0, 0)
 
     return if (bitmap != null) {
         ImageView(context).apply {
             layoutParams = params
-            scaleType = ImageView.ScaleType.FIT_XY
+            scaleType = ImageView.ScaleType.FIT_CENTER
             setImageBitmap(bitmap)
         }
     } else {

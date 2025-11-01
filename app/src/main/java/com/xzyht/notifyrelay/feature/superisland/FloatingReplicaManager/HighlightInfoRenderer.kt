@@ -69,6 +69,10 @@ private fun buildHighlightLayout(
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = if (highlightInfo.iconOnly) Gravity.CENTER else Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
     }
 
     val density = context.resources.displayMetrics.density
