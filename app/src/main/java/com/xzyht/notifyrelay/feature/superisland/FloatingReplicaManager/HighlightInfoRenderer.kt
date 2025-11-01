@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.text.Html
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -110,7 +111,7 @@ private fun buildHighlightLayout(
             ?: parseColor(highlightInfo.colorContent)
             ?: 0xFFFFFFFF.toInt()
         val tv = TextView(context).apply {
-            this.text = text
+            this.text = Html.fromHtml(unescapeHtml(text), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(primaryColor)
             textSize = if (highlightInfo.iconOnly) 15f else 15f
         }
@@ -121,7 +122,7 @@ private fun buildHighlightLayout(
         ?.takeIf { it.isNotBlank() && it != primaryText }
         ?.let { content ->
             val tv = TextView(context).apply {
-                text = content
+                text = Html.fromHtml(unescapeHtml(content), Html.FROM_HTML_MODE_COMPACT)
                 setTextColor(parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
                 textSize = 12f
             }
@@ -132,7 +133,7 @@ private fun buildHighlightLayout(
         ?.takeIf { it.isNotBlank() && it != primaryText }
         ?.let { sub ->
             val tv = TextView(context).apply {
-                text = sub
+                text = Html.fromHtml(unescapeHtml(sub), Html.FROM_HTML_MODE_COMPACT)
                 setTextColor(parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt())
                 textSize = 12f
             }
@@ -145,7 +146,7 @@ private fun buildHighlightLayout(
 
     statusText?.let { status ->
         val tv = TextView(context).apply {
-            text = status
+            text = Html.fromHtml(unescapeHtml(status), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(parseColor(highlightInfo.colorSubContent) ?: parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
             textSize = 12f
         }
@@ -158,7 +159,7 @@ private fun buildHighlightLayout(
             val display = formatTimerInfo(timerInfo)
             if (display.isNotBlank()) {
                 val timerView = TextView(context).apply {
-                    text = display
+                    text = Html.fromHtml(unescapeHtml(display), Html.FROM_HTML_MODE_COMPACT)
                     setTextColor(parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
                     textSize = 16f
                 }

@@ -49,3 +49,12 @@ suspend fun downloadBitmap(url: String, timeoutMs: Int): Bitmap? {
         }
     }
 }
+
+fun unescapeHtml(input: String): String {
+    return input
+        .replace("\\u003c", "<")
+        .replace("\\u003e", ">")
+        .replace("\\u0027", "'")
+        .replace("\\u0022", "\"")
+        .replace("\\u0026", "&")
+}

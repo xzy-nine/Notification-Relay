@@ -47,6 +47,7 @@ import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -61,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Date
+import android.text.Html
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
 private const val SUPER_ISLAND_DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
@@ -271,6 +273,8 @@ private fun SuperIslandHistorySummaryRow(
         ?: entry.originalPackage?.takeIf { it.isNotBlank() }
         ?: "超级岛事件"
 
+    val displayTitle = titleText.let { unescapeHtml(it) }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
@@ -284,7 +288,7 @@ private fun SuperIslandHistorySummaryRow(
                 }
             )
     ) {
-        Text(titleText, style = textStyles.body2, color = colorScheme.onSurface)
+        Text(displayTitle, style = textStyles.body2, color = colorScheme.onSurface)
         val summaryText = entry.text
         if (!summaryText.isNullOrBlank()) {
             val summaryDisplay = if (includeImageDataOnCopy) summaryText else sanitizeImageContent(summaryText, false)
@@ -346,7 +350,8 @@ private fun SuperIslandHistoryEntryCard(
             ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
             ?: entry.originalPackage?.takeIf { it.isNotBlank() }
             ?: "超级岛事件"
-        Text(titleText, style = textStyles.body1, color = colorScheme.onSurface)
+        val displayTitle = titleText.let { unescapeHtml(it) }
+        Text(displayTitle, style = textStyles.body1, color = colorScheme.onSurface)
 
         val detailText = entry.text
         if (!detailText.isNullOrBlank()) {

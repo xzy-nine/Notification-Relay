@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.text.Html
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -72,7 +73,7 @@ fun buildBaseInfoView(context: Context, baseInfo: BaseInfo, picMap: Map<String, 
 
     baseInfo.title?.let {
         val tv = TextView(context).apply {
-            text = it
+            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
             textSize = 14f
         }
@@ -81,7 +82,7 @@ fun buildBaseInfoView(context: Context, baseInfo: BaseInfo, picMap: Map<String, 
 
     baseInfo.content?.let {
         val tv = TextView(context).apply {
-            text = it
+            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt())
             textSize = 12f
         }

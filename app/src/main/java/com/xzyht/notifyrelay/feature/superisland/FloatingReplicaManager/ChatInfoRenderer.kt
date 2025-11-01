@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Outline
+import android.text.Html
 import android.view.Gravity
 import android.view.View
 import android.view.ViewOutlineProvider
@@ -116,7 +117,7 @@ fun buildChatInfoView(
 
     chatInfo.title?.let {
         val tv = TextView(context).apply {
-            text = it
+            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
             textSize = 14f
         }
@@ -125,7 +126,7 @@ fun buildChatInfoView(
 
     chatInfo.content?.let {
         val tv = TextView(context).apply {
-            text = it
+            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt())
             textSize = 12f
         }

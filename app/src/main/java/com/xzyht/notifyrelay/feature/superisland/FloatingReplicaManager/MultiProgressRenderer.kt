@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.GradientDrawable
+import android.text.Html
 import android.util.Log
 import android.view.Gravity
 import android.view.View
@@ -76,7 +77,7 @@ suspend fun buildMultiProgressInfoView(
 
     multiProgressInfo.title.takeIf { it.isNotBlank() }?.let { title ->
         val titleView = TextView(context).apply {
-            text = title
+            text = Html.fromHtml(unescapeHtml(title), Html.FROM_HTML_MODE_COMPACT)
             setTextColor(primaryColor)
             textSize = 13f
         }

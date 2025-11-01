@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.Html
 import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
 import com.xzyht.notifyrelay.core.util.MessageSender
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
@@ -388,7 +390,7 @@ object FloatingReplicaManager {
                 textSize = 14f
                 ellipsize = TextUtils.TruncateAt.END
                 maxLines = 1
-                text = title ?: "(无标题)"
+                text = Html.fromHtml(unescapeHtml(title ?: "(无标题)"), Html.FROM_HTML_MODE_COMPACT)
             }
 
             val textView = TextView(context).apply {
@@ -397,7 +399,7 @@ object FloatingReplicaManager {
                 textSize = 12f
                 ellipsize = TextUtils.TruncateAt.END
                 maxLines = 2
-                text = content ?: "(无内容)"
+                text = Html.fromHtml(unescapeHtml(content ?: "(无内容)"), Html.FROM_HTML_MODE_COMPACT)
             }
 
             textColumn.addView(titleView)
@@ -521,7 +523,7 @@ object FloatingReplicaManager {
                 textSize = if (index == 0) 13f else 11f
                 typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                 maxLines = 1
-                this.text = text
+                this.text = Html.fromHtml(unescapeHtml(text), Html.FROM_HTML_MODE_COMPACT)
             }
             if (index == 0 && hasTimerLine && timerInfo != null && text == timerLine) {
                 tv.ellipsize = null

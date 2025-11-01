@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
 
 import android.content.Context
+import android.text.Html
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -58,7 +59,7 @@ fun buildHintInfoView(context: Context, hintInfo: HintInfo, picMap: Map<String, 
     }
 
     val tv = TextView(context).apply {
-        text = hintInfo.title ?: "提示信息"
+        text = Html.fromHtml(unescapeHtml(hintInfo.title ?: "提示信息"), Html.FROM_HTML_MODE_COMPACT)
         setTextColor(parseColor(hintInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
         textSize = 14f
     }
