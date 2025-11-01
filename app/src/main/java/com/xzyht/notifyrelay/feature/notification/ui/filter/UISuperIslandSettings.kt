@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay.feature.notification.ui.filter
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.text.format.DateFormat
 import android.widget.ImageView
@@ -39,6 +40,7 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
 import kotlinx.coroutines.Dispatchers
@@ -264,7 +266,9 @@ private fun SuperIslandHistorySummaryRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = {},
+                onClick = {
+                    triggerFloatingReplica(context, entry)
+                },
                 onLongClick = {
                     copyEntryToClipboard(context, copyText)
                 }
@@ -319,7 +323,9 @@ private fun SuperIslandHistoryEntryCard(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = {},
+                onClick = {
+                    triggerFloatingReplica(context, entry)
+                },
                 onLongClick = {
                     copyEntryToClipboard(context, copyText)
                 }
@@ -550,6 +556,25 @@ private fun copyEntryToClipboard(context: android.content.Context, content: Stri
         }
         android.widget.Toast.makeText(context, "复制失败", android.widget.Toast.LENGTH_SHORT).show()
     }
+}
+
+private fun triggerFloatingReplica(context: Context, entry: SuperIslandHistoryEntry) {
+    val sourceId = entry.mappedPackage?.takeIf { it.isNotBlank() }
+        ?: entry.originalPackage?.takeIf { it.isNotBlank() }
+        ?: entry.appName?.takeIf { it.isNotBlank() }
+        ?: entry.id.toString()
+    val title = entry.title?.takeIf { it.isNotBlank() }
+        ?: entry.appName?.takeIf { it.isNotBlank() }
+        ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
+        ?: entry.originalPackage?.takeIf { it.isNotBlank() }
+    FloatingReplicaManager.showFloating(
+        context = context,
+        sourceId = sourceId,
+        title = title,
+        text = entry.text,
+        paramV2Raw = entry.paramV2Raw,
+        picMap = entry.picMap.takeIf { it.isNotEmpty() }
+    )
 }
 
 private const val SUPER_ISLAND_KEY = "superisland_enabled"
