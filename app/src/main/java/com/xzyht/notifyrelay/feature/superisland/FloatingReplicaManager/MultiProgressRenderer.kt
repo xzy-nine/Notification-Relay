@@ -114,12 +114,44 @@ fun buildMultiProgressInfoView(
         )
         track.addView(nodeView)
         if (index < nodeCount - 1) {
-            track.addView(createConnectorView(context, multiProgressInfo, density, primaryColor, picMap))
+            val connectorProgress = (stageFloat - index).coerceIn(0f, 1f)
+            track.addView(
+                createConnectorView(
+                    context = context,
+                    info = multiProgressInfo,
+                    density = density,
+                    tintColor = primaryColor,
+                    picMap = picMap,
+                    segmentProgress = connectorProgress
+                )
+            )
         }
     }
 
     container.addView(track)
     return container
+}
+
+// 根据 ProgressInfo 构造多节点进度信息
+fun ProgressInfo.toMultiProgressInfo(title: String? = null, pointsOverride: Int? = null): MultiProgressInfo? {
+    val hasNodeAssets = listOf(picMiddle, picMiddleUnselected, picEnd, picEndUnselected, picForward)
+        .any { !it.isNullOrBlank() }
+    if (!hasNodeAssets) return null
+
+    val resolvedColor = colorProgress ?: colorProgressEnd
+    return MultiProgressInfo(
+        title = title?.trim().orEmpty(),
+        progress = progress,
+        color = resolvedColor,
+        points = pointsOverride,
+        picForward = picForward,
+        picForwardWait = null,
+        picForwardBox = null,
+        picMiddle = picMiddle,
+        picMiddleUnselected = picMiddleUnselected,
+        picEnd = picEnd,
+        picEndUnselected = picEndUnselected
+    )
 }
 
 private fun createNodeView(
@@ -182,9 +214,18 @@ private fun createConnectorView(
     info: MultiProgressInfo,
     density: Float,
     tintColor: Int,
-    picMap: Map<String, String>?
+    picMap: Map<String, String>?,
+    segmentProgress: Float
 ): View {
-    val bitmap = decodeBitmap(picMap, info.picForwardBox)
+    val completion = segmentProgress.coerceIn(0f, 1f)
+    val completed = completion >= 0.999f
+    val inProgress = completion > 0f && !completed
+    val iconKey = when {
+        completed -> info.picForward ?: info.picForwardBox
+        inProgress -> info.picForward ?: info.picForwardBox
+        else -> info.picForwardWait ?: info.picForwardBox
+    }
+    val bitmap = decodeBitmap(picMap, iconKey)
     val width = (24 * density).toInt()
     val height = if (bitmap != null) (8 * density).toInt() else (3 * density).toInt()
     val params = LinearLayout.LayoutParams(width, height)
@@ -197,13 +238,46 @@ private fun createConnectorView(
             setImageBitmap(bitmap)
         }
     } else {
-        View(context).apply {
+        val container = FrameLayout(context).apply {
             layoutParams = params
+        }
+
+        val baseColorAlpha = when {
+            completed -> 0xFF
+            inProgress -> 0x66
+            else -> 0x33
+        }
+        val baseColor = adjustAlpha(tintColor, baseColorAlpha)
+        val cornerRadius = height / 2f
+        val baseView = View(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
             background = GradientDrawable().apply {
-                cornerRadius = density
-                setColor(adjustAlpha(tintColor, 0x66))
+                this.cornerRadius = cornerRadius
+                setColor(baseColor)
             }
         }
+        container.addView(baseView)
+
+        if (inProgress) {
+            val overlayWidth = (width * completion).toInt().coerceIn(1, width)
+            val overlayView = View(context).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    overlayWidth,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.START
+                )
+                background = GradientDrawable().apply {
+                    this.cornerRadius = cornerRadius
+                    setColor(tintColor)
+                }
+            }
+            container.addView(overlayView)
+        }
+
+        container
     }
 }
 

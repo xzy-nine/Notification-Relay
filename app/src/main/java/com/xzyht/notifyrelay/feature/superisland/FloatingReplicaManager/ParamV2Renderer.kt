@@ -29,7 +29,7 @@ data class ParamV2(
 // 构建UI视图的函数
 fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?): TemplateViewResult {
     val container = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL
+        orientation = LinearLayout.VERTICAL
         val padding = (8 * context.resources.displayMetrics.density).toInt()
         setPadding(padding, padding, padding, padding)
         setBackgroundColor(0xEE000000.toInt())
@@ -77,15 +77,17 @@ fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String
         }
     }
 
-    // 添加进度条如果有
-    paramV2.progressInfo?.let {
-        val progressBar = buildProgressInfoView(context, it, picMap)
-        container.addView(progressBar)
-    }
+    val resolvedMultiProgress = paramV2.multiProgressInfo
+        ?: paramV2.progressInfo?.toMultiProgressInfo(paramV2.baseInfo?.title)
 
-    paramV2.multiProgressInfo?.let {
-        val tv = buildMultiProgressInfoView(context, it, picMap)
-        container.addView(tv)
+    if (resolvedMultiProgress != null) {
+        val multiView = buildMultiProgressInfoView(context, resolvedMultiProgress, picMap)
+        container.addView(multiView)
+    } else {
+        paramV2.progressInfo?.let {
+            val progressBar = buildProgressInfoView(context, it, picMap)
+            container.addView(progressBar)
+        }
     }
 
     // 添加按钮如果有
