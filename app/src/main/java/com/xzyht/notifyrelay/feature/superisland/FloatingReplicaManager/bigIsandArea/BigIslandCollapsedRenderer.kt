@@ -37,8 +37,10 @@ fun buildBigIslandCollapsedView(
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 999f
             setColor(0xCC000000.toInt()) // 半透明黑
+            setStroke(density.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
         }
         background = bg
+        elevation = 6f * density
         clipToPadding = false
     }
 

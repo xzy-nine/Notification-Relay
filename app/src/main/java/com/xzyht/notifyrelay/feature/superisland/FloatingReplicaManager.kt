@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay.feature.superisland
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -55,6 +56,7 @@ import kotlin.math.abs
 object FloatingReplicaManager {
     private const val TAG = "超级岛"
     private const val EXPANDED_DURATION_MS = 3_000L
+    private const val TRANSITION_DURATION_MS = 220L
     private const val AUTO_DISMISS_DURATION_MS = 12_000L
     private const val PROGRESS_RESET_THRESHOLD = 5
     private const val FIXED_WIDTH_DP = 320 // 固定悬浮窗宽度，以确保MultiProgressRenderer完整显示
@@ -154,8 +156,9 @@ object FloatingReplicaManager {
         picMap: Map<String, String>?
     ): SummaryViewResult? {
         val bigIslandJson = try {
-            if (paramV2Raw.isNullOrBlank()) return null
-            val root = JSONObject(paramV2Raw)
+            val raw = paramV2Raw ?: return null
+            if (raw.isBlank()) return null
+            val root = JSONObject(raw)
             val island = root.optJSONObject("param_island")
                 ?: root.optJSONObject("paramIsland")
                 ?: root.optJSONObject("islandParam")
@@ -168,7 +171,8 @@ object FloatingReplicaManager {
         var fbTitle: String? = null
         var fbContent: String? = null
         try {
-            val root = JSONObject(paramV2Raw)
+            val raw2 = paramV2Raw ?: return null
+            val root = JSONObject(raw2)
             root.optJSONObject("baseInfo")?.let { bi ->
                 fbTitle = bi.optString("title", "").takeIf { it.isNotBlank() } ?: fbTitle
                 fbContent = bi.optString("content", "").takeIf { it.isNotBlank() } ?: fbContent
@@ -224,7 +228,8 @@ object FloatingReplicaManager {
     // 兼容空值的 param_v2 解析包装，避免在调用点产生空值分支和推断问题
     private fun parseParamV2Safe(raw: String?): com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ParamV2? {
         return try {
-            if (raw.isNullOrBlank()) null else parseParamV2(raw)
+            val s = raw ?: return null
+            if (s.isBlank()) null else parseParamV2(s)
         } catch (_: Exception) { null }
     }
 
@@ -307,10 +312,19 @@ object FloatingReplicaManager {
                 lp.setMargins(0, margin, 0, margin)
                 layoutParams = lp
                 isClickable = true
+                // 统一背景放在条目容器上，并进行圆角/描边/阴影管理
+                background = createEntryBackground(context, /*isExpanded=*/true)
+                elevation = 6f * context.resources.displayMetrics.density
             }
 
             detachFromParent(summaryView)
             detachFromParent(expandedView)
+            // 标记视图状态，并移除各自根背景，避免与容器背景叠加
+            expandedView.tag = "state_expanded"
+            summaryView.tag = "state_summary"
+            stripRootBackground(expandedView)
+            stripRootBackground(summaryView)
+
             summaryView.visibility = View.GONE
             expandedView.visibility = View.VISIBLE
             container.addView(summaryView)
@@ -343,6 +357,18 @@ object FloatingReplicaManager {
         detachFromParent(summaryView)
         detachFromParent(expandedView)
         record.container.removeAllViews()
+        // 确保容器具备统一背景
+        if (record.container.background !is GradientDrawable) {
+            record.container.background = createEntryBackground(record.container.context, wasExpanded)
+            record.container.elevation = 6f * record.container.resources.displayMetrics.density
+        }
+
+        // 标记状态并移除子根背景
+        expandedView.tag = "state_expanded"
+        summaryView.tag = "state_summary"
+        stripRootBackground(expandedView)
+        stripRootBackground(summaryView)
+
         record.container.addView(summaryView)
         record.container.addView(expandedView)
         record.expandedView = expandedView
@@ -384,16 +410,110 @@ object FloatingReplicaManager {
 
     private fun showExpanded(record: EntryRecord) {
         if (record.isExpanded) return
-        record.summaryView.visibility = View.GONE
-        record.expandedView.visibility = View.VISIBLE
+        crossfade(record.summaryView, record.expandedView)
         record.isExpanded = true
     }
 
     private fun showSummary(record: EntryRecord) {
         if (!record.isExpanded) return
-        record.expandedView.visibility = View.GONE
-        record.summaryView.visibility = View.VISIBLE
+        crossfade(record.expandedView, record.summaryView)
         record.isExpanded = false
+    }
+
+    private fun crossfade(fromView: View, toView: View) {
+        try {
+            // 取消可能存在的动画
+            fromView.animate()?.cancel()
+            toView.animate()?.cancel()
+
+            val density = fromView.resources.displayMetrics.density
+            val up = 4f * density
+
+            // 以上边框为基准进行缩放
+            fromView.pivotY = 0f
+            toView.pivotY = 0f
+
+            // 准备目标视图（向上边框缩 + 渐入）
+            toView.alpha = 0f
+            toView.scaleX = 0.96f
+            toView.scaleY = 0.96f
+            toView.translationY = -up
+            toView.visibility = View.VISIBLE
+
+            // 淡出 + 向上边框缩
+            fromView.animate()
+                .alpha(0f)
+                .scaleX(0.96f)
+                .scaleY(0.96f)
+                .translationY(-up)
+                .setDuration(TRANSITION_DURATION_MS)
+                .withEndAction {
+                    fromView.visibility = View.GONE
+                    fromView.alpha = 1f
+                    fromView.scaleX = 1f
+                    fromView.scaleY = 1f
+                    fromView.translationY = 0f
+                }
+                .start()
+
+            // 淡入 + 回弹
+            toView.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationY(0f)
+                .setDuration(TRANSITION_DURATION_MS)
+                .start()
+
+            // 同步圆角过渡（在容器背景上）
+            val parent = (fromView.parent as? View)
+            val bg = parent?.background as? GradientDrawable
+            if (bg != null) {
+                val dens = fromView.resources.displayMetrics.density
+                val expandedR = 16f * dens
+                val summaryR = 999f
+                val toIsExpanded = (toView.tag == "state_expanded")
+                val startR = if (toIsExpanded) summaryR else expandedR
+                val endR = if (toIsExpanded) expandedR else summaryR
+                val animator = ValueAnimator.ofFloat(startR, endR).apply {
+                    duration = TRANSITION_DURATION_MS
+                    addUpdateListener { a ->
+                        val r = a.animatedValue as Float
+                        bg.cornerRadius = r
+                    }
+                }
+                animator.start()
+            }
+        } catch (_: Exception) {
+            // 回退：无动画切换
+            fromView.visibility = View.GONE
+            toView.visibility = View.VISIBLE
+            fromView.alpha = 1f
+            fromView.scaleX = 1f
+            fromView.scaleY = 1f
+            fromView.translationY = 0f
+            toView.alpha = 1f
+            toView.scaleX = 1f
+            toView.scaleY = 1f
+            toView.translationY = 0f
+        }
+    }
+
+    private fun createEntryBackground(context: Context, isExpanded: Boolean): GradientDrawable {
+        val dens = context.resources.displayMetrics.density
+        val gd = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = if (isExpanded) 16f * dens else 999f
+            setColor(0xEE000000.toInt())
+            setStroke(dens.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+        }
+        return gd
+    }
+
+    private fun stripRootBackground(view: View) {
+        try {
+            view.background = null
+        } catch (_: Exception) {}
     }
 
     private fun cancelCollapse(record: EntryRecord) {
@@ -451,7 +571,15 @@ object FloatingReplicaManager {
             orientation = LinearLayout.HORIZONTAL
             val padding = (8 * density).toInt()
             setPadding(padding, padding, padding, padding)
-            setBackgroundColor(0xEE000000.toInt())
+            // 圆角矩形背景（展开态）
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 16f * density
+                setColor(0xEE000000.toInt())
+                setStroke(density.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+            }
+            clipToOutline = true
+            elevation = 6f * density
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -595,8 +723,10 @@ object FloatingReplicaManager {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 999f
                 setColor(0xEE000000.toInt())
+                setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
             }
             background = bg
+            elevation = 6f * density
             clipToPadding = false
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(

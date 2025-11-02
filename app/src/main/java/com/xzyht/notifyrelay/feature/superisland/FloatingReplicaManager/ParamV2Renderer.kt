@@ -33,7 +33,17 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
         orientation = LinearLayout.VERTICAL
         val padding = (8 * context.resources.displayMetrics.density).toInt()
         setPadding(padding, padding, padding, padding)
-        setBackgroundColor(0xEE000000.toInt())
+        // 圆角矩形背景（展开态）
+        background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+            cornerRadius = 16f * context.resources.displayMetrics.density
+            setColor(0xEE000000.toInt())
+            val d = context.resources.displayMetrics.density
+            setStroke(d.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+        }
+        clipToOutline = true
+        // 提升阴影层级
+        elevation = 6f * context.resources.displayMetrics.density
     }
 
     var progressBinding: CircularProgressBinding? = null
