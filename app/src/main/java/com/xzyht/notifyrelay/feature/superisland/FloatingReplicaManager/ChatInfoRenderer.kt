@@ -221,7 +221,9 @@ class CircularProgressBinding(
         if (target != null) {
             completionView?.visibility = View.GONE
             progressView.visibility = View.VISIBLE
-            progressView.setDirection(true)
+            // 依据 isCCW 设置方向（默认顺时针）
+            val clockwise = progressInfo?.isCCW?.not() ?: true
+            progressView.setDirection(clockwise)
             progressView.setColors(strokeColor, trackColor)
             if (previousProgress != null) {
                 progressView.setProgressAnimated(previousProgress, target, animationDuration)

@@ -136,17 +136,9 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
     val paramIsland = (root.optJSONObject("param_island")
         ?: root.optJSONObject("paramIsland")
         ?: root.optJSONObject("islandParam"))
-    val bigIsland = paramIsland?.optJSONObject("bigIslandArea")
-    val leftPic = bigIsland
-        ?.optJSONObject("imageTextInfoLeft")
-        ?.optJSONObject("picInfo")
-        ?.optString("pic", "")
-        ?.takeIf { it.isNotBlank() }
-    val rightPic = bigIsland
-        ?.optJSONObject("imageTextInfoRight")
-        ?.optJSONObject("picInfo")
-        ?.optString("pic", "")
-        ?.takeIf { it.isNotBlank() }
+    val big = parseBigIslandArea(paramIsland?.optJSONObject("bigIslandArea") ?: paramIsland?.optJSONObject("bigIsland"))
+    val leftPic = big?.leftImage
+    val rightPic = big?.rightImage
 
     return HighlightInfo(
         title = title,

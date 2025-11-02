@@ -8,7 +8,7 @@ import org.json.JSONObject
  */
 data class ParamIsland(
     val smallIslandArea: SmallIslandArea? = null,
-    val bigIslandArea: JSONObject? = null
+    val bigIslandArea: BigIslandArea? = null
 )
 
 data class SmallIslandArea(
@@ -21,7 +21,8 @@ data class SmallIslandArea(
 fun parseParamIsland(json: JSONObject): ParamIsland {
     val small = json.optJSONObject("smallIslandArea")?.let { parseSmallIslandArea(it) }
         ?: json.optJSONObject("smallIsland")?.let { parseSmallIslandArea(it) }
-    val big = json.optJSONObject("bigIslandArea") ?: json.optJSONObject("bigIsland")
+    val bigJson = json.optJSONObject("bigIslandArea") ?: json.optJSONObject("bigIsland")
+    val big = parseBigIslandArea(bigJson)
     return ParamIsland(smallIslandArea = small, bigIslandArea = big)
 }
 

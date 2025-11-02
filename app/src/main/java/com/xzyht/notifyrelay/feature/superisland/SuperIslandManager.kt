@@ -115,13 +115,16 @@ object SuperIslandManager {
                     // 提取 baseInfo (焦点通知数据) 中的 title/content
                     if (pv.has("baseInfo")) {
                         val base = pv.getJSONObject("baseInfo")
-                        title = base.optString("title", null)
-                        text = base.optString("content", text)
+                        val tBaseTitle = base.optString("title", "")
+                        if (tBaseTitle.isNotEmpty()) title = tBaseTitle
+                        val tBaseContent = base.optString("content", "")
+                        if (tBaseContent.isNotEmpty()) text = tBaseContent
                     }
 
                     // aodTitle 优先用于息屏场景的摘要
                     if (pv.has("aodTitle") && (title == null || title.isEmpty())) {
-                        title = pv.optString("aodTitle", title)
+                        val tAod = pv.optString("aodTitle", "")
+                        if (tAod.isNotEmpty()) title = tAod
                     }
 
                     // param_island 中可能包含更丰富的摘要数据
@@ -131,8 +134,14 @@ object SuperIslandManager {
                         // 尝试从 island 的 summary 区或 smallIslandArea 提取简单文本
                         if (island.has("smallIslandArea")) {
                             val small = island.getJSONObject("smallIslandArea")
-                            if (small.has("title") && title.isNullOrEmpty()) title = small.optString("title", title)
-                            if (small.has("content") && text.isNullOrEmpty()) text = small.optString("content", text)
+                            if (small.has("title") && title.isNullOrEmpty()) {
+                                val tSmallTitle = small.optString("title", "")
+                                if (tSmallTitle.isNotEmpty()) title = tSmallTitle
+                            }
+                            if (small.has("content") && text.isNullOrEmpty()) {
+                                val tSmallContent = small.optString("content", "")
+                                if (tSmallContent.isNotEmpty()) text = tSmallContent
+                            }
                         }
                         if (island.has("bigIslandArea")) rawExtras["bigIslandArea"] = island.getJSONObject("bigIslandArea").toString()
                     }
@@ -140,7 +149,7 @@ object SuperIslandManager {
                     // 记录 param_v2 原始内容
                     rawExtras["param_v2"] = pv.toString()
                     // 保留 param_v2 原始字符串以便发送
-                    if (pv != null) rawExtras["param_v2_raw"] = pv.toString()
+                    rawExtras["param_v2_raw"] = pv.toString()
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 解析 miui.focus.param 失败: ${e.message}")
                 }
@@ -167,6 +176,7 @@ object SuperIslandManager {
                                     continue
                                 }
                                 // 其次尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
+                                @Suppress("DEPRECATION")
                                 val obj = picsBundle.get(bk)
                                 if (obj is Bitmap) {
                                     picMap[bk] = DataUrlUtils.bitmapToDataUri(obj)
@@ -223,6 +233,7 @@ object SuperIslandManager {
                             continue
                         }
                         // 再尝试 Parcelable（Bitmap / Drawable / Icon / ByteArray）
+                        @Suppress("DEPRECATION")
                         val p = try { extras.get(k) } catch (_: Exception) { null }
                         if (p is Bitmap) {
                             picMap[k] = DataUrlUtils.bitmapToDataUri(p)
@@ -251,6 +262,7 @@ object SuperIslandManager {
                             } catch (_: Exception) {}
                         }
                         // 最后回退到 toString()
+                        @Suppress("DEPRECATION")
                         val fallback = extras.get(k)?.toString()
                         if (!fallback.isNullOrEmpty()) {
                             rawExtras[k] = fallback
@@ -258,6 +270,21 @@ object SuperIslandManager {
                         }
                     } catch (_: Exception) {}
                 }
+            }
+
+            // 若通知未提供应用图标，但业务侧使用了 miui.focus.pic_app_icon，我们在获取端注入应用图标的 data URL
+            try {
+                val appIconKey = "miui.focus.pic_app_icon"
+                if (!picMap.containsKey(appIconKey)) {
+                    val pm = context.packageManager
+                    val appIconDrawable = pm.getApplicationIcon(pkg)
+                    val appIconBitmap = DataUrlUtils.drawableToBitmap(appIconDrawable)
+                    val dataUrl = DataUrlUtils.bitmapToDataUri(appIconBitmap)
+                    picMap[appIconKey] = dataUrl
+                    if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 注入应用图标到 picMap => $appIconKey")
+                }
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 注入应用图标失败: ${e.message}")
             }
 
             // data URL / bitmap helpers moved to DataUrlUtils

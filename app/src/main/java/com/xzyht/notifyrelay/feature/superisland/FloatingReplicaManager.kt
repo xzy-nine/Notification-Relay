@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
 import com.xzyht.notifyrelay.core.util.MessageSender
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
@@ -42,6 +44,7 @@ import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.Highligh
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTimerUpdater
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTimerInfo
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.resolveHighlightIconBitmap
+import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.buildBigIslandCollapsedView
 import kotlin.math.abs
 
 /**
@@ -103,8 +106,7 @@ object FloatingReplicaManager {
             }
 
             CoroutineScope(Dispatchers.Main).launch {
-                val paramV2 = paramV2Raw?.let { parseParamV2(it) }
-                val business = paramV2Raw?.let { try { JSONObject(it).optString("business", null) } catch (_: Exception) { null } }
+                val paramV2 = parseParamV2Safe(paramV2Raw)
                 val smallIsland = paramV2?.paramIsland?.smallIslandArea
                 val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(picMap, iconKey) }
                 val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(picMap)
@@ -112,32 +114,118 @@ object FloatingReplicaManager {
                 ensureOverlayExists(context)
 
                 val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, business) }
+                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, null) }
                 val expandedView = templateResult?.view
                     ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                val summaryResult = buildSummaryView(
-                    context,
-                    smallIsland,
-                    paramV2?.highlightInfo,
-                    title,
-                    text,
-                    summaryBitmap ?: fallbackBitmap,
-                    picMap
-                )
+                val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, picMap)
+                    ?: buildSummaryView(
+                        context,
+                        smallIsland,
+                        paramV2?.highlightInfo,
+                        title,
+                        text,
+                        summaryBitmap ?: fallbackBitmap,
+                        picMap
+                    )
 
                 addOrUpdateEntry(
                     context,
                     entryKey,
                     expandedView,
-                    summaryResult.view,
+                    collapsedSummary.view,
                     templateResult?.progressBinding,
-                    summaryResult.progressBinding
+                    collapsedSummary.progressBinding
                 )
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
             MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
         }
+    }
+
+    /**
+     * 构建“收起态（摘要态）”视图：完全独立于展开态模板。
+     * 若 param_v2 中存在 bigIslandArea/bigIsland，则使用 BigIslandCollapsedRenderer 进行渲染；
+     * 否则返回 null 以便上层回退到旧的摘要视图。
+     */
+    private fun buildCollapsedSummaryView(
+        context: Context,
+        paramV2Raw: String?,
+        picMap: Map<String, String>?
+    ): SummaryViewResult? {
+        val bigIslandJson = try {
+            if (paramV2Raw.isNullOrBlank()) return null
+            val root = JSONObject(paramV2Raw)
+            val island = root.optJSONObject("param_island")
+                ?: root.optJSONObject("paramIsland")
+                ?: root.optJSONObject("islandParam")
+            island?.optJSONObject("bigIslandArea") ?: island?.optJSONObject("bigIsland")
+        } catch (_: Exception) { null }
+
+        bigIslandJson ?: return null
+
+        // 提取回落文本（用于 B 为空时填充）：优先 baseInfo.title/content，其次 iconTextInfo.title/content
+        var fbTitle: String? = null
+        var fbContent: String? = null
+        try {
+            val root = JSONObject(paramV2Raw)
+            root.optJSONObject("baseInfo")?.let { bi ->
+                fbTitle = bi.optString("title", "").takeIf { it.isNotBlank() } ?: fbTitle
+                fbContent = bi.optString("content", "").takeIf { it.isNotBlank() } ?: fbContent
+            }
+            if (fbTitle.isNullOrBlank() && fbContent.isNullOrBlank()) {
+                root.optJSONObject("iconTextInfo")?.let { ii ->
+                    fbTitle = ii.optString("title", "").takeIf { it.isNotBlank() } ?: fbTitle
+                    fbContent = ii.optString("content", "").takeIf { it.isNotBlank() } ?: fbContent
+                }
+            }
+        } catch (_: Exception) { }
+
+        val view = buildBigIslandCollapsedView(context, bigIslandJson, picMap, fbTitle, fbContent)
+
+        // 若 B区包含 progressTextInfo，则尝试从视图树中定位圆环并创建绑定，以获得平滑进度动画与状态记忆
+        var binding: CircularProgressBinding? = null
+        try {
+            val progressText = bigIslandJson.optJSONObject("progressTextInfo")
+            val pInfoObj = progressText?.optJSONObject("progressInfo")
+            if (pInfoObj != null) {
+                val progress = pInfoObj.optInt("progress", -1)
+                if (progress in 0..100) {
+                    val colorReach = pInfoObj.optString("colorReach", "").takeIf { it.isNotBlank() }
+                    val colorUnReach = pInfoObj.optString("colorUnReach", "").takeIf { it.isNotBlank() }
+                    val isCCW = pInfoObj.optBoolean("isCCW", false)
+
+                    val ring = view.findViewWithTag("collapsed_b_progress_ring") as? CircularProgressView
+                    if (ring != null) {
+                        val mapped = com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ProgressInfo(
+                            progress = progress,
+                            colorProgress = colorReach,
+                            colorProgressEnd = colorUnReach,
+                            isCCW = isCCW,
+                            isAutoProgress = false
+                        )
+                        binding = CircularProgressBinding(
+                            context = context,
+                            progressView = ring,
+                            completionView = null,
+                            picMap = picMap,
+                            progressInfo = mapped,
+                            completionIcon = null,
+                            completionIconDark = null
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+
+        return SummaryViewResult(view, binding)
+    }
+
+    // 兼容空值的 param_v2 解析包装，避免在调用点产生空值分支和推断问题
+    private fun parseParamV2Safe(raw: String?): com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ParamV2? {
+        return try {
+            if (raw.isNullOrBlank()) null else parseParamV2(raw)
+        } catch (_: Exception) { null }
     }
 
     // ---- 多条浮窗管理实现 ----
@@ -499,9 +587,17 @@ object FloatingReplicaManager {
 
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            val padding = (8 * density).toInt()
-            setPadding(padding, padding, padding, padding)
-            setBackgroundColor(0xEE000000.toInt())
+            val paddingH = (10 * density).toInt()
+            val paddingV = (6 * density).toInt()
+            setPadding(paddingH, paddingV, paddingH, paddingV)
+            // 胶囊背景
+            val bg = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 999f
+                setColor(0xEE000000.toInt())
+            }
+            background = bg
+            clipToPadding = false
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -590,29 +686,7 @@ object FloatingReplicaManager {
     }
 
     private fun downloadBitmap(url: String, timeoutMs: Int): Bitmap? {
-        return try {
-            if (url.startsWith("data:", ignoreCase = true)) {
-                DataUrlUtils.decodeDataUrlToBitmap(url)
-            } else {
-                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = timeoutMs
-                conn.readTimeout = timeoutMs
-                conn.instanceFollowRedirects = true
-                conn.requestMethod = "GET"
-                conn.doInput = true
-                conn.connect()
-                if (conn.responseCode != 200) {
-                    conn.disconnect()
-                    null
-                } else {
-                    val stream = conn.inputStream
-                    val bmp = BitmapFactory.decodeStream(stream)
-                    try { stream.close() } catch (_: Exception) {}
-                    conn.disconnect()
-                    bmp
-                }
-            }
-        } catch (e: Exception) {
+        return try { ImageLoader.loadBitmap(url, timeoutMs) } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             null
         }
