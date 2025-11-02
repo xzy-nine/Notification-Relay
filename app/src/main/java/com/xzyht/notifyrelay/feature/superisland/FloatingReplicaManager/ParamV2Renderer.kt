@@ -17,6 +17,7 @@ data class ParamV2(
     val baseInfo: BaseInfo? = null, // 文本组件
     val chatInfo: ChatInfo? = null, // IM图文组件
     val highlightInfo: HighlightInfo? = null, // 强调图文组件
+    val animTextInfo: AnimTextInfo? = null, // 动画文本组件
     val picInfo: PicInfo? = null, // 识别图形组件
     val progressInfo: ProgressInfo? = null, // 进度组件
     val multiProgressInfo: MultiProgressInfo? = null, // 多进度组件
@@ -48,6 +49,10 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
             container.addView(result.view)
             progressBinding = result.progressBinding
         }
+            paramV2.animTextInfo != null -> {
+                val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
+                container.addView(view)
+            }
         paramV2.highlightInfo != null -> {
             val view = buildHighlightInfoView(context, paramV2.highlightInfo, picMap)
             container.addView(view)
@@ -98,12 +103,14 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
         val json = JSONObject(jsonString)
+        val anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
         val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
             ?: parseHighlightFromIconText(json)
         ParamV2(
             baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
             chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
             highlightInfo = highlight,
+            animTextInfo = anim,
             picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) },
             progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) },
             multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) },
@@ -154,6 +161,7 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
         iconOnly = true
     )
 }
+
 
 data class TemplateViewResult(
     val view: View,
