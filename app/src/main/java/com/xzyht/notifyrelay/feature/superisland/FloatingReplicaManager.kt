@@ -142,6 +142,8 @@ object FloatingReplicaManager {
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
             MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
+            // 若此前已创建Overlay但未成功添加条目，立即移除以避免空容器拦截触摸
+            removeOverlayIfNoEntries()
         }
     }
 
@@ -273,6 +275,24 @@ object FloatingReplicaManager {
             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
+        }
+    }
+
+    // 当没有任何条目时，彻底移除 Overlay，避免占位区域拦截顶端触摸
+    private fun removeOverlayIfNoEntries() {
+        if (entries.isEmpty()) {
+            try {
+                val wm = windowManager
+                val view = overlayView
+                if (wm != null && view != null) {
+                    wm.removeView(view)
+                }
+            } catch (_: Exception) {}
+            overlayView = null
+            stackContainer = null
+            overlayLayoutParams = null
+            windowManager = null
+            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 所有条目清空，移除整体Overlay以避免触摸拦截")
         }
     }
 
@@ -547,6 +567,8 @@ object FloatingReplicaManager {
             stackContainer?.removeView(record.container)
         } catch (_: Exception) {}
         if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 自动移除浮窗条目 key=$key")
+        // 若已无任何条目，彻底移除Overlay，避免空容器占位影响顶端触摸
+        removeOverlayIfNoEntries()
     }
 
     // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
