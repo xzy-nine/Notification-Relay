@@ -240,9 +240,10 @@ object FloatingReplicaManager {
     private fun ensureOverlayExists(context: Context) {
         if (overlayView != null && stackContainer != null) return
         try {
-            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            // 移除已存在浮窗
-            try { overlayView?.let { wm.removeView(it) } } catch (_: Exception) {}
+            val appCtx = context.applicationContext
+            val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            // 移除已存在浮窗（防御式）
+            try { overlayView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
 
             val container = FrameLayout(context)
             container.setBackgroundColor(0x00000000)
@@ -266,13 +267,22 @@ object FloatingReplicaManager {
             layoutParams.x = 0
             layoutParams.y = 100
 
-            overlayView = container
-            stackContainer = innerStack
-            overlayLayoutParams = layoutParams
-            windowManager = wm
-            try { wm.addView(container, layoutParams) } catch (_: Exception) {}
-            entries.values.forEach { attachDragHandler(it.container, context) }
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
+            var added = false
+            try {
+                wm.addView(container, layoutParams)
+                added = true
+            } catch (e: Exception) {
+                // 添加失败时，不保留任何引用，避免进入“半初始化”卡死态
+                if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
+            }
+            if (added) {
+                overlayView = container
+                stackContainer = innerStack
+                overlayLayoutParams = layoutParams
+                windowManager = wm
+                entries.values.forEach { attachDragHandler(it.container, context) }
+                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
+            }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
         }
@@ -285,7 +295,7 @@ object FloatingReplicaManager {
                 val wm = windowManager
                 val view = overlayView
                 if (wm != null && view != null) {
-                    wm.removeView(view)
+                    wm.removeViewImmediate(view)
                 }
             } catch (_: Exception) {}
             overlayView = null
