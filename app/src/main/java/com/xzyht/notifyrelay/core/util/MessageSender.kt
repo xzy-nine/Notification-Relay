@@ -425,7 +425,8 @@ object MessageSender {
         time: Long,
         paramV2Raw: String?,
         picMap: Map<String, String>?,
-        deviceManager: DeviceConnectionManager
+        deviceManager: DeviceConnectionManager,
+        featureIdOverride: String? = null
     ) {
         try {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
@@ -472,8 +473,8 @@ object MessageSender {
                 }
             }
 
-            // 计算特征键
-            val featureId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+            // 计算特征键（支持外部传入首包固定ID，避免后续波动）
+            val featureId = featureIdOverride ?: com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
             )
 
@@ -548,14 +549,15 @@ object MessageSender {
         paramV2Raw: String?,
         title: String?,
         text: String?,
-        deviceManager: DeviceConnectionManager
+        deviceManager: DeviceConnectionManager,
+        featureIdOverride: String? = null
     ) {
         try {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
             if (authenticatedDevices.isEmpty()) return
             val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
-            val featureId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+            val featureId = featureIdOverride ?: com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
             )
             val payload = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.buildEndPayload(
