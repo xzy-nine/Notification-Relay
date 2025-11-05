@@ -549,6 +549,13 @@ object FloatingReplicaManager {
         if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 自动移除浮窗条目 key=$key")
     }
 
+    // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
+    fun dismissBySource(sourceId: String) {
+        try {
+            removeEntry(sourceId)
+        } catch (_: Exception) {}
+    }
+
     private fun detachFromParent(view: View) {
         val parent = view.parent as? ViewGroup ?: return
         parent.removeView(view)

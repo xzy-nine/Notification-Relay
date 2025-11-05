@@ -34,6 +34,24 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
             processedNotifications.remove(notificationKey)
             if (BuildConfig.DEBUG) Log.v("NotifyRelay", "通知移除，从缓存中清理: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
+            // 超级岛：发送终止包
+            try {
+                val pair = superIslandFeatureByKey.remove(notificationKey)
+                if (pair != null) {
+                    val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+                    val (superPkg, _) = pair
+                    com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandEnd(
+                        applicationContext,
+                        superPkg,
+                        try { applicationContext.packageName } catch (_: Exception) { null },
+                        System.currentTimeMillis(),
+                        try { com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
+                        try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
+                        try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
+                        deviceManager
+                    )
+                }
+            } catch (_: Exception) {}
         }
     }
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
@@ -129,6 +147,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     // 新增：已处理通知缓存，避免重复处理 (改进版：带时间戳的LRU缓存)
     private val processedNotifications = mutableMapOf<String, Long>()
+    // 记录本机转发过的超级岛特征ID，用于在移除时发送终止包
+    private val superIslandFeatureByKey = mutableMapOf<String, Pair<String, String>>() // sbnKey -> (superPkg, featureId)
 
     private fun cleanupExpiredCacheEntries(currentTime: Long) {
         if (processedNotifications.size <= CACHE_CLEANUP_THRESHOLD) return
@@ -162,6 +182,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
                     // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
                     val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
+                    // 计算特征ID并登记
+                    val featureId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+                        superPkg,
+                        superData.paramV2Raw,
+                        superData.title,
+                        superData.text
+                    )
+                    try { superIslandFeatureByKey[sbn.key ?: (sbn.id.toString() + sbn.packageName)] = superPkg to featureId } catch (_: Exception) {}
                     com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
                         applicationContext,
                         superPkg,

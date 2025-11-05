@@ -57,6 +57,7 @@ object DeviceConnectionManagerUtil {
     }
 }
 
+
 data class AuthInfo(
     val publicKey: String,
     val sharedSecret: String,
@@ -1009,6 +1010,17 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         try {
             if (remoteUuid != null) {
                 val json = org.json.JSONObject(decrypted)
+                // 先处理超级岛 ACK（接收端回执）
+                try {
+                    val msgType = json.optString("type", "")
+                    if (msgType == "SI_ACK") {
+                        val ackHash = json.optString("hash", "")
+                        val featureIdAck = json.optString("featureKeyValue", "")
+                        try { com.xzyht.notifyrelay.core.util.MessageSender.onSuperIslandAck(remoteUuid, featureIdAck, ackHash) } catch (_: Exception) {}
+                        if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "收到对方ACK：hash=" + ackHash + ", featureKeyValue=" + featureIdAck)
+                        return
+                    }
+                } catch (_: Exception) {}
                 val pkg = json.optString("packageName")
                 val appName = json.optString("appName")
                 val title = json.optString("title")
@@ -1024,58 +1036,123 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
 
-                // 如果是超级岛通知，直接走悬浮复刻流程，跳过 BackendRemoteFilter 的普通过滤/去重逻辑
+                // 如果是超级岛通知，优先走差异协议（SI_FULL/SI_DELTA/SI_END），否则回退到旧的“直接复刻”逻辑
                 try {
                     val isSuper = (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
                     if (isSuper) {
-                        if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据（直接复刻）: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
-                        // 尝试提取 param_v2_raw 与 pics（与 NotificationForwardRepository 保持一致的解析）
-                        val paramV2 = try { json.optString("param_v2_raw") } catch (_: Exception) { null }
-                        val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
-                        val picMap = mutableMapOf<String, String>()
-                        if (pics != null) {
-                            val keys = pics.keys()
-                            while (keys.hasNext()) {
-                                val k = keys.next()
-                                try {
-                                    val v = pics.optString(k)
-                                    if (!v.isNullOrEmpty()) picMap[k] = v
-                                } catch (_: Exception) {}
+                        val siType = try { json.optString("type", "") } catch (_: Exception) { "" }
+                        val hasFeature = try { json.has("featureKeyName") && json.has("featureKeyValue") } catch (_: Exception) { false }
+                        if (siType.startsWith("SI_") || hasFeature) {
+                            // 使用差异存储合并状态
+                            val featureId = try { json.optString("featureKeyValue", "") } catch (_: Exception) { "" }
+                            val sourceKey = listOfNotNull(remoteUuid, mappedPkg, featureId.takeIf { it.isNotBlank() }).joinToString("|")
+                            val merged = com.xzyht.notifyrelay.feature.superisland.SuperIslandRemoteStore.applyIncoming(sourceKey, json)
+
+                            // 发送ACK（带回对方的hash）
+                            val recvHash = try { json.optString("hash", "") } catch (_: Exception) { "" }
+                            if (!recvHash.isNullOrEmpty()) {
+                                try { sendSuperIslandAck(remoteUuid, sharedSecret, recvHash, featureId, mappedPkg) } catch (_: Exception) {}
                             }
-                        }
-                        try {
-                            // 直接在本地显示悬浮复刻
-                            com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, mappedPkg, title, text, paramV2, picMap)
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
-                        }
-                        val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
-                            id = System.currentTimeMillis(),
-                            sourceDeviceUuid = remoteUuid,
-                            originalPackage = pkg,
-                            mappedPackage = mappedPkg,
-                            appName = appName.takeIf { it.isNotEmpty() },
-                            title = title?.takeIf { it.isNotBlank() },
-                            text = text?.takeIf { it.isNotBlank() },
-                            paramV2Raw = paramV2?.takeIf { it.isNotBlank() },
-                            picMap = picMap.toMap(),
-                            rawPayload = decrypted
-                        )
-                        try {
-                            com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
-                        } catch (_: Exception) {
-                            com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
-                                context,
-                                com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+
+                            if (siType == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.TYPE_END) {
+                                // 结束包：移除对应浮窗
+                                try { com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
+                                return
+                            }
+
+                            if (merged != null) {
+                                // 展示合并后的效果
+                                val mTitle = merged.title ?: title
+                                val mText = merged.text ?: text
+                                val mParam2 = merged.paramV2Raw
+                                val mPics = merged.pics
+                                try {
+                                    com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, sourceKey, mTitle, mText, mParam2, mPics)
+                                } catch (e: Exception) {
+                                    if (BuildConfig.DEBUG) Log.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
+                                }
+                                // 写入历史
+                                val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
                                     id = System.currentTimeMillis(),
                                     sourceDeviceUuid = remoteUuid,
                                     originalPackage = pkg,
                                     mappedPackage = mappedPkg,
+                                    appName = appName.takeIf { it.isNotEmpty() },
+                                    title = mTitle?.takeIf { it.isNotBlank() },
+                                    text = mText?.takeIf { it.isNotBlank() },
+                                    paramV2Raw = mParam2?.takeIf { it.isNotBlank() },
+                                    picMap = mPics.toMap(),
                                     rawPayload = decrypted
                                 )
+                                try {
+                                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
+                                } catch (_: Exception) {
+                                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
+                                        context,
+                                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                                            id = System.currentTimeMillis(),
+                                            sourceDeviceUuid = remoteUuid,
+                                            originalPackage = pkg,
+                                            mappedPackage = mappedPkg,
+                                            rawPayload = decrypted
+                                        )
+                                    )
+                                }
+                                return
+                            } else {
+                                // 无法合并时不展示，仅发送ACK已在上面完成
+                                return
+                            }
+                        } else {
+                            if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据（旧协议直接复刻）: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
+                            // 尝试提取 param_v2_raw 与 pics（与 NotificationForwardRepository 保持一致的解析）
+                            val paramV2 = try { json.optString("param_v2_raw") } catch (_: Exception) { null }
+                            val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
+                            val picMap = mutableMapOf<String, String>()
+                            if (pics != null) {
+                                val keys = pics.keys()
+                                while (keys.hasNext()) {
+                                    val k = keys.next()
+                                    try {
+                                        val v = pics.optString(k)
+                                        if (!v.isNullOrEmpty()) picMap[k] = v
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                            try {
+                                // 直接在本地显示悬浮复刻（以包名为key，旧行为会互相覆盖）
+                                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, mappedPkg, title, text, paramV2, picMap)
+                            } catch (e: Exception) {
+                                if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
+                            }
+                            val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                                id = System.currentTimeMillis(),
+                                sourceDeviceUuid = remoteUuid,
+                                originalPackage = pkg,
+                                mappedPackage = mappedPkg,
+                                appName = appName.takeIf { it.isNotEmpty() },
+                                title = title?.takeIf { it.isNotBlank() },
+                                text = text?.takeIf { it.isNotBlank() },
+                                paramV2Raw = paramV2?.takeIf { it.isNotBlank() },
+                                picMap = picMap.toMap(),
+                                rawPayload = decrypted
                             )
+                            try {
+                                com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
+                            } catch (_: Exception) {
+                                com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
+                                    context,
+                                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                                        id = System.currentTimeMillis(),
+                                        sourceDeviceUuid = remoteUuid,
+                                        originalPackage = pkg,
+                                        mappedPackage = mappedPkg,
+                                        rawPayload = decrypted
+                                    )
+                                )
+                            }
+                            return
                         }
-                        return
                     }
                 } catch (_: Exception) {}
 
@@ -1664,6 +1741,43 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 获取当前加密类型
     fun getCurrentEncryptionType(): com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType {
         return com.xzyht.notifyrelay.core.util.EncryptionManager.getCurrentEncryptionType()
+    }
+
+    // 发送超级岛ACK（包含接收的hash），用于发送方确认
+    private fun sendSuperIslandAck(remoteUuid: String?, sharedSecret: String?, hash: String, featureKeyValue: String?, mappedPkg: String?) {
+        try {
+            if (remoteUuid.isNullOrEmpty() || sharedSecret.isNullOrEmpty()) return
+            val device = getDeviceInfo(remoteUuid)
+            val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+            val ip = device?.ip ?: auth?.lastIp
+            val port = device?.port ?: (auth?.lastPort ?: 23333)
+            if (ip.isNullOrEmpty() || ip == "0.0.0.0") return
+
+            val ackObj = org.json.JSONObject().apply {
+                put("packageName", mappedPkg ?: "superisland:ack")
+                put("type", "SI_ACK")
+                put("hash", hash)
+                if (!featureKeyValue.isNullOrEmpty()) {
+                    put("featureKeyName", com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.FEATURE_KEY_NAME)
+                    put("featureKeyValue", featureKeyValue)
+                }
+                put("time", System.currentTimeMillis())
+            }
+
+            // 通过TCP发回对端（与数据通道一致）
+            val socket = java.net.Socket()
+            try {
+                socket.connect(java.net.InetSocketAddress(ip, port), 3000)
+                val writer = java.io.OutputStreamWriter(socket.getOutputStream())
+                val encrypted = encryptData(ackObj.toString(), sharedSecret)
+                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${sharedSecret}:${encrypted}"
+                writer.write(payload + "\n")
+                writer.flush()
+            } finally {
+                try { socket.close() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+        }
     }
 
     // 新增：WLAN直连定期重连检查器
