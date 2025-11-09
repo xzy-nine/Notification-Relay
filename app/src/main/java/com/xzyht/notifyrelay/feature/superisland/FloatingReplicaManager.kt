@@ -108,40 +108,60 @@ object FloatingReplicaManager {
             }
 
             CoroutineScope(Dispatchers.Main).launch {
-                val paramV2 = parseParamV2Safe(paramV2Raw)
-                val smallIsland = paramV2?.paramIsland?.smallIslandArea
-                val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(picMap, iconKey) }
-                val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(picMap)
+                try {
+                    val paramV2 = parseParamV2Safe(paramV2Raw)
+                    // 若完全无可用内容（既无 param_v2，也无标题与正文），直接退化为通知，避免创建任何浮窗
+                    if (paramV2 == null && (title.isNullOrBlank() && text.isNullOrBlank())) {
+                        MessageSender.sendHighPriorityNotification(
+                            context,
+                            title ?: "(无标题)",
+                            text ?: "(无内容)"
+                        )
+                        return@launch
+                    }
 
-                ensureOverlayExists(context)
+                    val smallIsland = paramV2?.paramIsland?.smallIslandArea
+                    val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(picMap, iconKey) }
+                    val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(picMap)
 
-                val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, null) }
-                val expandedView = templateResult?.view
-                    ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, picMap)
-                    ?: buildSummaryView(
+                    val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
+                    val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, null) }
+                    val expandedView = templateResult?.view
+                        ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                    val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, picMap)
+                        ?: buildSummaryView(
+                            context,
+                            smallIsland,
+                            paramV2?.highlightInfo,
+                            title,
+                            text,
+                            summaryBitmap ?: fallbackBitmap,
+                            picMap
+                        )
+
+                    // 仅在需要真正添加条目时，才去确保 Overlay 容器存在，避免出现“空容器”占位导致的隐形浮窗
+                    ensureOverlayExists(context)
+
+                    addOrUpdateEntry(
                         context,
-                        smallIsland,
-                        paramV2?.highlightInfo,
-                        title,
-                        text,
-                        summaryBitmap ?: fallbackBitmap,
-                        picMap
+                        entryKey,
+                        expandedView,
+                        collapsedSummary.view,
+                        templateResult?.progressBinding,
+                        collapsedSummary.progressBinding
                     )
-
-                addOrUpdateEntry(
-                    context,
-                    entryKey,
-                    expandedView,
-                    collapsedSummary.view,
-                    templateResult?.progressBinding,
-                    collapsedSummary.progressBinding
-                )
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${'$'}{e.message}")
+                    // 临时移除：异常时不再退化为通知，仅进行清理
+                    // MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
+                    // 若此前已创建Overlay但未成功添加条目，立即移除以避免空容器拦截触摸
+                    removeOverlayIfNoEntries()
+                }
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
-            MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
+            // 临时移除：异常时不再退化为通知，仅进行清理
+            // MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
             // 若此前已创建Overlay但未成功添加条目，立即移除以避免空容器拦截触摸
             removeOverlayIfNoEntries()
         }
