@@ -1,0 +1,79 @@
+package com.xzyht.notifyrelay.core.util
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
+import android.widget.ImageView
+import java.lang.ref.WeakReference
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
+
+/**
+ * 统一图片加载器：同时支持 data: URL 与 http(s) URL。
+ * - 无外部依赖，使用轻量线程池与主线程切回。
+ * - 用于展开态与摘要态中组件级图标加载，避免在渲染器中写网络细节。
+ */
+object ImageLoader {
+    private val io = Executors.newFixedThreadPool(2)
+    private val main = Handler(Looper.getMainLooper())
+
+    /**
+     * 根据 key 从 picMap 取 URL 并加载到 ImageView。返回是否已启动加载。
+     */
+    fun loadKeyInto(view: ImageView, picMap: Map<String, String>?, key: String?, timeoutMs: Int = 5000): Boolean {
+        val url = if (!key.isNullOrBlank()) picMap?.get(key) else null
+        if (url.isNullOrBlank()) return false
+        loadInto(view, url, timeoutMs)
+        return true
+    }
+
+    /**
+     * 将 urlOrData（data: 或 http(s)）加载到 ImageView。
+     */
+    fun loadInto(view: ImageView, urlOrData: String, timeoutMs: Int = 5000) {
+        val targetRef = WeakReference(view)
+        io.execute {
+            val bmp: Bitmap? = try { loadBitmap(urlOrData, timeoutMs) } catch (_: Exception) { null }
+
+            val target = targetRef.get() ?: return@execute
+            if (bmp != null) {
+                main.post { target.setImageBitmap(bmp) }
+            }
+        }
+    }
+
+    /**
+     * 同步加载并返回 Bitmap（后台线程使用）。
+     */
+    fun loadBitmap(urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
+        return if (urlOrData.startsWith("data:", ignoreCase = true)) {
+            DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
+        } else {
+            loadHttpBitmap(urlOrData, timeoutMs)
+        }
+    }
+
+    private fun loadHttpBitmap(url: String, timeoutMs: Int): Bitmap? {
+        return try {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.connectTimeout = timeoutMs
+            conn.readTimeout = timeoutMs
+            conn.instanceFollowRedirects = true
+            conn.requestMethod = "GET"
+            conn.doInput = true
+            conn.connect()
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                null
+            } else {
+                val stream = conn.inputStream
+                val bmp = BitmapFactory.decodeStream(stream)
+                try { stream.close() } catch (_: Exception) {}
+                conn.disconnect()
+                bmp
+            }
+        } catch (_: Exception) { null }
+    }
+}

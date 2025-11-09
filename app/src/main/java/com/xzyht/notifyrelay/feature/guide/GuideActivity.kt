@@ -358,25 +358,44 @@ fun GuideScreen(onContinue: () -> Unit) {
         )
         top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
-            title = "悬浮通知权限 (可选)",
-            summary = "请手动选择并打开具体的通知类别的悬浮通知权限，以提升通知体验",
+            title = "悬浮窗权限 (可选)",
+            summary = if (hasFloatNotification) "已授权：允许在其他应用上层显示悬浮窗" else "用于支持超级岛/悬浮岛复刻，提升通知交互体验",
             summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
                 color = Color(0xFF888888),
                 disabledColor = Color(0xFFCCCCCC)
             ),
             rightActions = {
-                Button(
-                    onClick = {
-                        showToast("请在系统设置-通知-通知分组中管理本应用的通知分组")
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 32.dp)
-                        .padding(horizontal = 8.dp)
-                ) {
-                    Text("管理通知分组", fontSize = 14.sp)
+                if (hasFloatNotification) {
+                    Button(
+                        onClick = { showToast("悬浮窗已开启") },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 32.dp)
+                            .padding(horizontal = 8.dp)
+                    ) {
+                        Text("已开启", fontSize = 14.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            showToast("跳转悬浮窗权限设置")
+                            try {
+                                (context as? Activity)?.let { act ->
+                                    PermissionHelper.requestOverlayPermission(act)
+                                } ?: run {
+                                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                    intent.data = android.net.Uri.parse("package:${context.packageName}")
+                                    context.startActivity(intent)
+                                }
+                            } catch (e: Exception) {
+                                showToast("无法跳转悬浮窗设置，请手动在系统设置中允许悬浮窗权限")
+                            }
+                        },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 32.dp)
+                            .padding(horizontal = 8.dp)
+                    ) {
+                        Text("开启悬浮窗", fontSize = 14.sp)
+                    }
                 }
             },
             enabled = true,

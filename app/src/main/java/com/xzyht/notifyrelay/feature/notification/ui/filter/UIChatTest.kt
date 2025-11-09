@@ -1,6 +1,12 @@
 package com.xzyht.notifyrelay.feature.notification.ui.filter
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -25,8 +31,8 @@ fun UIChatTest(
 ) {
     val context = LocalContext.current
     MiuixTheme {
-    val colorScheme = MiuixTheme.colorScheme
-    val textStyles = MiuixTheme.textStyles
+        val colorScheme = MiuixTheme.colorScheme
+        val textStyles = MiuixTheme.textStyles
 
         var chatInput by rememberSaveable { mutableStateOf("") }
         val chatHistoryState = remember { mutableStateOf<List<String>>(emptyList()) }
@@ -73,6 +79,7 @@ fun UIChatTest(
             ) {
                 items(chatList) { msg ->
                     val isSend = msg.startsWith("发送:")
+                    val display = msg.removePrefix("发送:").removePrefix("收到:").trim()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = if (isSend) Arrangement.End else Arrangement.Start
@@ -80,13 +87,29 @@ fun UIChatTest(
                         top.yukonga.miuix.kmp.basic.Surface(
                             color = if (isSend) colorScheme.primaryContainer else colorScheme.secondaryContainer,
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            modifier = Modifier.padding(vertical = 2.dp, horizontal = 4.dp)
+                            modifier = Modifier
+                                .padding(vertical = 2.dp, horizontal = 4.dp)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        try {
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("message", msg)
+                                            clipboard.setPrimaryClip(clip)
+                                            android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.e("NotifyRelay", "复制失败", e)
+                                        }
+                                    }
+                                )
                         ) {
+                            val textToShow = if (display.isNotEmpty()) display else "(无内容)"
                             Text(
-                                msg.removePrefix("发送:").removePrefix("收到:"),
+                                text = textToShow,
                                 style = textStyles.body2,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                color = if (isSend) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer
+                                color = if (isSend) colorScheme.onPrimaryContainer else colorScheme.onSecondaryContainer,
+                                maxLines = Int.MAX_VALUE,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     }

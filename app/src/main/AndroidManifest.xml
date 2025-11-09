@@ -17,6 +17,8 @@
 
     <!-- MIUI/澎湃专用应用列表权限声明 -->
     <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
+    <!-- 悬浮窗权限：用于在其他应用上层显示悬浮窗（超级岛复刻等功能需要） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 修复后台服务前台启动崩溃 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Android 14+ 特殊前台服务权限声明 -->
