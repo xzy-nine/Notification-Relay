@@ -24,10 +24,60 @@ suspend fun replicateNotification(
     startMonitoring: Boolean = true // 是否启动先发后撤回监控（锁屏延迟复刻时可关闭以节省性能）
 ) {
     try {
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
-        val json = org.json.JSONObject(result.rawData)
-        json.put("packageName", result.mappedPkg)
+    if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
+    val json = org.json.JSONObject(result.rawData)
+    val originalPackage = json.optString("packageName")
+    json.put("packageName", result.mappedPkg)
         val pkg = result.mappedPkg
+        // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
+    if (pkg.startsWith("superisland:")) {
+            try {
+                val title = json.optString("title")
+                val text = json.optString("text")
+                val paramV2 = if (json.has("param_v2_raw")) json.optString("param_v2_raw") else null
+                val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
+                val picMap = mutableMapOf<String, String>()
+                if (pics != null) {
+                    val keys = pics.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        try {
+                            val v = pics.optString(k)
+                            if (!v.isNullOrEmpty()) picMap[k] = v
+                        } catch (_: Exception) {}
+                    }
+                }
+                if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title")
+                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, pkg, title, text, paramV2, picMap)
+                val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                    id = System.currentTimeMillis(),
+                    originalPackage = originalPackage.takeIf { it.isNotEmpty() },
+                    mappedPackage = pkg,
+                    appName = json.optString("appName").takeIf { it.isNotEmpty() },
+                    title = title.takeIf { it.isNotBlank() },
+                    text = text.takeIf { it.isNotBlank() },
+                    paramV2Raw = paramV2?.takeIf { it.isNotBlank() },
+                    picMap = picMap.toMap(),
+                    rawPayload = result.rawData
+                )
+                try {
+                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
+                } catch (_: Exception) {
+                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
+                        context,
+                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                            id = System.currentTimeMillis(),
+                            originalPackage = originalPackage.takeIf { it.isNotEmpty() },
+                            mappedPackage = pkg,
+                            rawPayload = result.rawData
+                        )
+                    )
+                }
+                return
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 复刻失败，回退到普通复刻: ${e.message}")
+            }
+        }
         val appName = json.optString("appName", pkg)
         val title = json.optString("title")
         val text = json.optString("text")
