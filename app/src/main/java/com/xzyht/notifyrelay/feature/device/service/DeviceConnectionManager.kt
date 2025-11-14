@@ -16,6 +16,8 @@ import kotlinx.coroutines.delay
 import android.util.Log
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
 import com.xzyht.notifyrelay.core.util.EncryptionManager
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
@@ -94,14 +96,83 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         } catch (_: Exception) {}
         return "0.0.0.0"
     }
-    // 获取本地设备显示名称，优先蓝牙名，其次型号
+    // 获取本地设备显示名称，优先级按要求：1. 蓝牙 -> 2. Settings.Secure(bluetooth_name) -> 3. Settings.Global(device_name) -> 4. Build.MODEL/DEVICE -> 5. 兜底
+    // 不再使用应用持久化或 SharedPreferences 中的 device_name
     private fun getLocalDisplayName(): String {
-        return try {
-            val name = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
-            if (!name.isNullOrEmpty()) name else android.os.Build.MODEL
+        try {
+            // 1. 蓝牙名称（Android 12+ 需要 BLUETOOTH_CONNECT 权限）
+            try {
+                val canReadBt = if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+                } else true
+                if (canReadBt) {
+                    val btName = android.bluetooth.BluetoothAdapter.getDefaultAdapter()?.name
+                    if (!btName.isNullOrEmpty()) return sanitizeDisplayName(btName)
+                }
+            } catch (_: Exception) {}
+
+            // 2. Settings.Secure 中的 bluetooth_name（部分设备/ROM会放在这里）
+            try {
+                val s = android.provider.Settings.Secure.getString(context.contentResolver, "bluetooth_name")
+                if (!s.isNullOrEmpty()) return sanitizeDisplayName(s)
+            } catch (_: Exception) {}
+
+            // 3. Settings.Global 中的 device_name
+            try {
+                val g = android.provider.Settings.Global.getString(context.contentResolver, "device_name")
+                if (!g.isNullOrEmpty()) return sanitizeDisplayName(g)
+            } catch (_: Exception) {}
+
+            // 4. 设备型号/设备名作为兜底
+            try {
+                val model = android.os.Build.MODEL
+                if (!model.isNullOrEmpty()) return sanitizeDisplayName(model)
+                val device = android.os.Build.DEVICE
+                if (!device.isNullOrEmpty()) return sanitizeDisplayName(device)
+            } catch (_: Exception) {}
+        } catch (_: Exception) {}
+
+        return "未知设备"
+    }
+
+    // 将显示名称清洗为不可见字符替换、并裁剪（口径较宽）
+    private fun sanitizeDisplayName(raw: String): String {
+        try {
+            var s = raw.replace(Regex("[\\r\\n]"), " ")
+            s = s.trim()
+            if (s.isEmpty()) return s
+            // 裁剪到 64 字节（UTF-8 字节），避免广播过长
+            val bytes = s.toByteArray(Charsets.UTF_8)
+            if (bytes.size <= 64) return s
+            // 按字节裁剪，确保不截断多字节字符
+            var cut = 64
+            while (cut > 0 && (bytes[cut - 1].toInt() and 0xC0) == 0x80) cut--
+            return String(bytes.copyOfRange(0, cut), Charsets.UTF_8)
         } catch (_: Exception) {
-            android.os.Build.MODEL
+            return raw
         }
+    }
+
+    // 编码用于 UDP/TCP 简单传输（避免冒号分隔冲突）。使用 Base64 无换行。
+    private fun encodeDisplayNameForTransport(name: String): String {
+        try {
+            val clean = sanitizeDisplayName(name)
+            return android.util.Base64.encodeToString(clean.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        } catch (_: Exception) {
+            return ""
+        }
+    }
+
+    // 解码并清洗从网络接收到的名称
+    private fun decodeDisplayNameFromTransport(encoded: String): String {
+        try {
+            val decoded = try { android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP) } catch (_: Exception) { null }
+            if (decoded != null) {
+                val s = String(decoded, Charsets.UTF_8)
+                return sanitizeDisplayName(s)
+            }
+        } catch (_: Exception) {}
+        return encoded
     }
     // 新增：UDP关闭时对已认证设备发送加密UDP唤醒包
     private var manualDiscoveryJob: kotlinx.coroutines.Job? = null
@@ -142,15 +213,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
     // 设备信息缓存，解决未认证设备无法显示详细信息问题
     private val deviceInfoCache = mutableMapOf<String, DeviceInfo>()
-    //private fun logDeviceCache(tag: String) {
-    //    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[$tag] deviceInfoCache: ${deviceInfoCache.keys}")
-    //    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[$tag] deviceLastSeen: ${deviceLastSeen.keys}")
-    //    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[$tag] authenticatedDevices: ${authenticatedDevices.keys}")
-    //    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[$tag] rejectedDevices: ${rejectedDevices}")
-    //    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[$tag] _devices: ${_devices.value.keys}")
-    //}
-    // 持久化认证设备表的key
-    // 持久化认证设备表的key
     private val PREFS_AUTHED_DEVICES = "authed_devices_json"
 
     // 加载已认证设备
@@ -448,7 +510,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     var socket: java.net.DatagramSocket? = null
                     try {
                         socket = java.net.DatagramSocket()
-                        val displayName = getLocalDisplayName()
+                        val displayName = encodeDisplayNameForTransport(getLocalDisplayName())
                         val group = java.net.InetAddress.getByName("255.255.255.255")
                         while (udpDiscoveryEnabled) {
                             val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
@@ -486,7 +548,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                 val parts = msg.split(":")
                                 if (parts.size >= 4) {
                                     val uuid = parts[1]
-                                    val displayName = parts[2]
+                                    val rawDisplay = parts[2]
+                                    val displayName = try { decodeDisplayNameFromTransport(rawDisplay) } catch (_: Exception) { rawDisplay }
                                     val port = parts[3].toIntOrNull() ?: 23333
                                     if (!uuid.isNullOrEmpty() && uuid != this@DeviceConnectionManager.uuid && !ip.isNullOrEmpty()) {
                                         val device = DeviceInfo(uuid, displayName, ip, port)
@@ -1591,7 +1654,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 新增：获取WLAN直连下的设备IP范围（通常是192.168.49.x或类似）
     private fun getWifiDirectIpRange(): List<String> {
-        val possibleRanges = listOf("192.168.49.", "192.168.43.", "192.168.42.", "10.0.0.")
+            val possibleRanges = listOf("192.168.49.", "192.168.43.", "192.168.42.", "10.0.0.")
         val ips = mutableListOf<String>()
         for (range in possibleRanges) {
             for (i in 1..254) {
@@ -1625,7 +1688,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             for (ip in ips) {
                 try {
                     val socket = java.net.DatagramSocket()
-                    val displayName = localDisplayName
+                    val displayName = encodeDisplayNameForTransport(localDisplayName)
                     val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
                     val packet = java.net.DatagramPacket(buf, buf.size, java.net.InetAddress.getByName(ip), 23334)
                     socket.send(packet)
