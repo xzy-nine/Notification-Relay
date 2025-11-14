@@ -944,8 +944,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val writer = OutputStreamWriter(socket.getOutputStream())
                 // 加密数据
                 val encryptedData = encryptData(data, auth.sharedSecret)
-                // 标记 json
-                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                // 标记 json -- 不再在消息中明文携带 sharedSecret，接收端从认证表中查找并使用
+                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${encryptedData}"
                 writer.write(payload + "\n")
                 writer.flush()
                 writer.close()
@@ -1452,42 +1452,39 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     reader.close()
                                     client.close()
                                 } else if (line.startsWith("DATA:") || line.startsWith("DATA_JSON:")) {
-                                     
+
+                                    // 新协议：格式为 "DATA_JSON:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
                                     val isJson = line.startsWith("DATA_JSON:")
-                                    val parts = line.split(":", limit = 5)
-                                    if (parts.size >= 5) {
+                                    val parts = line.split(":", limit = 4)
+                                    if (parts.size >= 4) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
-                                        val sharedSecret = parts[3]
-                                        val payload = parts[4]
-                                        val auth = authenticatedDevices[remoteUuid]
-                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            handleNotificationData(payload, sharedSecret, remoteUuid)
+                                        val payload = parts[3]
+                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+                                        if (auth != null && auth.isAccepted) {
+                                            // 可选：校验 remotePubKey 与存储的公钥是否一致
+                                            // if (auth.publicKey != remotePubKey) { /* log mismatch */ }
+                                            handleNotificationData(payload, auth.sharedSecret, remoteUuid)
                                         } else {
                                             if (auth == null) {
                                                 if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
                                             } else {
-                                                val reason = buildString {
-                                                    if (auth.sharedSecret != sharedSecret) append("sharedSecret不匹配; ")
-                                                    if (!auth.isAccepted) append("isAccepted=false; ")
-                                                }
-                                                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败，拒绝处理数据，uuid=${remoteUuid}, 本地sharedSecret=${auth.sharedSecret}, 对方sharedSecret=${sharedSecret}, isAccepted=${auth.isAccepted}，原因: $reason")
+                                                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败：device not accepted, uuid=${remoteUuid}")
                                             }
                                         }
                                     }
                                     reader.close()
                                     client.close()
                                 } else if (line.startsWith("DATA_ICON_REQUEST:")) {
-                                    // 处理图标请求
-                                    val parts = line.split(":", limit = 5)
-                                    if (parts.size >= 5) {
+                                    // 新协议：格式为 "DATA_ICON_REQUEST:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
+                                    val parts = line.split(":", limit = 4)
+                                    if (parts.size >= 4) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
-                                        val sharedSecret = parts[3]
-                                        val payload = parts[4]
-                                        val auth = authenticatedDevices[remoteUuid]
-                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, sharedSecret) } catch (_: Exception) { null }
+                                        val payload = parts[3]
+                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+                                        if (auth != null && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
                                             if (decrypted != null) {
                                                 val sourceDevice = getDeviceInfo(remoteUuid) ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress, 23333)
                                                 com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconRequest(decrypted, this@DeviceConnectionManager, sourceDevice, context)
@@ -1497,16 +1494,15 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     reader.close()
                                     client.close()
                                 } else if (line.startsWith("DATA_ICON_RESPONSE:")) {
-                                    // 处理图标响应
-                                    val parts = line.split(":", limit = 5)
-                                    if (parts.size >= 5) {
+                                    // 新协议：格式为 "DATA_ICON_RESPONSE:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
+                                    val parts = line.split(":", limit = 4)
+                                    if (parts.size >= 4) {
                                         val remoteUuid = parts[1]
                                         val remotePubKey = parts[2]
-                                        val sharedSecret = parts[3]
-                                        val payload = parts[4]
-                                        val auth = authenticatedDevices[remoteUuid]
-                                        if (auth != null && auth.sharedSecret == sharedSecret && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, sharedSecret) } catch (_: Exception) { null }
+                                        val payload = parts[3]
+                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+                                        if (auth != null && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
                                             if (decrypted != null) {
                                                 com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconResponse(decrypted, context)
                                             }
@@ -1770,7 +1766,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 socket.connect(java.net.InetSocketAddress(ip, port), 3000)
                 val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                 val encrypted = encryptData(ackObj.toString(), sharedSecret)
-                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${sharedSecret}:${encrypted}"
+                // 不在消息中包含 sharedSecret，接收端从认证表中查找
+                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${encrypted}"
                 writer.write(payload + "\n")
                 writer.flush()
             } finally {

@@ -171,7 +171,8 @@ object MessageSender {
                         socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
                         val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                         val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                        // 不在消息中包含 sharedSecret，接收端从认证表中查找
+                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
                         writer.write(payload + "\n")
                         writer.flush()
                         success = true
@@ -221,7 +222,8 @@ object MessageSender {
                         socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
                         val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                         val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                        // 不在消息中包含 sharedSecret，接收端从认证表中查找
+                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
                         writer.write(payload + "\n")
                         writer.flush()
                         success = true
@@ -264,7 +266,8 @@ object MessageSender {
                     socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
                     val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                     val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                    val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                    // 不在消息中包含 sharedSecret，接收端从认证表中查找
+                    val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
                     writer.write(payload + "\n")
                     writer.flush()
                     if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")

@@ -146,8 +146,8 @@ object IconSyncManager {
                             socket.connect(java.net.InetSocketAddress(device.ip, device.port), 5000)
                             val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                             val encryptedData = deviceManager.encryptData(requestData, auth.sharedSecret)
-                            // 使用特殊前缀标识图标请求
-                            val payload = "DATA_ICON_REQUEST:${deviceManager.uuid}:${deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                            // 使用特殊前缀标识图标请求 — 不在消息中包含 sharedSecret
+                            val payload = "DATA_ICON_REQUEST:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encryptedData}"
                             writer.write(payload + "\n")
                             writer.flush()
                             if (BuildConfig.DEBUG) Log.d(TAG, "图标请求发送成功：${device.displayName}")
@@ -289,8 +289,8 @@ object IconSyncManager {
                             socket.connect(java.net.InetSocketAddress(targetDevice.ip, targetDevice.port), 5000)
                             val writer = java.io.OutputStreamWriter(socket.getOutputStream())
                             val encryptedData = deviceManager.encryptData(responseJson, auth.sharedSecret)
-                            // 使用特殊前缀标识图标响应
-                            val payload = "DATA_ICON_RESPONSE:${deviceManager.uuid}:${deviceManager.localPublicKey}:${auth.sharedSecret}:${encryptedData}"
+                            // 使用特殊前缀标识图标响应 — 不在消息中包含 sharedSecret
+                            val payload = "DATA_ICON_RESPONSE:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encryptedData}"
                             writer.write(payload + "\n")
                             writer.flush()
                             if (BuildConfig.DEBUG) Log.d(TAG, "图标响应发送成功：$packageName -> ${targetDevice.displayName}")
