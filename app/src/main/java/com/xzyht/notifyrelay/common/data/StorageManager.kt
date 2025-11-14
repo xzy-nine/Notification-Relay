@@ -46,6 +46,61 @@ object StorageManager {
      * @return 对应名称的 [SharedPreferences] 实例，模式为 [Context.MODE_PRIVATE]。
      */
     fun getDevicePrefs(context: Context): SharedPreferences {
+        try {
+            // 使用 EncryptedSharedPreferences，若创建失败回退到普通 SharedPreferences
+            val masterKey = try {
+                androidx.security.crypto.MasterKey.Builder(context)
+                    .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+            } catch (e: Exception) {
+                null
+            }
+
+            if (masterKey != null) {
+                val encrypted = try {
+                    androidx.security.crypto.EncryptedSharedPreferences.create(
+                        context,
+                        PREFS_DEVICE,
+                        masterKey,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+
+                // 迁移逻辑：如果未迁移且旧的 prefs 有内容，则拷贝到加密 prefs
+                try {
+                    val general = getGeneralPrefs(context)
+                    val migratedKey = "device_prefs_migrated_v1"
+                    if (encrypted != null && !general.getBoolean(migratedKey, false)) {
+                        val legacy = context.getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
+                        if (legacy.all.isNotEmpty()) {
+                            val editor = encrypted.edit()
+                            for ((k, v) in legacy.all) {
+                                when (v) {
+                                    is String -> editor.putString(k, v)
+                                    is Boolean -> editor.putBoolean(k, v)
+                                    is Int -> editor.putInt(k, v)
+                                    is Long -> editor.putLong(k, v)
+                                    is Set<*> -> editor.putStringSet(k, v.filterIsInstance<String>().toSet())
+                                    else -> {
+                                        // skip unknown types
+                                    }
+                                }
+                            }
+                            editor.apply()
+                            // 清理 legacy（可选，保留备份时注释掉）
+                            try { legacy.edit().clear().apply() } catch (_: Exception) {}
+                        }
+                        general.edit().putBoolean(migratedKey, true).apply()
+                    }
+                } catch (_: Exception) {}
+
+                if (encrypted != null) return encrypted
+            }
+        } catch (_: Exception) {}
+
         return context.getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
     }
 

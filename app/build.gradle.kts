@@ -136,6 +136,8 @@ dependencies {
     // 局域网设备发现 jmdns
     implementation("org.jmdns:jmdns:3.5.7")
     implementation(project(":miuix-main:miuix"))
+    // AndroidX Security: EncryptedSharedPreferences
+    implementation("androidx.security:security-crypto:1.1.0")
 }
 
 // 强制所有 kotlin-stdlib 依赖使用 1.9.23，避免版本冲突

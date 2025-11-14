@@ -43,7 +43,9 @@ object EncryptionManager {
     // =================== AES加密实现 ===================
     private object AESEncryption {
         private const val ALGORITHM = "AES"
-        private const val TRANSFORMATION = "AES/ECB/PKCS5Padding"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val GCM_TAG_LENGTH = 128 // bits
+        private const val GCM_IV_LENGTH = 12 // bytes
 
         /**
          * 生成一个新的 AES 对称密钥
@@ -87,9 +89,16 @@ object EncryptionManager {
         fun encrypt(data: String, key: String): String {
             val secretKey = stringToKey(key)
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+            val iv = ByteArray(GCM_IV_LENGTH)
+            java.security.SecureRandom().nextBytes(iv)
+            val spec = javax.crypto.spec.GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
             val encryptedBytes = cipher.doFinal(data.toByteArray(Charsets.UTF_8))
-            return Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
+            // 输出格式：IV || ciphertext (ciphertext 包含 tag)
+            val out = ByteArray(iv.size + encryptedBytes.size)
+            System.arraycopy(iv, 0, out, 0, iv.size)
+            System.arraycopy(encryptedBytes, 0, out, iv.size, encryptedBytes.size)
+            return Base64.encodeToString(out, Base64.NO_WRAP)
         }
 
         /**
@@ -101,10 +110,14 @@ object EncryptionManager {
          */
         fun decrypt(encryptedData: String, key: String): String {
             val secretKey = stringToKey(key)
+            val data = Base64.decode(encryptedData, Base64.NO_WRAP)
+            if (data.size < GCM_IV_LENGTH) throw IllegalArgumentException("Invalid encrypted data")
+            val iv = data.copyOfRange(0, GCM_IV_LENGTH)
+            val cipherBytes = data.copyOfRange(GCM_IV_LENGTH, data.size)
             val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey)
-            val encryptedBytes = Base64.decode(encryptedData, Base64.NO_WRAP)
-            val decryptedBytes = cipher.doFinal(encryptedBytes)
+            val spec = javax.crypto.spec.GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+            val decryptedBytes = cipher.doFinal(cipherBytes)
             return String(decryptedBytes, Charsets.UTF_8)
         }
 
@@ -120,17 +133,44 @@ object EncryptionManager {
          * @return Base64 编码的 32 字节共享密钥字符串（无换行）
          */
         fun generateSharedSecret(localKey: String, remoteKey: String): String {
-            val combined = if (localKey < remoteKey) {
-                (localKey + remoteKey).take(32)
-            } else {
-                (remoteKey + localKey).take(32)
+            // 使用 HKDF-SHA256 从 localKey||remoteKey 派生 32 字节密钥，确保双方一致
+            val a = localKey
+            val b = remoteKey
+            val combined = if (a < b) a + b else b + a
+            val ikm = combined.toByteArray(Charsets.UTF_8)
+            val prk = hkdfExtract(null, ikm)
+            val okm = hkdfExpand(prk, "shared-secret".toByteArray(Charsets.UTF_8), 32)
+            return Base64.encodeToString(okm, Base64.NO_WRAP)
+        }
+
+        private fun hkdfExtract(salt: ByteArray?, ikm: ByteArray): ByteArray {
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            val realSalt = salt ?: ByteArray(32) { 0.toByte() }
+            val keySpec = javax.crypto.spec.SecretKeySpec(realSalt, "HmacSHA256")
+            mac.init(keySpec)
+            return mac.doFinal(ikm)
+        }
+
+        private fun hkdfExpand(prk: ByteArray, info: ByteArray, len: Int): ByteArray {
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            val keySpec = javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256")
+            mac.init(keySpec)
+            val hashLen = 32
+            val n = (len + hashLen - 1) / hashLen
+            var t = ByteArray(0)
+            val okm = ByteArray(len)
+            var copied = 0
+            for (i in 1..n) {
+                mac.reset()
+                mac.update(t)
+                mac.update(info)
+                mac.update(i.toByte())
+                t = mac.doFinal()
+                val toCopy = Math.min(hashLen, len - copied)
+                System.arraycopy(t, 0, okm, copied, toCopy)
+                copied += toCopy
             }
-            val keyBytes = combined.toByteArray(Charsets.UTF_8)
-            val paddedKey = ByteArray(32)
-            for (i in paddedKey.indices) {
-                paddedKey[i] = keyBytes[i % keyBytes.size]
-            }
-            return Base64.encodeToString(paddedKey, Base64.NO_WRAP)
+            return okm
         }
     }
 
