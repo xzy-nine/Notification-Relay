@@ -9,6 +9,7 @@ import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 
 /**
  * 统一图片加载器：同时支持 data: URL 与 http(s) URL。
@@ -25,7 +26,11 @@ object ImageLoader {
     fun loadKeyInto(view: ImageView, picMap: Map<String, String>?, key: String?, timeoutMs: Int = 5000): Boolean {
         val url = if (!key.isNullOrBlank()) picMap?.get(key) else null
         if (url.isNullOrBlank()) return false
-        loadInto(view, url, timeoutMs)
+        // 若为引用则先解析为真实值
+        val resolved = try {
+            if (url.startsWith("ref:", ignoreCase = true)) SuperIslandImageStore.resolve(view.context, url) ?: url else url
+        } catch (_: Exception) { url }
+        loadInto(view, resolved, timeoutMs)
         return true
     }
 
@@ -35,7 +40,11 @@ object ImageLoader {
     fun loadInto(view: ImageView, urlOrData: String, timeoutMs: Int = 5000) {
         val targetRef = WeakReference(view)
         io.execute {
-            val bmp: Bitmap? = try { loadBitmap(urlOrData, timeoutMs) } catch (_: Exception) { null }
+            // 若为引用则先解析为真实值
+            val finalUrl = try {
+                if (urlOrData.startsWith("ref:", ignoreCase = true)) SuperIslandImageStore.resolve(view.context.applicationContext, urlOrData) ?: urlOrData else urlOrData
+            } catch (_: Exception) { urlOrData }
+            val bmp: Bitmap? = try { loadBitmap(finalUrl, timeoutMs) } catch (_: Exception) { null }
 
             val target = targetRef.get() ?: return@execute
             if (bmp != null) {

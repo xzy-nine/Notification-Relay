@@ -13,6 +13,7 @@ import java.util.Locale
 import kotlin.math.max
 import org.json.JSONObject
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 
 // 高亮信息模板：强调图文组件，强调显示数据或内容
 data class HighlightInfo(
@@ -77,7 +78,7 @@ private fun buildHighlightLayout(
 
     val density = context.resources.displayMetrics.density
     val iconKey = selectIconKey(context, highlightInfo)
-    val bitmap = decodeBitmap(picMap, iconKey)
+    val bitmap = decodeBitmap(context, picMap, iconKey)
     val hasLeadingIcon = bitmap != null
     if (bitmap != null) {
         val iconSize = if (highlightInfo.iconOnly) (48 * density).toInt() else (40 * density).toInt()
@@ -216,7 +217,7 @@ fun resolveHighlightIconBitmap(
     picMap: Map<String, String>?
 ): Bitmap? {
     val key = selectIconKey(context, highlightInfo)
-    return decodeBitmap(picMap, key)
+    return decodeBitmap(context, picMap, key)
 }
 
 private fun selectIconKey(context: Context, highlightInfo: HighlightInfo): String? {
@@ -243,7 +244,7 @@ private fun addBigAreaImage(
     picMap: Map<String, String>?,
     allowFallback: Boolean
 ): Boolean {
-    val bitmap = decodeBitmap(picMap, key)
+    val bitmap = decodeBitmap(context, picMap, key)
         ?: if (allowFallback) resolveHighlightIconBitmap(context, highlightInfo, picMap) else null
         ?: return false
     val density = context.resources.displayMetrics.density
@@ -262,12 +263,13 @@ private fun addBigAreaImage(
     return true
 }
 
-private fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
+private fun decodeBitmap(context: Context, picMap: Map<String, String>?, key: String?): Bitmap? {
     if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
     val raw = picMap[key] ?: return null
+    val resolved = SuperIslandImageStore.resolve(context, raw) ?: raw
     return try {
         when {
-            raw.startsWith("data:", ignoreCase = true) -> DataUrlUtils.decodeDataUrlToBitmap(raw)
+            resolved.startsWith("data:", ignoreCase = true) -> DataUrlUtils.decodeDataUrlToBitmap(resolved)
             else -> null
         }
     } catch (_: Exception) {

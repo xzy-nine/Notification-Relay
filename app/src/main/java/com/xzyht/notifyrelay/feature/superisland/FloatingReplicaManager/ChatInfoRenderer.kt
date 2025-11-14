@@ -180,7 +180,7 @@ private fun loadProfileAsync(
     val url = key?.let { picMap?.get(it) } ?: chatInfo.picProfile?.let { picMap?.get(it) }
     if (url.isNullOrEmpty()) return
     CoroutineScope(Dispatchers.Main).launch {
-        val bitmap = downloadBitmap(url, 5000)
+        val bitmap = downloadBitmap(context, url, 5000)
         if (bitmap != null) {
             avatarView.setImageBitmap(bitmap)
         }
@@ -248,7 +248,7 @@ class CircularProgressBinding(
             return
         }
         CoroutineScope(Dispatchers.Main).launch {
-            val bitmap = downloadBitmap(url, 5000)
+            val bitmap = downloadBitmap(context, url, 5000)
             if (bitmap != null) {
                 completionView.setImageBitmap(bitmap)
             }

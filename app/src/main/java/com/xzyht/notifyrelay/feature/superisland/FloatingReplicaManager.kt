@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
 import com.xzyht.notifyrelay.core.util.MessageSender
@@ -110,6 +111,8 @@ object FloatingReplicaManager {
             CoroutineScope(Dispatchers.Main).launch {
                 try {
                     val paramV2 = parseParamV2Safe(paramV2Raw)
+                    // 将所有图片 intern 为引用，避免重复保存相同图片
+                    val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
                     // 若完全无可用内容（既无 param_v2，也无标题与正文），直接退化为通知，避免创建任何浮窗
                     if (paramV2 == null && (title.isNullOrBlank() && text.isNullOrBlank())) {
                         MessageSender.sendHighPriorityNotification(
@@ -121,14 +124,14 @@ object FloatingReplicaManager {
                     }
 
                     val smallIsland = paramV2?.paramIsland?.smallIslandArea
-                    val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(picMap, iconKey) }
-                    val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(picMap)
+                    val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
+                    val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
 
                     val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                    val templateResult = paramV2?.let { buildViewFromTemplate(context, it, picMap, null) }
+                    val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
                     val expandedView = templateResult?.view
                         ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                    val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, picMap)
+                    val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
                         ?: buildSummaryView(
                             context,
                             smallIsland,
@@ -136,7 +139,7 @@ object FloatingReplicaManager {
                             title,
                             text,
                             summaryBitmap ?: fallbackBitmap,
-                            picMap
+                            internedPicMap
                         )
 
                     // 仅在需要真正添加条目时，才去确保 Overlay 容器存在，避免出现“空容器”占位导致的隐形浮窗
@@ -855,17 +858,19 @@ object FloatingReplicaManager {
         }
     }
 
-    private suspend fun downloadBitmapByKey(picMap: Map<String, String>?, key: String?): Bitmap? {
+    private suspend fun downloadBitmapByKey(context: Context, picMap: Map<String, String>?, key: String?): Bitmap? {
         if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
-        val url = picMap[key] ?: return null
+        val raw = picMap[key] ?: return null
+        val url = SuperIslandImageStore.resolve(context, raw) ?: raw
         return withContext(Dispatchers.IO) { downloadBitmap(url, 5000) }
     }
 
-    private suspend fun downloadFirstAvailableImage(picMap: Map<String, String>?): Bitmap? {
+    private suspend fun downloadFirstAvailableImage(context: Context, picMap: Map<String, String>?): Bitmap? {
         if (picMap.isNullOrEmpty()) return null
         for ((_, url) in picMap) {
             try {
-                val bmp = withContext(Dispatchers.IO) { downloadBitmap(url, 5000) }
+                val resolved = SuperIslandImageStore.resolve(context, url) ?: url
+                val bmp = withContext(Dispatchers.IO) { downloadBitmap(resolved, 5000) }
                 if (bmp != null) return bmp
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")

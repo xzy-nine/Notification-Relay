@@ -45,6 +45,16 @@ object SuperIslandHistory {
             }
             historyFlow.value = history
             initialized = true
+            // 异步重建图片引用计数并执行 GC（按时间与条目数限制），避免阻塞加载流程
+            try {
+                Thread {
+                    try {
+                        SuperIslandImageStore.rebuildRefCountsAndPrune(context, history)
+                        // 额外按阈值进行清理（可调整参数）
+                        SuperIslandImageStore.prune(context, maxEntries = 2000, maxAgeDays = 30)
+                    } catch (_: Exception) {}
+                }.start()
+            } catch (_: Exception) {}
         }
     }
 
@@ -55,7 +65,9 @@ object SuperIslandHistory {
 
     fun append(context: Context, entry: SuperIslandHistoryEntry) {
         ensureLoaded(context)
-        val sanitizedEntry = entry.copy(picMap = entry.picMap.toMap())
+        // 将图片字符串 intern 为引用以避免重复存储
+        val interned = SuperIslandImageStore.internAll(context, entry.picMap)
+        val sanitizedEntry = entry.copy(picMap = interned.toMap())
         val updated = (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
         historyFlow.value = updated
         PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, updated)

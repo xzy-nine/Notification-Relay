@@ -11,6 +11,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressView
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTimerUpdater
@@ -180,9 +181,10 @@ fun buildBView(context: Context, component: BComponent, picMap: Map<String, Stri
         is BImageText6 -> {
             val key = component.picKey
             val url = picMap?.get(key)
+            val resolved = SuperIslandImageStore.resolve(context, url) ?: url
             val bmp: Bitmap? = when {
-                url.isNullOrBlank() -> null
-                url.startsWith("data:", true) -> runCatching { DataUrlUtils.decodeDataUrlToBitmap(url) }.getOrNull()
+                resolved.isNullOrBlank() -> null
+                resolved.startsWith("data:", true) -> runCatching { DataUrlUtils.decodeDataUrlToBitmap(resolved) }.getOrNull()
                 else -> null
             }
             if (bmp != null) {

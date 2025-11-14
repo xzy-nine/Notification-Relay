@@ -13,6 +13,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import kotlin.math.max
 import kotlin.math.roundToInt
 import org.json.JSONObject
@@ -140,7 +141,7 @@ suspend fun buildMultiProgressInfoView(
     }
     trackLayer.addView(progressBar)
 
-    val pointerBitmapGlobal = decodeBitmap(picMap, multiProgressInfo.picForward)
+    val pointerBitmapGlobal = decodeBitmap(context, picMap, multiProgressInfo.picForward)
     // 额外放大指示点尺寸：比默认增加 15dp（用户要求）
     val pointerExtra = (15 * density).toInt()
     val pointerSize = (barHeight * 4).toInt() + pointerExtra
@@ -251,7 +252,7 @@ private suspend fun createNodeView(
     frame.layoutParams = params
     frame.elevation = 10f
 
-    val baseBitmap = decodeBitmap(picMap, iconKey)
+    val baseBitmap = decodeBitmap(context, picMap, iconKey)
     if (baseBitmap != null) {
         val baseView = ImageView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -337,7 +338,7 @@ private suspend fun createConnectorView(
     container.addView(overlayView)
 
     var pointerView: ImageView? = null
-    val pointerBitmap = if (inProgress) decodeBitmap(picMap, info.picForward) else null
+    val pointerBitmap = if (inProgress) decodeBitmap(context, picMap, info.picForward) else null
     if (pointerBitmap != null) {
         // 同样为 segment 内的指针增加 15dp
         val pointerExtraInner = (15 * density).toInt()
@@ -373,15 +374,16 @@ private suspend fun createConnectorView(
     return container
 }
 
-private suspend fun decodeBitmap(picMap: Map<String, String>?, key: String?): Bitmap? {
+private suspend fun decodeBitmap(context: Context, picMap: Map<String, String>?, key: String?): Bitmap? {
     if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
     val raw = picMap[key] ?: return null
+    val resolved = SuperIslandImageStore.resolve(context, raw) ?: raw
     return try {
-        if (raw.startsWith("data:", ignoreCase = true)) {
-            DataUrlUtils.decodeDataUrlToBitmap(raw)
-        } else if (raw.startsWith("http", ignoreCase = true)) {
-            val cleanedUrl = raw.trim().replace("\n", "").replace("\r", "").replace(" ", "")
-            downloadBitmap(cleanedUrl, 10000)
+        if (resolved.startsWith("data:", ignoreCase = true)) {
+            DataUrlUtils.decodeDataUrlToBitmap(resolved)
+            } else if (resolved.startsWith("http", ignoreCase = true)) {
+            val cleanedUrl = resolved.trim().replace("\n", "").replace("\r", "").replace(" ", "")
+            downloadBitmap(context, cleanedUrl, 10000)
         } else {
             null
         }

@@ -45,7 +45,7 @@ fun buildPicInfoView(context: Context, picInfo: PicInfo, picMap: Map<String, Str
     picInfo.pic?.let { pic ->
         picMap?.get(pic)?.let { url ->
             CoroutineScope(Dispatchers.Main).launch {
-                val bitmap = downloadBitmap(url, 5000)
+                val bitmap = downloadBitmap(context, url, 5000)
                 if (bitmap != null) {
                     val iv = ImageView(context).apply {
                         setImageBitmap(bitmap)

@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -21,16 +22,16 @@ fun parseColor(colorString: String?): Int? {
     }
 }
 
-suspend fun downloadBitmap(url: String, timeoutMs: Int): Bitmap? {
+suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitmap? {
     return withContext(Dispatchers.IO) {
         try {
             // 支持 data URI（base64）、以及常规 http/https URL
-            if (url.startsWith("data:", ignoreCase = true)) {
+            val resolved = SuperIslandImageStore.resolve(context, url) ?: url
+            if (resolved.startsWith("data:", ignoreCase = true)) {
                 // delegate data URI decoding to DataUrlUtils (handles whitespace/newlines)
-                return@withContext DataUrlUtils.decodeDataUrlToBitmap(url)
+                return@withContext DataUrlUtils.decodeDataUrlToBitmap(resolved)
             }
-
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val conn = java.net.URL(resolved).openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = timeoutMs
             conn.readTimeout = timeoutMs
             conn.instanceFollowRedirects = true
