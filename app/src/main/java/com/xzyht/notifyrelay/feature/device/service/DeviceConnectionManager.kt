@@ -881,7 +881,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     }
                 } else if (resp != null && resp.startsWith("REJECT:")) {
                     if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "对方拒绝连接: uuid=${device.uuid}")
-                    rejectedDevices.add(device.uuid)
+                    // 对方拒绝连接（非本地用户在通知中主动拒绝）——仅移除本地信任/不加入已拒绝名单，允许后续重试
                     return Pair(false, "对方拒绝连接")
                 } else {
                     if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "认证失败: resp=$resp")
