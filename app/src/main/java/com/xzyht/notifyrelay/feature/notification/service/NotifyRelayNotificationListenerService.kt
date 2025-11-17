@@ -87,7 +87,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         NotificationRepository.init(applicationContext)
         // 初始化设备连接管理器并启动发现
         connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
-        connectionManager.startDiscovery()
+        try {
+            val discoveryField = connectionManager.javaClass.getDeclaredField("discoveryManager")
+            discoveryField.isAccessible = true
+            val discovery = discoveryField.get(connectionManager)
+            val startMethod = discovery.javaClass.getDeclaredMethod("startDiscovery")
+            startMethod.isAccessible = true
+            startMethod.invoke(discovery)
+        } catch (_: Exception) {}
 
         // 注册设备列表变化回调：立即刷新持久化通知（确保在主线程更新UI/通知）
         try {
@@ -349,7 +356,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 停止设备连接
         try {
             if (this::connectionManager.isInitialized) {
-                connectionManager.stopAll()
+                try {
+                    val discoveryField = connectionManager.javaClass.getDeclaredField("discoveryManager")
+                    discoveryField.isAccessible = true
+                    val discovery = discoveryField.get(connectionManager)
+                    val stopMethod = discovery.javaClass.getDeclaredMethod("stopAll")
+                    stopMethod.isAccessible = true
+                    stopMethod.invoke(discovery)
+                } catch (_: Exception) {}
                 // 注销设备列表变化回调
                 try {
                     if (BuildConfig.DEBUG) Log.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")

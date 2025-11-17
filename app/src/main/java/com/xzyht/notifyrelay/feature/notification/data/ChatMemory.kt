@@ -23,4 +23,13 @@ object ChatMemory {
         memory = mutableListOf()
         PersistenceManager.clearChatHistory(context)
     }
+
+    /**
+     * 清除所有聊天记忆，并释放内存缓存。
+     * 通常用于设置页里的“清空对话记录”按钮。
+     */
+    fun clearAll(context: Context) {
+        memory = null
+        PersistenceManager.clearChatHistory(context)
+    }
 }

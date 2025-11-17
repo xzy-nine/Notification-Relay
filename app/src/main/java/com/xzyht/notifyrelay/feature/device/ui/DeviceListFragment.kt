@@ -96,21 +96,20 @@ fun DeviceListScreen() {
     fun toggleUdpDiscovery(enabled: Boolean) {
         udpDiscoveryEnabled = enabled
         deviceManager.udpDiscoveryEnabled = enabled
-        if (enabled) {
-            deviceManager.startDiscovery()
-        } else {
-            // 只停止UDP相关线程，避免影响TCP服务
-            try {
-                val broadcastField = deviceManager.javaClass.getDeclaredField("broadcastThread")
-                broadcastField.isAccessible = true
-                (broadcastField.get(deviceManager) as? Thread)?.interrupt()
-                broadcastField.set(deviceManager, null)
-                val listenField = deviceManager.javaClass.getDeclaredField("listenThread")
-                listenField.isAccessible = true
-                (listenField.get(deviceManager) as? Thread)?.interrupt()
-                listenField.set(deviceManager, null)
-            } catch (_: Exception) {}
-        }
+        try {
+            val discoveryField = deviceManager.javaClass.getDeclaredField("discoveryManager")
+            discoveryField.isAccessible = true
+            val discovery = discoveryField.get(deviceManager)
+            if (enabled) {
+                val startMethod = discovery.javaClass.getDeclaredMethod("startDiscovery")
+                startMethod.isAccessible = true
+                startMethod.invoke(discovery)
+            } else {
+                val stopMethod = discovery.javaClass.getDeclaredMethod("stopDiscovery")
+                stopMethod.isAccessible = true
+                stopMethod.invoke(discovery)
+            }
+        } catch (_: Exception) {}
     }
     // 新增：未认证设备连接弹窗状态
     var showConnectDialog by remember { mutableStateOf(false) }

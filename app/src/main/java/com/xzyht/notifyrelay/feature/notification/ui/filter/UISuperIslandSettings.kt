@@ -153,6 +153,21 @@ fun UISuperIslandSettings() {
                 if (groups.isEmpty()) {
                     Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
                 } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        top.yukonga.miuix.kmp.basic.Button(
+                            onClick = {
+                                SuperIslandHistory.clearAll(context)
+                            }
+                        ) {
+                            Text("清空超级岛历史")
+                        }
+                    }
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)

@@ -143,6 +143,17 @@ fun UIChatTest(
                 ) {
                     Text("发送")
                 }
+                Button(
+                    onClick = {
+                        ChatMemory.clearAll(context)
+                        chatHistoryState.value = ChatMemory.getChatHistory(context)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(start = 4.dp)
+                ) {
+                    Text("清空对话")
+                }
             }
         }
     }

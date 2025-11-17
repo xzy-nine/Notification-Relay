@@ -94,7 +94,7 @@ object NotificationProcessor {
                 }
 
                 val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
-                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
                 try {
                     NotificationRepository.addRemoteNotification(mappedPkg, appName, title, text, time, remoteUuid, context)
@@ -126,13 +126,19 @@ object NotificationProcessor {
     ): Boolean {
         return try {
             val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
-            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
             val isSuper = (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
             if (!isSuper) return false
 
             val siType = try { json.optString("type", "") } catch (_: Exception) { "" }
             val hasFeature = try { json.has("featureKeyName") && json.has("featureKeyValue") } catch (_: Exception) { false }
+
+            // SI_ACK 属于超岛协议的确认包，仅用于可靠性确认，不应进入通知/聊天管线
+            if (siType == "SI_ACK") {
+                if (BuildConfig.DEBUG) Log.i("超级岛", "收到超级岛ACK: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, hash=${try { json.optString("hash", "") } catch (_: Exception) { "" }}")
+                return true
+            }
 
             if (siType.startsWith("SI_") || hasFeature) {
                 // 新协议：差异合并
@@ -271,7 +277,10 @@ object NotificationProcessor {
                 handleLockedScreenDelayed(context, scope, result)
                 ChatMemory.append(context, "收到: ${result.rawData}")
             } else {
-                com.xzyht.notifyrelay.feature.device.repository.replicateNotification(context, result, null, startMonitoring = true)
+                // 在非协程环境中调用挂起函数，使用 scope 启动协程
+                scope.launch {
+                    com.xzyht.notifyrelay.feature.device.repository.replicateNotification(context, result, null, startMonitoring = true)
+                }
 
                 if (remoteUuid != null) {
                     try {
@@ -290,14 +299,19 @@ object NotificationProcessor {
                 }
             }
         } else {
-            ChatMemory.append(context, "收到: ${result.rawData}")
+            val isSuperIsland = try {
+                !result.mappedPkg.isNullOrEmpty() && result.mappedPkg.startsWith("superisland:")
+            } catch (_: Exception) { false }
+            if (!isSuperIsland) {
+                ChatMemory.append(context, "收到: ${result.rawData}")
+            }
         }
     }
 
     private fun handleLockedScreenDelayed(
         context: Context,
         scope: CoroutineScope,
-        result: com.xzyht.notifyrelay.feature.device.repository.RemoteNotificationFilterResult
+        result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult
     ) {
         if (BuildConfig.DEBUG) Log.d("智能去重", "本机锁屏：延迟复刻，等待监控期后再检查重复再复刻 - 标题:${result.title}")
         try {

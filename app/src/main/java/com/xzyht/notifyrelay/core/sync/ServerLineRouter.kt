@@ -8,6 +8,7 @@ import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.net.Socket
@@ -116,7 +117,7 @@ object ServerLineRouter {
                                 deviceManager.authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
                                 deviceManager.saveAuthedDevicesInternal()
                             }
-                            try { deviceManager.launchUpdateDeviceList() } catch (_: Exception) {}
+                            try { deviceManager.updateDeviceListInternal() } catch (_: Exception) {}
                         } else {
                             // 用户拒绝：记录到本地拒绝名单，避免反复打扰
                             synchronized(deviceManager.rejectedDevicesInternal) {
@@ -205,7 +206,7 @@ object ServerLineRouter {
                     // 3. 用心跳驱动在线状态：刷新 lastSeen + 标记已建立心跳
                     deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
                     deviceManager.heartbeatedDevicesInternal.add(remoteUuid)
-                    deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
+                        deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
 
                     // 4. 若本端尚未给对方发心跳，则自动反向 connectToDevice，确保双向链路
                     if (remoteUuid != deviceManager.uuid && !deviceManager.heartbeatJobsInternal.containsKey(remoteUuid)) {

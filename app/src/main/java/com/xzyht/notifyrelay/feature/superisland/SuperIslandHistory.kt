@@ -78,4 +78,17 @@ object SuperIslandHistory {
         historyFlow.value = emptyList()
         PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, emptyList<SuperIslandHistoryEntry>())
     }
+
+    /**
+     * 清除所有超级岛历史记录，并同步清理相关图片引用计数。
+     * 适合作为“清空超级岛历史”设置入口调用。
+     */
+    fun clearAll(context: Context) {
+        ensureLoaded(context)
+        historyFlow.value = emptyList()
+        PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, emptyList<SuperIslandHistoryEntry>())
+        try {
+            SuperIslandImageStore.prune(context, maxEntries = 0, maxAgeDays = 0)
+        } catch (_: Exception) {}
+    }
 }
