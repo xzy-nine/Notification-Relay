@@ -165,26 +165,11 @@ object MessageSender {
                     return
                 }
 
-                withTimeout(10000L) { // 10秒超时
-                    val socket = java.net.Socket()
-                    try {
-                        socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
-                        val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                        val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                        // 不在消息中包含 sharedSecret，接收端从认证表中查找
-                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
-                        writer.write(payload + "\n")
-                        writer.flush()
-                        success = true
-                        // 发送成功后记录到已发送缓存，避免短时间重复发送
-                        try {
-                            sentKeys[task.dedupKey] = System.currentTimeMillis()
-                        } catch (_: Exception) {}
-                        if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
-                    } finally {
-                        socket.close()
-                    }
-                }
+                // 使用统一发送器
+                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                success = true
+                try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
+                if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
 
                 if (success) return
 
@@ -216,22 +201,9 @@ object MessageSender {
                     return
                 }
 
-                withTimeout(10000L) { // 10秒超时
-                    val socket = java.net.Socket()
-                    try {
-                        socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
-                        val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                        val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                        // 不在消息中包含 sharedSecret，接收端从认证表中查找
-                        val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
-                        writer.write(payload + "\n")
-                        writer.flush()
-                        success = true
-                        if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
-                    } finally {
-                        socket.close()
-                    }
-                }
+                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                success = true
+                if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
                 if (success) return
 
@@ -260,21 +232,8 @@ object MessageSender {
                 return
             }
 
-            withTimeout(10000L) { // 10秒超时
-                val socket = java.net.Socket()
-                try {
-                    socket.connect(java.net.InetSocketAddress(task.device.ip, task.device.port), 5000)
-                    val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                    val encryptedData = task.deviceManager.encryptData(task.data, auth.sharedSecret)
-                    // 不在消息中包含 sharedSecret，接收端从认证表中查找
-                    val payload = "DATA_JSON:${task.deviceManager.uuid}:${task.deviceManager.localPublicKey}:${encryptedData}"
-                    writer.write(payload + "\n")
-                    writer.flush()
-                    if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
-                } finally {
-                    socket.close()
-                }
-            }
+            com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+            if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")
         }

@@ -759,6 +759,18 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         return null
     }
 
+    /**
+     * 公开解析设备信息：优先使用缓存/认证信息，缺失IP时使用提供的回退IP。
+     */
+    fun resolveDeviceInfo(uuid: String, fallbackIp: String, fallbackPort: Int = 23333): DeviceInfo {
+        val cached = getDeviceInfo(uuid)
+        if (cached != null && cached.ip.isNotEmpty() && cached.ip != "0.0.0.0") return cached
+        val auth = synchronized(authenticatedDevices) { authenticatedDevices[uuid] }
+        val name = auth?.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
+        val port = cached?.port ?: auth?.lastPort ?: fallbackPort
+        return DeviceInfo(uuid, name, fallbackIp, port)
+    }
+
     // 网络类型枚举
     enum class NetworkType {
         REGULAR,    // 普通网络
@@ -988,14 +1000,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         return EncryptionManager.encrypt(input, key)
     }
 
-    // 使用加密管理器进行数据解密
-    private fun decryptData(input: String, key: String): String {
+    // 使用加密管理器进行数据解密（对 ProtocolRouter 开放）
+    internal fun decryptData(input: String, key: String): String {
         return EncryptionManager.decrypt(input, key)
     }
 
     // 发送通知数据（加密）
     fun sendNotificationData(device: DeviceInfo, data: String) {
-        // data 必须为 json 字符串，包含 packageName, title, text, time
         coroutineScope.launch {
             try {
                 val auth = authenticatedDevices[device.uuid]
@@ -1003,18 +1014,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
-                val socket = Socket(device.ip, device.port)
-                val writer = OutputStreamWriter(socket.getOutputStream())
-                // 加密数据
-                val encryptedData = encryptData(data, auth.sharedSecret)
-                // 标记 json -- 不再在消息中明文携带 sharedSecret，接收端从认证表中查找并使用
-                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${encryptedData}"
-                writer.write(payload + "\n")
-                writer.flush()
-                writer.close()
-                socket.close()
+                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (BuildConfig.DEBUG) Log.e("死神-NotifyRelay", "发送通知数据失败", e)
             }
         }
     }
@@ -1523,98 +1525,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                     }
                                     reader.close()
                                     client.close()
-                                } else if (line.startsWith("DATA:") || line.startsWith("DATA_JSON:")) {
-
-                                    // 新协议：格式为 "DATA_JSON:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
-                                    val isJson = line.startsWith("DATA_JSON:")
-                                    val parts = line.split(":", limit = 4)
-                                    if (parts.size >= 4) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val payload = parts[3]
-                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
-                                        if (auth != null && auth.isAccepted) {
-                                            // 可选：校验 remotePubKey 与存储的公钥是否一致
-                                            // if (auth.publicKey != remotePubKey) { /* log mismatch */ }
-                                            handleNotificationData(payload, auth.sharedSecret, remoteUuid)
-                                        } else {
-                                            if (auth == null) {
-                                                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败：无此uuid(${remoteUuid})的认证记录")
-                                            } else {
-                                                if (BuildConfig.DEBUG) android.util.Log.d("秩序之光 死神-NotifyRelay", "认证失败：device not accepted, uuid=${remoteUuid}")
-                                            }
-                                        }
-                                    }
-                                    reader.close()
-                                    client.close()
-                                } else if (line.startsWith("DATA_ICON_REQUEST:")) {
-                                    // 新协议：格式为 "DATA_ICON_REQUEST:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
-                                    val parts = line.split(":", limit = 4)
-                                    if (parts.size >= 4) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val payload = parts[3]
-                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
-                                        if (auth != null && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
-                                            if (decrypted != null) {
-                                                val sourceDevice = getDeviceInfo(remoteUuid) ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress, 23333)
-                                                com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconRequest(decrypted, this@DeviceConnectionManager, sourceDevice, context)
-                                            }
-                                        }
-                                    }
-                                    reader.close()
-                                    client.close()
-                                } else if (line.startsWith("DATA_ICON_RESPONSE:")) {
-                                    // 新协议：格式为 "DATA_ICON_RESPONSE:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
-                                    val parts = line.split(":", limit = 4)
-                                    if (parts.size >= 4) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val payload = parts[3]
-                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
-                                        if (auth != null && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
-                                            if (decrypted != null) {
-                                                com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconResponse(decrypted, context)
-                                            }
-                                        }
-                                    }
-                                    reader.close()
-                                    client.close()
-                                } else if (line.startsWith("DATA_APP_LIST_REQUEST:")) {
-                                    // 新协议：应用列表请求，格式 "DATA_APP_LIST_REQUEST:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
-                                    val parts = line.split(":", limit = 4)
-                                    if (parts.size >= 4) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val payload = parts[3]
-                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
-                                        if (auth != null && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
-                                            if (decrypted != null) {
-                                                val sourceDevice = getDeviceInfo(remoteUuid) ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress, 23333)
-                                                com.xzyht.notifyrelay.core.sync.AppListSyncManager.handleAppListRequest(decrypted, this@DeviceConnectionManager, sourceDevice, context)
-                                            }
-                                        }
-                                    }
-                                    reader.close()
-                                    client.close()
-                                } else if (line.startsWith("DATA_APP_LIST_RESPONSE:")) {
-                                    // 新协议：应用列表响应，格式 "DATA_APP_LIST_RESPONSE:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
-                                    val parts = line.split(":", limit = 4)
-                                    if (parts.size >= 4) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val payload = parts[3]
-                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
-                                        if (auth != null && auth.isAccepted) {
-                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
-                                            if (decrypted != null) {
-                                                com.xzyht.notifyrelay.core.sync.AppListSyncManager.handleAppListResponse(decrypted, context)
-                                            }
-                                        }
-                                    }
+                                } else if (line.startsWith("DATA")) {
+                                    // 统一通过 ProtocolRouter 处理所有 DATA_* 通道
+                                    try {
+                                        val clientIp = client.inetAddress?.hostAddress ?: "0.0.0.0"
+                                        val handled = com.xzyht.notifyrelay.core.sync.ProtocolRouter.handleEncryptedDataLine(line, clientIp, this@DeviceConnectionManager, context)
+                                        // handled 恒为 true（DATA 开头均视为本路由处理）
+                                    } catch (_: Exception) {}
                                     reader.close()
                                     client.close()
                                 } else {
@@ -1867,19 +1784,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 put("time", System.currentTimeMillis())
             }
 
-            // 通过TCP发回对端（与数据通道一致）
-            val socket = java.net.Socket()
-            try {
-                socket.connect(java.net.InetSocketAddress(ip, port), 3000)
-                val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                val encrypted = encryptData(ackObj.toString(), sharedSecret)
-                // 不在消息中包含 sharedSecret，接收端从认证表中查找
-                val payload = "DATA_JSON:${uuid}:${localPublicKey}:${encrypted}"
-                writer.write(payload + "\n")
-                writer.flush()
-            } finally {
-                try { socket.close() } catch (_: Exception) {}
-            }
+            // 通过统一加密发送器发回对端
+            val deviceInfo = DeviceInfo(remoteUuid, DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid), ip, port)
+            com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
         } catch (_: Exception) {
         }
     }

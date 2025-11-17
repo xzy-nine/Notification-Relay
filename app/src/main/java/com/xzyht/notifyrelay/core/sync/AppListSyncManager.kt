@@ -42,53 +42,13 @@ object AppListSyncManager {
         targetDevice: DeviceInfo,
         scope: String = "user"
     ) {
-        // context 暂未直接使用，仅保留以便未来扩展
         val _ = context.hashCode()
-
         val req = JSONObject().apply {
             put("type", "APP_LIST_REQUEST")
             put("scope", scope)
             put("time", System.currentTimeMillis())
         }.toString()
-
-        sendAppListRequest(deviceManager, targetDevice, req)
-    }
-
-    private fun sendAppListRequest(
-        deviceManager: DeviceConnectionManager,
-        device: DeviceInfo,
-        requestData: String
-    ) {
-        try {
-            val auth = deviceManager.authenticatedDevices[device.uuid]
-            if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过应用列表请求：${device.displayName}")
-                return
-            }
-
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    withTimeout(REQ_TIMEOUT) {
-                        val socket = java.net.Socket()
-                        try {
-                            socket.connect(java.net.InetSocketAddress(device.ip, device.port), 5000)
-                            val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                            val encrypted = deviceManager.encryptData(requestData, auth.sharedSecret)
-                            val payload = "DATA_APP_LIST_REQUEST:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encrypted}"
-                            writer.write(payload + "\n")
-                            writer.flush()
-                            if (BuildConfig.DEBUG) Log.d(TAG, "应用列表请求已发送 -> ${device.displayName}")
-                        } finally {
-                            try { socket.close() } catch (_: Exception) {}
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "应用列表请求发送失败：${device.displayName}", e)
-                }
-            }
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送应用列表请求异常", e)
-        }
+        ProtocolSender.sendEncrypted(deviceManager, targetDevice, "DATA_APP_LIST_REQUEST", req, REQ_TIMEOUT)
     }
 
     /**
@@ -144,34 +104,7 @@ object AppListSyncManager {
         target: DeviceInfo,
         responseData: String
     ) {
-        try {
-            val auth = deviceManager.authenticatedDevices[target.uuid]
-            if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过应用列表响应：${target.displayName}")
-                return
-            }
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    withTimeout(REQ_TIMEOUT) {
-                        val socket = java.net.Socket()
-                        try {
-                            socket.connect(java.net.InetSocketAddress(target.ip, target.port), 5000)
-                            val writer = java.io.OutputStreamWriter(socket.getOutputStream())
-                            val encrypted = deviceManager.encryptData(responseData, auth.sharedSecret)
-                            val payload = "DATA_APP_LIST_RESPONSE:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encrypted}"
-                            writer.write(payload + "\n")
-                            writer.flush()
-                        } finally {
-                            try { socket.close() } catch (_: Exception) {}
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "应用列表响应发送失败：${target.displayName}", e)
-                }
-            }
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送应用列表响应异常", e)
-        }
+        ProtocolSender.sendEncrypted(deviceManager, target, "DATA_APP_LIST_RESPONSE", responseData, REQ_TIMEOUT)
     }
 
     /**
