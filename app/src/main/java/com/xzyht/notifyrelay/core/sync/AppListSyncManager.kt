@@ -42,7 +42,7 @@ object AppListSyncManager {
         targetDevice: DeviceInfo,
         scope: String = "user"
     ) {
-        val _ = context.hashCode()
+        val contextHash = context.hashCode()
         val req = JSONObject().apply {
             put("type", "APP_LIST_REQUEST")
             put("scope", scope)
@@ -113,7 +113,7 @@ object AppListSyncManager {
      */
     fun handleAppListResponse(responseData: String, context: Context) {
         try {
-            val _ = context.hashCode()
+            val contextHash = context.hashCode()
             val json = JSONObject(responseData)
             if (json.optString("type") != "APP_LIST_RESPONSE") return
             val total = json.optInt("total", -1)
