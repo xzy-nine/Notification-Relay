@@ -181,45 +181,67 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
-        // 在本机本地过滤前，尝试读取超级岛信息并单独转发（即使后续本地过滤会拦截该通知也要先获取超岛数据）
-        try {
-            val superData = com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
+        // 读取超级岛设置开关，决定是否按超级岛专用逻辑处理
+        val superIslandEnabled = try {
+            com.xzyht.notifyrelay.common.data.StorageManager.getBoolean(applicationContext, "superisland_enabled", true)
+        } catch (_: Exception) { true }
+
+        // 在本机本地过滤前，尝试读取超级岛信息并单独转发
+        // 当开关开启且检测到超级岛数据时，只发送超级岛分支，不再走普通通知转发
+        val superIslandHandledAndStop: Boolean = if (superIslandEnabled) {
+            try {
+                val superData = com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
                 if (superData != null) {
-                if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
-                try {
-                    val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
-                    // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
-                    val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
-                    val sbnKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
-                    // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判
-                    val oldId = try { superIslandFeatureByKey[sbnKey]?.second } catch (_: Exception) { null }
-                    val computedId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
-                        superPkg,
-                        superData.paramV2Raw,
-                        superData.title,
-                        superData.text
-                    )
-                    val featureId = oldId ?: computedId
-                    // 初次出现时登记；后续保持不变
-                    try { if (oldId == null) superIslandFeatureByKey[sbnKey] = superPkg to featureId } catch (_: Exception) {}
-                    com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
-                        applicationContext,
-                        superPkg,
-                        superData.appName ?: "超级岛",
-                        superData.title,
-                        superData.text,
-                        sbn.postTime,
-                        superData.paramV2Raw,
-                        // 尝试把 simple pic map 提取为 string map（仅支持 string/url 类值）
-                        (superData.picMap ?: emptyMap()),
-                        deviceManager,
-                        featureIdOverride = featureId
-                    )
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 转发超级岛数据失败: ${e.message}")
+                    if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
+                    try {
+                        val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+                        // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
+                        val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
+                        val sbnKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+                        // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判
+                        val oldId = try { superIslandFeatureByKey[sbnKey]?.second } catch (_: Exception) { null }
+                        val computedId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+                            superPkg,
+                            superData.paramV2Raw,
+                            superData.title,
+                            superData.text
+                        )
+                        val featureId = oldId ?: computedId
+                        // 初次出现时登记；后续保持不变
+                        try { if (oldId == null) superIslandFeatureByKey[sbnKey] = superPkg to featureId } catch (_: Exception) {}
+                        com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
+                            applicationContext,
+                            superPkg,
+                            superData.appName ?: "超级岛",
+                            superData.title,
+                            superData.text,
+                            sbn.postTime,
+                            superData.paramV2Raw,
+                            // 尝试把 simple pic map 提取为 string map（仅支持 string/url 类值）
+                            (superData.picMap ?: emptyMap()),
+                            deviceManager,
+                            featureIdOverride = featureId
+                        )
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 转发超级岛数据失败: ${e.message}")
+                    }
+                    // 已按超级岛分支处理，本条不再继续普通转发
+                    true
+                } else {
+                    false
                 }
+            } catch (_: Exception) {
+                false
             }
-        } catch (_: Exception) {}
+        } else {
+            false
+        }
+
+        if (superIslandHandledAndStop) {
+            // 超级岛分支已完成，只保留本机历史，不再转发普通通知
+            logSbnDetail("超级岛: 已按超级岛分支处理，跳过普通转发", sbn)
+            return
+        }
 
         if (!BackendLocalFilter.shouldForward(sbn, applicationContext, checkProcessed)) {
             logSbnDetail("法鸡-黑影 被过滤", sbn)
