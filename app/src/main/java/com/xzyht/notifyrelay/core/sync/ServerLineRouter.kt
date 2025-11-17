@@ -37,11 +37,15 @@ object ServerLineRouter {
         deviceManager: DeviceConnectionManager,
         context: Context
     ) {
-        // 按首行前缀分发：握手 / 心跳 / DATA 通道 / 其它（目前用于手动发现）
+        // 按首行前缀分发：握手 / 心跳 / DATA 加密通道 / 其它（目前主要用于手动发现）
         when {
+            // HANDSHAKE：连接建立时的认证握手，决定是否建立「受信任设备」关系
             line.startsWith("HANDSHAKE:") -> handleHandshake(line, client, reader, deviceManager)
+            // HEARTBEAT：已认证设备的心跳包，用于维持在线状态并触发反向重连
             line.startsWith("HEARTBEAT:") -> handleHeartbeat(line, client, reader, deviceManager)
+            // DATA*：加密业务通道（通知 / 图标 / 应用列表等），解密与路由交给 ProtocolRouter
             line.startsWith("DATA") -> handleData(line, client, reader, deviceManager, context)
+            // 其他：当前仅用于 NOTIFYRELAY_DISCOVER_MANUAL 等辅助协议（如手动发现）
             else -> handleOther(line, client, reader, deviceManager)
         }
     }
@@ -157,6 +161,13 @@ object ServerLineRouter {
         }
     }
 
+    /**
+     * 处理心跳请求：
+     * - 仅接受已在认证表中的设备心跳
+     * - 使用心跳中的连接 IP 刷新设备缓存与认证信息的 lastIp
+     * - 更新 lastSeen / heartbeatedDevices，用于在线状态判断
+     * - 如果本机尚未向对方建立心跳，则自动发起反向 connectToDevice，形成双向心跳链路
+     */
     private fun handleHeartbeat(
         line: String,
         client: Socket,
@@ -219,6 +230,11 @@ object ServerLineRouter {
         }
     }
 
+    /**
+     * 处理 DATA* 加密通道：
+     * - 这里不做具体业务解析，只负责把首行和 client IP 交给 ProtocolRouter
+     * - ProtocolRouter 再统一完成解密和按 DATA_* 头进行的业务路由
+     */
     private fun handleData(
         line: String,
         client: Socket,
@@ -237,6 +253,12 @@ object ServerLineRouter {
         }
     }
 
+    /**
+     * 处理其它首行协议：
+     * - 当前用于 NOTIFYRELAY_DISCOVER_MANUAL（加密手动发现包）
+     * - 尝试用每个已认证设备的 sharedSecret 解密首行
+     * - 匹配成功后更新 deviceInfoCache / authenticatedDevices 的 IP / 端口等信息
+     */
     private fun handleOther(
         line: String,
         client: Socket,

@@ -58,31 +58,45 @@ object ProtocolRouter {
         // 路由
         return try {
             when (header) {
-                // 历史兼容：DATA 与 DATA_JSON 均视为通知 JSON
+                // DATA / DATA_JSON：远程通知主通道（含超级岛、去重与复刻等完整处理），入口统一交给 NotificationProcessor
                 "DATA", "DATA_JSON" -> {
-                    deviceManager.handleNotificationData(decrypted, auth.sharedSecret, remoteUuid)
+                    com.xzyht.notifyrelay.core.notification.NotificationProcessor.process(
+                        context,
+                        deviceManager,
+                        deviceManager.coroutineScopeInternal,
+                        com.xzyht.notifyrelay.core.notification.NotificationProcessor.NotificationInput(
+                            rawData = decrypted,
+                            sharedSecret = auth.sharedSecret,
+                            remoteUuid = remoteUuid
+                        ),
+                        deviceManager.notificationDataReceivedCallbacksInternal
+                    )
                     true
                 }
+                // DATA_ICON_REQUEST：对方向本机请求应用图标，本机查找后会通过 DATA_ICON_RESPONSE 回传
                 "DATA_ICON_REQUEST" -> {
                     val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
                     IconSyncManager.handleIconRequest(decrypted, deviceManager, source, context)
                     true
                 }
+                // DATA_ICON_RESPONSE：图标请求的响应，更新本机图标缓存供通知复刻使用
                 "DATA_ICON_RESPONSE" -> {
                     IconSyncManager.handleIconResponse(decrypted, context)
                     true
                 }
+                // DATA_APP_LIST_REQUEST：对方请求本机应用列表，本机查询后通过 DATA_APP_LIST_RESPONSE 返回
                 "DATA_APP_LIST_REQUEST" -> {
                     val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
                     AppListSyncManager.handleAppListRequest(decrypted, deviceManager, source, context)
                     true
                 }
+                // DATA_APP_LIST_RESPONSE：应用列表请求的响应，用于更新本机缓存/状态
                 "DATA_APP_LIST_RESPONSE" -> {
                     AppListSyncManager.handleAppListResponse(decrypted, context)
                     true
                 }
                 else -> {
-                    // 未知 DATA_* 报文头，忽略
+                    // 其他未识别的 DATA_* 报文：当前版本不支持，直接忽略（方便后向兼容）
                     if (BuildConfig.DEBUG) Log.d(TAG, "未知DATA通道: $header")
                     true
                 }
