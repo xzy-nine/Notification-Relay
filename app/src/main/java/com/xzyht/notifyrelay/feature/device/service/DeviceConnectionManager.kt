@@ -1019,6 +1019,15 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         }
     }
 
+    /**
+     * 公开API：请求远端设备的“用户应用列表”。
+     */
+    fun requestRemoteAppList(device: DeviceInfo, scope: String = "user") {
+        try {
+            com.xzyht.notifyrelay.core.sync.AppListSyncManager.requestAppListFromDevice(context, this, device, scope)
+        } catch (_: Exception) {}
+    }
+
     // 通知处理队列，避免大量并发通知导致的处理阻塞
     private val notificationProcessingQueue = kotlinx.coroutines.channels.Channel<NotificationData>(kotlinx.coroutines.channels.Channel.UNLIMITED)
     private val notificationProcessingJob: kotlinx.coroutines.Job? = null
@@ -1568,6 +1577,41 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                             val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
                                             if (decrypted != null) {
                                                 com.xzyht.notifyrelay.core.sync.IconSyncManager.handleIconResponse(decrypted, context)
+                                            }
+                                        }
+                                    }
+                                    reader.close()
+                                    client.close()
+                                } else if (line.startsWith("DATA_APP_LIST_REQUEST:")) {
+                                    // 新协议：应用列表请求，格式 "DATA_APP_LIST_REQUEST:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
+                                    val parts = line.split(":", limit = 4)
+                                    if (parts.size >= 4) {
+                                        val remoteUuid = parts[1]
+                                        val remotePubKey = parts[2]
+                                        val payload = parts[3]
+                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+                                        if (auth != null && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
+                                            if (decrypted != null) {
+                                                val sourceDevice = getDeviceInfo(remoteUuid) ?: DeviceInfo(remoteUuid, "未知设备", client.inetAddress.hostAddress, 23333)
+                                                com.xzyht.notifyrelay.core.sync.AppListSyncManager.handleAppListRequest(decrypted, this@DeviceConnectionManager, sourceDevice, context)
+                                            }
+                                        }
+                                    }
+                                    reader.close()
+                                    client.close()
+                                } else if (line.startsWith("DATA_APP_LIST_RESPONSE:")) {
+                                    // 新协议：应用列表响应，格式 "DATA_APP_LIST_RESPONSE:<remoteUuid>:<remotePubKey>:<encryptedPayload>"
+                                    val parts = line.split(":", limit = 4)
+                                    if (parts.size >= 4) {
+                                        val remoteUuid = parts[1]
+                                        val remotePubKey = parts[2]
+                                        val payload = parts[3]
+                                        val auth = synchronized(authenticatedDevices) { authenticatedDevices[remoteUuid] }
+                                        if (auth != null && auth.isAccepted) {
+                                            val decrypted = try { decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
+                                            if (decrypted != null) {
+                                                com.xzyht.notifyrelay.core.sync.AppListSyncManager.handleAppListResponse(decrypted, context)
                                             }
                                         }
                                     }

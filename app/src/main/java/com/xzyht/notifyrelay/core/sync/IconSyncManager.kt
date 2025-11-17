@@ -60,6 +60,40 @@ object IconSyncManager {
         val now = System.currentTimeMillis()
         val lastRequest = pendingRequests[packageName]
         if (lastRequest != null && (now - lastRequest) < ICON_REQUEST_TIMEOUT) {
+    /**
+     * 批量请求多个包名的图标。
+     * 若需要，请调用方自行控制数量与频率以避免超大负载。
+     */
+    fun requestIconsBatch(
+        context: Context,
+        packageNames: List<String>,
+        deviceManager: DeviceConnectionManager,
+        sourceDevice: DeviceInfo
+    ) {
+        if (packageNames.isEmpty()) return
+        // 过滤掉已存在的与近期请求过的
+        val now = System.currentTimeMillis()
+        val need = packageNames.filter { pkg ->
+            val exist = AppRepository.getExternalAppIcon(pkg) != null
+            val last = pendingRequests[pkg]
+            val inFlight = last != null && (now - last) < ICON_REQUEST_TIMEOUT
+            !exist && !inFlight
+        }
+        if (need.isEmpty()) return
+
+        // 标记为正在请求
+        need.forEach { pendingRequests[it] = now }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                requestIconsFromDevice(context, need, deviceManager, sourceDevice)
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) Log.e(TAG, "批量请求图标失败：$need", e)
+            } finally {
+                need.forEach { pendingRequests.remove(it) }
+            }
+        }
+    }
             if (BuildConfig.DEBUG) Log.d(TAG, "图标请求进行中，跳过：$packageName")
             return
         }
