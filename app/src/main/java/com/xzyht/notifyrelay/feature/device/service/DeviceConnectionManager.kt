@@ -19,6 +19,9 @@ import android.net.NetworkCapabilities
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import com.xzyht.notifyrelay.core.util.EncryptionManager
+import com.xzyht.notifyrelay.core.sync.DiscoveryBroadcaster
+import com.xzyht.notifyrelay.core.sync.HandshakeSender
+import com.xzyht.notifyrelay.core.sync.HeartbeatSender
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
@@ -315,7 +318,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     internal val localPublicKey: String
         get() = field
     private val localPrivateKey: String
-    private val listenPort: Int = 23333
+    internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private var serverSocket: ServerSocket? = null
     private val deviceLastSeen = mutableMapOf<String, Long>()
@@ -507,27 +510,16 @@ class DeviceConnectionManager(private val context: android.content.Context) {
              
             if (broadcastThread == null) {
                 broadcastThread = Thread {
-                    var socket: java.net.DatagramSocket? = null
                     try {
-                        socket = java.net.DatagramSocket()
                         val displayName = encodeDisplayNameForTransport(getLocalDisplayName())
-                        val group = java.net.InetAddress.getByName("255.255.255.255")
                         while (udpDiscoveryEnabled) {
-                            val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
-                            val packet = java.net.DatagramPacket(buf, buf.size, group, 23334)
-                            socket.send(packet)
+                            DiscoveryBroadcaster.sendBroadcast(this@DeviceConnectionManager, displayName, "255.255.255.255")
                             Thread.sleep(2000)
                         }
                         if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP广播线程已关闭")
                     } catch (e: Exception) {
-                        if (socket != null && socket.isClosed) {
-                            if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP广播线程正常关闭")
-                        } else {
-                            if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "UDP广播异常: ${e.message}")
-                            e.printStackTrace()
-                        }
-                    } finally {
-                        try { socket?.close() } catch (_: Exception) {}
+                        if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "UDP广播异常: ${e.message}")
+                        e.printStackTrace()
                     }
                 }
                 broadcastThread?.isDaemon = true
@@ -838,13 +830,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
         for (retry in 0 until maxRetries) {
             try {
-                val socket = Socket()
-                socket.connect(java.net.InetSocketAddress(device.ip, device.port), 3000) // 3秒超时
-                val writer = OutputStreamWriter(socket.getOutputStream())
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-                writer.write("HANDSHAKE:${uuid}:${localPublicKey}\n")
-                writer.flush()
-                val resp = reader.readLine()
+                val resp = HandshakeSender.sendHandshake(this@DeviceConnectionManager, device, 3000)
                 if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "connectToDevice: handshake resp=$resp")
 
                 if (resp != null && resp.startsWith("ACCEPT:")) {
@@ -883,9 +869,6 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                                 if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "本机getDeviceInfo返回null，无法反向connectToDevice")
                             }
                         }
-                        writer.close()
-                        reader.close()
-                        socket.close()
                         return Pair(true, null)
                     } else {
                         if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "认证响应格式错误: $resp")
@@ -928,14 +911,9 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     val info = synchronized(deviceInfoCache) { deviceInfoCache[uuid] }
                     val targetIp = info?.ip?.takeIf { it.isNotEmpty() && it != "0.0.0.0" } ?: ip
                     val targetPort = info?.port ?: port
-                    val socket = Socket(targetIp, targetPort)
-                    val writer = OutputStreamWriter(socket.getOutputStream())
-                    writer.write("HEARTBEAT:${this@DeviceConnectionManager.uuid}:${localPublicKey}\n")
-                    writer.flush()
-                    writer.close()
-                    socket.close()
+                    val target = DeviceInfo(uuid, "", targetIp, targetPort)
+                    success = HeartbeatSender.sendHeartbeat(this@DeviceConnectionManager, target)
                     // 不再本地刷新 deviceLastSeen，只有收到对方心跳包时才刷新
-                    success = true
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "心跳发送失败: $uuid, ${e.message}")
                 }
@@ -1646,14 +1624,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             }
 
             // 然后扫描IP范围，发送UDP单播发现包
+            val encodedName = encodeDisplayNameForTransport(localDisplayName)
             for (ip in ips) {
                 try {
-                    val socket = java.net.DatagramSocket()
-                    val displayName = encodeDisplayNameForTransport(localDisplayName)
-                    val buf = ("NOTIFYRELAY_DISCOVER:${uuid}:${displayName}:${listenPort}").toByteArray()
-                    val packet = java.net.DatagramPacket(buf, buf.size, java.net.InetAddress.getByName(ip), 23334)
-                    socket.send(packet)
-                    socket.close()
+                    DiscoveryBroadcaster.sendBroadcast(this@DeviceConnectionManager, encodedName, ip)
                     delay(10) // 每10ms发送一个，避免过快
                 } catch (_: Exception) {
                     // 忽略发送失败
