@@ -19,6 +19,7 @@ import android.net.NetworkCapabilities
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import com.xzyht.notifyrelay.core.util.EncryptionManager
+import com.xzyht.notifyrelay.core.sync.ServerLineRouter
 import com.xzyht.notifyrelay.core.sync.DiscoveryBroadcaster
 import com.xzyht.notifyrelay.core.sync.HandshakeSender
 import com.xzyht.notifyrelay.core.sync.HeartbeatSender
@@ -320,6 +321,37 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val localPrivateKey: String
     internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
+
+    // === 以下为提供给 ServerLineRouter 等内部组件使用的访问器（保持字段本身 private） ===
+    internal val deviceInfoCacheInternal: MutableMap<String, DeviceInfo>
+        get() = deviceInfoCache
+
+    internal val deviceLastSeenInternal: MutableMap<String, Long>
+        get() = deviceLastSeen
+
+    internal val rejectedDevicesInternal: MutableSet<String>
+        get() = rejectedDevices
+
+    internal val coroutineScopeInternal: CoroutineScope
+        get() = coroutineScope
+
+    internal val heartbeatedDevicesInternal: MutableSet<String>
+        get() = heartbeatedDevices
+
+    internal val heartbeatJobsInternal: MutableMap<String, kotlinx.coroutines.Job>
+        get() = heartbeatJobs
+
+    internal fun updateDeviceListInternal() = updateDeviceList()
+
+    internal fun saveAuthedDevicesInternal() = saveAuthedDevices()
+
+    internal fun decryptDataInternal(input: String, key: String): String = decryptData(input, key)
+
+    internal fun getDeviceInfoInternal(uuid: String): DeviceInfo? = getDeviceInfo(uuid)
+
+    internal fun launchUpdateDeviceList() {
+        try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
+    }
     private var serverSocket: ServerSocket? = null
     private val deviceLastSeen = mutableMapOf<String, Long>()
     // 广播发现线程
@@ -1371,190 +1403,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             val reader = BufferedReader(InputStreamReader(client.getInputStream()))
                             val line = reader.readLine()
                             if (line != null) {
-                                if (line.startsWith("HANDSHAKE:")) {
-                                    val parts = line.split(":")
-                                    if (parts.size >= 3) {
-                                        val remoteUuid = parts[1]
-                                        val remotePubKey = parts[2]
-                                        val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                        // 同步更新 deviceInfoCache，保证ip为最新
-                                        synchronized(deviceInfoCache) {
-                                            val old = deviceInfoCache[remoteUuid]
-                                            val displayName = old?.displayName ?: "未知设备"
-                                            // 只更新IP，不更新端口，端口保持原有或默认
-                                            deviceInfoCache[remoteUuid] = DeviceInfo(
-                                                remoteUuid,
-                                                displayName,
-                                                ip,
-                                                old?.port ?: 23333
-                                            )
-                                        }
-                                        // 只更新认证表中的IP，不更新端口
-                                        synchronized(authenticatedDevices) {
-                                            val auth = authenticatedDevices[remoteUuid]
-                                            if (auth != null) {
-                                                authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
-                                                saveAuthedDevices()
-                                            }
-                                        }
-                                        val remoteDevice = deviceInfoCache[remoteUuid]!!
-                                        // 新增：已认证设备自动ACCEPT
-                                        val alreadyAuthed = synchronized(authenticatedDevices) {
-                                            authenticatedDevices[remoteUuid]?.isAccepted == true
-                                        }
-                                        if (alreadyAuthed) {
-                                            coroutineScope.launch {
-                                                val writer = OutputStreamWriter(client.getOutputStream())
-                                                writer.write("ACCEPT:${uuid}:${localPublicKey}\n")
-                                                writer.flush()
-                                                writer.close()
-                                                reader.close()
-                                                client.close()
-                                            }
-                                        } else if (onHandshakeRequest != null) {
-                                            onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
-                                                if (accepted) {
-                                                    val sharedSecret = EncryptionManager.generateSharedSecret(localPublicKey, remotePubKey)
-                                                    synchronized(authenticatedDevices) {
-                                                        authenticatedDevices.remove(remoteUuid)
-                                                        authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
-                                                        saveAuthedDevices()
-                                                    }
-                                                    // 被动接受握手后，立即更新设备列表，确保 StateFlow 反映已认证状态
-                                                    try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
-                                                } else {
-                                                    synchronized(rejectedDevices) {
-                                                        rejectedDevices.add(remoteUuid)
-                                                    }
-                                                }
-                                                coroutineScope.launch {
-                                                    val writer = OutputStreamWriter(client.getOutputStream())
-                                                    if (accepted) {
-                                                        writer.write("ACCEPT:${uuid}:${localPublicKey}\n")
-                                                    } else {
-                                                        writer.write("REJECT:${uuid}\n")
-                                                    }
-                                                    writer.flush()
-                                                    writer.close()
-                                                    reader.close()
-                                                    client.close()
-                                                }
-                                            }
-                                        } else {
-                                            val writer = OutputStreamWriter(client.getOutputStream())
-                                            writer.write("REJECT:${uuid}\n")
-                                            writer.flush()
-                                            writer.close()
-                                            reader.close()
-                                            client.close()
-                                        }
-                                    } else {
-                                        val writer = OutputStreamWriter(client.getOutputStream())
-                                        writer.write("REJECT:${uuid}\n")
-                                        writer.flush()
-                                        writer.close()
-                                        reader.close()
-                                        client.close()
-                                    }
-                                } else if (line.startsWith("HEARTBEAT:")) {
-                                    val parts = line.split(":")
-                                    if (parts.size >= 3) {
-                                        val remoteUuid = parts[1]
-                                        val isAuthed = synchronized(authenticatedDevices) { authenticatedDevices.containsKey(remoteUuid) }
-                                        if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${authenticatedDevices.keys}")
-                                        if (isAuthed) {
-                                            val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                            // 同步更新 deviceInfoCache，保证ip为最新
-                                            synchronized(deviceInfoCache) {
-                                                val old = deviceInfoCache[remoteUuid]
-                                                val displayName = old?.displayName ?: "未知设备"
-                                                // 只更新IP，不更新端口
-                                                deviceInfoCache[remoteUuid] = DeviceInfo(
-                                                    remoteUuid,
-                                                    displayName,
-                                                    ip,
-                                                    old?.port ?: 23333
-                                                )
-                                            }
-                                            // 只更新认证表中的IP，不更新端口
-                                            synchronized(authenticatedDevices) {
-                                                val auth = authenticatedDevices[remoteUuid]
-                                                if (auth != null) {
-                                                    authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
-                                                    saveAuthedDevices()
-                                                }
-                                            }
-                                        deviceLastSeen[remoteUuid] = System.currentTimeMillis()
-                                        heartbeatedDevices.add(remoteUuid) // 标记已建立心跳
-                                        coroutineScope.launch { updateDeviceList() }
-                                    // 新增：收到对方心跳时，若本地发送心跳给对方，则自动connectToDevice对方，确保双向链路
-                                    if (remoteUuid != uuid && !heartbeatJobs.containsKey(remoteUuid)) {
-                                        val info = getDeviceInfo(remoteUuid)
-                                        if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
-                                            if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "收到HEARTBEAT后自动反向connectToDevice: $info")
-                                            connectToDevice(info)
-                                        }
-                                    }
-                                        } else {
-                                            if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "收到HEARTBEAT但未认证: remoteUuid=$remoteUuid, authedKeys=${authenticatedDevices.keys}")
-                                        }
-                                    } else {
-                                        if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "收到HEARTBEAT格式异常: $line")
-                                    }
-                                    reader.close()
-                                    client.close()
-                                } else if (line.startsWith("DATA")) {
-                                    // 统一通过 ProtocolRouter 处理所有 DATA_* 通道
-                                    try {
-                                        val clientIp = client.inetAddress?.hostAddress ?: "0.0.0.0"
-                                        val handled = com.xzyht.notifyrelay.core.sync.ProtocolRouter.handleEncryptedDataLine(line, clientIp, this@DeviceConnectionManager, context)
-                                        // handled 恒为 true（DATA 开头均视为本路由处理）
-                                    } catch (_: Exception) {}
-                                    reader.close()
-                                    client.close()
-                                } else {
-                                    // 新增：手动发现UDP包（加密）
-                                    try {
-                                        val authed = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
-                                        for ((uuid, auth) in authed) {
-                                            if (uuid == this@DeviceConnectionManager.uuid) continue
-                                            try {
-                                                val decrypted = try { decryptData(line, auth.sharedSecret) } catch (_: Exception) { null }
-                                                if (decrypted != null && decrypted.startsWith("NOTIFYRELAY_DISCOVER_MANUAL:")) {
-                                                    val parts = decrypted.split(":")
-                                                    if (parts.size >= 5) {
-                                                        val remoteUuid = parts[1]
-                                                        val displayName = parts[2]
-                                                        val port = parts[3].toIntOrNull() ?: 23333
-                                                        val sharedSecret = parts[4]
-                                                        // 仅已认证设备才处理
-                                                        if (auth.sharedSecret == sharedSecret) {
-                                                            // 更新设备缓存
-                                                            val ip = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                                            val device = DeviceInfo(remoteUuid, displayName, ip, port)
-                                                            deviceLastSeen[remoteUuid] = System.currentTimeMillis()
-                                                            synchronized(deviceInfoCache) { deviceInfoCache[remoteUuid] = device }
-                                                            // 只在手动发现包里才允许更新端口
-                                                            synchronized(authenticatedDevices) {
-                                                                val auth = authenticatedDevices[remoteUuid]
-                                                                if (auth != null) {
-                                                                    authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip, lastPort = port)
-                                                                    saveAuthedDevices()
-                                                                }
-                                                            }
-                                                            DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
-                                                            coroutineScope.launch { updateDeviceList() }
-                                                            if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
-                                                        }
-                                                    }
-                                                }
-                                            } catch (_: Exception) {}
-                                        }
-                                    } catch (_: Exception) {}
-                                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "未知请求: $line")
-                                    reader.close()
-                                    client.close()
-                                }
+                                ServerLineRouter.handleClientLine(line, client, reader, this@DeviceConnectionManager, context)
+                            } else {
+                                try { reader.close() } catch (_: Exception) {}
+                                try { client.close() } catch (_: Exception) {}
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
