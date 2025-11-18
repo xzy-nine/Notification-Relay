@@ -30,8 +30,20 @@ suspend fun replicateNotification(
     json.put("packageName", result.mappedPkg)
         val pkg = result.mappedPkg
         // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
+        // 同时根据 type 字段过滤 SI_END 结束包：结束包不再生成新的悬浮窗，只用于关闭已有浮窗
     if (pkg.startsWith("superisland:")) {
             try {
+                val type = json.optString("type", "")
+                val featureKeyName = json.optString("featureKeyName", "")
+                val featureKeyValue = json.optString("featureKeyValue", "")
+
+                // 结束包：只负责关闭对应 featureId 的悬浮窗，不生成任何 UI
+                if (type == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.TYPE_END && featureKeyValue.isNotBlank()) {
+                    if (BuildConfig.DEBUG) Log.i("超级岛", "检测到超级岛结束包，准备关闭悬浮窗 featureId=$featureKeyValue")
+                    com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.dismissBySource(featureKeyValue)
+                    return
+                }
+
                 val title = json.optString("title")
                 val text = json.optString("text")
                 val paramV2 = if (json.has("param_v2_raw")) json.optString("param_v2_raw") else null
@@ -47,8 +59,14 @@ suspend fun replicateNotification(
                         } catch (_: Exception) {}
                     }
                 }
-                if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title")
-                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, pkg, title, text, paramV2, picMap)
+                if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title, type=$type")
+                // 使用 featureKeyValue 作为 sourceId，确保结束包可以按 featureId 精确关闭
+                val sourceId = if (featureKeyName == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.FEATURE_KEY_NAME && featureKeyValue.isNotBlank()) {
+                    featureKeyValue
+                } else {
+                    pkg
+                }
+                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap)
                 val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
                     id = System.currentTimeMillis(),
                     originalPackage = originalPackage.takeIf { it.isNotEmpty() },

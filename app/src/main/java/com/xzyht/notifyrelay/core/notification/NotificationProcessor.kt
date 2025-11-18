@@ -198,53 +198,7 @@ object NotificationProcessor {
                     return true
                 }
             } else {
-                // 旧协议：直接复刻
-                if (BuildConfig.DEBUG) Log.i("超级岛", "收到远程超级岛数据（旧协议直接复刻）: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=${if (text?.length ?: 0 > 200) text?.substring(0,200) + "..." else text}")
-                val paramV2 = try { json.optString("param_v2_raw") } catch (_: Exception) { null }
-                val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
-                val picMap = mutableMapOf<String, String>()
-                if (pics != null) {
-                    val keys = pics.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        try {
-                            val v = pics.optString(k)
-                            if (!v.isNullOrEmpty()) picMap[k] = v
-                        } catch (_: Exception) {}
-                    }
-                }
-                try {
-                    com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, mappedPkg, title, text, paramV2, picMap)
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w("超级岛", "直接复刻悬浮窗失败: ${e.message}")
-                }
-                val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
-                    id = System.currentTimeMillis(),
-                    sourceDeviceUuid = remoteUuid,
-                    originalPackage = pkg,
-                    mappedPackage = mappedPkg,
-                    appName = appName?.takeIf { it.isNotEmpty() },
-                    title = title?.takeIf { it.isNotBlank() },
-                    text = text?.takeIf { it.isNotBlank() },
-                    paramV2Raw = paramV2?.takeIf { it.isNotBlank() },
-                    picMap = picMap.toMap(),
-                    rawPayload = decrypted
-                )
-                try {
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
-                } catch (_: Exception) {
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
-                        context,
-                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
-                            id = System.currentTimeMillis(),
-                            sourceDeviceUuid = remoteUuid,
-                            originalPackage = pkg,
-                            mappedPackage = mappedPkg,
-                            rawPayload = decrypted
-                        )
-                    )
-                }
-                return true
+                return false
             }
         } catch (_: Exception) {
             return false

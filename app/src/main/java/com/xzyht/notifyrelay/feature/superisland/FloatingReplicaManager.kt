@@ -104,7 +104,6 @@ object FloatingReplicaManager {
         try {
             if (!canShowOverlay(context)) {
                 requestOverlayPermission(context)
-                MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
                 return
             }
 
@@ -113,21 +112,10 @@ object FloatingReplicaManager {
                     val paramV2 = parseParamV2Safe(paramV2Raw)
                     // 将所有图片 intern 为引用，避免重复保存相同图片
                     val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
-                    // 若完全无可用内容（既无 param_v2，也无标题与正文），直接退化为通知，避免创建任何浮窗
-                    if (paramV2 == null && (title.isNullOrBlank() && text.isNullOrBlank())) {
-                        MessageSender.sendHighPriorityNotification(
-                            context,
-                            title ?: "(无标题)",
-                            text ?: "(无内容)"
-                        )
-                        return@launch
-                    }
-
+                    val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
                     val smallIsland = paramV2?.paramIsland?.smallIslandArea
                     val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
                     val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
-
-                    val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
                     val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
                     val expandedView = templateResult?.view
                         ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
@@ -142,9 +130,6 @@ object FloatingReplicaManager {
                             internedPicMap
                         )
 
-                    // 仅在需要真正添加条目时，才去确保 Overlay 容器存在，避免出现“空容器”占位导致的隐形浮窗
-                    ensureOverlayExists(context)
-
                     addOrUpdateEntry(
                         context,
                         entryKey,
@@ -155,17 +140,13 @@ object FloatingReplicaManager {
                     )
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${'$'}{e.message}")
-                    // 临时移除：异常时不再退化为通知，仅进行清理
-                    // MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
-                    // 若此前已创建Overlay但未成功添加条目，立即移除以避免空容器拦截触摸
+                    // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
                     removeOverlayIfNoEntries()
                 }
             }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
-            // 临时移除：异常时不再退化为通知，仅进行清理
-            // MessageSender.sendHighPriorityNotification(context, title ?: "(无标题)", text ?: "(无内容)")
-            // 若此前已创建Overlay但未成功添加条目，立即移除以避免空容器拦截触摸
+            // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
             removeOverlayIfNoEntries()
         }
     }
@@ -260,57 +241,6 @@ object FloatingReplicaManager {
 
     // ---- 多条浮窗管理实现 ----
 
-    private fun ensureOverlayExists(context: Context) {
-        if (overlayView != null && stackContainer != null) return
-        try {
-            val appCtx = context.applicationContext
-            val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            // 移除已存在浮窗（防御式）
-            try { overlayView?.let { wm.removeViewImmediate(it) } } catch (_: Exception) {}
-
-            val container = FrameLayout(context)
-            container.setBackgroundColor(0x00000000)
-
-            val padding = (12 * (context.resources.displayMetrics.density)).toInt()
-            val innerStack = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(padding, padding, padding, padding)
-            }
-
-            container.addView(innerStack)
-
-            val layoutParams = WindowManager.LayoutParams(
-                (FIXED_WIDTH_DP * (context.resources.displayMetrics.density)).toInt(),
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            )
-            layoutParams.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            layoutParams.x = 0
-            layoutParams.y = 100
-
-            var added = false
-            try {
-                wm.addView(container, layoutParams)
-                added = true
-            } catch (e: Exception) {
-                // 添加失败时，不保留任何引用，避免进入“半初始化”卡死态
-                if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
-            }
-            if (added) {
-                overlayView = container
-                stackContainer = innerStack
-                overlayLayoutParams = layoutParams
-                windowManager = wm
-                entries.values.forEach { attachDragHandler(it.container, context) }
-                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建，初始坐标 x=${layoutParams.x}, y=${layoutParams.y}")
-            }
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
-        }
-    }
-
     // 当没有任何条目时，彻底移除 Overlay，避免占位区域拦截顶端触摸
     private fun removeOverlayIfNoEntries() {
         if (entries.isEmpty()) {
@@ -318,14 +248,16 @@ object FloatingReplicaManager {
                 val wm = windowManager
                 val view = overlayView
                 if (wm != null && view != null) {
-                    wm.removeViewImmediate(view)
+                    wm.removeView(view)
                 }
             } catch (_: Exception) {}
             overlayView = null
             stackContainer = null
             overlayLayoutParams = null
             windowManager = null
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 所有条目清空，移除整体Overlay以避免触摸拦截")
+            if (BuildConfig.DEBUG) {
+                Log.i(TAG, "超级岛: 所有条目移除，销毁浮窗容器")
+            }
         }
     }
 
@@ -338,6 +270,53 @@ object FloatingReplicaManager {
         summaryBinding: CircularProgressBinding?
     ) {
         try {
+            // 首条条目到来时再创建 Overlay 容器，避免先有空容器
+            if (overlayView == null || stackContainer == null || windowManager == null || overlayLayoutParams == null) {
+                try {
+                    val appCtx = context.applicationContext
+                    val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                    val container = FrameLayout(context).apply {
+                        // 调试用：如果只剩空容器，保持半透明红色背景便于发现
+                        setBackgroundColor(0x33FF0000.toInt())
+                    }
+                    val padding = (12 * (context.resources.displayMetrics.density)).toInt()
+                    val innerStack = LinearLayout(context).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(padding, padding, padding, padding)
+                    }
+                    container.addView(innerStack)
+
+                    val layoutParams = WindowManager.LayoutParams(
+                        (FIXED_WIDTH_DP * (context.resources.displayMetrics.density)).toInt(),
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                        PixelFormat.TRANSLUCENT
+                    ).apply {
+                        gravity = Gravity.LEFT or Gravity.TOP
+                        x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * context.resources.displayMetrics.density).toInt()) / 2).coerceAtLeast(0)
+                        y = 100
+                    }
+
+                    var added = false
+                    try {
+                        wm.addView(container, layoutParams)
+                        added = true
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
+                    }
+                    if (added) {
+                        overlayView = container
+                        stackContainer = innerStack
+                        overlayLayoutParams = layoutParams
+                        windowManager = wm
+                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
+                    }
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
+                }
+            }
+
             val stack = stackContainer ?: return
             val existing = entries[key]
             if (existing != null) {
@@ -893,15 +872,26 @@ object FloatingReplicaManager {
         private val rootView: View,
         context: Context
     ) : View.OnTouchListener {
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
         private var lastX = 0f
         private var lastY = 0f
+        private var startX = 0
+        private var startY = 0
         private var isDragging = false
-    override fun onTouch(v: View, event: MotionEvent): Boolean {
+        private val displayMetrics = context.resources.displayMetrics
+        private val screenWidth = displayMetrics.widthPixels
+        private val screenHeight = displayMetrics.heightPixels
+        private val windowWidth = (FIXED_WIDTH_DP * displayMetrics.density).toInt()
+        private var windowHeight = 0
+
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     lastX = event.rawX
                     lastY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    windowHeight = rootView.height.takeIf { it > 0 } ?: (200 * displayMetrics.density).toInt()
                     isDragging = false
                     return false
                 }
@@ -912,14 +902,17 @@ object FloatingReplicaManager {
                         isDragging = true
                     }
                     if (isDragging) {
-                        params.x += dx.toInt()
-                        params.y += dy.toInt()
-                        try {
-                            wm.updateViewLayout(rootView, params)
-                            if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
-                        } catch (_: Exception) {}
-                        lastX = event.rawX
-                        lastY = event.rawY
+                        val newX = startX + (event.rawX - lastX).toInt()
+                        val newY = startY + (event.rawY - lastY).toInt()
+                        // 边界检查：如果新位置在边界内，则更新，否则停止拖动（不更新位置）
+                        if (newX in 0..(screenWidth - windowWidth) && newY in 0..(screenHeight - windowHeight)) {
+                            params.x = newX
+                            params.y = newY
+                            try {
+                                wm.updateViewLayout(rootView, params)
+                                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
+                            } catch (_: Exception) {}
+                        }
                         return true
                     }
                 }
