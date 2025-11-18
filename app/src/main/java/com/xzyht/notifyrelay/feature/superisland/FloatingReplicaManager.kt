@@ -47,6 +47,7 @@ import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTime
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTimerInfo
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.resolveHighlightIconBitmap
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.buildBigIslandCollapsedView
+import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import kotlin.math.abs
 
 /**
@@ -66,7 +67,14 @@ object FloatingReplicaManager {
     private var stackContainer: LinearLayout? = null
     private var overlayLayoutParams: WindowManager.LayoutParams? = null
     private var windowManager: WindowManager? = null
+    // 单独的全屏关闭层（拖动时显示底部中心关闭指示器）
+    private var closeOverlayView: View? = null
+    private var closeOverlayLayoutParams: WindowManager.LayoutParams? = null
+    private var closeTargetView: View? = null
     private val handler = Handler(Looper.getMainLooper())
+    // 会话级屏蔽池：进程结束后自然清空，value 为最后屏蔽时间戳
+    private val blockedInstanceIds = mutableMapOf<String, Long>()
+    private const val BLOCK_EXPIRE_MS = 10_000L
 
     private data class EntryRecord(
         val key: String,
@@ -102,6 +110,12 @@ object FloatingReplicaManager {
         picMap: Map<String, String>? = null
     ) {
         try {
+            // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
+            if (!sourceId.isNullOrBlank() && isInstanceBlocked(sourceId)) {
+                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
+                return
+            }
+
             if (!canShowOverlay(context)) {
                 requestOverlayPermission(context)
                 return
@@ -149,6 +163,50 @@ object FloatingReplicaManager {
             // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
             removeOverlayIfNoEntries()
         }
+    }
+
+    // ---- 会话级屏蔽工具方法 ----
+
+    private fun isInstanceBlocked(instanceId: String?): Boolean {
+        if (instanceId.isNullOrBlank()) return false
+        val now = System.currentTimeMillis()
+        val ts = blockedInstanceIds[instanceId]
+        if (ts == null) return false
+        // 超过过期时间则自动移除黑名单
+        if (now - ts > BLOCK_EXPIRE_MS) {
+            blockedInstanceIds.remove(instanceId)
+            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 屏蔽过期，自动移除 instanceId=$instanceId")
+            return false
+        }
+        return true
+    }
+
+    private fun blockInstance(instanceId: String?) {
+        if (instanceId.isNullOrBlank()) return
+        blockedInstanceIds[instanceId] = System.currentTimeMillis()
+        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 会话级屏蔽 instanceId=$instanceId")
+    }
+
+    // 关闭指示器高亮/还原动画
+    private fun animateCloseTargetHighlight(highlight: Boolean) {
+        val target = closeTargetView ?: return
+        val endScale = if (highlight) 1.2f else 1.0f
+        val endAlpha = if (highlight) 1.0f else 0.7f
+
+        try {
+            target.animate()
+                .scaleX(endScale)
+                .scaleY(endScale)
+                .alpha(endAlpha)
+                .setDuration(160L)
+                .start()
+        } catch (_: Exception) {
+        }
+    }
+
+    // 触觉反馈：进入/离开关闭区域时短振动
+    private fun performHapticFeedback(context: Context) {
+        HapticFeedbackUtils.performLightHaptic(context)
     }
 
     /**
@@ -275,16 +333,39 @@ object FloatingReplicaManager {
                 try {
                     val appCtx = context.applicationContext
                     val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                    val container = FrameLayout(context).apply {
-                        // 调试用：如果只剩空容器，保持半透明红色背景便于发现
-                        setBackgroundColor(0x33FF0000.toInt())
-                    }
+                    val container = FrameLayout(context)
                     val padding = (12 * (context.resources.displayMetrics.density)).toInt()
                     val innerStack = LinearLayout(context).apply {
                         orientation = LinearLayout.VERTICAL
                         setPadding(padding, padding, padding, padding)
                     }
                     container.addView(innerStack)
+
+                    // 创建底部中心的关闭指示器（圆形叉号区域），默认隐藏
+                    val closeSize = (72 * context.resources.displayMetrics.density).toInt()
+                    val closeLp = FrameLayout.LayoutParams(closeSize, closeSize).apply {
+                        gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                        bottomMargin = (24 * context.resources.displayMetrics.density).toInt()
+                    }
+                    val closeView = ImageView(context).apply {
+                        layoutParams = closeLp
+                        // 半透明深色圆背景 + 白色叉号
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(0x99000000.toInt())
+                        }
+                        val cross = GradientDrawable().apply {
+                            shape = GradientDrawable.RECTANGLE
+                            setColor(0xFFFFFFFF.toInt())
+                            cornerRadius = (2 * context.resources.displayMetrics.density)
+                        }
+                        // 用两条旋转矩形组合叉号太复杂，这里先用内容描述占位，后续可换成真正图标
+                        contentDescription = "close_target"
+                        alpha = 0f
+                        visibility = View.GONE
+                    }
+                    container.addView(closeView)
+                    closeTargetView = closeView
 
                     val layoutParams = WindowManager.LayoutParams(
                         (FIXED_WIDTH_DP * (context.resources.displayMetrics.density)).toInt(),
@@ -347,6 +428,8 @@ object FloatingReplicaManager {
                 // 统一背景放在条目容器上，并进行圆角/描边/阴影管理
                 background = createEntryBackground(context, /*isExpanded=*/true)
                 elevation = 6f * context.resources.displayMetrics.density
+                // 将 entryKey（通常为 instanceId/sourceId）挂到 tag，供拖动关闭逻辑使用
+                tag = key
             }
 
             detachFromParent(summaryView)
@@ -587,6 +670,8 @@ object FloatingReplicaManager {
     fun dismissBySource(sourceId: String) {
         try {
             removeEntry(sourceId)
+            // 如果对应的会话结束（SI_END），同步移除黑名单，允许后续同一通知重新展示
+            blockedInstanceIds.remove(sourceId)
         } catch (_: Exception) {}
     }
 
@@ -600,9 +685,71 @@ object FloatingReplicaManager {
         val wm = windowManager
         val root = overlayView
         if (params != null && wm != null && root != null) {
-            target.setOnTouchListener(FloatingTouchListener(params, wm, root, context))
+            // 这里的 tag 保存的是 entryKey，一般等于 instanceId/sourceId
+            val entryKey = (target.tag as? String)
+            target.setOnTouchListener(FloatingTouchListener(params, wm, root, context, entryKey))
         } else {
             target.setOnTouchListener(null)
+        }
+    }
+
+    // 显示全屏关闭层，底部中心有关闭指示器
+    private fun showCloseOverlay(context: Context) {
+        val wm = windowManager ?: return
+        if (closeOverlayView != null) return
+
+        val density = context.resources.displayMetrics.density
+        val container = FrameLayout(context)
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.LEFT or Gravity.TOP
+        }
+
+        val closeSize = (72 * density).toInt()
+        val closeLp = FrameLayout.LayoutParams(closeSize, closeSize, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = (24 * density).toInt()
+        }
+        val closeView = ImageView(context).apply {
+            layoutParams = closeLp
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x99000000.toInt())
+            }
+            // 使用实际的叉号图标（请在资源中提供 ic_pip_close）
+            try {
+                setImageResource(com.xzyht.notifyrelay.R.drawable.ic_pip_close)
+            } catch (_: Exception) { }
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            alpha = 0.7f
+            visibility = View.VISIBLE
+            contentDescription = "close_overlay_target"
+        }
+        container.addView(closeView)
+
+        try {
+            wm.addView(container, lp)
+            closeOverlayView = container
+            closeOverlayLayoutParams = lp
+            closeTargetView = closeView
+            closeView.animate().alpha(1f).setDuration(150L).start()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun hideCloseOverlay() {
+        val wm = windowManager ?: return
+        val view = closeOverlayView ?: return
+        closeTargetView = null
+        closeOverlayLayoutParams = null
+        closeOverlayView = null
+        try {
+            wm.removeView(view)
+        } catch (_: Exception) {
         }
     }
 
@@ -870,7 +1017,8 @@ object FloatingReplicaManager {
         private val params: WindowManager.LayoutParams,
         private val wm: WindowManager,
         private val rootView: View,
-        context: Context
+        context: Context,
+        private val entryKey: String?
     ) : View.OnTouchListener {
         private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
         private var lastX = 0f
@@ -883,6 +1031,20 @@ object FloatingReplicaManager {
         private val screenHeight = displayMetrics.heightPixels
         private val windowWidth = (FIXED_WIDTH_DP * displayMetrics.density).toInt()
         private var windowHeight = 0
+        // 关闭区域：屏幕底部中间一块圆形区域（类似画中画关闭手势）
+        private val closeRadius = (72 * displayMetrics.density)
+        private val closeCenterX = screenWidth / 2f
+        private val closeCenterY = screenHeight - (96 * displayMetrics.density)
+        private var isInCloseArea = false
+
+        private fun isCenterInCloseArea(): Boolean {
+            val centerX = params.x + windowWidth / 2f
+            val centerY = params.y + windowHeight / 2f
+            val dx = centerX - closeCenterX
+            val dy = centerY - closeCenterY
+            val distanceSq = dx * dx + dy * dy
+            return distanceSq <= closeRadius * closeRadius
+        }
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.actionMasked) {
@@ -893,6 +1055,9 @@ object FloatingReplicaManager {
                     startY = params.y
                     windowHeight = rootView.height.takeIf { it > 0 } ?: (200 * displayMetrics.density).toInt()
                     isDragging = false
+                    isInCloseArea = false
+                    // 开始拖动时，显示全屏关闭层
+                    showCloseOverlay(rootView.context)
                     return false
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -912,13 +1077,39 @@ object FloatingReplicaManager {
                                 wm.updateViewLayout(rootView, params)
                                 if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
                             } catch (_: Exception) {}
+
+                            // 检测是否进入/离开关闭区域
+                            val nowInClose = isCenterInCloseArea()
+                            if (nowInClose != isInCloseArea) {
+                                isInCloseArea = nowInClose
+                                animateCloseTargetHighlight(nowInClose)
+                                performHapticFeedback(rootView.context)
+                            }
                         }
                         return true
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDragging) {
+                        // 在松手时，如果中心点落在底部中间的关闭圆形区域内，则视为“关闭并屏蔽本轮会话的该 instanceId”
+                        val nowInClose = isCenterInCloseArea()
+                        if (nowInClose) {
+                            // 命中关闭区域：会话级屏蔽 + 移除浮窗条目
+                            if (!entryKey.isNullOrBlank()) {
+                                blockInstance(entryKey)
+                                removeEntry(entryKey)
+                            } else {
+                                // 没有明确键时，仅做普通移除
+                                // 这里 rootView 是整个 Overlay 容器，无法定位单条，保持不动
+                            }
+                        }
                         isDragging = false
+                        if (isInCloseArea) {
+                            isInCloseArea = false
+                            animateCloseTargetHighlight(false)
+                        }
+                        // 结束拖动时移除全屏关闭层
+                        hideCloseOverlay()
                         return true
                     }
                 }

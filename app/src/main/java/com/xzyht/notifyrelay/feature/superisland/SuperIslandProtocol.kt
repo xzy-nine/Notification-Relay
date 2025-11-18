@@ -34,8 +34,20 @@ object SuperIslandProtocol {
     /**
      * 计算“岛”的特征ID。尽量使用paramV2Raw中稳定字段；若不可得，则退回 title/text。
      * 注意：该ID必须对“同一座岛的一次会话”保持稳定，对不同会话应不同。
+     * 为了区分相同内容的通知，加入时间戳确保唯一性。
      */
-    fun computeFeatureId(superPkg: String?, paramV2Raw: String?, title: String?, text: String?): String {
+    /**
+     * 计算“岛”的特征ID。
+     * - 基于 paramV2/title/text 等稳定内容字段生成特征。
+     * - 如果提供了 instanceId（例如接收端的 sbnKey），会把它包含进特征以确保同内容的不同通知能被区分。
+     */
+    fun computeFeatureId(
+        superPkg: String?,
+        paramV2Raw: String?,
+        title: String?,
+        text: String?,
+        instanceId: String? = null
+    ): String {
         val keyParts = mutableListOf<String>()
         keyParts += (superPkg ?: "")
         // 解析param_v2的稳定字段（如chatInfo.title 或 baseInfo.title/content）
@@ -66,6 +78,10 @@ object SuperIslandProtocol {
         if (keyParts.size <= 1) {
             if (!title.isNullOrBlank()) keyParts += ("t:" + title)
             if (!text.isNullOrBlank()) keyParts += ("c:" + text)
+        }
+        // 如果提供了 instanceId，则把它加入特征，确保能区分同内容的不同实例
+        if (!instanceId.isNullOrBlank()) {
+            keyParts += "id:" + instanceId
         }
         // 使用SHA-1生成稳定短ID
         val raw = keyParts.joinToString("|")

@@ -197,18 +197,20 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
                         // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
                         val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
-                        val sbnKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
+                        // 严格以通知 sbn.key 作为会话键：一条系统通知只对应一座“岛”
+                        val sbnInstanceId = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
                         // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判
-                        val oldId = try { superIslandFeatureByKey[sbnKey]?.second } catch (_: Exception) { null }
+                        val oldId = try { superIslandFeatureByKey[sbnInstanceId]?.second } catch (_: Exception) { null }
                         val computedId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
                             superPkg,
                             superData.paramV2Raw,
                             superData.title,
-                            superData.text
+                            superData.text,
+                            sbnInstanceId
                         )
                         val featureId = oldId ?: computedId
                         // 初次出现时登记；后续保持不变
-                        try { if (oldId == null) superIslandFeatureByKey[sbnKey] = superPkg to featureId } catch (_: Exception) {}
+                        try { if (oldId == null) superIslandFeatureByKey[sbnInstanceId] = superPkg to featureId } catch (_: Exception) {}
                         com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
                             applicationContext,
                             superPkg,
