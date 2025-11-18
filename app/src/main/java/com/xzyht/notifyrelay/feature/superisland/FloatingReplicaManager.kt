@@ -81,6 +81,7 @@ object FloatingReplicaManager {
         val container: FrameLayout,
         var expandedView: View,
         var summaryView: View,
+        val summaryOnly: Boolean = false,
         var isExpanded: Boolean = true,
         var collapseRunnable: Runnable? = null,
         var removalRunnable: Runnable? = null,
@@ -124,6 +125,11 @@ object FloatingReplicaManager {
             CoroutineScope(Dispatchers.Main).launch {
                 try {
                     val paramV2 = parseParamV2Safe(paramV2Raw)
+                    val summaryOnly = when (paramV2?.business) {
+                        // 仅摘要态的业务模板在这里枚举
+                        "miui_flashlight" -> true
+                        else -> false
+                    }
                     // 将所有图片 intern 为引用，避免重复保存相同图片
                     val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
                     val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
@@ -150,7 +156,8 @@ object FloatingReplicaManager {
                         expandedView,
                         collapsedSummary.view,
                         templateResult?.progressBinding,
-                        collapsedSummary.progressBinding
+                        collapsedSummary.progressBinding,
+                        summaryOnly
                     )
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${'$'}{e.message}")
@@ -325,7 +332,8 @@ object FloatingReplicaManager {
         expandedView: View,
         summaryView: View,
         expandedBinding: CircularProgressBinding?,
-        summaryBinding: CircularProgressBinding?
+        summaryBinding: CircularProgressBinding?,
+        summaryOnly: Boolean
     ) {
         try {
             // 首条条目到来时再创建 Overlay 容器，避免先有空容器
@@ -406,9 +414,16 @@ object FloatingReplicaManager {
                 attachDragHandler(existing.container, context)
                 existing.lastExpandedProgress = applyProgressBinding(expandedBinding, existing.lastExpandedProgress)
                 existing.lastSummaryProgress = applyProgressBinding(summaryBinding, existing.lastSummaryProgress)
-                if (wasExpanded) {
-                    scheduleCollapse(existing)
+                if (!existing.summaryOnly) {
+                    if (wasExpanded) {
+                        scheduleCollapse(existing)
+                    } else {
+                        cancelCollapse(existing)
+                    }
                 } else {
+                    existing.isExpanded = false
+                    existing.expandedView.visibility = View.GONE
+                    existing.summaryView.visibility = View.VISIBLE
                     cancelCollapse(existing)
                 }
                 scheduleRemoval(existing, key)
@@ -426,7 +441,7 @@ object FloatingReplicaManager {
                 layoutParams = lp
                 isClickable = true
                 // 统一背景放在条目容器上，并进行圆角/描边/阴影管理
-                background = createEntryBackground(context, /*isExpanded=*/true)
+                background = createEntryBackground(context, /*isExpanded=*/!summaryOnly)
                 elevation = 6f * context.resources.displayMetrics.density
                 // 将 entryKey（通常为 instanceId/sourceId）挂到 tag，供拖动关闭逻辑使用
                 tag = key
@@ -440,8 +455,13 @@ object FloatingReplicaManager {
             stripRootBackground(expandedView)
             stripRootBackground(summaryView)
 
-            summaryView.visibility = View.GONE
-            expandedView.visibility = View.VISIBLE
+            if (summaryOnly) {
+                summaryView.visibility = View.VISIBLE
+                expandedView.visibility = View.GONE
+            } else {
+                summaryView.visibility = View.GONE
+                expandedView.visibility = View.VISIBLE
+            }
             container.addView(summaryView)
             container.addView(expandedView)
             container.setOnClickListener { onEntryClicked(key) }
@@ -453,13 +473,19 @@ object FloatingReplicaManager {
                 key = key,
                 container = container,
                 expandedView = expandedView,
-                summaryView = summaryView
+                summaryView = summaryView,
+                summaryOnly = summaryOnly,
+                isExpanded = !summaryOnly
             )
             entries[key] = record
             record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
             record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
-            showExpanded(record)
-            scheduleCollapse(record)
+            if (!summaryOnly) {
+                showExpanded(record)
+                scheduleCollapse(record)
+            } else {
+                record.isExpanded = false
+            }
             scheduleRemoval(record, key)
             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 新增浮窗条目 key=$key")
         } catch (e: Exception) {
@@ -474,7 +500,7 @@ object FloatingReplicaManager {
         record.container.removeAllViews()
         // 确保容器具备统一背景
         if (record.container.background !is GradientDrawable) {
-            record.container.background = createEntryBackground(record.container.context, wasExpanded)
+            record.container.background = createEntryBackground(record.container.context, wasExpanded && !record.summaryOnly)
             record.container.elevation = 6f * record.container.resources.displayMetrics.density
         }
 
@@ -488,13 +514,13 @@ object FloatingReplicaManager {
         record.container.addView(expandedView)
         record.expandedView = expandedView
         record.summaryView = summaryView
-        record.isExpanded = wasExpanded
-        if (wasExpanded) {
-            record.summaryView.visibility = View.GONE
-            record.expandedView.visibility = View.VISIBLE
-        } else {
+        record.isExpanded = wasExpanded && !record.summaryOnly
+        if (record.summaryOnly || !record.isExpanded) {
             record.expandedView.visibility = View.GONE
             record.summaryView.visibility = View.VISIBLE
+        } else {
+            record.summaryView.visibility = View.GONE
+            record.expandedView.visibility = View.VISIBLE
         }
     }
 
@@ -518,6 +544,10 @@ object FloatingReplicaManager {
 
     private fun onEntryClicked(key: String) {
         val record = entries[key] ?: return
+        if (record.summaryOnly) {
+            scheduleRemoval(record, key)
+            return
+        }
         showExpanded(record)
         scheduleCollapse(record)
         scheduleRemoval(record, key)
