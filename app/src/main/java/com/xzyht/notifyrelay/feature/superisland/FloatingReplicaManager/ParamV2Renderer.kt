@@ -24,7 +24,8 @@ data class ParamV2(
     val actions: List<ActionInfo>? = null, // 按钮组件
     val hintInfo: HintInfo? = null, // 提示组件（按钮组件2/3）
     val textButton: TextButton? = null, // 文本按钮组件
-    val paramIsland: ParamIsland? = null // 摘要态组件
+    val paramIsland: ParamIsland? = null, // 摘要态组件
+    val business: String? = null // 可选的业务标识（例如 miui_flashlight）
 )
 
 // 构建UI视图的函数
@@ -113,10 +114,12 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
         val json = JSONObject(jsonString)
+        val business = json.optString("business", "").takeIf { it.isNotBlank() }
         val anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
         val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
             ?: parseHighlightFromIconText(json)
         ParamV2(
+            business = business,
             baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
             chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
             highlightInfo = highlight,
