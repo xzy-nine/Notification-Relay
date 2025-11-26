@@ -138,6 +138,10 @@ dependencies {
     implementation(project(":miuix-main:miuix"))
     // AndroidX Security: EncryptedSharedPreferences
     implementation("androidx.security:security-crypto:1.1.0")
+    // Coil: image loading (Kotlin + Coroutines friendly)
+    implementation("io.coil-kt:coil:2.4.0")
+    // DiskLruCache: stable disk-based LRU cache for icons
+    implementation("com.jakewharton:disklrucache:2.0.2")
 }
 
 // 强制所有 kotlin-stdlib 依赖使用 1.9.23，避免版本冲突

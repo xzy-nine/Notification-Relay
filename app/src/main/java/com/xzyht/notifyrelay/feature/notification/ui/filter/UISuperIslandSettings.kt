@@ -44,6 +44,7 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
@@ -435,6 +436,7 @@ private fun SuperIslandHistoryEntryCard(
 private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Modifier = Modifier) {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
+    val context = LocalContext.current
 
     val bitmap by produceState<Bitmap?>(initialValue = SuperIslandImageCache.get(data), key1 = data) {
         val cached = SuperIslandImageCache.get(data)
@@ -445,11 +447,17 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
 
         val loaded = withContext(Dispatchers.IO) {
             try {
+                // 先尝试将可能的 ref: 引用解析为原始 data: 或 http URL
+                val resolved = try {
+                    SuperIslandImageStore.resolve(context, data) ?: data
+                } catch (_: Exception) { data }
+
                 val decoded = when {
-                    DataUrlUtils.isDataUrl(data) -> DataUrlUtils.decodeDataUrlToBitmap(data)
-                    data.startsWith("http", ignoreCase = true) -> downloadBitmap(data)
+                    DataUrlUtils.isDataUrl(resolved) -> DataUrlUtils.decodeDataUrlToBitmap(resolved)
+                    resolved.startsWith("http", ignoreCase = true) -> downloadBitmap(resolved)
                     else -> null
                 }
+                // 缓存仍以传入的 key (可能是 ref:...) 作为索引，便于下次直接命中
                 decoded?.let { SuperIslandImageCache.put(data, it) }
             } catch (_: Exception) {
                 null
@@ -704,7 +712,10 @@ private const val SUPER_ISLAND_COPY_IMAGE_DATA_KEY = "superisland_copy_image_dat
 
 private fun sanitizeImageContent(source: String, includeImageDataOnCopy: Boolean): String {
     if (includeImageDataOnCopy) return source
-    var sanitized = DATA_URL_REGEX.replace(source) { "图片" }
+    // 先替换可能存在的 ref: 引用为占位，避免在 UI 上显示内部引用字符串
+    var sanitized = REF_URL_REGEX.replace(source) { "图片" }
+    // 替换 data: URI 与常见图片 URL
+    sanitized = DATA_URL_REGEX.replace(sanitized) { "图片" }
     sanitized = IMAGE_URL_REGEX.replace(sanitized) { "图片" }
     return sanitized
 }
@@ -718,6 +729,9 @@ private val IMAGE_URL_REGEX = Regex(
     pattern = "https?:[^\\s\"]+\\.(?:png|jpe?g|gif|webp|bmp|svg)",
     options = setOf(RegexOption.IGNORE_CASE)
 )
+
+// 匹配已被 intern 为引用的图片标识（例如 ref:abcdef...），展示时应替换为占位而非原样显示
+private val REF_URL_REGEX = Regex(pattern = "(?i)ref:[0-9a-f]{16,}")
 
 private fun formatMultilineContent(content: String): List<String> {
     if (content.isBlank()) return emptyList()

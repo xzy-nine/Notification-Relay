@@ -1,14 +1,21 @@
 package com.xzyht.notifyrelay.core.util
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
+import android.util.Log
+import com.xzyht.notifyrelay.BuildConfig
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import java.io.ByteArrayOutputStream
 
 object DataUrlUtils {
+    private const val TAG = "DataUrlUtils"
     // Older regex-based approach could miss data URIs that are JSON-escaped (e.g. "data:image\/png;base64,....")
     // or that have been wrapped/line-broken. Use a tolerant scanner that finds "data:" and extracts a likely
     // candidate until a reasonable terminator (quote, whitespace, brace) — then sanitize before decoding.
@@ -82,115 +89,68 @@ object DataUrlUtils {
             try { candidate = candidate.replace("\\\\", "") } catch (_: Exception) {}
 
             val comma = candidate.indexOf(',')
-            if (comma <= 0) return null
+            if (comma <= 0) {
+                if (BuildConfig.DEBUG) Log.w(TAG, "不是有效的 data URL：未找到分隔符 ','，候选长度=${candidate.length}")
+                return null
+            }
             val meta = candidate.substring(5, comma)
             var rawData = candidate.substring(comma + 1)
-            // Strip whitespace and any characters not valid in base64
-            rawData = rawData.replace(Regex("[^A-Za-z0-9+/=]"), "")
+            // Strip whitespace
+            rawData = rawData.replace(Regex("\\s+"), "")
+
             if (meta.contains("base64", ignoreCase = true)) {
-                // 提供更多容错与调试信息：记录 base64 长度、尝试多种解码 flag，并在必要时补齐 padding
+                // Use the existing robust base64 cleaning/decoding, then decode bytes to Bitmap
                 try {
-                    if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                        try { android.util.Log.d("NotifyRelay", "base64: decodeDataUrlToBitmap meta=$meta rawDataLen=${rawData.length}") } catch (_: Exception) {}
-                    }
-
-
                     var cleaned = rawData
-                    // 先尝试将常见的 \uXXXX unicode 转义还原（例如有人把 '=' 或其他字符以 \u003d 形式传输）
                     try { cleaned = unescapeUnicode(cleaned) } catch (_: Exception) {}
-
-                    // remove any chars not valid in base64 (keep only base64 chars and '=' for now)
                     cleaned = cleaned.replace(Regex("[^A-Za-z0-9+/=]"), "")
 
-                    // Normalize padding: remove all '=' then re-pad correctly (prevents too many '=' or '=' in the middle)
+                    // Normalize padding
                     try {
                         val withoutEq = cleaned.replace("=", "")
                         val pad = (4 - withoutEq.length % 4) % 4
                         cleaned = withoutEq + "=".repeat(pad)
                     } catch (_: Exception) {}
 
-                    // If length not multiple of 4, pad with '='
-                    val pad = (4 - cleaned.length % 4) % 4
-                    if (pad > 0) cleaned += "=".repeat(pad)
-
-                    val decodeFlags = listOf(Base64.DEFAULT, Base64.NO_WRAP, Base64.NO_PADDING, Base64.URL_SAFE)
-                    var lastErr: Exception? = null
-                    var bytes: ByteArray? = null
-                    for (flag in decodeFlags) {
-                        try {
-                            bytes = Base64.decode(cleaned, flag)
-                            if (bytes != null) {
-                                if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                                    try { android.util.Log.d("NotifyRelay", "base64: decode success flag=$flag bytes=${bytes.size}") } catch (_: Exception) {}
-                                }
-                                break
-                            }
-                        } catch (e: Exception) {
-                            lastErr = e
-                            if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                                try { android.util.Log.d("NotifyRelay", "base64: decode failed flag=$flag", e) } catch (_: Exception) {}
-                            }
-                        }
+                    if (BuildConfig.DEBUG) {
+                        val preview = if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
+                        Log.d(TAG, "尝试解码 base64，meta=$meta, cleanedLen=${cleaned.length}, preview=$preview")
                     }
-
+                    val bytes = tryDecodeBase64Variants(cleaned)
                     if (bytes == null) {
-                        // as ultimate fallback, try Java URLDecoder then re-decode
-                        try {
-                            val urlDecoded = java.net.URLDecoder.decode(rawData, "UTF-8").replace(Regex("[^A-Za-z0-9+/=]"), "")
-                            val pad2 = (4 - urlDecoded.length % 4) % 4
-                            val cleaned2 = if (pad2 > 0) urlDecoded + "=".repeat(pad2) else urlDecoded
-                            bytes = Base64.decode(cleaned2, Base64.DEFAULT)
-                        } catch (e: Exception) {
-                            lastErr = e
-                        }
-                    }
-
-                    if (bytes == null) {
-                        if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                            try {
-                                val head = if (cleaned.length > 200) cleaned.substring(0, 200) else cleaned
-                                val tail = if (cleaned.length > 200) cleaned.substring(cleaned.length - 200) else ""
-                                android.util.Log.d("NotifyRelay", "base64: all base64 decode attempts failed; lastErr=${lastErr?.message} cleanedLen=${cleaned.length} cleanedHead=$head cleanedTail=$tail")
-                            } catch (_: Exception) {}
-                        }
+                        if (BuildConfig.DEBUG) Log.e(TAG, "base64 解码失败：无法解出有效字节数组 (meta=$meta)")
                         return null
                     }
 
-                    // Quick header check for PNG/JPEG to help debugging
-                    try {
-                        if (bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes[1] == 0x50.toByte() && bytes[2] == 0x4E.toByte() && bytes[3] == 0x47.toByte()) {
-                            if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.d("NotifyRelay", "base64: bytes look like PNG header; len=${bytes.size}")
-                        }
-                    } catch (_: Exception) {}
-
-                    // First try a straightforward decode
+                    // Prefer BitmapFactory for bytes, but let Coil handle advanced config elsewhere
                     var bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     if (bmp != null) return ensureCpuBitmap(bmp)
 
-                    // Extra fallback: try decode via InputStream (some platforms handle streams differently)
+                    // Fallbacks similar to previous implementation
                     try {
                         val `is` = java.io.ByteArrayInputStream(bytes)
                         val optsStream = BitmapFactory.Options()
                         optsStream.inPreferredConfig = Bitmap.Config.ARGB_8888
                         bmp = BitmapFactory.decodeStream(`is`, null, optsStream)
                         if (bmp != null) return ensureCpuBitmap(bmp)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e(TAG, "通过 InputStream 解码 Bitmap 失败：${e.message}", e)
+                    }
 
-                    // Another fallback: try a more memory-efficient config (RGB_565) which sometimes helps decode
                     try {
                         val optsRGB = BitmapFactory.Options()
                         optsRGB.inPreferredConfig = Bitmap.Config.RGB_565
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, optsRGB)
                         if (bmp != null) return ensureCpuBitmap(bmp)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e(TAG, "使用 RGB_565 解码失败：${e.message}", e)
+                    }
 
-                    // If that failed, attempt a sampled decode to avoid OOMs and improve chances
+                    // Last resort: sampled decode
                     try {
                         val opts = BitmapFactory.Options()
                         opts.inJustDecodeBounds = true
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-
-                        // If bounds couldn't be read, still try a small sample decode as last resort
                         val reqMax = 256
                         var inSampleSize = 1
                         if (opts.outWidth > 0 && opts.outHeight > 0) {
@@ -200,26 +160,66 @@ object DataUrlUtils {
                                 inSampleSize *= 2
                             }
                         } else {
-                            // unknown bounds: try small sample to increase chance
                             inSampleSize = 4
                         }
-
                         val decodeOpts = BitmapFactory.Options()
                         decodeOpts.inSampleSize = inSampleSize
                         decodeOpts.inPreferredConfig = Bitmap.Config.ARGB_8888
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
                         return if (bmp != null) ensureCpuBitmap(bmp) else null
                     } catch (e: Exception) {
-                        if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.d("NotifyRelay", "base64: sampled decode failed", e)
+                        if (BuildConfig.DEBUG) Log.e(TAG, "采样解码（最后兜底）失败：${e.message}", e)
                         return null
                     }
                 } catch (e: Exception) {
-                    if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.d("NotifyRelay", "base64: decodeDataUrlToBitmap top-level failure", e)
+                    if (BuildConfig.DEBUG) Log.e(TAG, "处理 base64 数据时发生异常：${e.message}", e)
                     return null
                 }
             }
         } catch (_: Exception) {}
         return null
+    }
+
+    // Try to decode base64 using multiple flags and fallbacks
+    private fun tryDecodeBase64Variants(cleaned: String): ByteArray? {
+        val flags = listOf(Base64.DEFAULT, Base64.NO_WRAP, Base64.NO_PADDING, Base64.URL_SAFE)
+        var lastErr: Exception? = null
+        for (f in flags) {
+            try {
+                val b = Base64.decode(cleaned, f)
+                if (b.isNotEmpty()) return b
+            } catch (e: Exception) { lastErr = e }
+        }
+        // try URLDecoder fallback
+        return try {
+            val urlDecoded = java.net.URLDecoder.decode(cleaned, "UTF-8").replace(Regex("[^A-Za-z0-9+/=]"), "")
+            val pad = (4 - urlDecoded.length % 4) % 4
+            val s2 = if (pad > 0) urlDecoded + "=".repeat(pad) else urlDecoded
+            Base64.decode(s2, Base64.DEFAULT)
+        } catch (e: Exception) { null }
+    }
+
+    /**
+     * Use Coil to load a bitmap from common URIs (http(s), content://, file://).
+     * Returns null on failure.
+     */
+    suspend fun loadBitmapWithCoil(context: Context, uri: Any): Bitmap? {
+        return try {
+            val loader = ImageLoader(context)
+            val request = ImageRequest.Builder(context)
+                .data(uri)
+                .allowHardware(false)
+                .build()
+            val result = loader.execute(request)
+            if (result is SuccessResult) {
+                val drawable = result.drawable
+                if (drawable is BitmapDrawable) return drawable.bitmap
+                // convert to bitmap
+                return drawableToBitmap(drawable)
+            } else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     // Ensure returned bitmap is CPU-accessible (not hardware-backed). If it's HARDWARE, return an ARGB_8888 copy.
