@@ -125,6 +125,7 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
 
     // Miuix Compose 主题库
+    implementation(libs.miuix.android)
     // DataStore 持久化（设备名、规则设置）
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.datastore:datastore:1.0.0")
@@ -135,7 +136,6 @@ dependencies {
     implementation("com.squareup.okio:okio:3.7.0")
     // 局域网设备发现 jmdns
     implementation("org.jmdns:jmdns:3.5.7")
-    implementation(project(":miuix-main:miuix"))
     // AndroidX Security: EncryptedSharedPreferences
     implementation("androidx.security:security-crypto:1.1.0")
     // Coil: image loading (Kotlin + Coroutines friendly)
@@ -161,3 +161,5 @@ tasks.register("printVersionName") {
         println(computedVersionName)
     }
 }
+
+
