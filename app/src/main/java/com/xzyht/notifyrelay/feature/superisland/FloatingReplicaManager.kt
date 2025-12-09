@@ -745,20 +745,28 @@ object FloatingReplicaManager {
             bottomMargin = (24 * density).toInt()
         }
         val closeView = ImageView(context).apply {
-            layoutParams = closeLp
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0x99000000.toInt())
+                layoutParams = closeLp
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x99000000.toInt())
+                }
+                // 使用实际的叉号图标（请在资源中提供 ic_pip_close）
+                try {
+                    setImageResource(com.xzyht.notifyrelay.R.drawable.ic_pip_close)
+                } catch (_: Exception) { }
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                alpha = 0.7f
+                visibility = View.VISIBLE
+                contentDescription = "close_overlay_target"
+                setOnClickListener {
+                    // 点击关闭按钮时，移除所有浮窗条目
+                    entries.keys.toList().forEach { key ->
+                        removeEntry(key)
+                    }
+                    // 隐藏全屏关闭层
+                    hideCloseOverlay()
+                }
             }
-            // 使用实际的叉号图标（请在资源中提供 ic_pip_close）
-            try {
-                setImageResource(com.xzyht.notifyrelay.R.drawable.ic_pip_close)
-            } catch (_: Exception) { }
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            alpha = 0.7f
-            visibility = View.VISIBLE
-            contentDescription = "close_overlay_target"
-        }
         container.addView(closeView)
 
         try {
