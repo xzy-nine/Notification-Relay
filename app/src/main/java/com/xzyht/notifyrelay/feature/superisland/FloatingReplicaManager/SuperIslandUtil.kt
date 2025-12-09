@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

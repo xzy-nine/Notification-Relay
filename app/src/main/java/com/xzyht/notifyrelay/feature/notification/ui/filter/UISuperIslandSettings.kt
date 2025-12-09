@@ -44,6 +44,7 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory

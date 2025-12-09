@@ -61,7 +61,7 @@ object ImageLoader {
      * 同步加载并返回 Bitmap（后台线程使用）。
      */
     fun loadBitmap(urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
-        // Deprecated synchronous path — prefer suspend loader with context
+        // 已弃用的同步路径 —— 建议使用带上下文的 suspend 加载器
         return if (urlOrData.startsWith("data:", ignoreCase = true)) {
             DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
         } else {
@@ -70,7 +70,7 @@ object ImageLoader {
     }
 
     private fun loadHttpBitmap(url: String, timeoutMs: Int): Bitmap? {
-        // Keep existing implementation as fallback for synchronous callers
+        // 保留原有实现，作为同步调用方的兜底方案
         return try {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = timeoutMs
@@ -93,8 +93,7 @@ object ImageLoader {
     }
 
     /**
-     * Suspend loader that uses Coil for HTTP/URI loading and delegates data: URIs to DataUrlUtils.
-     * Prefer this API from coroutine contexts where a Context is available.
+    *暂停使用 Coil 进行 HTTP/URI 加载的加载器，并将 data: 协议 URI 委托给 DataUrlUtils 处理。
      */
     suspend fun loadBitmapSuspend(context: Context, urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
         return try {
@@ -110,7 +109,7 @@ object ImageLoader {
                 if (result is SuccessResult) {
                     val drawable = result.drawable
                     if (drawable is android.graphics.drawable.BitmapDrawable) return drawable.bitmap
-                    // convert drawable to bitmap
+                    // 将 drawable 转换为 bitmap
                     val bmp = DataUrlUtils.drawableToBitmap(drawable)
                     bmp
                 } else null
