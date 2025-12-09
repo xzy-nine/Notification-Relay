@@ -23,31 +23,12 @@ fun parseColor(colorString: String?): Int? {
 }
 
 suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitmap? {
-    return withContext(Dispatchers.IO) {
-        try {
-            // 支持 data URI（base64）、以及常规 http/https URL
-            val resolved = SuperIslandImageStore.resolve(context, url) ?: url
-            if (resolved.startsWith("data:", ignoreCase = true)) {
-                // delegate data URI decoding to DataUrlUtils (handles whitespace/newlines)
-                return@withContext DataUrlUtils.decodeDataUrlToBitmap(resolved)
-            }
-            val conn = java.net.URL(resolved).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = timeoutMs
-            conn.readTimeout = timeoutMs
-            conn.instanceFollowRedirects = true
-            conn.requestMethod = "GET"
-            conn.doInput = true
-            conn.connect()
-            if (conn.responseCode != 200) return@withContext null
-            val stream = conn.inputStream
-            val bmp = BitmapFactory.decodeStream(stream)
-            try { stream.close() } catch (_: Exception) {}
-            conn.disconnect()
-            return@withContext bmp
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 下载图片失败: ${e.message}")
-            return@withContext null
-        }
+    return try {
+        val resolved = SuperIslandImageStore.resolve(context, url) ?: url
+        ImageLoader.loadBitmapSuspend(context, resolved, timeoutMs)
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 下载图片失败: ${e.message}")
+        null
     }
 }
 

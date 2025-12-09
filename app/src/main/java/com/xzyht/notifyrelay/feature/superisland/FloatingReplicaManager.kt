@@ -1018,7 +1018,7 @@ object FloatingReplicaManager {
         if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
         val raw = picMap[key] ?: return null
         val url = SuperIslandImageStore.resolve(context, raw) ?: raw
-        return withContext(Dispatchers.IO) { downloadBitmap(url, 5000) }
+        return withContext(Dispatchers.IO) { downloadBitmap(context, url, 5000) }
     }
 
     private suspend fun downloadFirstAvailableImage(context: Context, picMap: Map<String, String>?): Bitmap? {
@@ -1026,7 +1026,7 @@ object FloatingReplicaManager {
         for ((_, url) in picMap) {
             try {
                 val resolved = SuperIslandImageStore.resolve(context, url) ?: url
-                val bmp = withContext(Dispatchers.IO) { downloadBitmap(resolved, 5000) }
+                val bmp = withContext(Dispatchers.IO) { downloadBitmap(context, resolved, 5000) }
                 if (bmp != null) return bmp
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
@@ -1035,8 +1035,10 @@ object FloatingReplicaManager {
         return null
     }
 
-    private fun downloadBitmap(url: String, timeoutMs: Int): Bitmap? {
-        return try { ImageLoader.loadBitmap(url, timeoutMs) } catch (e: Exception) {
+    private suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitmap? {
+        return try {
+            ImageLoader.loadBitmapSuspend(context, url, timeoutMs)
+        } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             null
         }

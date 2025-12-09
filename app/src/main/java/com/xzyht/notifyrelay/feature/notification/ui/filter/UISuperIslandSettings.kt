@@ -454,7 +454,7 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
 
                 val decoded = when {
                     DataUrlUtils.isDataUrl(resolved) -> DataUrlUtils.decodeDataUrlToBitmap(resolved)
-                    resolved.startsWith("http", ignoreCase = true) -> downloadBitmap(resolved)
+                    resolved.startsWith("http", ignoreCase = true) -> downloadBitmap(context, resolved)
                     else -> null
                 }
                 // 缓存仍以传入的 key (可能是 ref:...) 作为索引，便于下次直接命中
@@ -508,42 +508,10 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
     }
 }
 
-private fun downloadBitmap(urlString: String, timeoutMs: Int = 5_000): Bitmap? {
+private suspend fun downloadBitmap(context: Context, urlString: String, timeoutMs: Int = 5_000): Bitmap? {
     return try {
-        val connection = (URL(urlString).openConnection() as? HttpURLConnection)?.apply {
-            connectTimeout = timeoutMs
-            readTimeout = timeoutMs
-            instanceFollowRedirects = true
-            requestMethod = "GET"
-            doInput = true
-        } ?: return null
-
-        try {
-            connection.connect()
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-            val bytes = connection.inputStream.use { stream ->
-                val buffer = ByteArrayOutputStream()
-                val temp = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = stream.read(temp)
-                    if (read == -1) break
-                    total += read
-                    if (total > SUPER_ISLAND_DOWNLOAD_MAX_BYTES) {
-                        return@use null
-                    }
-                    buffer.write(temp, 0, read)
-                }
-                buffer.toByteArray()
-            } ?: return null
-            if (bytes.isEmpty()) return null
-            decodeSampledBitmap(bytes, SUPER_ISLAND_IMAGE_MAX_DIMENSION)
-        } finally {
-            try { connection.disconnect() } catch (_: Exception) {}
-        }
-    } catch (_: Exception) {
-        null
-    }
+        ImageLoader.loadBitmapSuspend(context, urlString, timeoutMs)
+    } catch (_: Exception) { null }
 }
 
 private fun decodeSampledBitmap(bytes: ByteArray, maxDimension: Int): Bitmap? {

@@ -1,10 +1,14 @@
 package com.xzyht.notifyrelay.core.util
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.widget.ImageView
+import coil.ImageLoader as CoilImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
@@ -57,6 +61,7 @@ object ImageLoader {
      * 同步加载并返回 Bitmap（后台线程使用）。
      */
     fun loadBitmap(urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
+        // Deprecated synchronous path — prefer suspend loader with context
         return if (urlOrData.startsWith("data:", ignoreCase = true)) {
             DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
         } else {
@@ -65,6 +70,7 @@ object ImageLoader {
     }
 
     private fun loadHttpBitmap(url: String, timeoutMs: Int): Bitmap? {
+        // Keep existing implementation as fallback for synchronous callers
         return try {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = timeoutMs
@@ -84,5 +90,33 @@ object ImageLoader {
                 bmp
             }
         } catch (_: Exception) { null }
+    }
+
+    /**
+     * Suspend loader that uses Coil for HTTP/URI loading and delegates data: URIs to DataUrlUtils.
+     * Prefer this API from coroutine contexts where a Context is available.
+     */
+    suspend fun loadBitmapSuspend(context: Context, urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
+        return try {
+            if (urlOrData.startsWith("data:", ignoreCase = true)) {
+                DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
+            } else {
+                val loader = CoilImageLoader(context)
+                val request = ImageRequest.Builder(context)
+                    .data(urlOrData)
+                    .allowHardware(false)
+                    .build()
+                val result = loader.execute(request)
+                if (result is SuccessResult) {
+                    val drawable = result.drawable
+                    if (drawable is android.graphics.drawable.BitmapDrawable) return drawable.bitmap
+                    // convert drawable to bitmap
+                    val bmp = DataUrlUtils.drawableToBitmap(drawable)
+                    bmp
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 }
