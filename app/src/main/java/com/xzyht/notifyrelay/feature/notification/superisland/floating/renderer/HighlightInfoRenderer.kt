@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
 import android.content.res.Configuration
@@ -14,6 +14,8 @@ import kotlin.math.max
 import org.json.JSONObject
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 
 // 高亮信息模板：强调图文组件，强调显示数据或内容
 data class HighlightInfo(

@@ -14,10 +14,10 @@ import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.CircularProgressView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bindTimerUpdater
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.formatTimerInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.TimerInfo as FMTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.bindTimerUpdater
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.TimerInfo as FMTimerInfo
 
 /**
  * 创建 B区 浮窗视图。

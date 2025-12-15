@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -7,8 +7,6 @@ import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
-
-// 复用工具函数
 
 fun parseColor(colorString: String?): Int? {
     return try {

@@ -1,9 +1,11 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
 import android.text.Html
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import org.json.JSONObject
 
 // 提示信息模板：按钮组件2和3，包含文本和按钮

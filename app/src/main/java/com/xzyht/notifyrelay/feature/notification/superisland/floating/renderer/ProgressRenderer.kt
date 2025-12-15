@@ -1,10 +1,11 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.R
 import android.content.Context
 import android.content.res.ColorStateList
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import org.json.JSONObject
 
 // 进度信息：定义进度条的样式和状态

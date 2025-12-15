@@ -1,9 +1,11 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
 import android.text.Html
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import org.json.JSONObject
 
 // 数据类定义模板组件，使用分支结构避免重复定义

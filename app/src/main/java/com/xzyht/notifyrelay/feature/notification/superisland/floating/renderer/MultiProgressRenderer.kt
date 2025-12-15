@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -12,6 +12,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.downloadBitmap
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import kotlin.math.max
 import kotlin.math.roundToInt
 import org.json.JSONObject
