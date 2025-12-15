@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay.feature.notification.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.compose.animation.core.exponentialDecay
@@ -12,6 +13,7 @@ import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,12 +37,17 @@ import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
+import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 
 enum class DragValue { Center, End }
@@ -329,47 +336,15 @@ fun NotificationHistoryScreen() {
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val clearHistory: () -> Unit = {
         try {
+            // 只清除当前设备的历史，不删除其他设备的历史文件
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
             appInfoCache.clear() // 清空应用信息缓存
-            // 修正：同步清理本地json文件内容
+            // 同步清理当前设备的本地json文件内容
             val store = com.xzyht.notifyrelay.common.data.PersistenceManager
             val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
             kotlinx.coroutines.runBlocking {
                 store.clearNotificationRecords(context, fileKey)
             }
-            // 新增：仅删除当前设备和所有已不在认证设备列表的通知历史文件（本机除非当前选中，否则不删）
-            try {
-                // 获取当前认证设备uuid集合（含本机local）
-                val authedUuids: Set<String> = try {
-                    val deviceManager = DeviceForwardFragment.getDeviceManager(context)
-                    val field = deviceManager::class.java.getDeclaredField("authenticatedDevices")
-                    field.isAccessible = true
-                    @Suppress("UNCHECKED_CAST")
-                    val map = field.get(deviceManager) as? Map<String, *>
-                    val set = map?.filter { entry ->
-                        val v = entry.value
-                        v?.let {
-                            val isAcceptedField = v::class.java.getDeclaredField("isAccepted").apply { isAccessible = true }
-                            isAcceptedField.getBoolean(v)
-                        } ?: false
-                    }?.keys?.toSet() ?: emptySet()
-                    set + "local"
-                } catch (_: Exception) {
-                    setOf("local")
-                }
-                for (file in PersistenceManager.getAllNotificationFiles(context)) {
-                    val name = file.name.removePrefix("notification_records_").removeSuffix(".json")
-                    // 当前设备的历史文件始终删除
-                    if (name == fileKey) {
-                        PersistenceManager.deleteNotificationFile(context, fileKey)
-                        continue
-                    }
-                    // 不是当前设备，且不在认证设备列表，且不是本机（除非当前选中）
-                    if (!authedUuids.contains(name) && !(name == "local" && fileKey != "local")) {
-                        PersistenceManager.deleteNotificationFile(context, name)
-                    }
-                }
-            } catch (_: Exception) {}
             // 主动刷新 StateFlow
             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {
@@ -644,57 +619,115 @@ fun NotificationHistoryScreen() {
         }
     }
 
-    // 只显示通知列表和清除按钮
-    Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colorScheme.background)
-                .padding(16.dp)
-        ) {
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "通知历史",
-                style = textStyles.title2.copy(color = colorScheme.onBackground)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (notifications.isEmpty()) {
-                Spacer(modifier = Modifier.height(16.dp))
-                top.yukonga.miuix.kmp.basic.Text(
-                    text = "暂无通知",
-                    style = textStyles.body1.copy(color = colorScheme.onBackground)
-                )
-            } else {
-                NotificationListBlock(
-                    notifications = notifications,
-                    mixedList = mixedList,
-                    getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
-                )
-            }
-        }
-        // 悬浮清除按钮
-        if (notifications.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                Card(
-                    modifier = Modifier.padding(24.dp),
+    // 使用 Miuix Scaffold 重构布局
+    Scaffold(
+        containerColor = colorScheme.background,
+        floatingToolbar = {
+            if (notifications.isNotEmpty()) {
+                FloatingToolbar(
                     color = colorScheme.primary,
-                    cornerRadius = 24.dp,
-                    pressFeedbackType = PressFeedbackType.Sink,
-                    showIndication = true,
-                    onClick = clearHistory,
-                    onLongPress = {
-                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
-                        intent.putExtra("fromInternal", true)
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                    }
+                    cornerRadius = 20.dp,
+                    showDivider = false
                 ) {
+                    // 使用Row水平排列按钮
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 清除按钮 - 始终显示
+                        Button(
+                            onClick = {
+                                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "清除按钮点击事件触发")
+                                clearHistory()
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            cornerRadius = 16.dp,
+                            minWidth = 0.dp,
+                            minHeight = 0.dp,
+                            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            top.yukonga.miuix.kmp.basic.Text(
+                                text = "清除",
+                                style = textStyles.body2.copy(color = colorScheme.onPrimary)
+                            )
+                        }
+                        
+                        // 垂直分割线
+                        if (BuildConfig.DEBUG) {
+                            VerticalDivider(
+                                thickness = 1.dp,
+                                modifier = Modifier.height(30.dp)
+                            )
+                        }
+                        
+                        // 引导按钮 - 仅在DEBUG模式下显示
+                        if (BuildConfig.DEBUG) {
+                            Button(
+                                onClick = {
+                                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "引导按钮点击事件触发")
+                                    try {
+                                        // 跳转引导页面
+                                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
+                                        intent.putExtra("fromInternal", true)
+                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(intent)
+                                        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "引导跳转成功")
+                                    } catch (e: Exception) {
+                                        if (BuildConfig.DEBUG) Log.e("NotifyRelay", "引导跳转失败", e)
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "跳转失败: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                                cornerRadius = 16.dp,
+                                minWidth = 0.dp,
+                                minHeight = 0.dp,
+                                insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                top.yukonga.miuix.kmp.basic.Text(
+                                    text = "引导",
+                                    style = textStyles.body2.copy(color = colorScheme.onPrimary)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        floatingToolbarPosition = ToolbarPosition.BottomEnd,
+        content = { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        top = paddingValues.calculateTopPadding() + 16.dp,
+                        bottom = paddingValues.calculateBottomPadding() + 16.dp,
+                        start = 16.dp,
+                        end = 16.dp
+                    )
+            ) {
+                top.yukonga.miuix.kmp.basic.Text(
+                    text = "通知历史",
+                    style = textStyles.title2.copy(color = colorScheme.onBackground)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                if (notifications.isEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
                     top.yukonga.miuix.kmp.basic.Text(
-                        text = "清除",
-                        style = textStyles.body2.copy(color = colorScheme.onPrimary),
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                        text = "暂无通知",
+                        style = textStyles.body1.copy(color = colorScheme.onBackground)
+                    )
+                } else {
+                    NotificationListBlock(
+                        notifications = notifications,
+                        mixedList = mixedList,
+                        getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
                     )
                 }
             }
         }
-    }
+    )
 }
