@@ -8,6 +8,7 @@ import org.json.JSONObject
 import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
 import android.widget.TextView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.parseBigIslandArea
 
 // 摘要态组件解析
 
@@ -159,7 +160,9 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
     val paramIsland = (root.optJSONObject("param_island")
         ?: root.optJSONObject("paramIsland")
         ?: root.optJSONObject("islandParam"))
-    val big = parseBigIslandArea(paramIsland?.optJSONObject("bigIslandArea") ?: paramIsland?.optJSONObject("bigIsland"))
+    val big = parseBigIslandArea(
+        paramIsland?.optJSONObject("bigIslandArea") ?: paramIsland?.optJSONObject("bigIsland")
+    )
     val leftPic = big?.leftImage
     val rightPic = big?.rightImage
 
