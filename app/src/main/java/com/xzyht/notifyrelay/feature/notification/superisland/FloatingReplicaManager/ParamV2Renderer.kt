@@ -6,6 +6,7 @@ import android.widget.LinearLayout
 import org.json.JSONObject
 import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
+import com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager.parseBigIslandArea
 import org.json.JSONArray
 
 // 摘要态组件解析

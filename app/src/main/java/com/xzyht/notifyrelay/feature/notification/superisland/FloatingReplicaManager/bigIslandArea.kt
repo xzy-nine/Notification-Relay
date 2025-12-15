@@ -1,6 +1,5 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager
 
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**

@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.NotificationListenerService
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
@@ -45,7 +47,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         superPkg,
                         try { applicationContext.packageName } catch (_: Exception) { null },
                         System.currentTimeMillis(),
-                        try { com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
+                        try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
                         try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
                         try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
                         deviceManager,
@@ -190,7 +192,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 当开关开启且检测到超级岛数据时，只发送超级岛分支，不再走普通通知转发
         val superIslandHandledAndStop: Boolean = if (superIslandEnabled) {
             try {
-                val superData = com.xzyht.notifyrelay.feature.superisland.SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
+                val superData = SuperIslandManager.extractSuperIslandData(sbn, applicationContext)
                 if (superData != null) {
                     if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
                     try {
@@ -201,7 +203,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         val sbnInstanceId = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
                         // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判
                         val oldId = try { superIslandFeatureByKey[sbnInstanceId]?.second } catch (_: Exception) { null }
-                        val computedId = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+                        val computedId = SuperIslandProtocol.computeFeatureId(
                             superPkg,
                             superData.paramV2Raw,
                             superData.title,

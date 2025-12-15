@@ -1,9 +1,10 @@
-package com.xzyht.notifyrelay.feature.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland
 
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
+import kotlin.collections.iterator
 
 /**
  * 超级岛图片去重存储（内存 + 简单文件持久化）。
@@ -35,30 +36,30 @@ object SuperIslandImageStore {
                     val raw = file.readText(Charsets.UTF_8)
                     try {
                         // 先尝试解析为 wrapper { images: {...}, lastSeen: {...} }
-                        val wrapperType = object : TypeToken<Map<String, Any>>() {}.type
+                        val wrapperType = object : com.google.gson.reflect.TypeToken<Map<String, Any>>() {}.type
                         val wrapper: Map<String, Any>? = gson.fromJson(raw, wrapperType)
                         if (wrapper != null && wrapper.containsKey("images")) {
                             val imagesJson = gson.toJson(wrapper["images"])
-                            val imagesType = object : TypeToken<Map<String, String>>() {}.type
+                            val imagesType = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
                             val loadedImages: Map<String, String> = gson.fromJson(imagesJson, imagesType) ?: emptyMap()
                             map.clear(); map.putAll(loadedImages)
                             // load lastSeen if present
                             val lastSeenObj = wrapper["lastSeen"]
                             if (lastSeenObj != null) {
                                 val lastSeenJson = gson.toJson(lastSeenObj)
-                                val lastSeenType = object : TypeToken<Map<String, Long>>() {}.type
+                                val lastSeenType = object : com.google.gson.reflect.TypeToken<Map<String, Long>>() {}.type
                                 val loadedLastSeen: Map<String, Long> = gson.fromJson(lastSeenJson, lastSeenType) ?: emptyMap()
                                 lastSeen.clear(); lastSeen.putAll(loadedLastSeen)
                             }
                         } else {
                             // fallback: plain map
-                            val type = object : TypeToken<Map<String, String>>() {}.type
+                            val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
                             val loaded: Map<String, String> = gson.fromJson(raw, type) ?: emptyMap()
                             map.clear(); map.putAll(loaded)
                         }
                     } catch (_: Exception) {
                         // best-effort fallback to plain map
-                        val type = object : TypeToken<Map<String, String>>() {}.type
+                        val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
                         val loaded: Map<String, String> = gson.fromJson(file.readText(Charsets.UTF_8), type) ?: emptyMap()
                         map.clear(); map.putAll(loaded)
                     }
@@ -90,7 +91,7 @@ object SuperIslandImageStore {
      *
      * 该方法为“最后引用计数更新式”：先扫描整个历史，更新映射，再清理未被引用的项。
      */
-    fun rebuildRefCountsAndPrune(context: Context, historyEntries: List<com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry>) {
+    fun rebuildRefCountsAndPrune(context: Context, historyEntries: List<com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry>) {
         ensureLoaded(context)
         synchronized(lock) {
             refCounts.clear()

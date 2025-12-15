@@ -13,7 +13,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import kotlin.math.max
 import kotlin.math.roundToInt
 import org.json.JSONObject

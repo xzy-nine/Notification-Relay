@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland
 
 import android.content.Context
 import com.google.gson.reflect.TypeToken
@@ -27,7 +27,7 @@ object SuperIslandHistory {
     private const val STORAGE_DEVICE_KEY = "super_island_history"
     private const val MAX_ENTRIES = 600
 
-    private val historyTypeToken = object : TypeToken<List<SuperIslandHistoryEntry>>() {}
+    private val historyTypeToken = object : com.google.gson.reflect.TypeToken<List<SuperIslandHistoryEntry>>() {}
 
     private val historyFlow = MutableStateFlow<List<SuperIslandHistoryEntry>>(emptyList())
     private val lock = Any()

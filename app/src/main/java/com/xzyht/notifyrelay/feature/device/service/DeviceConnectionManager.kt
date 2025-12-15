@@ -26,6 +26,7 @@ import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
 import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
 
 data class DeviceInfo(
     val uuid: String,
@@ -673,7 +674,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 put("type", "SI_ACK")
                 put("hash", hash)
                 if (!featureKeyValue.isNullOrEmpty()) {
-                    put("featureKeyName", com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.FEATURE_KEY_NAME)
+                    put("featureKeyName", SuperIslandProtocol.FEATURE_KEY_NAME)
                     put("featureKeyValue", featureKeyValue)
                 }
                 put("time", System.currentTimeMillis())

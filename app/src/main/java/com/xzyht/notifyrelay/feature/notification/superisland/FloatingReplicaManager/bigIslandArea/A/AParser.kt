@@ -1,7 +1,6 @@
 package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.A
 
 import org.json.JSONObject
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseBigIslandArea
 
 /**
  * 解析 A区（imageTextInfoLeft）。

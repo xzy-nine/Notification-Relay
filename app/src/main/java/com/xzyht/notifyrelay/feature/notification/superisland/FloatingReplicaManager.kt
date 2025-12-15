@@ -1,10 +1,9 @@
-package com.xzyht.notifyrelay.feature.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland
 
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
@@ -32,11 +31,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
-import com.xzyht.notifyrelay.core.util.MessageSender
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
@@ -48,6 +44,7 @@ import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTi
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.resolveHighlightIconBitmap
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
+import kotlin.collections.iterator
 import kotlin.math.abs
 
 /**

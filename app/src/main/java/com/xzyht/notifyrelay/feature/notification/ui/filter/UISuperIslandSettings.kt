@@ -45,10 +45,10 @@ import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
-import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
 import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

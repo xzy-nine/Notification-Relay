@@ -13,7 +13,7 @@ import java.util.Locale
 import kotlin.math.max
 import org.json.JSONObject
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 
 // 高亮信息模板：强调图文组件，强调显示数据或内容
 data class HighlightInfo(
