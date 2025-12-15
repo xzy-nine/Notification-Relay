@@ -1,6 +1,5 @@
 package com.xzyht.notifyrelay.feature.notification.ui
 
-import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.compose.animation.core.exponentialDecay
@@ -13,7 +12,6 @@ import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,22 +30,16 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
-import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
-import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 
 enum class DragValue { Center, End }
@@ -60,7 +52,6 @@ object ToastDebounce {
 
 @Composable
 fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     Box(
         modifier = modifier
@@ -80,39 +71,35 @@ if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
                 tint = Color.White
             )
             Spacer(modifier = Modifier.height(4.dp))
-            top.yukonga.miuix.kmp.basic.Text(
-                text = "删除",
-                style = textStyles.body2.copy(color = Color.White)
-            )
+            Text(text = "删除", style = textStyles.body2.copy(color = Color.White))
         }
     }
 }
 
 @Composable
-fun NotificationCard(record: NotificationRecord, appName: String, appIcon: android.graphics.Bitmap?, context: android.content.Context, getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>) {
+fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitmap?, context: android.content.Context, getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     
     // 对包名进行等价映射
-    val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+    val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
     val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
     
     // 使用映射后的包名获取应用信息
     val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
-    val (mappedAppName, mappedAppIcon) = appInfo
-    
-    val displayAppName = record.appName ?: mappedAppName
+    val (_, mappedAppIcon) = appInfo
     val displayAppIcon = mappedAppIcon ?: appIcon
     
     // 修正：单条通知卡片标题应为原始通知标题
     val displayTitle = record.title ?: "(无标题)"
-    Surface(
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         onClick = {
             // 跳转到对应应用主界面
             val pkg = record.packageName
-            if (!pkg.isNullOrEmpty()) {
+            if (pkg.isNotEmpty()) {
                 // 应用等价映射
-                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
                 
                 var canOpen = false
@@ -146,10 +133,10 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         color = cardColorScheme.surfaceContainerHighest,
-        shadowElevation = 4.dp
+        cornerRadius = 8.dp,
+        showIndication = true,
+        pressFeedbackType = PressFeedbackType.Tilt
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -162,35 +149,22 @@ fun NotificationCard(record: NotificationRecord, appName: String, appIcon: andro
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 // 标题显示为原始通知标题
-                top.yukonga.miuix.kmp.basic.Text(
+                Text(
                     text = displayTitle,
                     style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Spacer(modifier = Modifier.height(4.dp))
-            top.yukonga.miuix.kmp.basic.Text(
+            Text(
                 text = record.text ?: "(无内容)",
                 style = notificationTextStyles.body1.copy(color = cardColorScheme.onBackground)
             )
             Spacer(modifier = Modifier.height(4.dp))
-            top.yukonga.miuix.kmp.basic.Text(
+            Text(
                 text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(record.time)),
                 style = notificationTextStyles.body2.copy(color = cardColorScheme.outline)
             )
-        }
-    }
-}
-
-@Composable
-fun AsyncAppIcon(packageName: String?, onIconLoaded: (android.graphics.Bitmap?) -> Unit) {
-    val context = LocalContext.current
-    LaunchedEffect(packageName) {
-        if (packageName != null) {
-            val icon = withContext(Dispatchers.IO) {
-                getAppNameAndIcon(context, packageName).second
-            }
-            onIconLoaded(icon)
         }
     }
 }
@@ -265,7 +239,7 @@ fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): android.grap
 
 
 class NotificationHistoryFragment : Fragment() {
-    override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, savedInstanceState: Bundle?): android.view.View? {
+    override fun onCreateView(inflater: android.view.LayoutInflater, container: android.view.ViewGroup?, savedInstanceState: Bundle?): android.view.View {
         return ComposeView(requireContext()).apply {
             setContent {
                 MiuixTheme {
@@ -294,7 +268,7 @@ fun NotificationHistoryScreen() {
 
     val mixedList by remember(notifications) {
         derivedStateOf {
-            val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+            val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val grouped = notifications.groupBy { record ->
                 // 使用映射后的包名进行分组
                 com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
@@ -332,8 +306,6 @@ fun NotificationHistoryScreen() {
         }
     }
 
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val clearHistory: () -> Unit = {
         try {
             // 只清除当前设备的历史，不删除其他设备的历史文件
@@ -358,7 +330,7 @@ fun NotificationHistoryScreen() {
     }
     val density = LocalDensity.current
     val deleteWidthPx = with(density) { 80.dp.toPx() }
-    val scope = rememberCoroutineScope()
+
     // 通用通知列表块
     @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
     @Composable
@@ -411,36 +383,36 @@ fun NotificationHistoryScreen() {
                         ) {
                             if (list.size == 1) {
                                 val record = list[0]
-                                val (localAppName, appIcon) = getCachedAppInfo(record.packageName)
-                                NotificationCard(record, localAppName, appIcon, context, getCachedAppInfo)
+                                val (_, appIcon) = getCachedAppInfo(record.packageName)
+                                NotificationCard(record, appIcon, context, getCachedAppInfo)
                             } else {
                                 val latest = list.maxByOrNull { it.time }
                                 var expanded by remember { mutableStateOf(false) }
                                 // 使用映射后的包名获取应用信息
-                                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                                val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
                                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPkgs)
                                 val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
                                 val (appName, appIcon) = appInfo
                                 // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
                                 val groupTitle = when {
-                                    !latest?.appName.isNullOrBlank() -> latest?.appName!!
-                                    !appName.isNullOrBlank() -> appName
-                                    !mappedPkg.isNullOrBlank() -> mappedPkg
+                                    !latest?.appName.isNullOrBlank() -> latest.appName!!
+                                    appName.isNotBlank() -> appName
+                                    mappedPkg.isNotBlank() -> mappedPkg
                                     else -> "(未知应用)"
                                 }
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 8.dp)
-                                        .then(if (!expanded) Modifier.clickable { expanded = true } else Modifier),
+                                        .padding(vertical = 8.dp),
+                                    onClick = { expanded = !expanded },
                                     color = colorScheme.surfaceContainerHighest,
-                                    cornerRadius = 12.dp
+                                    cornerRadius = 12.dp,
+                                    showIndication = true,
+                                    pressFeedbackType = PressFeedbackType.Sink
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
-                                            modifier = if (expanded)
-                                                Modifier.fillMaxWidth().clickable { expanded = false }
-                                            else Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (appIcon != null) {
@@ -451,12 +423,12 @@ fun NotificationHistoryScreen() {
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                             }
-                                            top.yukonga.miuix.kmp.basic.Text(
+                                            Text(
                                                 text = groupTitle,
                                                 style = textStyles.title3.copy(color = colorScheme.onBackground)
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
-                                            top.yukonga.miuix.kmp.basic.Text(
+                                            Text(
                                                 text = "最新时间: " + (latest?.time?.let {
                                                     java.text.SimpleDateFormat(
                                                         "yyyy-MM-dd HH:mm:ss"
@@ -465,7 +437,7 @@ fun NotificationHistoryScreen() {
                                                 style = textStyles.body2.copy(color = colorScheme.onBackground)
                                             )
                                             Spacer(modifier = Modifier.weight(1f))
-                                            top.yukonga.miuix.kmp.basic.Text(
+                                            Text(
                                                 text = if (expanded) "收起" else "展开",
                                                 style = textStyles.body2.copy(color = colorScheme.primary)
                                             )
@@ -479,16 +451,16 @@ fun NotificationHistoryScreen() {
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     // 修正：标题应为原始通知标题而非应用名
-                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                    Text(
                                                         text = record.title ?: "(无标题)",
                                                         style = textStyles.body2.copy(
-                                                            color = androidx.compose.ui.graphics.Color(0xFF0066B2),
+                                                            color = Color(0xFF0066B2),
                                                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                                                         ),
                                                         modifier = Modifier.weight(0.4f)
                                                     )
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    top.yukonga.miuix.kmp.basic.Text(
+                                                    Text(
                                                         text = record.text ?: "(无内容)",
                                                         style = textStyles.body2.copy(color = colorScheme.onBackground),
                                                         modifier = Modifier.weight(0.6f),
@@ -497,7 +469,7 @@ fun NotificationHistoryScreen() {
                                                     )
                                                 }
                                                 if (idx < showList.lastIndex) {
-                                                    top.yukonga.miuix.kmp.basic.HorizontalDivider(
+                                                    HorizontalDivider(
                                                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                                         color = colorScheme.outline,
                                                         thickness = 1.dp
@@ -505,7 +477,7 @@ fun NotificationHistoryScreen() {
                                                 }
                                             }
                                             if (list.size > 3) {
-                                                top.yukonga.miuix.kmp.basic.Text(
+                                                Text(
                                                     text = "... 共${list.size}条，点击展开",
                                                     style = textStyles.body2.copy(color = colorScheme.outline)
                                                 )
@@ -561,8 +533,9 @@ fun NotificationHistoryScreen() {
                                                             )
                                                             .offset { IntOffset(offset.roundToInt(), 0) }
                                                     ) {
-                                                        val (localAppName, appIcon1) = getCachedAppInfo(record.packageName)
-                                                        NotificationCard(record, localAppName, appIcon1, context, getCachedAppInfo)
+                                                        val (_, appIcon1) = getCachedAppInfo(record.packageName)
+                                                        NotificationCard(record,
+                                                            appIcon1, context, getCachedAppInfo)
                                                     }
                                                     // 删除按钮
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {
@@ -582,7 +555,7 @@ fun NotificationHistoryScreen() {
                                             // 如果通知数量超过限制，显示提示信息
                                             if (expandedList.size > maxExpandedItems) {
                                                 Spacer(modifier = Modifier.height(8.dp))
-                                                top.yukonga.miuix.kmp.basic.Text(
+                                                Text(
                                                     text = "... 仅显示前${maxExpandedItems}条，共${expandedList.size}条通知",
                                                     style = textStyles.body2.copy(color = colorScheme.outline)
                                                 )
@@ -646,7 +619,7 @@ fun NotificationHistoryScreen() {
                             minHeight = 0.dp,
                             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            top.yukonga.miuix.kmp.basic.Text(
+                            Text(
                                 text = "清除",
                                 style = textStyles.body2.copy(color = colorScheme.onPrimary)
                             )
@@ -664,16 +637,16 @@ fun NotificationHistoryScreen() {
                         if (BuildConfig.DEBUG) {
                             Button(
                                 onClick = {
-                                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "引导按钮点击事件触发")
+                                    Log.d("NotifyRelay", "引导按钮点击事件触发")
                                     try {
                                         // 跳转引导页面
                                         val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
                                         intent.putExtra("fromInternal", true)
                                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                         context.startActivity(intent)
-                                        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "引导跳转成功")
+                                        Log.d("NotifyRelay", "引导跳转成功")
                                     } catch (e: Exception) {
-                                        if (BuildConfig.DEBUG) Log.e("NotifyRelay", "引导跳转失败", e)
+                                        Log.e("NotifyRelay", "引导跳转失败", e)
                                         android.widget.Toast.makeText(
                                             context,
                                             "跳转失败: ${e.message}",
@@ -687,7 +660,7 @@ fun NotificationHistoryScreen() {
                                 minHeight = 0.dp,
                                 insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                top.yukonga.miuix.kmp.basic.Text(
+                                Text(
                                     text = "引导",
                                     style = textStyles.body2.copy(color = colorScheme.onPrimary)
                                 )
@@ -709,14 +682,14 @@ fun NotificationHistoryScreen() {
                         end = 16.dp
                     )
             ) {
-                top.yukonga.miuix.kmp.basic.Text(
+                Text(
                     text = "通知历史",
                     style = textStyles.title2.copy(color = colorScheme.onBackground)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 if (notifications.isEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    top.yukonga.miuix.kmp.basic.Text(
+                    Text(
                         text = "暂无通知",
                         style = textStyles.body1.copy(color = colorScheme.onBackground)
                     )
