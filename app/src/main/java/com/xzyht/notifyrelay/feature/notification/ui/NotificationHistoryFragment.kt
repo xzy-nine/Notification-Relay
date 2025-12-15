@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
 // AndroidX 碎片管理
 import androidx.fragment.app.Fragment
 
@@ -50,6 +51,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Delete
+import top.yukonga.miuix.kmp.basic.CardDefaults
 
 // ========================= 工具函数/常量 =========================
 import kotlin.math.roundToInt
@@ -85,7 +87,14 @@ fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitmap?, context: android.content.Context, getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>) {
+fun NotificationCard(
+    record: NotificationRecord, 
+    appIcon: android.graphics.Bitmap?, 
+    context: android.content.Context, 
+    getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>,
+    cardColor: Color,
+    contentColor: Color
+) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     
@@ -141,39 +150,41 @@ fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitma
                 }
             }
         },
-        color = cardColorScheme.surfaceContainerHighest,
         cornerRadius = 8.dp,
+        insideMargin = PaddingValues(12.dp),
+        colors = CardDefaults.defaultColors(
+            color = cardColor,
+            contentColor = contentColor
+        ),
         showIndication = true,
         pressFeedbackType = PressFeedbackType.Tilt
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (displayAppIcon != null) {
-                    Icon(
-                        bitmap = displayAppIcon.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                // 标题显示为原始通知标题
-                Text(
-                    text = displayTitle,
-                    style = notificationTextStyles.body2.copy(color = cardColorScheme.primary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (displayAppIcon != null) {
+                Image(
+                    bitmap = displayAppIcon.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            // 标题显示为原始通知标题
             Text(
-                text = record.text ?: "(无内容)",
-                style = notificationTextStyles.body1.copy(color = cardColorScheme.onBackground)
+                text = displayTitle,
+                style = notificationTextStyles.body2.copy(color = cardColorScheme.onSurface)
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(record.time)),
-                style = notificationTextStyles.body2.copy(color = cardColorScheme.outline)
-            )
+            Spacer(modifier = Modifier.width(8.dp))
         }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = record.text ?: "(无内容)",
+            style = notificationTextStyles.body1.copy(color = cardColorScheme.onSurface)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(record.time)),
+            style = notificationTextStyles.body2.copy(color = cardColorScheme.onSurfaceSecondary)
+        )
     }
 }
 
@@ -387,7 +398,14 @@ fun NotificationHistoryScreen() {
                             if (list.size == 1) {
                                 val record = list[0]
                                 val (_, appIcon) = getCachedAppInfo(record.packageName)
-                                NotificationCard(record, appIcon, context, getCachedAppInfo)
+                                NotificationCard(
+                                    record = record, 
+                                    appIcon = appIcon, 
+                                    context = context, 
+                                    getCachedAppInfo = getCachedAppInfo,
+                                    cardColor = colorScheme.surface,
+                                    contentColor = colorScheme.onSurface
+                                )
                             } else {
                                 val latest = list.maxByOrNull { it.time }
                                 var expanded by remember { mutableStateOf(false) }
@@ -408,18 +426,21 @@ fun NotificationHistoryScreen() {
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
                                     onClick = { expanded = !expanded },
-                                    color = colorScheme.surfaceContainerHighest,
                                     cornerRadius = 12.dp,
+                                    insideMargin = PaddingValues(12.dp),
+                                    colors = CardDefaults.defaultColors(
+                                        color = colorScheme.surface,
+                                        contentColor = colorScheme.onSurface
+                                    ),
                                     showIndication = true,
                                     pressFeedbackType = PressFeedbackType.Sink
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (appIcon != null) {
-                                                Icon(
+                                                Image(
                                                     bitmap = appIcon.asImageBitmap(),
                                                     contentDescription = null,
                                                     modifier = Modifier.size(24.dp)
@@ -428,7 +449,7 @@ fun NotificationHistoryScreen() {
                                             }
                                             Text(
                                                 text = groupTitle,
-                                                style = textStyles.title3.copy(color = colorScheme.onBackground)
+                                                style = textStyles.title3.copy(color = colorScheme.onSurface)
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(
@@ -438,7 +459,7 @@ fun NotificationHistoryScreen() {
                                                         java.util.Locale.US
                                                     ).format(java.util.Date(it))
                                                 } ?: ""),
-                                                style = textStyles.body2.copy(color = colorScheme.onBackground)
+                                                style = textStyles.body2.copy(color = colorScheme.onSurfaceSecondary)
                                             )
                                             Spacer(modifier = Modifier.weight(1f))
                                             Text(
@@ -458,7 +479,7 @@ fun NotificationHistoryScreen() {
                                                         Text(
                                                             text = record.title ?: "(无标题)",
                                                             style = textStyles.body2.copy(
-                                                                color = colorScheme.primary,
+                                                                color = colorScheme.onSurface,
                                                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                                                             ),
                                                             modifier = Modifier.weight(0.4f)
@@ -466,7 +487,7 @@ fun NotificationHistoryScreen() {
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
                                                         text = record.text ?: "(无内容)",
-                                                        style = textStyles.body2.copy(color = colorScheme.onBackground),
+                                                        style = textStyles.body2.copy(color = colorScheme.onSurfaceSecondary),
                                                         modifier = Modifier.weight(0.6f),
                                                         maxLines = 1,
                                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -534,8 +555,14 @@ fun NotificationHistoryScreen() {
                                                             .offset { IntOffset(offset.roundToInt(), 0) }
                                                     ) {
                                                         val (_, appIcon1) = getCachedAppInfo(record.packageName)
-                                                        NotificationCard(record,
-                                                            appIcon1, context, getCachedAppInfo)
+                                                        NotificationCard(
+                                                            record = record,
+                                                            appIcon = appIcon1,
+                                                            context = context,
+                                                            getCachedAppInfo = getCachedAppInfo,
+                                                            cardColor = colorScheme.surfaceContainer,
+                                                            contentColor = colorScheme.onSurface
+                                                        )
                                                     }
                                                     // 删除按钮
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {
@@ -561,7 +588,6 @@ fun NotificationHistoryScreen() {
                                                 )
                                             }
                                         }
-                                    }
                                 }
                             }
                         }
@@ -684,14 +710,14 @@ fun NotificationHistoryScreen() {
             ) {
                 Text(
                     text = "通知历史",
-                    style = textStyles.title2.copy(color = colorScheme.onBackground)
+                    style = textStyles.title2.copy(color = colorScheme.onSurface)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 if (notifications.isEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "暂无通知",
-                        style = textStyles.body1.copy(color = colorScheme.onBackground)
+                        style = textStyles.body1.copy(color = colorScheme.onSurfaceSecondary)
                     )
                 } else {
                     NotificationListBlock(

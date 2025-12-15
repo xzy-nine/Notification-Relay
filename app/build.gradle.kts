@@ -144,14 +144,7 @@ dependencies {
     implementation("com.jakewharton:disklrucache:2.0.2")
 }
 
-// 强制所有 kotlin-stdlib 依赖使用 1.9.23，避免版本冲突
-configurations.all {
-    resolutionStrategy.eachDependency {
-        if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
-            useVersion("1.9.23")
-        }
-    }
-}
+// 移除强制使用旧版本stdlib的配置，让项目使用与Kotlin 2.1.21兼容的stdlib版本
 
 // CI helper task: print the computed version name to stdout.
 // This allows CI workflows to obtain the resolved versionName (computed by Versioning)
