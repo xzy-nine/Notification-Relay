@@ -1,17 +1,18 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea
 
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.A.AComponent
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.A.buildAView
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.A.parseAComponent
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.BComponent
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.BEmpty
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.BTextInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.buildBView
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.parseBComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.AComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.buildAView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.parseAComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BEmpty
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BTextInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.buildBView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.parseBComponent
 import org.json.JSONObject
 
 /**
@@ -84,7 +85,7 @@ fun buildBigIslandCollapsedView(
     if (aExists) {
         val leftWrap = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -104,7 +105,7 @@ fun buildBigIslandCollapsedView(
     if (bExists) {
         val rightWrap = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.END
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

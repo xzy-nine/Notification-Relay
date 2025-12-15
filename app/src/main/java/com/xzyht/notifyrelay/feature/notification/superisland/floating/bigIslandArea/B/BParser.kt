@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B
 
 import org.json.JSONObject
 
@@ -85,7 +85,11 @@ fun parseBComponent(bigIsland: JSONObject?): BComponent {
         digit ?: return@let
         val content = fi.optString("content", "").takeIf { it.isNotBlank() }
         val showHighlightColor = fi.optBoolean("showHighlightColor", false)
-        return BFixedWidthDigitInfo(digit = digit, content = content, showHighlightColor = showHighlightColor)
+        return BFixedWidthDigitInfo(
+            digit = digit,
+            content = content,
+            showHighlightColor = showHighlightColor
+        )
     }
 
     bigIsland?.optJSONObject("sameWidthDigitInfo")?.let { si ->
@@ -98,7 +102,7 @@ fun parseBComponent(bigIsland: JSONObject?): BComponent {
                 val timerWhen = if (to.has("timerWhen")) to.optLong("timerWhen") else null
                 val timerTotal = if (to.has("timerTotal")) to.optLong("timerTotal") else null
                 val timerSystemCurrent = if (to.has("timerSystemCurrent")) to.optLong("timerSystemCurrent") else null
-                com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B.TimerInfo(
+                TimerInfo(
                     timerType = timerType,
                     timerWhen = timerWhen,
                     timerTotal = timerTotal,
@@ -116,7 +120,12 @@ fun parseBComponent(bigIsland: JSONObject?): BComponent {
 
         val content = si.optString("content", "").takeIf { it.isNotBlank() }
         val showHighlightColor = si.optBoolean("showHighlightColor", false)
-        return BSameWidthDigitInfo(digit = digit, timer = timer, content = content, showHighlightColor = showHighlightColor)
+        return BSameWidthDigitInfo(
+            digit = digit,
+            timer = timer,
+            content = content,
+            showHighlightColor = showHighlightColor
+        )
     }
 
     bigIsland?.optJSONObject("progressTextInfo")?.let { root ->

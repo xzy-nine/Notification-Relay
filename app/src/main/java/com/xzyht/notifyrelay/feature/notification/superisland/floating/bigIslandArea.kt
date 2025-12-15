@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import org.json.JSONObject
 

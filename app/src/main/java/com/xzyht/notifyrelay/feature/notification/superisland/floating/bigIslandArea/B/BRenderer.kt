@@ -1,9 +1,10 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -13,10 +14,10 @@ import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressView
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTimerUpdater
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTimerInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.TimerInfo as FMTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.CircularProgressView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bindTimerUpdater
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.formatTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.TimerInfo as FMTimerInfo
 
 /**
  * 创建 B区 浮窗视图。
@@ -72,7 +73,7 @@ fun buildBView(context: Context, component: BComponent, picMap: Map<String, Stri
                 textSize = 11f
                 isSingleLine = true
                 maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(9, 11, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                setAutoSizeTextTypeUniformWithConfiguration(9, 11, 1, TypedValue.COMPLEX_UNIT_SP)
                 maxWidth = (120 * density).toInt()
                 typeface = when {
                     monospace -> Typeface.MONOSPACE
@@ -89,7 +90,7 @@ fun buildBView(context: Context, component: BComponent, picMap: Map<String, Stri
                 textSize = 14f
                 isSingleLine = true
                 maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, TypedValue.COMPLEX_UNIT_SP)
                 maxWidth = (140 * density).toInt()
                 typeface = when {
                     monospace -> Typeface.MONOSPACE
@@ -107,7 +108,7 @@ fun buildBView(context: Context, component: BComponent, picMap: Map<String, Stri
                 textSize = 12f
                 isSingleLine = true
                 maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, TypedValue.COMPLEX_UNIT_SP)
                 maxWidth = (140 * density).toInt()
                 typeface = when {
                     monospace -> Typeface.MONOSPACE

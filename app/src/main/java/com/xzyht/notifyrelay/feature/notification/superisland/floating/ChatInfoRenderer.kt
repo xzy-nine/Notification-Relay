@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
 import android.content.res.Configuration
@@ -15,8 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.TimerInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseTimerInfo
 import kotlin.math.roundToInt
 
 // 聊天信息模板：IM图文组件，显示头像、主要文本、次要文本

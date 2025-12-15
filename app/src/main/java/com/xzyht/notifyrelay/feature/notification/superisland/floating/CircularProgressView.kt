@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.animation.ValueAnimator
 import android.content.Context

@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
 import android.content.res.Configuration
@@ -114,7 +114,10 @@ fun buildAnimTextInfoView(context: Context, info: AnimTextInfo, picMap: Map<Stri
             ellipsize = TextUtils.TruncateAt.END
             if (text.matches(Regex("[0-9: ]{2,}"))) typeface = Typeface.MONOSPACE
         }
-        if (info.title.isNullOrBlank() && info.timerInfo != null) bindTimerUpdater(tv, info.timerInfo)
+        if (info.title.isNullOrBlank() && info.timerInfo != null) bindTimerUpdater(
+            tv,
+            info.timerInfo
+        )
         textColumn.addView(tv)
     }
 
@@ -130,7 +133,10 @@ fun buildAnimTextInfoView(context: Context, info: AnimTextInfo, picMap: Map<Stri
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.END
         }
-        if (info.content == null && !info.title.isNullOrBlank() && info.timerInfo != null) bindTimerUpdater(tv, info.timerInfo)
+        if (info.content == null && !info.title.isNullOrBlank() && info.timerInfo != null) bindTimerUpdater(
+            tv,
+            info.timerInfo
+        )
         textColumn.addView(tv)
     }
 

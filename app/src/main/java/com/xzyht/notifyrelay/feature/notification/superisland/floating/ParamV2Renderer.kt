@@ -1,17 +1,15 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.widget.LinearLayout
 import org.json.JSONObject
 import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
-import com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager.parseBigIslandArea
-import org.json.JSONArray
+import android.widget.TextView
 
 // 摘要态组件解析
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ParamIsland
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamIsland
 
 // 参数 V2 总容器，使用分支选择不同模板
 data class ParamV2(
@@ -36,8 +34,8 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
         val padding = (8 * context.resources.displayMetrics.density).toInt()
         setPadding(padding, padding, padding, padding)
         // 圆角矩形背景（展开态）
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
             cornerRadius = 16f * context.resources.displayMetrics.density
             setColor(0xEE000000.toInt())
             val d = context.resources.displayMetrics.density
@@ -78,7 +76,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
             container.addView(view)
         }
         paramV2.textButton != null -> {
-            val tv = android.widget.TextView(context).apply {
+            val tv = TextView(context).apply {
                 text = "此通知包含不可用的按钮"
                 setTextColor(0xFFFFFFFF.toInt())
             }
@@ -86,7 +84,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
         }
         else -> {
             // 默认模板：未支持的模板类型
-            val tv = android.widget.TextView(context).apply {
+            val tv = TextView(context).apply {
                 text = "未支持的模板"
                 setTextColor(0xFFFFFFFF.toInt())
             }
@@ -127,7 +125,11 @@ fun parseParamV2(jsonString: String): ParamV2? {
             animTextInfo = anim,
             picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) },
             progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) },
-            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) },
+            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let {
+                parseMultiProgressInfo(
+                    it
+                )
+            },
             actions = json.optJSONArray("actions")?.let { parseActions(it) },
             hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) },
             textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) },

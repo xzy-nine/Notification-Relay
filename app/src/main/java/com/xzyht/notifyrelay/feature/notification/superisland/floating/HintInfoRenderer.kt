@@ -1,12 +1,10 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
 import android.text.Html
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ActionInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseActionInfo
 
 // 提示信息模板：按钮组件2和3，包含文本和按钮
 data class HintInfo(

@@ -1,23 +1,18 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 
 // 复用工具函数
 
 fun parseColor(colorString: String?): Int? {
     return try {
-        colorString?.let { android.graphics.Color.parseColor(it) }
+        colorString?.let { Color.parseColor(it) }
     } catch (e: Exception) {
         null
     }

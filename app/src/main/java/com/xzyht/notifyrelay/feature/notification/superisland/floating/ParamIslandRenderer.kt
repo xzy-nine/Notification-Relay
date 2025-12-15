@@ -1,7 +1,5 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
-import com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager.BigIslandArea
-import com.xzyht.notifyrelay.feature.notification.superisland.floatingReplicaManager.parseBigIslandArea
 import org.json.JSONArray
 import org.json.JSONObject
 

@@ -1,8 +1,8 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.A
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Typeface
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -80,7 +80,7 @@ fun buildAView(context: Context, component: AComponent, picMap: Map<String, Stri
                     // 单行与自动收缩，避免胶囊过长
                     isSingleLine = true
                     maxLines = 1
-                    setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                    setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, TypedValue.COMPLEX_UNIT_SP)
                     maxWidth = (140 * density).toInt()
                     typeface = if (component.narrowFont) Typeface.create("sans-serif-condensed", Typeface.BOLD) else Typeface.DEFAULT_BOLD
                 }
@@ -94,7 +94,7 @@ fun buildAView(context: Context, component: AComponent, picMap: Map<String, Stri
                     textSize = 12f
                     isSingleLine = true
                     maxLines = 1
-                    setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                    setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, TypedValue.COMPLEX_UNIT_SP)
                     maxWidth = (140 * density).toInt()
                     typeface = if (component.narrowFont) Typeface.create("sans-serif-condensed", Typeface.NORMAL) else Typeface.DEFAULT
                 }
@@ -130,7 +130,7 @@ fun buildAView(context: Context, component: AComponent, picMap: Map<String, Stri
                 textSize = 14f
                 isSingleLine = true
                 maxLines = 1
-                setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                setAutoSizeTextTypeUniformWithConfiguration(12, 14, 1, TypedValue.COMPLEX_UNIT_SP)
                 maxWidth = (140 * density).toInt()
                 typeface = Typeface.DEFAULT_BOLD
             }
@@ -143,7 +143,7 @@ fun buildAView(context: Context, component: AComponent, picMap: Map<String, Stri
                     textSize = 12f
                     isSingleLine = true
                     maxLines = 1
-                    setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                    setAutoSizeTextTypeUniformWithConfiguration(10, 12, 1, TypedValue.COMPLEX_UNIT_SP)
                     maxWidth = (140 * density).toInt()
                     typeface = Typeface.DEFAULT
                 }

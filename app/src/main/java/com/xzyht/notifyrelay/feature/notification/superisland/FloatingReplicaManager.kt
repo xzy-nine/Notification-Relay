@@ -32,18 +32,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.ImageLoader
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.SmallIslandArea
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.buildViewFromTemplate
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.parseParamV2
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressBinding
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.CircularProgressView
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.HighlightInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bindTimerUpdater
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.formatTimerInfo
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.resolveHighlightIconBitmap
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.bigIsandArea.buildBigIslandCollapsedView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.buildViewFromTemplate
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.parseParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.CircularProgressBinding
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.CircularProgressView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.HighlightInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bindTimerUpdater
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.formatTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.resolveHighlightIconBitmap
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.ParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.ProgressInfo
 import kotlin.collections.iterator
 import kotlin.math.abs
 
@@ -269,7 +271,7 @@ object FloatingReplicaManager {
 
                     val ring = view.findViewWithTag("collapsed_b_progress_ring") as? CircularProgressView
                     if (ring != null) {
-                        val mapped = com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ProgressInfo(
+                        val mapped = ProgressInfo(
                             progress = progress,
                             colorProgress = colorReach,
                             colorProgressEnd = colorUnReach,
@@ -294,7 +296,7 @@ object FloatingReplicaManager {
     }
 
     // 兼容空值的 param_v2 解析包装，避免在调用点产生空值分支和推断问题
-    private fun parseParamV2Safe(raw: String?): com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.ParamV2? {
+    private fun parseParamV2Safe(raw: String?): ParamV2? {
         return try {
             val s = raw ?: return null
             if (s.isBlank()) null else parseParamV2(s)

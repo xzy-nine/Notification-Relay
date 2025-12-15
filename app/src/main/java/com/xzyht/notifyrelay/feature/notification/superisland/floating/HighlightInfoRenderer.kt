@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager
+package com.xzyht.notifyrelay.feature.notification.superisland.floating
 
 import android.content.Context
 import android.content.res.Configuration
@@ -152,7 +152,9 @@ private fun buildHighlightLayout(
     statusText?.let { status ->
         val tv = TextView(context).apply {
             text = Html.fromHtml(unescapeHtml(status), Html.FROM_HTML_MODE_COMPACT)
-            setTextColor(parseColor(highlightInfo.colorSubContent) ?: parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt())
+            setTextColor(
+                parseColor(highlightInfo.colorSubContent) ?: parseColor(highlightInfo.colorContent)
+                ?: 0xFFDDDDDD.toInt())
             textSize = 12f
         }
         textContainer.addView(tv)
