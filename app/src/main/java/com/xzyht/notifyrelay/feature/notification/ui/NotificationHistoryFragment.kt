@@ -1,13 +1,11 @@
 package com.xzyht.notifyrelay.feature.notification.ui
 
+// ========================= 基础组件导入区 =========================
+// Android 基础组件
 import android.os.Bundle
 import android.util.Log
-import androidx.compose.animation.core.exponentialDecay
-import androidx.compose.animation.core.tween
+// Compose 核心布局与手势相关
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
@@ -15,9 +13,8 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
+// Compose 状态与UI基础
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,51 +25,62 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+// AndroidX 碎片管理
 import androidx.fragment.app.Fragment
+
+// ========================= 业务模块导入区 =========================
+// 项目构建配置
 import com.xzyht.notifyrelay.BuildConfig
+// 数据仓库层
 import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+// 全局状态管理
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
+// 数据模型
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
+
+// ========================= 第三方UI库导入区 =========================
+// MIUI X 跨平台UI组件
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
-import androidx.compose.foundation.layout.Box
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.useful.Delete
+
+// ========================= 工具函数/常量 =========================
 import kotlin.math.roundToInt
+
 
 enum class DragValue { Center, End }
 
 // 防抖 Toast（文件级顶层对象）
 object ToastDebounce {
     var lastToastTime: Long = 0L
-    const val debounceMillis: Long = 1500L
+    const val DEBOUNCE_MILLIS: Long = 1500L
 }
 
 @Composable
 fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val textStyles = MiuixTheme.textStyles
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(80.dp)
-            .background(Color.Red, shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-            .clickable {
-if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
-                onClick()
-            },
-        contentAlignment = Alignment.Center
+    IconButton(
+        onClick = {
+            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
+            onClick()
+        },
+        modifier = modifier.fillMaxHeight().width(80.dp),
+        backgroundColor = Color.Red,
+        cornerRadius = 8.dp,
+        minHeight = 40.dp,
+        minWidth = 80.dp
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Filled.Delete,
-                contentDescription = "删除",
-                tint = Color.White
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "删除", style = textStyles.body2.copy(color = Color.White))
-        }
+        Icon(
+            imageVector = MiuixIcons.Useful.Delete,
+            contentDescription = "Settings",
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
 
@@ -110,14 +118,14 @@ fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitma
                         canOpen = true
                     } else {
                         val now = System.currentTimeMillis()
-                        if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
+                        if (now - ToastDebounce.lastToastTime > ToastDebounce.DEBOUNCE_MILLIS) {
                             android.widget.Toast.makeText(context, "无法打开应用：$mappedPkg", android.widget.Toast.LENGTH_SHORT).show()
                             ToastDebounce.lastToastTime = now
                         }
                     }
                 } catch (e: Exception) {
                     val now = System.currentTimeMillis()
-                    if (now - ToastDebounce.lastToastTime > ToastDebounce.debounceMillis) {
+                    if (now - ToastDebounce.lastToastTime > ToastDebounce.DEBOUNCE_MILLIS) {
                         android.widget.Toast.makeText(context, "启动失败：${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                         ToastDebounce.lastToastTime = now
                     }
@@ -141,7 +149,7 @@ fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitma
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (displayAppIcon != null) {
-                    Image(
+                    Icon(
                         bitmap = displayAppIcon.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
@@ -162,7 +170,7 @@ fun NotificationCard(record: NotificationRecord, appIcon: android.graphics.Bitma
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date(record.time)),
+                text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(record.time)),
                 style = notificationTextStyles.body2.copy(color = cardColorScheme.outline)
             )
         }
@@ -342,14 +350,9 @@ fun NotificationHistoryScreen() {
         if (notifications.isNotEmpty()) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(mixedList) { list ->
-                    val density = LocalDensity.current
                     val anchoredDraggableState = remember {
-                        AnchoredDraggableState<DragValue>(
-                            initialValue = DragValue.Center,
-                            positionalThreshold = { distance: Float -> distance * 0.5f },
-                            velocityThreshold = { with(density) { 100.dp.toPx() } },
-                            snapAnimationSpec = tween(),
-                            decayAnimationSpec = exponentialDecay(),
+                        AnchoredDraggableState(
+                            initialValue = DragValue.Center
                         )
                     }
                     val anchors = DraggableAnchors {
@@ -395,7 +398,7 @@ fun NotificationHistoryScreen() {
                                 val (appName, appIcon) = appInfo
                                 // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
                                 val groupTitle = when {
-                                    !latest?.appName.isNullOrBlank() -> latest.appName!!
+                                    !latest?.appName.isNullOrBlank() -> latest.appName
                                     appName.isNotBlank() -> appName
                                     mappedPkg.isNotBlank() -> mappedPkg
                                     else -> "(未知应用)"
@@ -416,7 +419,7 @@ fun NotificationHistoryScreen() {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             if (appIcon != null) {
-                                                Image(
+                                                Icon(
                                                     bitmap = appIcon.asImageBitmap(),
                                                     contentDescription = null,
                                                     modifier = Modifier.size(24.dp)
@@ -429,9 +432,10 @@ fun NotificationHistoryScreen() {
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(
-                                                text = "最新时间: " + (latest?.time?.let {
+                                                text = (latest?.time?.let {
                                                     java.text.SimpleDateFormat(
-                                                        "yyyy-MM-dd HH:mm:ss"
+                                                        "yyyy-MM-dd HH:mm:ss",
+                                                        java.util.Locale.US
                                                     ).format(java.util.Date(it))
                                                 } ?: ""),
                                                 style = textStyles.body2.copy(color = colorScheme.onBackground)
@@ -451,14 +455,14 @@ fun NotificationHistoryScreen() {
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     // 修正：标题应为原始通知标题而非应用名
-                                                    Text(
-                                                        text = record.title ?: "(无标题)",
-                                                        style = textStyles.body2.copy(
-                                                            color = Color(0xFF0066B2),
-                                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                                        ),
-                                                        modifier = Modifier.weight(0.4f)
-                                                    )
+                                                        Text(
+                                                            text = record.title ?: "(无标题)",
+                                                            style = textStyles.body2.copy(
+                                                                color = colorScheme.primary,
+                                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                            ),
+                                                            modifier = Modifier.weight(0.4f)
+                                                        )
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(
                                                         text = record.text ?: "(无内容)",
@@ -495,12 +499,8 @@ fun NotificationHistoryScreen() {
                                             displayList.forEach { record ->
                                                 val density = LocalDensity.current
                                                 val anchoredDraggableState = remember {
-                                                    AnchoredDraggableState<DragValue>(
-                                                        initialValue = DragValue.Center,
-                                                        positionalThreshold = { distance: Float -> distance * 0.5f },
-                                                        velocityThreshold = { with(density) { 100.dp.toPx() } },
-                                                        snapAnimationSpec = tween(),
-                                                        decayAnimationSpec = exponentialDecay(),
+                                                    AnchoredDraggableState(
+                                                        initialValue = DragValue.Center
                                                     )
                                                 }
                                                 val deleteWidthPx = with(density) { 80.dp.toPx() }
@@ -576,7 +576,7 @@ fun NotificationHistoryScreen() {
                                             NotificationRepository.removeNotification(list[0].key, context)
                                             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                         } else {
-                                            NotificationRepository.removeNotificationsByPackage(list[0].packageName ?: "", context)
+                                            NotificationRepository.removeNotificationsByPackage(list[0].packageName, context)
                                             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                         }
                                     } catch (e: Exception) {
