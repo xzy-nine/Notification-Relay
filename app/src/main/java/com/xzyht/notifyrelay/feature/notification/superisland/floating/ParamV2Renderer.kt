@@ -8,7 +8,7 @@ import org.json.JSONObject
 import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
 import android.widget.TextView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.parseBigIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
 
 // 摘要态组件解析
 

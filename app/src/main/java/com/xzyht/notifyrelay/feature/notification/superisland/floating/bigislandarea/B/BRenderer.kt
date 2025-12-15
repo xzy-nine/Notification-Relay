@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B
 
 import android.content.Context
 import android.graphics.Bitmap

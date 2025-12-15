@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.A
 
 /**
  * A区（左侧 imageTextInfoLeft）组件模型。

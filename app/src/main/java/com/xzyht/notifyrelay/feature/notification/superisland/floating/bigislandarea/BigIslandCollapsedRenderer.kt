@@ -1,18 +1,18 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea
 
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.AComponent
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.buildAView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.A.parseAComponent
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BComponent
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BEmpty
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.BTextInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.buildBView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.B.parseBComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.A.AComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.A.buildAView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.A.parseAComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B.BComponent
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B.BEmpty
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B.BTextInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B.buildBView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.B.parseBComponent
 import org.json.JSONObject
 
 /**

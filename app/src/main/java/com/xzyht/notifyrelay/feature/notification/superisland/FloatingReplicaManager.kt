@@ -42,7 +42,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.Highlight
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bindTimerUpdater
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.formatTimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.resolveHighlightIconBitmap
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigIslandArea.buildBigIslandCollapsedView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.ProgressInfo
