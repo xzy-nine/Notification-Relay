@@ -142,6 +142,12 @@ abstract class AppDatabase : RoomDatabase() {
                     database.deviceDao()
                 )
                 
+                // 迁移超级岛历史记录
+                com.xzyht.notifyrelay.common.data.database.migration.MigrationHelper.migrateSuperIslandHistory(
+                    context,
+                    database.superIslandHistoryDao()
+                )
+                
                 // 清理旧存储文件
                 com.xzyht.notifyrelay.common.data.database.migration.MigrationHelper.cleanupLegacyStorage(context)
             } catch (e: Exception) {

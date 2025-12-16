@@ -199,6 +199,56 @@ object MigrationHelper {
     }
     
     /**
+     * 迁移超级岛历史记录
+     */
+    suspend fun migrateSuperIslandHistory(
+        context: Context,
+        superIslandHistoryDao: com.xzyht.notifyrelay.common.data.database.dao.SuperIslandHistoryDao
+    ) {
+        if (BuildConfig.DEBUG) {
+            Log.d("MigrationHelper", "开始迁移超级岛历史记录")
+        }
+        
+        try {
+            // 从旧存储读取超级岛历史记录
+            val oldHistoryTypeToken = object : TypeToken<List<com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry>>() {}
+            val oldHistory = PersistenceManager.readNotificationRecords(
+                context,
+                "super_island_history",
+                oldHistoryTypeToken
+            )
+            
+            // 转换为Room实体
+            val entities = oldHistory.map { oldEntry ->
+                com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity(
+                    id = oldEntry.id,
+                    sourceDeviceUuid = oldEntry.sourceDeviceUuid,
+                    originalPackage = oldEntry.originalPackage,
+                    mappedPackage = oldEntry.mappedPackage,
+                    appName = oldEntry.appName,
+                    title = oldEntry.title,
+                    text = oldEntry.text,
+                    paramV2Raw = oldEntry.paramV2Raw,
+                    picMap = gson.toJson(oldEntry.picMap),
+                    rawPayload = oldEntry.rawPayload
+                )
+            }
+            
+            // 插入到数据库
+            if (entities.isNotEmpty()) {
+                superIslandHistoryDao.insertAll(entities)
+                if (BuildConfig.DEBUG) {
+                    Log.d("MigrationHelper", "迁移超级岛历史记录完成，共${entities.size}条")
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.e("MigrationHelper", "迁移超级岛历史记录失败: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
      * 清理旧的存储文件
      */
     fun cleanupLegacyStorage(context: Context) {
