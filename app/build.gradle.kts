@@ -26,7 +26,7 @@ plugins {
 // - 直接在此处设置主版本号；不再从 gradle.properties 读取。
 // - 在发布重大版本时请在这里更新此值（并可同时调整下方的 versionMajorSubtract）。
 // 例如：val versionMajor: Int = 1
-val versionMajor: Int = 0 // <-- 在此处直接修改主版本号
+val versionMajor: Int = 1 // <-- 在此处直接修改主版本号
 
 fun gitOutput(vararg args: String): String {
     val stdout = ByteArrayOutputStream()
@@ -46,7 +46,7 @@ fun gitOutput(vararg args: String): String {
 // - 当主版本号（versionMajor）升级后，可以在下面直接把 `versionMajorSubtract` 改为期望的值，
 //   这样 main 的提交计数会在计算中减去该值（下限为 0），防止次版本无限递增。
 // - 示例：如果希望在 major 升级后把 main 的计数回退 340，则设置为 340。
-val versionMajorSubtract: Int = 0 // <-- 在此处直接修改以手动应用减量
+val versionMajorSubtract: Int = 238 // <-- 在此处直接修改以手动应用减量，当前main分支提交数为238
 val versionInfo = Versioning.compute(rootProject.projectDir, versionMajor, versionMajorSubtract)
 val computedVersionName = versionInfo.versionName
 val computedVersionCode = versionInfo.versionCode
@@ -155,9 +155,6 @@ dependencies {
 
 // 移除强制使用旧版本stdlib的配置，让项目使用与Kotlin 2.1.21兼容的stdlib版本
 
-// CI helper task: print the computed version name to stdout.
-// This allows CI workflows to obtain the resolved versionName (computed by Versioning)
-// by running `./gradlew -q :app:printVersionName`.
 tasks.register("printVersionName") {
     doLast {
         println(computedVersionName)
