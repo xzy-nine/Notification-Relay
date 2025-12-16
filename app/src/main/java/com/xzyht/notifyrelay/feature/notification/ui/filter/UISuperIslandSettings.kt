@@ -55,9 +55,9 @@ import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Surface
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.extra.SuperSwitch
 import java.util.Date
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
@@ -93,84 +93,62 @@ fun UISuperIslandSettings() {
         val colorScheme = MiuixTheme.colorScheme
         val textStyles = MiuixTheme.textStyles
 
-        Surface(color = colorScheme.surface) {
-            Column(
+        Surface(color = colorScheme.background) {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("超级岛读取", style = textStyles.body1, color = colorScheme.onSurface)
-                Text(
-                    "控制是否尝试从本机通知中读取小米超级岛数据并转发",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceVariantSummary
-                )
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = {
-                        enabled = it
-                        StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
-                    }
-                )
+                item {
+                    SuperSwitch(
+                        title = "超级岛读取",
+                        summary = "控制是否尝试从本机通知中读取小米超级岛数据并转发",
+                        checked = enabled,
+                        onCheckedChange = {
+                            enabled = it
+                            StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
+                        }
+                    )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(0.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            "复制图片详细信息",
-                            style = textStyles.body2,
-                            color = colorScheme.onSurface
-                        )
-                        Text(
-                            "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
-                            style = textStyles.body2,
-                            color = colorScheme.onSurfaceVariantSummary
-                        )
-                    }
-                    Switch(
+                    SuperSwitch(
+                        title = "复制图片详细信息",
+                        summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
                         checked = includeImageDataOnCopy,
                         onCheckedChange = {
                             includeImageDataOnCopy = it
                             StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
                         }
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(0.dp))    
 
-                if (groups.isEmpty()) {
-                    Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Button(
-                            onClick = {
-                                SuperIslandHistory.clearAll(context)
-                            }
+                    if (groups.isEmpty()) {
+                        Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text("清空超级岛历史")
+                            top.yukonga.miuix.kmp.basic.Button(
+                                onClick = {
+                                    SuperIslandHistory.clearAll(context)
+                                }
+                            ) {
+                                Text("清空超级岛历史")
+                            }
                         }
                     }
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(groups, key = { it.packageName }) { group ->
-                            SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
-                        }
+                }
+                
+                if (groups.isNotEmpty()) {
+                    items(groups, key = { it.packageName }) { group ->
+                        SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
                     }
                 }
             }
