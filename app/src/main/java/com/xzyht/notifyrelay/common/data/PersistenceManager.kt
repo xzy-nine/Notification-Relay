@@ -15,9 +15,6 @@ object PersistenceManager {
     /** Gson 实例，用于对象与 JSON 间的序列化/反序列化。 */
     private val gson = Gson()
 
-    /** 聊天记忆文件名（存放在 Context.filesDir 下） */
-    private const val CHAT_MEMORY_FILE = "chat_memory.json"
-
     /** 通知记录文件名前缀（实际文件名格式为：前缀 + 安全化设备名 + 后缀） */
     private const val NOTIFICATION_RECORDS_PREFIX = "notification_records_"
 
@@ -104,64 +101,6 @@ object PersistenceManager {
             if (BuildConfig.DEBUG) Log.e("PersistenceManager", "保存设备 ${task.device} 的通知记录时出错: ${e.message}")
             task.callback?.invoke(false, e)
         }
-    }
-
-    /**
-     * 获取聊天记忆（按顺序返回消息字符串列表）。
-     *
-     * 如果文件不存在返回空列表；读取或反序列化失败时也返回空列表并在调试模式下记录错误。
-     *
-     * @param context 用于访问 filesDir 的 Context
-     * @return 聊天消息字符串列表（最新插入在末尾）
-     */
-    fun getChatHistory(context: Context): List<String> {
-        val file = File(context.filesDir, CHAT_MEMORY_FILE)
-        if (!file.exists()) return emptyList()
-        return try {
-            val json = file.readText()
-            gson.fromJson(json, Array<String>::class.java)?.toList() ?: emptyList()
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "读取聊天记忆失败: ${e.message}")
-            emptyList()
-        }
-    }
-
-    /**
-     * 保存聊天记忆到磁盘（覆盖写入）。
-     *
-     * @param context 用于访问 filesDir 的 Context
-     * @param history 要保存的消息列表
-     */
-    fun saveChatHistory(context: Context, history: List<String>) {
-        val file = File(context.filesDir, CHAT_MEMORY_FILE)
-        try {
-            file.writeText(gson.toJson(history))
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "保存聊天记忆失败: ${e.message}")
-        }
-    }
-
-    /**
-     * 追加一条聊天消息到记忆中（从磁盘读取、追加、再写回）。
-     *
-     * 注意：此方法会进行磁盘读写，频繁调用可能影响性能。
-     *
-     * @param context 用于访问 filesDir 的 Context
-     * @param message 要追加的消息文本
-     */
-    fun appendChatMessage(context: Context, message: String) {
-        val history = getChatHistory(context).toMutableList()
-        history.add(message)
-        saveChatHistory(context, history)
-    }
-
-    /**
-     * 清空聊天记忆（等效于保存空列表）。
-     *
-     * @param context 用于访问 filesDir 的 Context
-     */
-    fun clearChatHistory(context: Context) {
-        saveChatHistory(context, emptyList())
     }
 
     /**
@@ -323,4 +262,3 @@ object PersistenceManager {
         return "队列大小: ${writeQueue.size}, 正在处理: ${isProcessing.get()}"
     }
 }
-
