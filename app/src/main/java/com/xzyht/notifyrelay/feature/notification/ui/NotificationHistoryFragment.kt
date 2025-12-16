@@ -621,6 +621,7 @@ fun NotificationHistoryScreen() {
     // 使用 Miuix Scaffold 重构布局
     Scaffold(
         containerColor = colorScheme.background,
+        popupHost = {  },
         floatingToolbar = {
             if (notifications.isNotEmpty()) {
                 FloatingToolbar(

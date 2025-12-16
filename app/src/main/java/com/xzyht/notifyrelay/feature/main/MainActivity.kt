@@ -30,6 +30,7 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
 class MainActivity : FragmentActivity() {
     internal var showAutoStartBanner = false
@@ -217,6 +218,7 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Scaffold(
         modifier = modifier,
+        popupHost = { MiuixPopupHost() },
         topBar = {
             if (showBanner && !bannerMsg.isNullOrBlank()) {
                 top.yukonga.miuix.kmp.basic.Surface(
