@@ -46,7 +46,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity" android:exported="true" />
+        <activity android:name=".feature.main.MainActivity" android:exported="true" />
         <!-- 通知监听服务声明，用于系统识别通知访问权限 -->
         <service
             android:name=".feature.notification.service.NotifyRelayNotificationListenerService"

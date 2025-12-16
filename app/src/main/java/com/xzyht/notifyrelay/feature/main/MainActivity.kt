@@ -1,28 +1,66 @@
-package com.xzyht.notifyrelay
+package com.xzyht.notifyrelay.feature.main
 
 import android.content.Intent
+import android.content.res.Configuration
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
+import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
+import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.core.util.ServiceManager
+import com.xzyht.notifyrelay.core.util.SystemBarUtils
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
+import com.xzyht.notifyrelay.feature.device.ui.DeviceListFragment
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationHistoryFragment
-import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationItem
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.basic.Check
@@ -67,7 +105,7 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private val guideLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { _ ->
+    private val guideLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
         // 授权页返回后重新检查权限
         recreate()
     }
@@ -77,7 +115,7 @@ class MainActivity : FragmentActivity() {
 
         // 使用 PermissionHelper 检查权限
         if (!PermissionHelper.checkAllPermissions(this)) {
-            android.widget.Toast.makeText(this, "请先授权所有必要权限！", android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "请先授权所有必要权限！", Toast.LENGTH_SHORT).show()
             val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
             guideLauncher.launch(intent)
@@ -90,29 +128,27 @@ class MainActivity : FragmentActivity() {
 
             // 沉浸式虚拟键和状态栏设置
             // 允许内容延伸到状态栏和导航栏区域，统一用 WindowCompat 控制系统栏外观
-            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(this.window, false)
-            this.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            WindowCompat.setDecorFitsSystemWindows(this.window, false)
+            this.window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
             // 颜色设置放到 Compose SideEffect 里统一管理
 
         // 仅使用 Compose 管理主页面和通知历史页面
         setContent {
-            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val isDarkTheme = isSystemInDarkTheme()
             // 自定义错误颜色常量
-            val errorColor = Color(0xFFD32F2F)
-            val onErrorColor = Color.White
             val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
             MiuixTheme(colors = colors) {
                 val colorScheme = MiuixTheme.colorScheme
                 // 统一在 Composable 作用域设置 window decor
                 SideEffect {
                     val win = this@MainActivity.window
-                    val controller = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
+                    val controller = WindowCompat.getInsetsController(win, win.decorView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
                     val barColor = colorScheme.background.toArgb()
-                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setStatusBarColor(win, barColor, false)
-                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setNavigationBarColor(win, barColor, false)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    SystemBarUtils.setStatusBarColor(win, barColor, false)
+                    SystemBarUtils.setNavigationBarColor(win, barColor, false)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         win.isNavigationBarContrastEnforced = false
                     }
                 }
@@ -136,13 +172,11 @@ fun DeviceListFragmentView(fragmentContainerId: Int) {
     Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
         AndroidView(
             factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
+                val frameLayout = FrameLayout(context)
                 frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.feature.device.ui.DeviceListFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
+                fragmentManager?.beginTransaction()?.replace(frameLayout.id,
+                    DeviceListFragment(), fragmentTag)
+                    ?.commitAllowingStateLoss()
                 frameLayout
             },
             update = { }
@@ -158,13 +192,11 @@ fun DeviceForwardFragmentView(fragmentContainerId: Int) {
     Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
         AndroidView(
             factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
+                val frameLayout = FrameLayout(context)
                 frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
+                fragmentManager?.beginTransaction()?.replace(frameLayout.id,
+                    DeviceForwardFragment(), fragmentTag)
+                    ?.commitAllowingStateLoss()
                 frameLayout
             },
             update = { }
@@ -180,14 +212,11 @@ fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
     Box(modifier = Modifier.fillMaxSize().background(colorScheme.background)) {
         AndroidView(
             factory = { context ->
-                val frameLayout = android.widget.FrameLayout(context)
+                val frameLayout = FrameLayout(context)
                 frameLayout.id = fragmentContainerId
-                fragmentManager?.let { fm ->
-                    // 每次都 replace，保证 fragment attach
-                    fm.beginTransaction()
-                        .replace(frameLayout.id, NotificationHistoryFragment(), fragmentTag)
-                        .commitAllowingStateLoss()
-                }
+                fragmentManager?.beginTransaction()
+                    ?.replace(frameLayout.id, NotificationHistoryFragment(), fragmentTag)
+                    ?.commitAllowingStateLoss()
                 frameLayout
             },
             update = { }
@@ -197,8 +226,8 @@ fun NotificationHistoryFragmentView(fragmentContainerId: Int) {
 
 @Composable
 fun MainAppFragment(modifier: Modifier = Modifier) {
-    var selectedTab by rememberSaveable { mutableStateOf(0) }
-    val fragmentContainerId = remember { android.view.View.generateViewId() }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val fragmentContainerId = remember { View.generateViewId() }
     val items = listOf(
         NavigationItem("设备与转发", MiuixIcons.Useful.Settings),
         NavigationItem("通知历史", MiuixIcons.Basic.Check)
@@ -209,8 +238,8 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
             val errorColor = Color(0xFFD32F2F)
             val onErrorColor = Color.White
     
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     // 读取Activity的Banner状态
     val activity = LocalContext.current as? MainActivity
     val showBanner = activity?.showAutoStartBanner == true
@@ -221,7 +250,7 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
         popupHost = { MiuixPopupHost() },
         topBar = {
             if (showBanner && !bannerMsg.isNullOrBlank()) {
-                top.yukonga.miuix.kmp.basic.Surface(
+                Surface(
                     color = errorColor,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -231,29 +260,29 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        top.yukonga.miuix.kmp.basic.Icon(
+                        Icon(
                             imageVector = MiuixIcons.Useful.Settings,
                             contentDescription = null
                         )
                         Spacer(Modifier.width(10.dp))
-                        top.yukonga.miuix.kmp.basic.Text(
+                        Text(
                             text = bannerMsg,
                             style = MiuixTheme.textStyles.body1,
                             color = onErrorColor,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(Modifier.width(10.dp))
-                        top.yukonga.miuix.kmp.basic.Button(
+                        Button(
                             onClick = {
                                 // 跳转到本应用系统详情页
-                                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                                intent.data = android.net.Uri.fromParts("package", context.packageName, null)
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                                intent.data = Uri.fromParts("package", context.packageName, null)
                                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.height(36.dp)
                         ) {
-                            top.yukonga.miuix.kmp.basic.Text("前往设置")
+                            Text("前往设置")
                         }
                     }
                 }
@@ -327,12 +356,4 @@ fun MainAppFragment(modifier: Modifier = Modifier) {
             }
         }
     }
-@Preview(showBackground = true)
-@Composable
-fun MainAppPreview() {
-    val colors = lightColorScheme()
-    MiuixTheme(colors = colors) {
-        MainAppFragment()
-    }
-}
 }
