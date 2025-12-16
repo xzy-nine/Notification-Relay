@@ -30,27 +30,36 @@ import top.yukonga.miuix.kmp.basic.Text
 fun UIRemoteFilter() {
     val context = LocalContext.current
 
-    // 确保 RemoteFilterConfig 已加载
-    if (!RemoteFilterConfig.isLoaded) {
-        RemoteFilterConfig.load(context)
-        RemoteFilterConfig.isLoaded = true
-    }
-
-    // 前端状态 - 直接从 RemoteFilterConfig 初始化
-    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
-    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
+    // 前端状态 - 先使用默认值，然后在配置加载完成后更新
+    var filterMode by remember { mutableStateOf("none") }
+    var enableDedup by remember { mutableStateOf(true) }
+    var enablePackageGroupMapping by remember { mutableStateOf(true) }
     var allGroups by remember { mutableStateOf<List<MutableList<String>>>(
-        (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
-                RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() }
     ) }
     var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(
-        (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        RemoteFilterConfig.defaultGroupEnabled.toMutableList()
     ) }
-    var filterListText by remember { mutableStateOf(
-        RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
-    ) }
-    var enableLockScreenOnly by remember { mutableStateOf(RemoteFilterConfig.enableLockScreenOnly) }
+    var filterListText by remember { mutableStateOf("") }
+    var enableLockScreenOnly by remember { mutableStateOf(false) }
+    
+    // 在LaunchedEffect中异步加载RemoteFilterConfig，避免阻塞UI
+    LaunchedEffect(Unit) {
+        if (!RemoteFilterConfig.isLoaded) {
+            RemoteFilterConfig.load(context)
+            RemoteFilterConfig.isLoaded = true
+        }
+        
+        // 配置加载完成后更新前端状态
+        filterMode = RemoteFilterConfig.filterMode
+        enableDedup = RemoteFilterConfig.enableDeduplication
+        enablePackageGroupMapping = RemoteFilterConfig.enablePackageGroupMapping
+        allGroups = (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
+                RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
+        enableLockScreenOnly = RemoteFilterConfig.enableLockScreenOnly
+    }
 
     var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
 

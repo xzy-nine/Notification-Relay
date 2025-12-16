@@ -55,6 +55,10 @@ import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.device.ui.DeviceListFragment
 import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationHistoryFragment
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -110,29 +114,16 @@ class MainActivity : FragmentActivity() {
         recreate()
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 使用 PermissionHelper 检查权限
-        if (!PermissionHelper.checkAllPermissions(this)) {
-            Toast.makeText(this, "请先授权所有必要权限！", Toast.LENGTH_SHORT).show()
-            val intent = Intent(this, GuideActivity::class.java)
-            intent.putExtra("from", "MainActivity")
-            guideLauncher.launch(intent)
-            return
-        }
+        // 先设置沉浸式虚拟键和状态栏，然后立即显示UI
+        WindowCompat.setDecorFitsSystemWindows(this.window, false)
+        this.window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        // 颜色设置放到 Compose SideEffect 里统一管理
 
-        // 权限检查通过后再启动前台服务，保证设备发现线程正常
-        // 启动时加载本地历史通知
-        NotificationRepository.init(this)
-
-            // 沉浸式虚拟键和状态栏设置
-            // 允许内容延伸到状态栏和导航栏区域，统一用 WindowCompat 控制系统栏外观
-            WindowCompat.setDecorFitsSystemWindows(this.window, false)
-            this.window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            // 颜色设置放到 Compose SideEffect 里统一管理
-
-        // 仅使用 Compose 管理主页面和通知历史页面
+        // 仅使用 Compose 管理主页面和通知历史页面，先显示UI再进行初始化
         setContent {
             val isDarkTheme = isSystemInDarkTheme()
             // 自定义错误颜色常量
@@ -159,6 +150,40 @@ class MainActivity : FragmentActivity() {
                     .systemBarsPadding()
                 ) {
                     MainAppFragment(modifier = Modifier.fillMaxSize())
+                }
+            }
+        }
+
+        // 在UI显示后进行权限检查
+        if (!PermissionHelper.checkAllPermissions(this)) {
+            Toast.makeText(this, "请先授权所有必要权限！", Toast.LENGTH_SHORT).show()
+            val intent = Intent(this, GuideActivity::class.java)
+            intent.putExtra("from", "MainActivity")
+            guideLauncher.launch(intent)
+            return
+        }
+
+        // 在后台线程初始化 NotificationRepository 和启动服务
+        kotlinx.coroutines.GlobalScope.launch {
+            // 启动时加载本地历史通知
+            NotificationRepository.init(this@MainActivity)
+            
+            // 使用 ServiceManager 启动服务
+            val result = ServiceManager.startAllServices(this@MainActivity)
+            val serviceStarted = result.first
+            val errorMessage = result.second as? String
+            if (errorMessage != null) {
+                withContext(Dispatchers.Main) {
+                    showAutoStartBanner = true
+                    bannerMessage = errorMessage
+                }
+            }
+
+            // 如果设备服务无法启动，也显示提示
+            if (!serviceStarted) {
+                withContext(Dispatchers.Main) {
+                    showAutoStartBanner = true
+                    bannerMessage = "服务无法启动，可能因系统自启动/后台运行权限被拒绝。请前往系统设置手动允许自启动、后台运行和电池优化白名单，否则通知转发将无法正常工作。"
                 }
             }
         }

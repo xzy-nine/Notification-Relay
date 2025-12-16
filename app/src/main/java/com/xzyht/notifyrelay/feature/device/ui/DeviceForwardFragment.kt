@@ -123,17 +123,20 @@ fun DeviceForwardScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     // 触发一次读取以避免未使用参数提示（保持原有持久化行为）
         // loadAuthedUuids/saveAuthedUuids 留作接口使用，具体操作在需要时调用
-    // 确保RemoteFilterConfig已加载
-    if (!RemoteFilterConfig.isLoaded) {
-        RemoteFilterConfig.load(context)
-        RemoteFilterConfig.isLoaded = true
-    }
     // 手动发现提示相关状态
     val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
     val snackbarVisible = remember { mutableStateOf(false) }
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
+    
+    // 在LaunchedEffect中异步加载RemoteFilterConfig，避免阻塞UI
+    LaunchedEffect(Unit) {
+        if (!RemoteFilterConfig.isLoaded) {
+            RemoteFilterConfig.load(context)
+            RemoteFilterConfig.isLoaded = true
+        }
+    }
     // TabRow相关状态
-    val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤", "超级岛")
+    val tabTitles = listOf("远程过滤", "聊天测试", "本地过滤", "超级岛")
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     
     // Pager相关状态
