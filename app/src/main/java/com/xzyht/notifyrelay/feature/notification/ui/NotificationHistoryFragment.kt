@@ -98,8 +98,8 @@ fun NotificationCard(
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     
-    // 对包名进行等价映射
-    val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
+    // 对包名进行等价映射，使用缓存的包名集合，避免同步加载
+    val installedPkgs = AppRepository.getInstalledPackageNames(context)
     val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
     
     // 使用映射后的包名获取应用信息
@@ -115,8 +115,8 @@ fun NotificationCard(
             // 跳转到对应应用主界面
             val pkg = record.packageName
             if (pkg.isNotEmpty()) {
-                // 应用等价映射
-                val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
+                // 应用等价映射，使用缓存的包名集合，避免同步加载
+                val installedPkgs = AppRepository.getInstalledPackageNames(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
                 
                 var canOpen = false
@@ -287,7 +287,8 @@ fun NotificationHistoryScreen() {
 
     val mixedList by remember(notifications) {
         derivedStateOf {
-            val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
+            // 使用缓存的包名集合，避免同步加载
+            val installedPkgs = AppRepository.getInstalledPackageNames(context)
             val grouped = notifications.groupBy { record ->
                 // 使用映射后的包名进行分组
                 com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
@@ -409,8 +410,8 @@ fun NotificationHistoryScreen() {
                             } else {
                                 val latest = list.maxByOrNull { it.time }
                                 var expanded by remember { mutableStateOf(false) }
-                                // 使用映射后的包名获取应用信息
-                                val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
+                                // 使用映射后的包名获取应用信息，使用缓存的包名集合，避免同步加载
+                                val installedPkgs = AppRepository.getInstalledPackageNames(context)
                                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPkgs)
                                 val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
                                 val (appName, appIcon) = appInfo

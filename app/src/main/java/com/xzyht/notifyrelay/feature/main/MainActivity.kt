@@ -168,6 +168,9 @@ class MainActivity : FragmentActivity() {
             // 启动时加载本地历史通知
             NotificationRepository.init(this@MainActivity)
             
+            // 预加载应用列表，避免在UI线程中同步加载
+            com.xzyht.notifyrelay.core.repository.AppRepository.loadApps(this@MainActivity)
+            
             // 使用 ServiceManager 启动服务
             val result = ServiceManager.startAllServices(this@MainActivity)
             val serviceStarted = result.first
