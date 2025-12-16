@@ -11,9 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -30,6 +28,7 @@ import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.ui.filter.UILocalFilter
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.TabRow
@@ -128,6 +127,9 @@ fun DeviceForwardScreen(
     val snackbarVisible = remember { mutableStateOf(false) }
     if (BuildConfig.DEBUG) Log.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     
+    // 创建协程作用域用于Tab点击事件
+    val coroutineScope = rememberCoroutineScope()
+    
     // 在LaunchedEffect中异步加载RemoteFilterConfig，避免阻塞UI
     LaunchedEffect(Unit) {
         if (!RemoteFilterConfig.isLoaded) {
@@ -137,20 +139,14 @@ fun DeviceForwardScreen(
     }
     // TabRow相关状态
     val tabTitles = listOf("远程过滤", "聊天测试", "本地过滤", "超级岛")
-    var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
     
-    // Pager相关状态
-    val pagerState = rememberPagerState {
+    // Pager相关状态 - 使用Pager状态作为唯一数据源
+    val pagerState = rememberPagerState(initialPage = 0) {
         tabTitles.size
     }
     
-    // 同步TabRow与Pager状态
-    LaunchedEffect(pagerState.currentPage) {
-        selectedTabIndex = pagerState.currentPage
-    }
-    LaunchedEffect(selectedTabIndex) {
-        pagerState.animateScrollToPage(selectedTabIndex)
-    }
+    // 从Pager状态直接获取当前选中的Tab索引，不使用独立状态
+    val selectedTabIndex = pagerState.currentPage
     
     // 连接弹窗与错误弹窗相关状态（暂不在此处管理具体弹窗）
     // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
@@ -201,7 +197,11 @@ fun DeviceForwardScreen(
         TabRowWithContour(
     tabs = tabTitles,
     selectedTabIndex = selectedTabIndex,
-    onTabSelected = { selectedTabIndex = it },
+    onTabSelected = { index ->
+        coroutineScope.launch {
+            pagerState.scrollToPage(index)
+        }
+    },
     modifier = Modifier.fillMaxWidth(),
     colors = TabRowDefaults.tabRowColors(
         backgroundColor = colorScheme.surface,
