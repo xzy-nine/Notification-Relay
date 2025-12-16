@@ -429,5 +429,65 @@ class ConnectionDiscoveryManager(
 
             if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连发现完成")
         }
+        
+        // 在WLAN直连模式下也启动监听线程，确保能接收其他设备的广播消息
+        if (listenThread == null) {
+            listenThread = Thread {
+                var socket: java.net.DatagramSocket? = null
+                try {
+                    socket = java.net.DatagramSocket(23334)
+                    val buf = ByteArray(256)
+                    while (deviceManager.udpDiscoveryEnabled || deviceManager.isWifiDirectNetworkInternal()) {
+                        val packet = java.net.DatagramPacket(buf, buf.size)
+                        socket.receive(packet)
+                        val msg = String(packet.data, 0, packet.length)
+                        val ip = packet.address.hostAddress
+                        if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
+                            val parts = msg.split(":")
+                            if (parts.size >= 4) {
+                                val uuid = parts[1]
+                                val rawDisplay = parts[2]
+                                val displayName = try {
+                                    deviceManager.decodeDisplayNameFromTransportInternal(rawDisplay)
+                                } catch (_: Exception) {
+                                    rawDisplay
+                                }
+                                val port = parts[3].toIntOrNull() ?: deviceManager.listenPort
+                                if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
+                                    val device = DeviceInfo(uuid, displayName, ip, port)
+                                    deviceManager.deviceLastSeenInternal[uuid] = System.currentTimeMillis()
+                                    if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceManager.deviceLastSeenInternal[uuid]}")
+                                    synchronized(deviceManager.deviceInfoCacheInternal) {
+                                        deviceManager.deviceInfoCacheInternal[uuid] = device
+                                    }
+                                    com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
+                                    val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(uuid) }
+                                    if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(uuid)) {
+                                        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
+                                        deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
+                                    }
+                                    scope.launch { deviceManager.updateDeviceListInternal() }
+                                }
+                            }
+                        }
+                    }
+                    if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程已关闭")
+                } catch (e: Exception) {
+                    if (socket != null && socket.isClosed) {
+                        if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程正常关闭")
+                    } else {
+                        if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听异常: ${e.message}")
+                        e.printStackTrace()
+                    }
+                } finally {
+                    try {
+                        socket?.close()
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            listenThread?.isDaemon = true
+            listenThread?.start()
+        }
     }
 }

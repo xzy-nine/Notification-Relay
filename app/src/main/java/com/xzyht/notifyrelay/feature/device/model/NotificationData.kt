@@ -6,43 +6,77 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.runBlocking
-import com.xzyht.notifyrelay.common.data.PersistenceManager
-import com.google.gson.reflect.TypeToken
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 
 class NotificationRecordStore(private val context: Context) {
+    // 数据库仓库实例
+    private val repository = com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context)
+    
+    // 转换方法：将旧的NotificationRecordEntity转换为新的Room实体
+    private fun convertToRoomEntity(old: NotificationRecordEntity, deviceUuid: String): com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity {
+        return com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity(
+            key = old.key,
+            deviceUuid = deviceUuid,
+            packageName = old.packageName,
+            appName = old.appName,
+            title = old.title,
+            text = old.text,
+            time = old.time
+        )
+    }
+    
+    // 转换方法：将新的Room实体转换为旧的NotificationRecordEntity
+    private fun convertFromRoomEntity(new: com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity): NotificationRecordEntity {
+        return NotificationRecordEntity(
+            key = new.key,
+            packageName = new.packageName,
+            appName = new.appName,
+            title = new.title,
+            text = new.text,
+            time = new.time,
+            device = new.deviceUuid
+        )
+    }
+    
     internal fun readAll(device: String): MutableList<NotificationRecordEntity> {
-        val typeToken = object : TypeToken<List<NotificationRecordEntity>>() {}
-        return PersistenceManager.readNotificationRecords(context, device, typeToken).toMutableList()
+        val deviceUuid = if (device == "local") "本机" else device
+        return kotlinx.coroutines.runBlocking {
+            repository.getNotificationsByDevice(deviceUuid)
+        }.map { convertFromRoomEntity(it) }.toMutableList()
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
-        PersistenceManager.saveNotificationRecords(context, device, list)
+        val deviceUuid = if (device == "local") "本机" else device
+        kotlinx.coroutines.runBlocking {
+            val roomEntities = list.map { convertToRoomEntity(it, deviceUuid) }
+            repository.saveNotifications(roomEntities)
+        }
     }
 
     suspend fun insert(record: NotificationRecordEntity) {
-        val list = readAll(record.device)
-        list.removeAll { it.key == record.key }
-        list.add(0, record)
-        writeAll(list, record.device)
+        val deviceUuid = if (record.device == "local") "本机" else record.device
+        val roomEntity = convertToRoomEntity(record, deviceUuid)
+        repository.saveNotification(roomEntity)
     }
 
     suspend fun getAll(device: String): List<NotificationRecordEntity> {
-        return readAll(device).sortedByDescending { it.time }
+        val deviceUuid = if (device == "local") "本机" else device
+        return repository.getNotificationsByDevice(deviceUuid)
+            .map { convertFromRoomEntity(it) }
+            .sortedByDescending { it.time }
     }
 
     suspend fun deleteByKey(key: String, device: String) {
-        val list = readAll(device)
-        list.removeAll { it.key == key }
-        writeAll(list, device)
+        repository.deleteNotificationByKey(key)
     }
 
     suspend fun clearByDevice(device: String) {
-        PersistenceManager.clearNotificationRecords(context, device)
+        val deviceUuid = if (device == "local") "本机" else device
+        repository.deleteNotificationsByDevice(deviceUuid)
     }
 }
 
@@ -230,17 +264,28 @@ object NotificationRepository {
     // 设备列表，自动维护
     val deviceList: MutableList<String> = mutableListOf("本机")
 
-    // 新增：扫描本地所有 notification_records_*.json 文件，自动识别设备
+    // 扫描数据库中的设备，自动识别所有设备
     fun scanDeviceList(context: Context) {
-        val files = context.filesDir.listFiles()?.filter { it.name.startsWith("notification_records_") && it.name.endsWith(".json") } ?: emptyList()
-        val found = files.mapNotNull {
-            val name = it.name.removePrefix("notification_records_").removeSuffix(".json")
-            if (name == "local") "本机" else name
-        }.toMutableSet()
+        // 从Room数据库中获取所有已认证设备
+        val allDevicesFromDb = kotlinx.coroutines.runBlocking {
+            com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context).getDevices()
+        }
+        
+        // 添加本机设备
+        val found = mutableSetOf<String>()
         found.add("本机")
+        
+        // 添加数据库中的所有已认证设备UUID
+        allDevicesFromDb.forEach { device ->
+            val uuid = device.uuid
+            if (!uuid.isNullOrEmpty() && uuid != "本机") {
+                found.add(uuid)
+            }
+        }
+        
         // 保证本机在首位
         val sorted = found.sortedWith(compareBy({ if (it == "本机") 0 else 1 }, { it }))
-        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[scanDeviceList] found devices: $sorted") //打印本机存储的通知
+        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[scanDeviceList] found devices: $sorted")
         deviceList.clear()
         deviceList.addAll(sorted)
     }
@@ -332,10 +377,8 @@ object NotificationRepository {
         notifications.removeAll { it.device == device }
         syncToCache(context)
 
-        // 对于清除操作，等待写入完成确保数据确实被清除
-        if (device == "本机") {
-            PersistenceManager.waitForAllWrites(2000) // 等待最多2秒
-        }
+        // Room数据库操作是异步的，不需要等待写入完成
+        // 清除操作已经通过Repository提交到数据库
 
         // 仅在本机设备时清理processedNotifications缓存（非本机设备没有缓存）
         if (device == "本机") {

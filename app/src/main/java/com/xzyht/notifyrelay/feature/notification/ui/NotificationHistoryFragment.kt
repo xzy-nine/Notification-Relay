@@ -331,12 +331,6 @@ fun NotificationHistoryScreen() {
             // 只清除当前设备的历史，不删除其他设备的历史文件
             NotificationRepository.clearDeviceHistory(selectedDevice, context)
             appInfoCache.clear() // 清空应用信息缓存
-            // 同步清理当前设备的本地json文件内容
-            val store = com.xzyht.notifyrelay.common.data.PersistenceManager
-            val fileKey = if (selectedDevice == "本机") "local" else selectedDevice
-            kotlinx.coroutines.runBlocking {
-                store.clearNotificationRecords(context, fileKey)
-            }
             // 主动刷新 StateFlow
             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {

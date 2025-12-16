@@ -129,6 +129,11 @@ dependencies {
     // Compose Pager 用于实现滑动切换（直接指定有效版本）
     implementation("com.google.accompanist:accompanist-pager-indicators:0.36.0")
 
+    // Room Database
+    implementation("androidx.room:room-runtime:2.8.0")
+    kapt("androidx.room:room-compiler:2.8.0")
+    implementation("androidx.room:room-ktx:2.8.0")
+    
     // Miuix Compose 主题库
     implementation(libs.miuix.android)
     // DataStore 持久化（设备名、规则设置）
@@ -141,8 +146,7 @@ dependencies {
     implementation("com.squareup.okio:okio:3.7.0")
     // 局域网设备发现 jmdns
     implementation("org.jmdns:jmdns:3.5.7")
-    // AndroidX Security: EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0")
+    
     // Coil: image loading (Kotlin + Coroutines friendly)
     implementation("io.coil-kt:coil:2.4.0")
     // DiskLruCache: stable disk-based LRU cache for icons

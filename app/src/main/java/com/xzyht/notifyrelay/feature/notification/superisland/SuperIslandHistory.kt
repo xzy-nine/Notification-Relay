@@ -1,11 +1,16 @@
 package com.xzyht.notifyrelay.feature.notification.superisland
 
 import android.content.Context
-import com.google.gson.reflect.TypeToken
-import com.xzyht.notifyrelay.common.data.PersistenceManager
+import com.google.gson.Gson
+import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
+import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * 持久化超级岛历史记录并提供实时状态流以便 UI 订阅。
@@ -24,10 +29,8 @@ data class SuperIslandHistoryEntry(
 )
 
 object SuperIslandHistory {
-    private const val STORAGE_DEVICE_KEY = "super_island_history"
     private const val MAX_ENTRIES = 600
-
-    private val historyTypeToken = object : com.google.gson.reflect.TypeToken<List<SuperIslandHistoryEntry>>() {}
+    private val gson = Gson()
 
     private val historyFlow = MutableStateFlow<List<SuperIslandHistoryEntry>>(emptyList())
     private val lock = Any()
@@ -39,9 +42,28 @@ object SuperIslandHistory {
         synchronized(lock) {
             if (initialized) return
             val history = try {
-                PersistenceManager.readNotificationRecords(context, STORAGE_DEVICE_KEY, historyTypeToken)
+                // 从Room数据库加载历史记录
+                val repository = DatabaseRepository.getInstance(context)
+                val entities = runBlocking {
+                    repository.getSuperIslandHistory()
+                }
+                // 转换为SuperIslandHistoryEntry
+                entities.map { entity: SuperIslandHistoryEntity ->
+                    SuperIslandHistoryEntry(
+                        id = entity.id,
+                        sourceDeviceUuid = entity.sourceDeviceUuid,
+                        originalPackage = entity.originalPackage,
+                        mappedPackage = entity.mappedPackage,
+                        appName = entity.appName,
+                        title = entity.title,
+                        text = entity.text,
+                        paramV2Raw = entity.paramV2Raw,
+                        picMap = gson.fromJson(entity.picMap, Map::class.java) as Map<String, String>,
+                        rawPayload = entity.rawPayload
+                    )
+                }
             } catch (_: Exception) {
-                emptyList()
+                emptyList<SuperIslandHistoryEntry>()
             }
             historyFlow.value = history
             initialized = true
@@ -70,13 +92,41 @@ object SuperIslandHistory {
         val sanitizedEntry = entry.copy(picMap = interned.toMap())
         val updated = (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
         historyFlow.value = updated
-        PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, updated)
+        
+        // 保存到Room数据库
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val repository = DatabaseRepository.getInstance(context)
+                val entities = updated.map { entry: SuperIslandHistoryEntry ->
+                    SuperIslandHistoryEntity(
+                        id = entry.id,
+                        sourceDeviceUuid = entry.sourceDeviceUuid,
+                        originalPackage = entry.originalPackage,
+                        mappedPackage = entry.mappedPackage,
+                        appName = entry.appName,
+                        title = entry.title,
+                        text = entry.text,
+                        paramV2Raw = entry.paramV2Raw,
+                        picMap = gson.toJson(entry.picMap),
+                        rawPayload = entry.rawPayload
+                    )
+                }
+                repository.saveSuperIslandHistory(entities)
+            } catch (_: Exception) {}
+        }
     }
 
     fun clear(context: Context) {
         ensureLoaded(context)
         historyFlow.value = emptyList()
-        PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, emptyList<SuperIslandHistoryEntry>())
+        
+        // 清空Room数据库
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val repository = DatabaseRepository.getInstance(context)
+                repository.clearSuperIslandHistory()
+            } catch (_: Exception) {}
+        }
     }
 
     /**
@@ -86,7 +136,15 @@ object SuperIslandHistory {
     fun clearAll(context: Context) {
         ensureLoaded(context)
         historyFlow.value = emptyList()
-        PersistenceManager.saveNotificationRecords(context, STORAGE_DEVICE_KEY, emptyList<SuperIslandHistoryEntry>())
+        
+        // 清空Room数据库
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val repository = DatabaseRepository.getInstance(context)
+                repository.clearSuperIslandHistory()
+            } catch (_: Exception) {}
+        }
+        
         try {
             SuperIslandImageStore.prune(context, maxEntries = 0, maxAgeDays = 0)
         } catch (_: Exception) {}

@@ -135,31 +135,33 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     // 加载已认证设备
     private fun loadAuthedDevices() {
-        val json = StorageManager.getString(context, PREFS_AUTHED_DEVICES) ?: return
-        try {
-            val arr = org.json.JSONArray(json)
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val uuid = obj.getString("uuid")
-                val publicKey = obj.getString("publicKey")
-                val sharedSecret = obj.getString("sharedSecret")
-                val isAccepted = obj.optBoolean("isAccepted", true)
-                val displayName = obj.optString("displayName").takeIf { it.isNotEmpty() }
-                val lastIp = obj.optString("lastIp").takeIf { it.isNotEmpty() }
-                val lastPort = if (obj.has("lastPort")) obj.optInt("lastPort", 23333) else null
-                authenticatedDevices[uuid] = AuthInfo(publicKey, sharedSecret, isAccepted, displayName, lastIp, lastPort)
-                // 新增：恢复设备名到缓存
-                if (!displayName.isNullOrEmpty()) {
-                    DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
-                }
-                // 新增：恢复ip到deviceInfoCache
-                if (!lastIp.isNullOrEmpty()) {
-                    synchronized(deviceInfoCache) {
-                        deviceInfoCache[uuid] = DeviceInfo(uuid, displayName ?: "已认证设备", lastIp, lastPort ?: 23333)
-                    }
-                }
+        // 从Room数据库加载设备信息
+        val devices = kotlinx.coroutines.runBlocking {
+            com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context).getDevices()
+        }
+        
+        for (device in devices) {
+            authenticatedDevices[device.uuid] = AuthInfo(
+                publicKey = device.publicKey,
+                sharedSecret = device.sharedSecret,
+                isAccepted = device.isAccepted,
+                displayName = device.displayName,
+                lastIp = device.lastIp,
+                lastPort = device.lastPort
+            )
+            // 恢复设备名到缓存
+            DeviceConnectionManagerUtil.updateGlobalDeviceName(device.uuid, device.displayName)
+            // 恢复ip到deviceInfoCache
+            synchronized(deviceInfoCache) {
+                deviceInfoCache[device.uuid] = DeviceInfo(
+                    uuid = device.uuid,
+                    displayName = device.displayName,
+                    ip = device.lastIp,
+                    port = device.lastPort
+                )
             }
-        } catch (_: Exception) {}
+        }
+        
         // 认证设备加载完成后，更新设备列表状态，确保 listeners（例如通知服务）能及时感知认证状态
         try {
             coroutineScope.launch { updateDeviceList() }
@@ -169,25 +171,48 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 保存已认证设备
     private fun saveAuthedDevices() {
         try {
-            val arr = org.json.JSONArray()
+            // 保存到Room数据库
+            val deviceEntities = mutableListOf<com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity>()
             for ((uuid, auth) in authenticatedDevices) {
                 if (auth.isAccepted) {
-                    val obj = org.json.JSONObject()
-                    obj.put("uuid", uuid)
-                    obj.put("publicKey", auth.publicKey)
-                    obj.put("sharedSecret", auth.sharedSecret)
-                    obj.put("isAccepted", auth.isAccepted)
-                    // 新增：持久化 displayName
                     val name = auth.displayName ?: deviceInfoCache[uuid]?.displayName ?: DeviceConnectionManagerUtil.getDisplayNameByUuid(uuid)
-                    obj.put("displayName", name)
-                    // 新增：持久化ip和port
                     val info = deviceInfoCache[uuid]
-                    obj.put("lastIp", info?.ip ?: auth.lastIp ?: "")
-                    obj.put("lastPort", info?.port ?: auth.lastPort ?: 23333)
-                    arr.put(obj)
+                    val deviceEntity = com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity(
+                        uuid = uuid,
+                        publicKey = auth.publicKey,
+                        sharedSecret = auth.sharedSecret,
+                        isAccepted = auth.isAccepted,
+                        displayName = name,
+                        lastIp = info?.ip ?: auth.lastIp ?: "",
+                        lastPort = info?.port ?: auth.lastPort ?: 23333
+                    )
+                    deviceEntities.add(deviceEntity)
                 }
             }
-            StorageManager.putString(context, PREFS_AUTHED_DEVICES, arr.toString())
+            
+            // 异步保存到数据库
+            coroutineScope.launch {
+                val repository = com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context)
+                
+                // 获取当前数据库中的所有设备
+                val currentDevices = repository.getDevices()
+                val currentDeviceUuids = currentDevices.map { it.uuid }.toSet()
+                
+                // 要保存的设备UUID列表
+                val deviceUuidsToSave = deviceEntities.map { it.uuid }.toSet()
+                
+                // 删除数据库中存在但内存中不存在的设备
+                currentDevices.forEach {
+                    if (!deviceUuidsToSave.contains(it.uuid)) {
+                        repository.deleteDevice(it)
+                    }
+                }
+                
+                // 保存或更新设备
+                deviceEntities.forEach {
+                    repository.saveDevice(it)
+                }
+            }
         } catch (_: Exception) {}
     }
     /**
@@ -270,9 +295,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private fun encodeDisplayNameForTransport(name: String): String {
         try {
             val clean = sanitizeDisplayName(name)
+            if (clean.isEmpty()) {
+                // 确保设备名称不为空，使用默认值"错误空"以便排除故障点
+                return android.util.Base64.encodeToString("错误空".toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+            }
             return android.util.Base64.encodeToString(clean.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
         } catch (_: Exception) {
-            return ""
+            // 编码失败时返回默认设备名称的Base64编码，确保UDP广播消息格式正确
+            return android.util.Base64.encodeToString("错误空2".toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
         }
     }
 
@@ -281,13 +311,21 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 解码并清洗从网络接收到的名称
     private fun decodeDisplayNameFromTransport(encoded: String): String {
         try {
+            if (encoded.isEmpty()) {
+                // 处理空字符串情况，返回默认设备名称"错误空"以便排除故障点
+                return "错误空"
+            }
             val decoded = try { android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP) } catch (_: Exception) { null }
             if (decoded != null) {
                 val s = String(decoded, Charsets.UTF_8)
-                return sanitizeDisplayName(s)
+                val sanitized = sanitizeDisplayName(s)
+                // 确保解码后的名称不为空，使用默认值"错误空"兜底以便排除故障点
+                return if (sanitized.isNotEmpty()) sanitized else "错误空"
             }
         } catch (_: Exception) {}
-        return encoded
+        // 如果解码失败，尝试直接使用原字符串，确保不为空
+        val sanitized = sanitizeDisplayName(encoded)
+        return if (sanitized.isNotEmpty()) sanitized else "错误空"
     }
 
     internal fun decodeDisplayNameFromTransportInternal(encoded: String): String = decodeDisplayNameFromTransport(encoded)
@@ -613,31 +651,47 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     /**
      * 公开API：移除已认证设备（线程安全）。
      * - 取消与该设备相关的心跳任务
-     * - 从已认证表中移除并持久化
+     * - 直接从数据库中删除设备
+     * - 从内存中移除设备信息
      * - 触发 updateDeviceList() 以通知观察者
      * 返回 true 表示存在并已移除，false 表示没有该uuid
      */
     fun removeAuthenticatedDevice(uuid: String): Boolean {
         try {
             var existed = false
+            
             // 取消心跳任务
             try {
                 heartbeatJobs[uuid]?.cancel()
                 heartbeatJobs.remove(uuid)
             } catch (_: Exception) {}
+            
             // 从已建立心跳集合移除
             try { heartbeatedDevices.remove(uuid) } catch (_: Exception) {}
 
             synchronized(authenticatedDevices) {
                 if (authenticatedDevices.containsKey(uuid)) {
+                    // 直接从数据库中删除设备
+                    coroutineScope.launch {
+                        val repository = com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context)
+                        repository.deleteDeviceByUuid(uuid)
+                    }
+                    
+                    // 从内存中移除
                     authenticatedDevices.remove(uuid)
                     existed = true
-                    try { saveAuthedDevices() } catch (_: Exception) {}
                 }
             }
 
             // 清理 deviceLastSeen
             try { deviceLastSeen.remove(uuid) } catch (_: Exception) {}
+            
+            // 清理 deviceInfoCache
+            try {
+                synchronized(deviceInfoCache) {
+                    deviceInfoCache.remove(uuid)
+                }
+            } catch (_: Exception) {}
 
             // 触发更新，确保 StateFlow 与回调被通知
             try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
