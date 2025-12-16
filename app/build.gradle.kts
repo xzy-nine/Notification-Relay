@@ -113,16 +113,21 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    // Jetpack Compose 依赖（升级至 1.8.x 以适配 Miuix 0.4.7）
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.compose.ui:ui:1.8.1")
-    implementation("androidx.compose.material3:material3:1.3.2")
-    implementation("androidx.compose.material:material:1.8.1")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.8.1")
-    debugImplementation("androidx.compose.ui:ui-tooling:1.8.1")
-    implementation("androidx.compose.foundation:foundation:1.8.1")
-    implementation("androidx.compose.runtime:runtime:1.8.1")
-    implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
+    // Jetpack Compose BOM 统一管理版本
+    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
+    
+    // Jetpack Compose 依赖（通过 BOM 统一管理版本）
+    implementation("androidx.activity:activity-compose")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.runtime:runtime-livedata")
+    // Compose Pager 用于实现滑动切换（直接指定有效版本）
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.36.0")
 
     // Miuix Compose 主题库
     implementation(libs.miuix.android)

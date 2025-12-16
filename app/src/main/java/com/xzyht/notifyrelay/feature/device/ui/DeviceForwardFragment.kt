@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
@@ -31,6 +33,8 @@ import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -131,8 +135,20 @@ fun DeviceForwardScreen(
     // TabRow相关状态
     val tabTitles = listOf("远程通知过滤", "聊天测试", "本地通知过滤", "超级岛")
     var selectedTabIndex by rememberSaveable { mutableStateOf(0) }
-    // NotificationFilterPager 的状态由其内部组件管理
-        // 只监听全局选中设备（订阅由需要的组件进行）
+    
+    // Pager相关状态
+    val pagerState = rememberPagerState {
+        tabTitles.size
+    }
+    
+    // 同步TabRow与Pager状态
+    LaunchedEffect(pagerState.currentPage) {
+        selectedTabIndex = pagerState.currentPage
+    }
+    LaunchedEffect(selectedTabIndex) {
+        pagerState.animateScrollToPage(selectedTabIndex)
+    }
+    
     // 连接弹窗与错误弹窗相关状态（暂不在此处管理具体弹窗）
     // 设备认证、删除等逻辑已交由DeviceListFragment统一管理
 
@@ -179,30 +195,52 @@ fun DeviceForwardScreen(
             .background(colorScheme.background)
             .padding(12.dp)
     ) {
-        TabRow(
-            tabs = tabTitles,
-            selectedTabIndex = selectedTabIndex,
-            onTabSelected = { selectedTabIndex = it },
-            modifier = Modifier.fillMaxWidth()
-        )
+        TabRowWithContour(
+    tabs = tabTitles,
+    selectedTabIndex = selectedTabIndex,
+    onTabSelected = { selectedTabIndex = it },
+    modifier = Modifier.fillMaxWidth(),
+    colors = TabRowDefaults.tabRowColors(
+        backgroundColor = colorScheme.surface,
+        contentColor = colorScheme.onSurface,
+        selectedBackgroundColor = colorScheme.primary,
+        selectedContentColor = colorScheme.onPrimary
+    ),
+    minWidth = 100.dp,
+    height = 48.dp,
+    cornerRadius = 16.dp
+)
         // 移除Spacer，改为内容区顶部padding
-        when (selectedTabIndex) {
-            0 -> {
-                // 远程通知过滤 Tab：重构为复用 UIRemoteFilter 组件
-                com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
-            }
-            1 -> {
-                // 聊天测试 Tab：独立到 UIChatTest 组件
-                com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
-            }
-            2 -> {
-                // 本地通知过滤 Tab
-                UILocalFilter()
-            }
-            3 -> {
-                // 超级岛设置 Tab
-                if (BuildConfig.DEBUG) Log.d("超级岛", "UI: 打开超级岛设置 Tab")
-                com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            page ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                when (page) {
+                    0 -> {
+                        // 远程通知过滤 Tab：重构为复用 UIRemoteFilter 组件
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
+                    }
+                    1 -> {
+                        // 聊天测试 Tab：独立到 UIChatTest 组件
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
+                    }
+                    2 -> {
+                        // 本地通知过滤 Tab
+                        UILocalFilter()
+                    }
+                    3 -> {
+                        // 超级岛设置 Tab
+                        if (BuildConfig.DEBUG) Log.d("超级岛", "UI: 打开超级岛设置 Tab")
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
+                    }
+                }
             }
         }
     }
