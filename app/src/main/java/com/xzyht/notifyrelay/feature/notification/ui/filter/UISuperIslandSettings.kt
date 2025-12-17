@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -27,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,25 +42,23 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.superisland.floatingreplicamanager.unescapeHtml
+import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.math.max
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Surface
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.extra.SuperSwitch
 import java.util.Date
-import android.text.Html
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
 private const val SUPER_ISLAND_DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
@@ -97,84 +93,62 @@ fun UISuperIslandSettings() {
         val colorScheme = MiuixTheme.colorScheme
         val textStyles = MiuixTheme.textStyles
 
-        Surface(color = colorScheme.surface) {
-            Column(
+        Surface(color = colorScheme.background) {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("超级岛读取", style = textStyles.body1, color = colorScheme.onSurface)
-                Text(
-                    "控制是否尝试从本机通知中读取小米超级岛数据并转发",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceVariantSummary
-                )
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = {
-                        enabled = it
-                        StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
-                    }
-                )
+                item {
+                    SuperSwitch(
+                        title = "超级岛读取",
+                        summary = "控制是否尝试从本机通知中读取小米超级岛数据并转发",
+                        checked = enabled,
+                        onCheckedChange = {
+                            enabled = it
+                            StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
+                        }
+                    )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(0.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            "复制图片详细信息",
-                            style = textStyles.body2,
-                            color = colorScheme.onSurface
-                        )
-                        Text(
-                            "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
-                            style = textStyles.body2,
-                            color = colorScheme.onSurfaceVariantSummary
-                        )
-                    }
-                    Switch(
+                    SuperSwitch(
+                        title = "复制图片详细信息",
+                        summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
                         checked = includeImageDataOnCopy,
                         onCheckedChange = {
                             includeImageDataOnCopy = it
                             StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
                         }
                     )
-                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(0.dp))    
 
-                if (groups.isEmpty()) {
-                    Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
-                } else {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        top.yukonga.miuix.kmp.basic.Button(
-                            onClick = {
-                                SuperIslandHistory.clearAll(context)
-                            }
+                    if (groups.isEmpty()) {
+                        Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text("清空超级岛历史")
+                            top.yukonga.miuix.kmp.basic.Button(
+                                onClick = {
+                                    SuperIslandHistory.clearAll(context)
+                                }
+                            ) {
+                                Text("清空超级岛历史")
+                            }
                         }
                     }
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(groups, key = { it.packageName }) { group ->
-                            SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
-                        }
+                }
+                
+                if (groups.isNotEmpty()) {
+                    items(groups, key = { it.packageName }) { group ->
+                        SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
                     }
                 }
             }
@@ -435,6 +409,7 @@ private fun SuperIslandHistoryEntryCard(
 private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Modifier = Modifier) {
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
+    val context = LocalContext.current
 
     val bitmap by produceState<Bitmap?>(initialValue = SuperIslandImageCache.get(data), key1 = data) {
         val cached = SuperIslandImageCache.get(data)
@@ -445,11 +420,17 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
 
         val loaded = withContext(Dispatchers.IO) {
             try {
+                // 先尝试将可能的 ref: 引用解析为原始 data: 或 http URL
+                val resolved = try {
+                    SuperIslandImageStore.resolve(context, data) ?: data
+                } catch (_: Exception) { data }
+
                 val decoded = when {
-                    DataUrlUtils.isDataUrl(data) -> DataUrlUtils.decodeDataUrlToBitmap(data)
-                    data.startsWith("http", ignoreCase = true) -> downloadBitmap(data)
+                    DataUrlUtils.isDataUrl(resolved) -> DataUrlUtils.decodeDataUrlToBitmap(resolved)
+                    resolved.startsWith("http", ignoreCase = true) -> downloadBitmap(context, resolved)
                     else -> null
                 }
+                // 缓存仍以传入的 key (可能是 ref:...) 作为索引，便于下次直接命中
                 decoded?.let { SuperIslandImageCache.put(data, it) }
             } catch (_: Exception) {
                 null
@@ -500,42 +481,10 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
     }
 }
 
-private fun downloadBitmap(urlString: String, timeoutMs: Int = 5_000): Bitmap? {
+private suspend fun downloadBitmap(context: Context, urlString: String, timeoutMs: Int = 5_000): Bitmap? {
     return try {
-        val connection = (URL(urlString).openConnection() as? HttpURLConnection)?.apply {
-            connectTimeout = timeoutMs
-            readTimeout = timeoutMs
-            instanceFollowRedirects = true
-            requestMethod = "GET"
-            doInput = true
-        } ?: return null
-
-        try {
-            connection.connect()
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) return null
-            val bytes = connection.inputStream.use { stream ->
-                val buffer = ByteArrayOutputStream()
-                val temp = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = stream.read(temp)
-                    if (read == -1) break
-                    total += read
-                    if (total > SUPER_ISLAND_DOWNLOAD_MAX_BYTES) {
-                        return@use null
-                    }
-                    buffer.write(temp, 0, read)
-                }
-                buffer.toByteArray()
-            } ?: return null
-            if (bytes.isEmpty()) return null
-            decodeSampledBitmap(bytes, SUPER_ISLAND_IMAGE_MAX_DIMENSION)
-        } finally {
-            try { connection.disconnect() } catch (_: Exception) {}
-        }
-    } catch (_: Exception) {
-        null
-    }
+        ImageLoader.loadBitmapSuspend(context, urlString, timeoutMs)
+    } catch (_: Exception) { null }
 }
 
 private fun decodeSampledBitmap(bytes: ByteArray, maxDimension: Int): Bitmap? {
@@ -704,7 +653,10 @@ private const val SUPER_ISLAND_COPY_IMAGE_DATA_KEY = "superisland_copy_image_dat
 
 private fun sanitizeImageContent(source: String, includeImageDataOnCopy: Boolean): String {
     if (includeImageDataOnCopy) return source
-    var sanitized = DATA_URL_REGEX.replace(source) { "图片" }
+    // 先替换可能存在的 ref: 引用为占位，避免在 UI 上显示内部引用字符串
+    var sanitized = REF_URL_REGEX.replace(source) { "图片" }
+    // 替换 data: URI 与常见图片 URL
+    sanitized = DATA_URL_REGEX.replace(sanitized) { "图片" }
     sanitized = IMAGE_URL_REGEX.replace(sanitized) { "图片" }
     return sanitized
 }
@@ -718,6 +670,9 @@ private val IMAGE_URL_REGEX = Regex(
     pattern = "https?:[^\\s\"]+\\.(?:png|jpe?g|gif|webp|bmp|svg)",
     options = setOf(RegexOption.IGNORE_CASE)
 )
+
+// 匹配已被 intern 为引用的图片标识（例如 ref:abcdef...），展示时应替换为占位而非原样显示
+private val REF_URL_REGEX = Regex(pattern = "(?i)ref:[0-9a-f]{16,}")
 
 private fun formatMultilineContent(content: String): List<String> {
     if (content.isBlank()) return emptyList()

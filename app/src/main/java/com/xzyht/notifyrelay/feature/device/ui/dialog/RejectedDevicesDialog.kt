@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 
@@ -24,7 +24,7 @@ fun RejectedDevicesDialog(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
 
-    SuperDialog(
+    SuperBottomSheet(
         show = showDialog,
         title = "已拒绝设备",
         onDismissRequest = onDismiss
@@ -39,7 +39,7 @@ fun RejectedDevicesDialog(
             Column {
                 rejectedDevices.forEach { device ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -55,16 +55,6 @@ fun RejectedDevicesDialog(
                     }
                 }
             }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(
-                text = "关闭",
-                onClick = onDismiss
-            )
         }
     }
 }

@@ -23,7 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
@@ -533,9 +532,7 @@ fun DeviceListScreen() {
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
-                        try {
-                            PersistenceManager.deleteNotificationFile(appContext, uuid)
-                        } catch (_: Exception) {}
+                        // 使用Room数据库后，不需要手动删除JSON文件
                     }
                     // 持久化认证状态
                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
@@ -611,9 +608,7 @@ fun DeviceListScreen() {
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
-                        try {
-                            PersistenceManager.deleteNotificationFile(appContext, uuid)
-                        } catch (_: Exception) {}
+                        // 使用Room数据库后，不需要手动删除JSON文件
                     }
                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                     saveMethod.isAccessible = true

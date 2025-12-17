@@ -1,15 +1,19 @@
 package com.xzyht.notifyrelay.core.util
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.widget.ImageView
+import coil.ImageLoader as CoilImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
-import com.xzyht.notifyrelay.feature.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 
 /**
  * 统一图片加载器：同时支持 data: URL 与 http(s) URL。
@@ -57,6 +61,7 @@ object ImageLoader {
      * 同步加载并返回 Bitmap（后台线程使用）。
      */
     fun loadBitmap(urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
+        // 已弃用的同步路径 —— 建议使用带上下文的 suspend 加载器
         return if (urlOrData.startsWith("data:", ignoreCase = true)) {
             DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
         } else {
@@ -65,6 +70,7 @@ object ImageLoader {
     }
 
     private fun loadHttpBitmap(url: String, timeoutMs: Int): Bitmap? {
+        // 保留原有实现，作为同步调用方的兜底方案
         return try {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = timeoutMs
@@ -84,5 +90,32 @@ object ImageLoader {
                 bmp
             }
         } catch (_: Exception) { null }
+    }
+
+    /**
+    *暂停使用 Coil 进行 HTTP/URI 加载的加载器，并将 data: 协议 URI 委托给 DataUrlUtils 处理。
+     */
+    suspend fun loadBitmapSuspend(context: Context, urlOrData: String, timeoutMs: Int = 5000): Bitmap? {
+        return try {
+            if (urlOrData.startsWith("data:", ignoreCase = true)) {
+                DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
+            } else {
+                val loader = CoilImageLoader(context)
+                val request = ImageRequest.Builder(context)
+                    .data(urlOrData)
+                    .allowHardware(false)
+                    .build()
+                val result = loader.execute(request)
+                if (result is SuccessResult) {
+                    val drawable = result.drawable
+                    if (drawable is android.graphics.drawable.BitmapDrawable) return drawable.bitmap
+                    // 将 drawable 转换为 bitmap
+                    val bmp = DataUrlUtils.drawableToBitmap(drawable)
+                    bmp
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 }

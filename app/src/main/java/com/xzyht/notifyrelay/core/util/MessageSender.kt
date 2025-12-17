@@ -1,17 +1,22 @@
 package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
+import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
-import org.json.JSONObject
-import android.net.Uri
-import android.util.Base64
-import kotlinx.coroutines.*
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
+import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -45,7 +50,7 @@ object MessageSender {
     private val sentKeys = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     // 超级岛：为实现“首次全量，后续差异”，需要跟踪每个设备下每个feature的上次完整状态
-    private val siLastStatePerDevice = mutableMapOf<String, MutableMap<String, com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.State>>()
+    private val siLastStatePerDevice = mutableMapOf<String, MutableMap<String, SuperIslandProtocol.State>>()
     // 超级岛：ACK 跟踪与强制全量发送控制
     private const val SI_ACK_TIMEOUT_MS = 4_000L
     private data class PendingAck(val hash: String, val ts: Long)
@@ -436,12 +441,12 @@ object MessageSender {
             }
 
             // 计算特征键（支持外部传入首包固定ID，避免后续波动）
-            val featureId = featureIdOverride ?: com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+            val featureId = featureIdOverride ?: SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
             )
 
             val finalPics: Map<String, String> = if (processedPics.isNotEmpty()) processedPics.toMap() else (picMap?.toMap() ?: emptyMap())
-            val newState = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.State(
+            val newState = SuperIslandProtocol.State(
                 title = title,
                 text = text,
                 paramV2Raw = paramV2Raw,
@@ -460,39 +465,35 @@ object MessageSender {
 
                 val payloadObj = if (old == null || forceFull) {
                     // 首包全量
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.buildFullPayload(
+                    SuperIslandProtocol.buildFullPayload(
                         superPkg, appName, time, isLocked, featureId, newState
                     )
                 } else {
                     // 差异包：即便无变化也发送空变更包，以刷新接收端的待撤回悬浮窗
-                    val d = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.diff(old, newState)
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.buildDeltaPayload(
+                    val d = SuperIslandProtocol.diff(old, newState)
+                    SuperIslandProtocol.buildDeltaPayload(
                         superPkg, appName, time, isLocked, featureId, d
                     )
                 }
 
-                if (payloadObj != null) {
-                    // 立即更新本地lastState（简单模式：不等待ACK再更新，用于后续差异计算）
-                    synchronized(siLastStatePerDevice) { deviceMap[featureId] = newState }
-                    // 记录待ACK哈希
-                    try {
-                        val h = payloadObj.optString("hash", "")
-                        if (h.isNotEmpty()) {
-                            val map = synchronized(siPendingAcks) { siPendingAcks.getOrPut(deviceInfo.uuid) { mutableMapOf() } }
-                            synchronized(siPendingAcks) { map[featureId] = PendingAck(h, System.currentTimeMillis()) }
-                        }
-                    } catch (_: Exception) {}
-                    val task = SuperIslandTask(deviceInfo, payloadObj.toString(), deviceManager)
-                    CoroutineScope(Dispatchers.IO).launch {
-                        try {
-                            superIslandSendChannel.send(task)
-                            if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 数据已加入超级岛发送队列：${deviceInfo.displayName}")
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 加入超级岛发送队列失败：${deviceInfo.displayName}", e)
-                        }
+                // 立即更新本地lastState（简单模式：不等待ACK再更新，用于后续差异计算）
+                synchronized(siLastStatePerDevice) { deviceMap[featureId] = newState }
+                // 记录待ACK哈希
+                try {
+                    val h = payloadObj.optString("hash", "")
+                    if (h.isNotEmpty()) {
+                        val map = synchronized(siPendingAcks) { siPendingAcks.getOrPut(deviceInfo.uuid) { mutableMapOf() } }
+                        synchronized(siPendingAcks) { map[featureId] = PendingAck(h, System.currentTimeMillis()) }
                     }
-                } else {
-                    if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 无变化，跳过发送 -> ${deviceInfo.displayName}")
+                } catch (_: Exception) {}
+                val task = SuperIslandTask(deviceInfo, payloadObj.toString(), deviceManager)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        superIslandSendChannel.send(task)
+                        if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 数据已加入超级岛发送队列：${deviceInfo.displayName}")
+                    } catch (e: Exception) {
+                        if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 加入超级岛发送队列失败：${deviceInfo.displayName}", e)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -519,10 +520,10 @@ object MessageSender {
             if (authenticatedDevices.isEmpty()) return
             val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
-            val featureId = featureIdOverride ?: com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.computeFeatureId(
+            val featureId = featureIdOverride ?: SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
             )
-            val payload = com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.buildEndPayload(
+            val payload = SuperIslandProtocol.buildEndPayload(
                 superPkg, appName, time, isLocked, featureId
             ).toString()
             authenticatedDevices.forEach { deviceInfo ->

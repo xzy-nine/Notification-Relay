@@ -3,9 +3,13 @@ package com.xzyht.notifyrelay.feature.device.repository
 import android.content.Context
 import kotlinx.coroutines.delay
 import android.util.Log
+import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
 import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
 
 // 延迟去重缓存（10秒内）
 // private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
@@ -38,9 +42,9 @@ suspend fun replicateNotification(
                 val featureKeyValue = json.optString("featureKeyValue", "")
 
                 // 结束包：只负责关闭对应 featureId 的悬浮窗，不生成任何 UI
-                if (type == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.TYPE_END && featureKeyValue.isNotBlank()) {
+                if (type == SuperIslandProtocol.TYPE_END && featureKeyValue.isNotBlank()) {
                     if (BuildConfig.DEBUG) Log.i("超级岛", "检测到超级岛结束包，准备关闭悬浮窗 featureId=$featureKeyValue")
-                    com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.dismissBySource(featureKeyValue)
+                    FloatingReplicaManager.dismissBySource(featureKeyValue)
                     return
                 }
 
@@ -61,13 +65,13 @@ suspend fun replicateNotification(
                 }
                 if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title, type=$type")
                 // 使用 featureKeyValue 作为 sourceId，确保结束包可以按 featureId 精确关闭
-                val sourceId = if (featureKeyName == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.FEATURE_KEY_NAME && featureKeyValue.isNotBlank()) {
+                val sourceId = if (featureKeyName == SuperIslandProtocol.FEATURE_KEY_NAME && featureKeyValue.isNotBlank()) {
                     featureKeyValue
                 } else {
                     pkg
                 }
-                com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap)
-                val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap)
+                val historyEntry = SuperIslandHistoryEntry(
                     id = System.currentTimeMillis(),
                     originalPackage = originalPackage.takeIf { it.isNotEmpty() },
                     mappedPackage = pkg,
@@ -79,11 +83,11 @@ suspend fun replicateNotification(
                     rawPayload = result.rawData
                 )
                 try {
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
+                    SuperIslandHistory.append(context, historyEntry)
                 } catch (_: Exception) {
-                    com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
+                    SuperIslandHistory.append(
                         context,
-                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                        SuperIslandHistoryEntry(
                             id = System.currentTimeMillis(),
                             originalPackage = originalPackage.takeIf { it.isNotEmpty() },
                             mappedPackage = pkg,

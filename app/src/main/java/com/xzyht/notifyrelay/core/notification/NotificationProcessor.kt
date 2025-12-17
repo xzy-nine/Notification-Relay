@@ -6,6 +6,11 @@ import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandRemoteStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -144,7 +149,7 @@ object NotificationProcessor {
                 // 新协议：差异合并
                 val featureId = try { json.optString("featureKeyValue", "") } catch (_: Exception) { "" }
                 val sourceKey = listOfNotNull(remoteUuid, mappedPkg, featureId.takeIf { it.isNotBlank() }).joinToString("|")
-                val merged = com.xzyht.notifyrelay.feature.superisland.SuperIslandRemoteStore.applyIncoming(sourceKey, json)
+                val merged = SuperIslandRemoteStore.applyIncoming(sourceKey, json)
 
                 // 发送 ACK
                 val recvHash = try { json.optString("hash", "") } catch (_: Exception) { "" }
@@ -152,8 +157,8 @@ object NotificationProcessor {
                     try { manager.sendSuperIslandAckInternal(remoteUuid, sharedSecret, recvHash, featureId, mappedPkg) } catch (_: Exception) {}
                 }
 
-                if (siType == com.xzyht.notifyrelay.feature.superisland.SuperIslandProtocol.TYPE_END) {
-                    try { com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
+                if (siType == SuperIslandProtocol.TYPE_END) {
+                    try { FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
                     return true
                 }
 
@@ -163,11 +168,11 @@ object NotificationProcessor {
                     val mParam2 = merged.paramV2Raw
                     val mPics = merged.pics
                     try {
-                        com.xzyht.notifyrelay.feature.superisland.FloatingReplicaManager.showFloating(context, sourceKey, mTitle, mText, mParam2, mPics)
+                        FloatingReplicaManager.showFloating(context, sourceKey, mTitle, mText, mParam2, mPics)
                     } catch (e: Exception) {
                         if (BuildConfig.DEBUG) Log.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
                     }
-                    val historyEntry = com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                    val historyEntry = SuperIslandHistoryEntry(
                         id = System.currentTimeMillis(),
                         sourceDeviceUuid = remoteUuid,
                         originalPackage = pkg,
@@ -180,11 +185,11 @@ object NotificationProcessor {
                         rawPayload = decrypted
                     )
                     try {
-                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(context, historyEntry)
+                        SuperIslandHistory.append(context, historyEntry)
                     } catch (_: Exception) {
-                        com.xzyht.notifyrelay.feature.superisland.SuperIslandHistory.append(
+                        SuperIslandHistory.append(
                             context,
-                            com.xzyht.notifyrelay.feature.superisland.SuperIslandHistoryEntry(
+                            SuperIslandHistoryEntry(
                                 id = System.currentTimeMillis(),
                                 sourceDeviceUuid = remoteUuid,
                                 originalPackage = pkg,

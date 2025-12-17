@@ -26,7 +26,7 @@ plugins {
 // - 直接在此处设置主版本号；不再从 gradle.properties 读取。
 // - 在发布重大版本时请在这里更新此值（并可同时调整下方的 versionMajorSubtract）。
 // 例如：val versionMajor: Int = 1
-val versionMajor: Int = 0 // <-- 在此处直接修改主版本号
+val versionMajor: Int = 1 // <-- 在此处直接修改主版本号
 
 fun gitOutput(vararg args: String): String {
     val stdout = ByteArrayOutputStream()
@@ -46,7 +46,7 @@ fun gitOutput(vararg args: String): String {
 // - 当主版本号（versionMajor）升级后，可以在下面直接把 `versionMajorSubtract` 改为期望的值，
 //   这样 main 的提交计数会在计算中减去该值（下限为 0），防止次版本无限递增。
 // - 示例：如果希望在 major 升级后把 main 的计数回退 340，则设置为 340。
-val versionMajorSubtract: Int = 0 // <-- 在此处直接修改以手动应用减量
+val versionMajorSubtract: Int = 238 // <-- 在此处直接修改以手动应用减量，当前main分支提交数为238
 val versionInfo = Versioning.compute(rootProject.projectDir, versionMajor, versionMajorSubtract)
 val computedVersionName = versionInfo.versionName
 val computedVersionCode = versionInfo.versionCode
@@ -113,18 +113,29 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    // Jetpack Compose 依赖（升级至 1.8.x 以适配 Miuix 0.4.7）
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation("androidx.compose.ui:ui:1.8.1")
-    implementation("androidx.compose.material3:material3:1.3.2")
-    implementation("androidx.compose.material:material:1.8.1")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.8.1")
-    debugImplementation("androidx.compose.ui:ui-tooling:1.8.1")
-    implementation("androidx.compose.foundation:foundation:1.8.1")
-    implementation("androidx.compose.runtime:runtime:1.8.1")
-    implementation("androidx.compose.runtime:runtime-livedata:1.8.1")
+    // Jetpack Compose BOM 统一管理版本
+    implementation(platform("androidx.compose:compose-bom:2025.01.00"))
+    
+    // Jetpack Compose 依赖（通过 BOM 统一管理版本）
+    implementation("androidx.activity:activity-compose")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.runtime:runtime-livedata")
+    // Compose Pager 用于实现滑动切换（直接指定有效版本）
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.36.0")
 
+    // Room Database
+    implementation("androidx.room:room-runtime:2.8.0")
+    kapt("androidx.room:room-compiler:2.8.0")
+    implementation("androidx.room:room-ktx:2.8.0")
+    
     // Miuix Compose 主题库
+    implementation(libs.miuix.android)
     // DataStore 持久化（设备名、规则设置）
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.datastore:datastore:1.0.0")
@@ -135,25 +146,19 @@ dependencies {
     implementation("com.squareup.okio:okio:3.7.0")
     // 局域网设备发现 jmdns
     implementation("org.jmdns:jmdns:3.5.7")
-    implementation(project(":miuix-main:miuix"))
-    // AndroidX Security: EncryptedSharedPreferences
-    implementation("androidx.security:security-crypto:1.1.0")
+    
+    // Coil: image loading (Kotlin + Coroutines friendly)
+    implementation("io.coil-kt:coil:2.4.0")
+    // DiskLruCache: stable disk-based LRU cache for icons
+    implementation("com.jakewharton:disklrucache:2.0.2")
 }
 
-// 强制所有 kotlin-stdlib 依赖使用 1.9.23，避免版本冲突
-configurations.all {
-    resolutionStrategy.eachDependency {
-        if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
-            useVersion("1.9.23")
-        }
-    }
-}
+// 移除强制使用旧版本stdlib的配置，让项目使用与Kotlin 2.1.21兼容的stdlib版本
 
-// CI helper task: print the computed version name to stdout.
-// This allows CI workflows to obtain the resolved versionName (computed by Versioning)
-// by running `./gradlew -q :app:printVersionName`.
 tasks.register("printVersionName") {
     doLast {
         println(computedVersionName)
     }
 }
+
+
