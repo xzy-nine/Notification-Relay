@@ -80,6 +80,19 @@ object FloatingReplicaManager {
     // 会话级屏蔽池：进程结束后自然清空，value 为最后屏蔽时间戳
     private val blockedInstanceIds = ConcurrentHashMap<String, Long>()
     private const val BLOCK_EXPIRE_MS = 10_000L
+    
+    // 优化：缓存背景资源，避免重复创建GradientDrawable
+    private val expandedBackgroundCache = mutableMapOf<Context, GradientDrawable>()
+    private val summaryBackgroundCache = mutableMapOf<Context, GradientDrawable>()
+    // 优化：缓存密度值，避免频繁计算density
+    private val densityCache = mutableMapOf<Context, Float>()
+    
+    // 优化：获取密度值，优先从缓存中获取
+    private fun getDensity(context: Context): Float {
+        return densityCache.getOrPut(context) {
+            context.resources.displayMetrics.density
+        }
+    }
 
     private data class EntryRecord(
         val key: String,
@@ -155,15 +168,18 @@ object FloatingReplicaManager {
                             internedPicMap
                         )
 
-                    addOrUpdateEntry(
-                        context,
-                        entryKey,
-                        expandedView,
-                        collapsedSummary.view,
-                        templateResult?.progressBinding,
-                        collapsedSummary.progressBinding,
-                        summaryOnly
-                    )
+                    // 增强空指针保护：确保所有必要参数都不为null
+                    if (expandedView != null && collapsedSummary != null) {
+                        addOrUpdateEntry(
+                            context,
+                            entryKey,
+                            expandedView,
+                            collapsedSummary.view,
+                            templateResult?.progressBinding,
+                            collapsedSummary.progressBinding,
+                            summaryOnly
+                        )
+                    }
                 } catch (e: Exception) {
                     if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${'$'}{e.message}")
                     // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
@@ -330,6 +346,9 @@ object FloatingReplicaManager {
                     Log.w(TAG, "超级岛: 销毁浮窗容器失败: ${e.message}")
                 }
             } finally {
+                // 优化：清理Handler消息，避免内存泄漏
+                handler.removeCallbacksAndMessages(null)
+                
                 // 无论移除是否成功，都置空全局引用，避免内存泄漏
                 overlayView = null
                 stackContainer = null
@@ -355,7 +374,7 @@ object FloatingReplicaManager {
                     val appCtx = context.applicationContext
                     val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
                     val container = FrameLayout(context)
-                    val padding = (12 * (context.resources.displayMetrics.density)).toInt()
+                    val padding = (12 * getDensity(context)).toInt()
                     val innerStack = LinearLayout(context).apply {
                         orientation = LinearLayout.VERTICAL
                         setPadding(padding, padding, padding, padding)
@@ -366,14 +385,14 @@ object FloatingReplicaManager {
                     // 浮窗容器只负责显示浮窗条目，关闭功能由专门的关闭层处理
 
                     val layoutParams = WindowManager.LayoutParams(
-                        (FIXED_WIDTH_DP * (context.resources.displayMetrics.density)).toInt(),
+                        (FIXED_WIDTH_DP * getDensity(context)).toInt(),
                         WindowManager.LayoutParams.WRAP_CONTENT,
                         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                         PixelFormat.TRANSLUCENT
                     ).apply {
                         gravity = Gravity.LEFT or Gravity.TOP
-                        x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * context.resources.displayMetrics.density).toInt()) / 2).coerceAtLeast(0)
+                        x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * getDensity(context)).toInt()) / 2).coerceAtLeast(0)
                         y = 100
                     }
 
@@ -426,13 +445,13 @@ object FloatingReplicaManager {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
-                val margin = (4 * context.resources.displayMetrics.density).toInt()
+                val margin = (4 * getDensity(context)).toInt()
                 lp.setMargins(0, margin, 0, margin)
                 layoutParams = lp
                 isClickable = true
                 // 统一背景放在条目容器上，并进行圆角/描边/阴影管理
                 background = createEntryBackground(context, /*isExpanded=*/!summaryOnly)
-                elevation = 6f * context.resources.displayMetrics.density
+                elevation = 6f * getDensity(context)
                 // 将 entryKey（通常为 instanceId/sourceId）挂到 tag，供拖动关闭逻辑使用
                 tag = key
             }
@@ -519,17 +538,26 @@ object FloatingReplicaManager {
         previousProgress: Int?
     ): Int? {
         if (binding == null) return null
+        
         val target = binding.currentProgress
+        // 确保target在合理范围内
+        val safeTarget = target?.coerceIn(0, 100)
+        
         val effectivePrevious = if (
-            target != null && previousProgress != null && target < previousProgress && target <= PROGRESS_RESET_THRESHOLD
+            safeTarget != null && previousProgress != null && safeTarget < previousProgress && safeTarget <= PROGRESS_RESET_THRESHOLD
         ) {
             // 新一轮传输通常会重置到极小值，主动回退到0避免出现倒退动画
             0
         } else {
-            previousProgress
+            previousProgress?.coerceIn(0, 100) // 确保previousProgress也在合理范围内
         }
-        binding.apply(effectivePrevious)
-        return binding.currentProgress
+        
+        // 优化：只有当进度值有效时才应用更新
+        if (safeTarget != null) {
+            binding.apply(effectivePrevious)
+        }
+        
+        return safeTarget
     }
 
     private fun onEntryClicked(key: String) {
@@ -635,14 +663,17 @@ object FloatingReplicaManager {
     }
 
     private fun createEntryBackground(context: Context, isExpanded: Boolean): GradientDrawable {
-        val dens = context.resources.displayMetrics.density
-        val gd = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = if (isExpanded) 16f * dens else 999f
-            setColor(0xEE000000.toInt())
-            setStroke(dens.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+        // 优化：使用缓存避免重复创建GradientDrawable
+        val cache = if (isExpanded) expandedBackgroundCache else summaryBackgroundCache
+        return cache.getOrPut(context) {
+            val dens = getDensity(context)
+            GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = if (isExpanded) 16f * dens else 999f
+                setColor(0xEE000000.toInt())
+                setStroke(dens.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+            }
         }
-        return gd
     }
 
     private fun stripRootBackground(view: View) {
@@ -687,31 +718,14 @@ object FloatingReplicaManager {
             record.expandedView.animate()?.cancel()
             record.summaryView.animate()?.cancel()
             
-            // 移除所有监听器
+            // 简化：只移除必要的监听器
             record.container.setOnTouchListener(null)
             record.container.setOnClickListener(null)
-            record.container.setOnLongClickListener(null)
-            record.container.setOnFocusChangeListener(null)
-            record.container.setOnKeyListener(null)
-            record.container.setOnHoverListener(null)
-            
-            // 清理子视图监听器
-            record.expandedView.setOnClickListener(null)
-            record.expandedView.setOnTouchListener(null)
-            record.expandedView.setOnFocusChangeListener(null)
-            record.expandedView.setOnKeyListener(null)
-            record.expandedView.setOnHoverListener(null)
-            
-            record.summaryView.setOnClickListener(null)
-            record.summaryView.setOnTouchListener(null)
-            record.summaryView.setOnFocusChangeListener(null)
-            record.summaryView.setOnKeyListener(null)
-            record.summaryView.setOnHoverListener(null)
             
             // 移除视图
             stackContainer?.removeView(record.container)
             
-            // 清理视图的背景和其他资源
+            // 清理视图的背景
             record.expandedView.background = null
             record.summaryView.background = null
             record.container.background = null
@@ -723,8 +737,6 @@ object FloatingReplicaManager {
             detachFromParent(record.expandedView)
             detachFromParent(record.summaryView)
             
-            // 清理视图资源引用
-            // 注意：不要直接置空record的视图引用，因为record将被GC回收
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) {
                 Log.w(TAG, "超级岛: 移除浮窗条目资源失败: ${e.message}")
@@ -780,7 +792,7 @@ object FloatingReplicaManager {
         // 获取windowManager，优先使用全局引用，否则从context中获取
         val wm = windowManager ?: context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
 
-        val density = context.resources.displayMetrics.density
+        val density = getDensity(context)
         val container = FrameLayout(context)
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -1063,12 +1075,12 @@ object FloatingReplicaManager {
                 this.text = Html.fromHtml(unescapeHtml(text), Html.FROM_HTML_MODE_COMPACT)
             }
             // 简化条件：当hasTimerLine为true时，timerLine必然存在于linesToRender[0]，timerInfo也必然不为null
-            if (index == 0 && hasTimerLine) {
-                tv.ellipsize = null
-                bindTimerUpdater(tv, timerInfo)
-            } else {
-                tv.ellipsize = TextUtils.TruncateAt.END
-            }
+        if (index == 0 && hasTimerLine && timerInfo != null) {
+            tv.ellipsize = null
+            bindTimerUpdater(tv, timerInfo)
+        } else {
+            tv.ellipsize = TextUtils.TruncateAt.END
+        }
             textColumn.addView(tv)
         }
 
@@ -1155,6 +1167,9 @@ object FloatingReplicaManager {
         private val closeCenterX = screenWidth / 2f
         private val closeCenterY = screenHeight - (96 * displayMetrics.density)
         private var isInCloseArea = false
+        // 优化：限制视图更新频率，避免频繁UI更新
+        private var lastUpdateTime = 0L
+        private val UPDATE_INTERVAL = 16L // 约60fps
 
         private fun isCenterInCloseArea(height: Int = windowHeight): Boolean {
             val centerX = params.x + windowWidth / 2f
@@ -1189,24 +1204,33 @@ object FloatingReplicaManager {
                     if (isDragging) {
                         val newX = startX + (event.rawX - lastX).toInt()
                         val newY = startY + (event.rawY - lastY).toInt()
-                        // 边界检查：如果新位置在边界内，则更新，否则停止拖动（不更新位置）
+                        // 边界检查：将位置限制在边界内，确保浮窗始终可见
                         // 实时获取浮窗高度用于边界检查
                         val currentHeight = rootView.height.takeIf { it > 0 } ?: (200 * displayMetrics.density).toInt()
-                        if (newX in 0..(screenWidth - windowWidth) && newY in 0..(screenHeight - currentHeight)) {
-                            params.x = newX
-                            params.y = newY
+                        
+                        // 优化：将位置限制在边界内，而不是完全不更新
+                        val boundedX = newX.coerceIn(0, screenWidth - windowWidth)
+                        val boundedY = newY.coerceIn(0, screenHeight - currentHeight)
+                        
+                        params.x = boundedX
+                        params.y = boundedY
+                        
+                        // 优化：限制视图更新频率，避免频繁UI更新
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
                             try {
                                 wm.updateViewLayout(rootView, params)
                                 if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 浮窗移动到 x=${params.x}, y=${params.y}")
                             } catch (_: Exception) {}
+                            lastUpdateTime = currentTime
+                        }
 
-                            // 检测是否进入/离开关闭区域
-                            val nowInClose = isCenterInCloseArea()
-                            if (nowInClose != isInCloseArea) {
-                                isInCloseArea = nowInClose
-                                animateCloseTargetHighlight(nowInClose)
-                                performHapticFeedback(rootView.context)
-                            }
+                        // 检测是否进入/离开关闭区域
+                        val nowInClose = isCenterInCloseArea()
+                        if (nowInClose != isInCloseArea) {
+                            isInCloseArea = nowInClose
+                            animateCloseTargetHighlight(nowInClose)
+                            performHapticFeedback(rootView.context)
                         }
                         return true
                     }
