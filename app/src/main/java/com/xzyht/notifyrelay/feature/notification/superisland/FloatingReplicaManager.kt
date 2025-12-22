@@ -29,6 +29,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
+import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
@@ -197,8 +199,8 @@ object FloatingReplicaManager {
                     val smallIsland = paramV2?.paramIsland?.smallIslandArea
                     val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
                     val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
-                    // 使用Compose构建视图的开关
-                    val useCompose = true
+                    // 使用Compose构建视图的开关（来自设置页）
+                    val useCompose = StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)
                     
                     // 优化渲染逻辑：即使paramV2为null，也尝试使用Compose渲染
                     val expandedView = if (useCompose) {

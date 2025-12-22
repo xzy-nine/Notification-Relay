@@ -47,6 +47,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaMan
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +74,7 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
+    var renderWithCompose by remember { mutableStateOf(StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)) }
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
     val groups = remember(history) {
@@ -108,6 +110,18 @@ fun UISuperIslandSettings() {
                         onCheckedChange = {
                             enabled = it
                             StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(0.dp))
+
+                    SuperSwitch(
+                        title = "使用 Compose 渲染",
+                        summary = "切换超级岛模板渲染实现（实验性）",
+                        checked = renderWithCompose,
+                        onCheckedChange = {
+                            renderWithCompose = it
+                            StorageManager.putBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, it)
                         }
                     )
 

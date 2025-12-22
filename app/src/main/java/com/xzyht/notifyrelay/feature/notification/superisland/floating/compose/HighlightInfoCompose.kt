@@ -83,6 +83,22 @@ fun HighlightInfoCompose(
                 )
             }
             
+            // 状态文本（如“进行中”），与View路径保持一致
+            val statusText = highlightInfo.timerInfo
+                ?.let { resolveStatusText(highlightInfo) }
+                ?.takeIf { it.isNotBlank() && it != primaryText }
+
+            statusText?.let { status ->
+                val statusColor = parseColor(highlightInfo.colorSubContent)
+                    ?: parseColor(highlightInfo.colorContent)
+                    ?: 0xFFDDDDDD.toInt()
+                Text(
+                    text = status,
+                    color = Color(statusColor),
+                    fontSize = 12.sp
+                )
+            }
+
             // 内容文本
             highlightInfo.content
                 ?.takeIf { it.isNotBlank() && it != primaryText }
@@ -111,7 +127,8 @@ fun HighlightInfoCompose(
             highlightInfo.timerInfo
                 ?.takeIf { !highlightInfo.iconOnly }
                 ?.let { timerInfo ->
-                    TimerText(timerInfo)
+                    val timerColor = parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt()
+                    TimerText(timerInfo, timerColor)
                 }
         }
         
@@ -167,7 +184,7 @@ private fun BigAreaImage(
  * 计时器文本组件
  */
 @Composable
-private fun TimerText(timerInfo: TimerInfo) {
+private fun TimerText(timerInfo: TimerInfo, colorInt: Int) {
     var display by remember {
         mutableStateOf(formatTimerInfo(timerInfo))
     }
@@ -184,7 +201,7 @@ private fun TimerText(timerInfo: TimerInfo) {
     Text(
         text = display,
         fontSize = 16.sp,
-        color = Color.White
+        color = Color(colorInt)
     )
 }
 
@@ -217,4 +234,22 @@ private fun decodeBitmap(picMap: Map<String, String>?, key: String?): android.gr
     } catch (_: Exception) {
         null
     }
+}
+
+// 与View版相同的状态文本推导逻辑
+private fun resolveStatusText(highlightInfo: HighlightInfo): String? {
+    val preferred = listOfNotNull(
+        highlightInfo.title,
+        highlightInfo.content,
+        highlightInfo.subContent
+    ).firstOrNull { it.contains("进行") }
+    if (!preferred.isNullOrBlank()) {
+        return preferred
+    }
+    val base = listOfNotNull(
+        highlightInfo.subContent,
+        highlightInfo.title,
+        highlightInfo.content
+    ).firstOrNull { it.isNotBlank() } ?: return null
+    return if (base.contains("进行")) base else base + "进行中"
 }
