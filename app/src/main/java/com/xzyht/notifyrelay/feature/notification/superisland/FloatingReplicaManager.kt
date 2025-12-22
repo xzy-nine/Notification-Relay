@@ -1185,8 +1185,7 @@ object FloatingReplicaManager {
                     isDragging = false
                     isInCloseArea = false
                     // 拖动开始时再显示关闭层，避免点击时不必要的显示
-                    // 返回true确保后续触摸事件能够被正确处理
-                    return true
+                    return true // 需要返回true以接收后续事件
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - lastX
@@ -1255,6 +1254,9 @@ object FloatingReplicaManager {
                         // 结束拖动时移除全屏关闭层
                         hideCloseOverlay()
                         return true
+                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
+                        // 非拖动的 ACTION_UP，视为点击事件，手动触发 onClickListener
+                        v.performClick()
                     }
                     // 非拖动结束时，如果显示了关闭层，也需要隐藏
                     hideCloseOverlay()
