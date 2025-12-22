@@ -129,6 +129,11 @@ dependencies {
     // Compose Pager 用于实现滑动切换（直接指定有效版本）
     implementation("com.google.accompanist:accompanist-pager-indicators:0.36.0")
 
+    // AndroidX Lifecycle（提供 ViewTreeLifecycleOwner 等）
+    implementation("androidx.lifecycle:lifecycle-runtime:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-android:2.8.7")
+
     // Room Database
     implementation("androidx.room:room-runtime:2.8.0")
     kapt("androidx.room:room-compiler:2.8.0")

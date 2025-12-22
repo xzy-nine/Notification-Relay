@@ -17,8 +17,8 @@ suspend fun buildComposeViewFromTemplateSimple(
     business: String? = null
 ): ComposeView {
     return ComposeView(context).apply {
-        // 设置Composition策略，确保Compose视图能够正确地与View系统集成
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        // 浮窗环境默认无 ViewTreeLifecycleOwner，使用分离窗口时销毁更稳妥
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         
         setContent {
             SuperIslandCompose(paramV2, picMap)

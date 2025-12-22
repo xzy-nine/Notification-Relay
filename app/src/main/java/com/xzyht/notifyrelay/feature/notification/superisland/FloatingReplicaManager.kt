@@ -25,9 +25,12 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromRawParam
@@ -69,6 +72,34 @@ object FloatingReplicaManager {
     private var stackContainer: WeakReference<LinearLayout>? = null
     private var overlayLayoutParams: WindowManager.LayoutParams? = null
     private var windowManager: WeakReference<WindowManager>? = null
+    // 提供给 Compose 的生命周期所有者（不依赖 ViewTree）
+    private var overlayLifecycleOwner: FloatingWindowLifecycleOwner? = null
+
+    // 通过反射调用 androidx.lifecycle.ViewTreeLifecycleOwner.set(view, owner)
+    private fun tryInstallViewTreeLifecycleOwner(view: View, owner: LifecycleOwner) {
+        try {
+            val clazz = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
+            val method = clazz.getMethod("set", View::class.java, LifecycleOwner::class.java)
+            method.invoke(null, view, owner)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 安装 ViewTreeLifecycleOwner 失败: ${e.message}")
+        }
+    }
+
+    // 通过反射调用 androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(view, owner)
+    private fun tryInstallViewTreeSavedStateRegistryOwner(view: View, owner: SavedStateRegistryOwner) {
+        try {
+            val clazz = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
+            val method = clazz.getMethod(
+                "set",
+                View::class.java,
+                Class.forName("androidx.savedstate.SavedStateRegistryOwner")
+            )
+            method.invoke(null, view, owner)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 安装 ViewTreeSavedStateRegistryOwner 失败: ${e.message}")
+        }
+    }
     // 单独的全屏关闭层（拖动时显示底部中心关闭指示器）
     private var closeOverlayView: WeakReference<View>? = null
     private var closeOverlayLayoutParams: WindowManager.LayoutParams? = null
@@ -145,6 +176,10 @@ object FloatingReplicaManager {
 
             CoroutineScope(Dispatchers.Main).launch {
                 try {
+                    // 预先准备生命周期所有者，供 Compose 注入 LocalLifecycleOwner 使用
+                    if (overlayLifecycleOwner == null) {
+                        overlayLifecycleOwner = FloatingWindowLifecycleOwner()
+                    }
                     // 尝试解析paramV2
                     val paramV2 = parseParamV2Safe(paramV2Raw)
                     
@@ -168,12 +203,12 @@ object FloatingReplicaManager {
                     val expandedView = if (useCompose) {
                         try {
                             if (paramV2 != null) {
-                                val composeView = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
+                                val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null, overlayLifecycleOwner)
                                 if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
-                                composeView as View
+                                composeResult.view
                             } else if (!paramV2Raw.isNullOrBlank()) {
                                 // 尝试直接使用paramV2Raw构建ComposeView
-                                val composeView = buildComposeViewFromRawParam(context, paramV2Raw, internedPicMap)
+                                val composeView = buildComposeViewFromRawParam(context, paramV2Raw, internedPicMap, overlayLifecycleOwner)
                                 if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染(直接从raw)，sourceId=$sourceId")
                                 composeView as View
                             } else {
@@ -372,6 +407,10 @@ object FloatingReplicaManager {
                 val wm = windowManager?.get()
                 val view = overlayView?.get()
                 if (wm != null && view != null) {
+                    // 通知生命周期结束，便于 Compose 清理
+                    try {
+                        overlayLifecycleOwner?.onDestroy()
+                    } catch (_: Exception) { }
                     wm.removeView(view)
                     if (BuildConfig.DEBUG) {
                         Log.i(TAG, "超级岛: 所有条目移除，销毁浮窗容器")
@@ -394,6 +433,7 @@ object FloatingReplicaManager {
                 stackContainer = null
                 overlayLayoutParams = null
                 windowManager = null
+                overlayLifecycleOwner = null
             }
         }
     }
@@ -421,8 +461,18 @@ object FloatingReplicaManager {
                         }
                         container.addView(innerStack)
 
-                        // 移除LifecycleOwner设置，使用DisposeOnDetachedFromWindow替代DisposeOnViewTreeLifecycleDestroyed
-                        // 避免在浮窗中找不到LifecycleOwner时崩溃
+                        // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
+                        val lifecycleOwner = overlayLifecycleOwner ?: FloatingWindowLifecycleOwner().also {
+                            overlayLifecycleOwner = it
+                        }
+                        // 安装 ViewTreeLifecycleOwner + ViewTreeSavedStateRegistryOwner，满足 ComposeView 附着校验
+                        tryInstallViewTreeLifecycleOwner(container, lifecycleOwner)
+                        try {
+                            val savedStateOwner = lifecycleOwner as SavedStateRegistryOwner
+                            tryInstallViewTreeSavedStateRegistryOwner(container, savedStateOwner)
+                        } catch (e: Exception) {
+                            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: lifecycleOwner 非 SavedStateRegistryOwner 或安装失败: ${e.message}")
+                        }
 
                         // 移除浮窗容器中的关闭指示器，统一由showCloseOverlay函数创建和管理
                         // 浮窗容器只负责显示浮窗条目，关闭功能由专门的关闭层处理
@@ -447,6 +497,8 @@ object FloatingReplicaManager {
                             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
                         }
                         if (added) {
+                            // 标记浮窗进入前台生命周期，供 Compose 使用
+                            try { lifecycleOwner.onShow() } catch (_: Exception) {}
                             overlayView = WeakReference(container)
                             stackContainer = WeakReference(innerStack)
                             overlayLayoutParams = layoutParams

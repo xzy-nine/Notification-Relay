@@ -7,6 +7,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
@@ -15,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
 import org.json.JSONObject
 
@@ -25,55 +28,65 @@ suspend fun buildComposeViewFromTemplate(
     context: Context,
     paramV2: ParamV2,
     picMap: Map<String, String>? = null, 
-    business: String? = null
+    business: String? = null,
+    lifecycleOwner: LifecycleOwner? = null
 ): ComposeView {
     return ComposeView(context).apply {
-        // Ensure the Compose view disposes with the view tree lifecycle
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        // 浮窗环境通常没有 ViewTreeLifecycleOwner，统一使用在分离窗口时销毁
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
-            SuperIslandComposeRoot {
-                when {
-                    paramV2.baseInfo != null -> {
-                        BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
-                    }
-                    paramV2.chatInfo != null -> {
-                        ChatInfoCompose(paramV2, picMap = picMap)
-                    }
-                    paramV2.animTextInfo != null -> {
-                        AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
-                    }
-                    paramV2.highlightInfo != null -> {
-                        HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
-                    }
-                    paramV2.picInfo != null -> {
-                        PicInfoCompose(paramV2.picInfo, picMap = picMap)
-                    }
-                    paramV2.hintInfo != null -> {
-                        HintInfoCompose(paramV2.hintInfo, picMap = picMap)
-                    }
-                    paramV2.textButton != null -> {
-                        TextButtonCompose(paramV2.textButton, picMap = picMap)
-                    }
-                    paramV2.paramIsland != null -> {
-                        ParamIslandCompose(paramV2.paramIsland)
-                    }
-                    paramV2.actions?.isNotEmpty() == true -> {
-                        ActionCompose(paramV2.actions, picMap)
-                    }
-                    else -> {
-                        // 默认模板：未支持的模板类型
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Text(text = "未支持的模板", color = Color.White)
+            val contentBlock: @Composable () -> Unit = {
+                SuperIslandComposeRoot {
+                    when {
+                        paramV2.baseInfo != null -> {
+                            BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
+                        }
+                        paramV2.chatInfo != null -> {
+                            ChatInfoCompose(paramV2, picMap = picMap)
+                        }
+                        paramV2.animTextInfo != null -> {
+                            AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
+                        }
+                        paramV2.highlightInfo != null -> {
+                            HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
+                        }
+                        paramV2.picInfo != null -> {
+                            PicInfoCompose(paramV2.picInfo, picMap = picMap)
+                        }
+                        paramV2.hintInfo != null -> {
+                            HintInfoCompose(paramV2.hintInfo, picMap = picMap)
+                        }
+                        paramV2.textButton != null -> {
+                            TextButtonCompose(paramV2.textButton, picMap = picMap)
+                        }
+                        paramV2.paramIsland != null -> {
+                            ParamIslandCompose(paramV2.paramIsland)
+                        }
+                        paramV2.actions?.isNotEmpty() == true -> {
+                            ActionCompose(paramV2.actions, picMap)
+                        }
+                        else -> {
+                            // 默认模板：未支持的模板类型
+                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Text(text = "未支持的模板", color = Color.White)
+                            }
                         }
                     }
+                    
+                    // 进度组件
+                    paramV2.multiProgressInfo?.let {
+                        MultiProgressCompose(it, picMap, business)
+                    } ?: paramV2.progressInfo?.let {
+                        ProgressCompose(it, picMap)
+                    }
                 }
-                
-                // 进度组件
-                paramV2.multiProgressInfo?.let {
-                    MultiProgressCompose(it, picMap, business)
-                } ?: paramV2.progressInfo?.let {
-                    ProgressCompose(it, picMap)
+            }
+            if (lifecycleOwner != null) {
+                CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                    contentBlock()
                 }
+            } else {
+                contentBlock()
             }
         }
     }
@@ -85,79 +98,89 @@ suspend fun buildComposeViewFromTemplate(
 suspend fun buildComposeViewFromRawParam(
     context: Context,
     paramV2Raw: String,
-    picMap: Map<String, String>? = null
+    picMap: Map<String, String>? = null,
+    lifecycleOwner: LifecycleOwner? = null
 ): ComposeView {
     return ComposeView(context).apply {
         // 使用DisposeOnDetachedFromWindow替代DisposeOnViewTreeLifecycleDestroyed
         // 避免在浮窗中找不到LifecycleOwner时崩溃
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
-            SuperIslandComposeRoot {
-                // 解析paramV2，在Composable函数之外处理异常
-                val parseResult = parseParamV2WithResult(paramV2Raw)
-                
-                when (parseResult) {
-                    is ParseResult.Success -> {
-                        val paramV2 = parseResult.paramV2
-                        // 根据paramV2的不同类型显示不同的Compose组件
-                        when {
-                            paramV2.baseInfo != null -> {
-                                BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
-                            }
-                            paramV2.chatInfo != null -> {
-                                ChatInfoCompose(paramV2, picMap = picMap)
-                            }
-                            paramV2.animTextInfo != null -> {
-                                AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
-                            }
-                            paramV2.highlightInfo != null -> {
-                                HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
-                            }
-                            paramV2.picInfo != null -> {
-                                PicInfoCompose(paramV2.picInfo, picMap = picMap)
-                            }
-                            paramV2.hintInfo != null -> {
-                                HintInfoCompose(paramV2.hintInfo, picMap = picMap)
-                            }
-                            paramV2.textButton != null -> {
-                                TextButtonCompose(paramV2.textButton, picMap = picMap)
-                            }
-                            paramV2.paramIsland != null -> {
-                                ParamIslandCompose(paramV2.paramIsland)
-                            }
-                            paramV2.actions?.isNotEmpty() == true -> {
-                                ActionCompose(paramV2.actions, picMap)
-                            }
-                            else -> {
-                                // 默认模板：未支持的模板类型
-                                Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                                    Text(text = "未支持的模板", color = Color.White)
+            val contentBlock: @Composable () -> Unit = {
+                SuperIslandComposeRoot {
+                    // 解析paramV2，在Composable函数之外处理异常
+                    val parseResult = parseParamV2WithResult(paramV2Raw)
+                    
+                    when (parseResult) {
+                        is ParseResult.Success -> {
+                            val paramV2 = parseResult.paramV2
+                            // 根据paramV2的不同类型显示不同的Compose组件
+                            when {
+                                paramV2.baseInfo != null -> {
+                                    BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
+                                }
+                                paramV2.chatInfo != null -> {
+                                    ChatInfoCompose(paramV2, picMap = picMap)
+                                }
+                                paramV2.animTextInfo != null -> {
+                                    AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
+                                }
+                                paramV2.highlightInfo != null -> {
+                                    HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
+                                }
+                                paramV2.picInfo != null -> {
+                                    PicInfoCompose(paramV2.picInfo, picMap = picMap)
+                                }
+                                paramV2.hintInfo != null -> {
+                                    HintInfoCompose(paramV2.hintInfo, picMap = picMap)
+                                }
+                                paramV2.textButton != null -> {
+                                    TextButtonCompose(paramV2.textButton, picMap = picMap)
+                                }
+                                paramV2.paramIsland != null -> {
+                                    ParamIslandCompose(paramV2.paramIsland)
+                                }
+                                paramV2.actions?.isNotEmpty() == true -> {
+                                    ActionCompose(paramV2.actions, picMap)
+                                }
+                                else -> {
+                                    // 默认模板：未支持的模板类型
+                                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                        Text(text = "未支持的模板", color = Color.White)
+                                    }
                                 }
                             }
+                            
+                            // 进度组件
+                            paramV2.multiProgressInfo?.let {
+                                MultiProgressCompose(it, picMap, paramV2.business)
+                            } ?: paramV2.progressInfo?.let {
+                                ProgressCompose(it, picMap)
+                            }
                         }
-                        
-                        // 进度组件
-                        paramV2.multiProgressInfo?.let {
-                            MultiProgressCompose(it, picMap, paramV2.business)
-                        } ?: paramV2.progressInfo?.let {
-                            ProgressCompose(it, picMap)
-                        }
-                    }
-                    is ParseResult.Failure -> {
-                        // 解析失败，显示默认信息
-                        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                            Column {
-                                Text(text = parseResult.title, 
-                                     color = Color.White, 
-                                     fontSize = 16.sp, 
-                                     fontWeight = FontWeight.Bold)
-                                Text(text = parseResult.content, 
-                                     color = Color(0xFFDDDDDD), 
-                                     fontSize = 14.sp)
+                        is ParseResult.Failure -> {
+                            // 解析失败，显示默认信息
+                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Column {
+                                    Text(text = parseResult.title, 
+                                         color = Color.White, 
+                                         fontSize = 16.sp, 
+                                         fontWeight = FontWeight.Bold)
+                                    Text(text = parseResult.content, 
+                                         color = Color(0xFFDDDDDD), 
+                                         fontSize = 14.sp)
+                                }
                             }
                         }
                     }
                 }
+            }
+            if (lifecycleOwner != null) {
+                CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
+                    contentBlock()
+                }
+            } else {
+                contentBlock()
             }
         }
     }

@@ -11,6 +11,7 @@ import android.widget.TextView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate
 import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.LifecycleOwner
 
 // 摘要态组件解析
 
@@ -113,9 +114,9 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
 }
 
 // 构建Compose UI视图的函数
-suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): ComposeTemplateViewResult {
+suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null, lifecycleOwner: LifecycleOwner? = null): ComposeTemplateViewResult {
     return ComposeTemplateViewResult(
-        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate(context, paramV2, picMap, business),
+        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate(context, paramV2, picMap, business, lifecycleOwner),
         progressBinding = null
     )
 }
