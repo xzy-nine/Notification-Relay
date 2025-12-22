@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,14 +19,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.MultiProgressInfo
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
-import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF
 private const val DEFAULT_NODE_COUNT = 3
+private const val NODE_SIZE_DP = 55 // 与传统View保持一致
+private const val PROGRESS_BAR_HEIGHT_DP = 8 // 与传统View保持一致
 
 /**
- * 多进度条Compose组件（使用 Miuix ProgressIndicator 恢复）
+ * 多进度条Compose组件，与传统View实现功能一致
  */
 @Composable
 fun MultiProgressCompose(
@@ -43,7 +44,10 @@ fun MultiProgressCompose(
     val progressFloat: Float? = if (progressInt in 0..100) progressInt / 100f else null
 
     // 计算指针索引（用于高亮已完成节点）
-    val pointerIndex = progressFloat?.let { (it * (nodeCount - 1)).toInt().coerceIn(0, nodeCount - 1) } ?: -1
+    val progressValue = progressInt.coerceIn(0, 100)
+    val segmentCount = nodeCount - 1
+    val stageFloat = progressValue / 100f * segmentCount
+    val pointerIndex = stageFloat.toInt().coerceIn(0, nodeCount - 1)
 
     Column(modifier = modifier.padding(8.dp)) {
         // 标题
@@ -56,38 +60,61 @@ fun MultiProgressCompose(
             )
         }
 
-        // 节点行（等距）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(nodeCount) { index ->
-                val completed = if (pointerIndex >= 0) index <= pointerIndex else false
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // 进度条背景层
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(PROGRESS_BAR_HEIGHT_DP.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        color = primaryColor.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(PROGRESS_BAR_HEIGHT_DP.dp / 2)
+                    )
+            )
+
+            // 进度条前景层
+            if (progressFloat != null) {
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
+                        .fillMaxWidth(fraction = progressFloat)
+                        .height(PROGRESS_BAR_HEIGHT_DP.dp)
+                        .align(Alignment.BottomCenter)
                         .background(
-                            color = if (completed) primaryColor else primaryColor.copy(alpha = 0.28f),
-                            shape = CircleShape
+                            color = primaryColor,
+                            shape = RoundedCornerShape(PROGRESS_BAR_HEIGHT_DP.dp / 2)
                         )
                 )
             }
-        }
 
-        // 线性进度条（确定/不确定两种状态，progress=null 表示不确定）
-        LinearProgressIndicator(
-            progress = progressFloat,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(ProgressIndicatorDefaults.DefaultLinearProgressIndicatorHeight),
-            colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                foregroundColor = primaryColor,
-                backgroundColor = primaryColor.copy(alpha = 0.2f)
-            )
-        )
+            // 节点行（等距，底部对齐）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(NODE_SIZE_DP.dp) // 确保有足够高度容纳节点
+                    .padding(bottom = 0.dp), // 与进度条底部对齐
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom // 节点底部对齐
+            ) {
+                repeat(nodeCount) {
+                    index ->
+                    val completed = index <= pointerIndex
+                    val isFirst = index == 0
+                    // 针对 food_delivery 业务，第一个节点需要透明
+                    val nodeAlpha = if (isFirst && business == "food_delivery") 0f else 1f
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(NODE_SIZE_DP.dp) // 与传统View保持一致的节点大小
+                            .background(
+                                color = if (completed) primaryColor else primaryColor.copy(alpha = 0.28f),
+                                shape = CircleShape
+                            )
+                            .alpha(nodeAlpha)
+                    )
+                }
+            }
+        }
 
         // 可选额外信息：显示数值
         progressFloat?.let { pf ->

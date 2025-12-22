@@ -16,10 +16,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.BaseInfo
 
 /**
- * BaseInfo的Compose实现，用于显示主要文本、次要文本等
+ * BaseInfo的Compose实现，与传统View功能一致
  */
 @Composable
 fun BaseInfoCompose(
@@ -34,10 +35,10 @@ fun BaseInfoCompose(
         // 主要文本1：关键信息
         baseInfo.title?.let {
             Text(
-                text = it,
+                text = unescapeHtml(it),
                 color = Color(parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Normal, // 与传统View一致，不使用Bold
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
@@ -47,64 +48,12 @@ fun BaseInfoCompose(
         // 次要文本1：前置描述
         baseInfo.content?.let {
             Text(
-                text = it,
+                text = unescapeHtml(it),
                 color = Color(parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // 主要文本2：关键信息
-        baseInfo.subTitle?.let {
-            Text(
-                text = it,
-                color = Color(parseColor(baseInfo.colorSubTitle) ?: 0xFFFFFFFF.toInt()),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // 次要文本2：前置描述
-        baseInfo.subContent?.let {
-            Text(
-                text = it,
-                color = Color(parseColor(baseInfo.colorSubContent) ?: 0xFFDDDDDD.toInt()),
-                fontSize = 12.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // 补充文本
-        baseInfo.extraTitle?.let {
-            Text(
-                text = it,
-                color = Color(parseColor(baseInfo.colorExtraTitle) ?: 0xFF888888.toInt()),
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // 特殊标签文本
-        baseInfo.specialTitle?.let {
-            Text(
-                text = it,
-                color = Color(parseColor(baseInfo.colorSpecialTitle) ?: 0xFFFFFFFF.toInt()),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(parseColor(baseInfo.colorSpecialBg) ?: 0xFFFF4444.toInt()))
-                    .padding(vertical = 2.dp, horizontal = 8.dp)
             )
         }
     }

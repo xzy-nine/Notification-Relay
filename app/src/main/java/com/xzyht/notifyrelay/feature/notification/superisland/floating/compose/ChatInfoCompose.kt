@@ -14,11 +14,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ChatInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
 
 /**
- * 聊天信息Compose组件
+ * 聊天信息Compose组件，与传统View功能一致
  */
 @Composable
 fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
@@ -27,7 +28,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(8.dp), // 与传统View一致
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
@@ -41,26 +42,26 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
                     .clip(androidx.compose.foundation.shape.CircleShape),
                 contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(12.dp))
         }
         
         // 文本内容
         Column(modifier = Modifier.weight(1f)) {
             chatInfo.title?.let {
                 Text(
-                    text = it,
+                    text = unescapeHtml(it),
                     color = Color(parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 2.dp)
+                    fontSize = 14.sp, // 与传统View一致
+                    fontWeight = FontWeight.Normal, // 与传统View一致
+                    modifier = Modifier.padding(start = 8.dp) // 与传统View一致
                 )
             }
             
             chatInfo.content?.let {
                 Text(
-                    text = it,
+                    text = unescapeHtml(it),
                     color = Color(parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
-                    fontSize = 14.sp
+                    fontSize = 12.sp, // 与传统View一致
+                    modifier = Modifier.padding(start = 8.dp) // 与传统View一致
                 )
             }
         }
