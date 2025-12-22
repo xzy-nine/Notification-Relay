@@ -37,6 +37,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ProgressInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.SmallIslandArea
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.bindTimerUpdater
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.buildComposeViewFromTemplate
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.buildViewFromTemplate
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
@@ -155,9 +156,16 @@ object FloatingReplicaManager {
                     val smallIsland = paramV2?.paramIsland?.smallIslandArea
                     val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
                     val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
-                    val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                    val expandedView = templateResult?.view
-                        ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                    // 使用Compose构建视图的开关
+                    val useCompose = true
+                    
+                    val expandedView = if (useCompose && paramV2 != null) {
+                        val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
+                        composeResult.view
+                    } else {
+                        val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                        templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                    }
                     val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
                         ?: buildSummaryView(
                             context,
@@ -175,7 +183,7 @@ object FloatingReplicaManager {
                         entryKey,
                         expandedView,
                         collapsedSummary.view,
-                        templateResult?.progressBinding,
+                        null, // Compose版本暂时不支持progressBinding
                         collapsedSummary.progressBinding,
                         summaryOnly
                     )

@@ -9,6 +9,8 @@ import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
 import android.widget.TextView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate
+import androidx.compose.ui.platform.ComposeView
 
 // 摘要态组件解析
 
@@ -28,7 +30,7 @@ data class ParamV2(
     val business: String? = null // 可选的业务标识（例如 miui_flashlight）
 )
 
-// 构建UI视图的函数
+// 构建传统UI视图的函数
 suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): TemplateViewResult {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -110,6 +112,14 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
     return TemplateViewResult(container, progressBinding)
 }
 
+// 构建Compose UI视图的函数
+suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): ComposeTemplateViewResult {
+    return ComposeTemplateViewResult(
+        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate(context, paramV2, picMap, business),
+        progressBinding = null
+    )
+}
+
 // 解析param_v2总容器，根据不同字段选择对应的子组件解析
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
@@ -184,5 +194,11 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
 
 data class TemplateViewResult(
     val view: View,
+    val progressBinding: CircularProgressBinding? = null
+)
+
+// 支持ComposeView的视图结果类
+data class ComposeTemplateViewResult(
+    val view: ComposeView,
     val progressBinding: CircularProgressBinding? = null
 )

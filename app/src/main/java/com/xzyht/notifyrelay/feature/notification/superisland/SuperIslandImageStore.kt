@@ -2,9 +2,7 @@ package com.xzyht.notifyrelay.feature.notification.superisland
 
 import android.content.Context
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import java.io.File
-import kotlin.collections.iterator
 
 /**
  * 超级岛图片去重存储（内存 + 简单文件持久化）。
@@ -155,9 +153,9 @@ object SuperIslandImageStore {
         return "ref:$hash"
     }
 
-    fun resolve(context: Context, refOrValue: String?): String? {
+    fun resolve(context: Context?, refOrValue: String?): String? {
         if (refOrValue == null) return null
-        ensureLoaded(context)
+        context?.let { ensureLoaded(it) }
         if (!refOrValue.startsWith("ref:")) return refOrValue
         val hash = refOrValue.removePrefix("ref:")
         return map[hash] ?: refOrValue

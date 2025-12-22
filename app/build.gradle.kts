@@ -1,6 +1,5 @@
+
 import java.io.ByteArrayOutputStream
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 plugins {
     id("com.android.application")
@@ -109,6 +108,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.androidx.ui.text)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -149,6 +149,8 @@ dependencies {
     
     // Coil: image loading (Kotlin + Coroutines friendly)
     implementation("io.coil-kt:coil:2.4.0")
+    // Coil Compose: Jetpack Compose integration for image loading
+    implementation("io.coil-kt:coil-compose:2.4.0")
     // DiskLruCache: stable disk-based LRU cache for icons
     implementation("com.jakewharton:disklrucache:2.0.2")
 }

@@ -1,0 +1,27 @@
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
+
+import android.content.Context
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
+
+/**
+ * 创建Compose视图的构建器
+ */
+suspend fun buildComposeViewFromTemplateSimple(
+    context: Context,
+    paramV2: ParamV2,
+    picMap: Map<String, String>? = null,
+    business: String? = null
+): ComposeView {
+    return ComposeView(context).apply {
+        // 设置Composition策略，确保Compose视图能够正确地与View系统集成
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        
+        setContent {
+            SuperIslandCompose(paramV2, picMap)
+        }
+    }
+}
