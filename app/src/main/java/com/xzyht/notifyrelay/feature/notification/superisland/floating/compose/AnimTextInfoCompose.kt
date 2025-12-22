@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,12 +20,17 @@ import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.AnimTextInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
 
 /**
  * 动画文本信息Compose组件，与传统View功能一致
  */
 @Composable
 fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>? = null) {
+    val uiMode = LocalConfiguration.current.uiMode
+    val nightMask = uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+    val preferDark = nightMask == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
     Row(modifier = Modifier.padding(8.dp)) {
         // 左侧图标
         val iconSize = 40.dp
@@ -52,26 +58,26 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
             // major = title ?: formattedTimer；若 major 是时间串则用等宽字体；
             // secondary = content ?: (title!=null && formattedTimer!=null ? formattedTimer : null)
 
-            // 计时显示状态，按秒刷新
             val hasTimer = animTextInfo.timerInfo != null
             val timerState = remember(animTextInfo.timerInfo) {
                 mutableStateOf(
-                    animTextInfo.timerInfo?.let { com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo(it) }
+                    animTextInfo.timerInfo?.let { formatTimerInfo(it) }
                 )
             }
             if (hasTimer) {
                 LaunchedEffect(animTextInfo.timerInfo) {
                     while (true) {
-                        timerState.value = animTextInfo.timerInfo?.let {
-                            com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo(it)
-                        }
+                        timerState.value = animTextInfo.timerInfo?.let { formatTimerInfo(it) }
                         kotlinx.coroutines.delay(1000)
                     }
                 }
             }
 
             val majorText = animTextInfo.title ?: timerState.value
-            val majorColor = parseColor(animTextInfo.colorTitle) ?: 0xFFFFFFFF.toInt()
+            val majorColor = when {
+                preferDark -> parseColor(animTextInfo.colorTitleDark)
+                else -> parseColor(animTextInfo.colorTitle)
+            } ?: 0xFFFFFFFF.toInt()
             majorText?.let { text ->
                 val isTimeLike = text.matches(Regex("[0-9: ]{2,}"))
                 Text(
@@ -86,7 +92,10 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
             val secondaryText = animTextInfo.content ?: run {
                 if (!animTextInfo.title.isNullOrBlank() && timerState.value != null) timerState.value else null
             }
-            val secondaryColor = parseColor(animTextInfo.colorContent) ?: 0xFFDDDDDD.toInt()
+            val secondaryColor = when {
+                preferDark -> parseColor(animTextInfo.colorContentDark)
+                else -> parseColor(animTextInfo.colorContent)
+            } ?: 0xFFDDDDDD.toInt()
             secondaryText?.let { text ->
                 Text(
                     text = unescapeHtml(text),

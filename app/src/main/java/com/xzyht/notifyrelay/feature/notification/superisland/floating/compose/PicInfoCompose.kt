@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.PicInfo
 
 /**
@@ -44,7 +45,7 @@ fun PicInfoCompose(picInfo: PicInfo, picMap: Map<String, String>?) {
         picInfo.title?.let {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = it,
+                text = unescapeHtml(it),
                 color = Color(parseColor(picInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp
             )
