@@ -160,11 +160,14 @@ object FloatingReplicaManager {
                     val useCompose = true
                     
                     val expandedView = if (useCompose && paramV2 != null) {
-                        val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
-                        composeResult.view
+                        val composeView = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
+                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
+                        composeView as View
                     } else {
                         val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                        templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                        val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
+                        view
                     }
                     val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
                         ?: buildSummaryView(
