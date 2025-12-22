@@ -113,7 +113,8 @@ object FloatingReplicaManager {
 
     // 会话级屏蔽池：进程结束后自然清空，value 为最后屏蔽时间戳
     private val blockedInstanceIds = ConcurrentHashMap<String, Long>()
-    private const val BLOCK_EXPIRE_MS = 10_000L
+    // 会话级屏蔽过期时间（默认 15 秒），避免用户刚刚关闭后立即再次弹出
+    private const val BLOCK_EXPIRE_MS = 15_000L
     
     // 优化：缓存背景资源，避免重复创建GradientDrawable
     private val expandedBackgroundCache = mutableMapOf<Context, GradientDrawable>()
@@ -400,6 +401,11 @@ object FloatingReplicaManager {
 
     // 当没有任何条目时，彻底移除 Overlay，避免占位区域拦截顶端触摸
     private fun removeOverlayIfNoEntries() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { removeOverlayIfNoEntries() }
+            return
+        }
+
         if (entries.isEmpty()) {
             try {
                 // 首先隐藏关闭层
@@ -801,6 +807,11 @@ object FloatingReplicaManager {
     }
 
     private fun removeEntry(key: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            handler.post { removeEntry(key) }
+            return
+        }
+
         val record = entries.remove(key) ?: return
         
         // 清理所有Runnable
