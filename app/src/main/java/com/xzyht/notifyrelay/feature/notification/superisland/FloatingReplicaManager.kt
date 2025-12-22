@@ -410,50 +410,53 @@ object FloatingReplicaManager {
         try {
             // 首条条目到来时再创建 Overlay 容器，避免先有空容器
             if (overlayView?.get() == null || stackContainer?.get() == null || windowManager?.get() == null || overlayLayoutParams == null) {
-                try {
-                    val appCtx = context.applicationContext
-                    val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-                    val container = FrameLayout(context)
-                    val padding = (12 * getDensity(context)).toInt()
-                    val innerStack = LinearLayout(context).apply {
-                        orientation = LinearLayout.VERTICAL
-                        setPadding(padding, padding, padding, padding)
-                    }
-                    container.addView(innerStack)
-
-                    // 移除浮窗容器中的关闭指示器，统一由showCloseOverlay函数创建和管理
-                    // 浮窗容器只负责显示浮窗条目，关闭功能由专门的关闭层处理
-
-                    val layoutParams = WindowManager.LayoutParams(
-                        (FIXED_WIDTH_DP * getDensity(context)).toInt(),
-                        WindowManager.LayoutParams.WRAP_CONTENT,
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                        PixelFormat.TRANSLUCENT
-                    ).apply {
-                        gravity = Gravity.LEFT or Gravity.TOP
-                        x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * getDensity(context)).toInt()) / 2).coerceAtLeast(0)
-                        y = 100
-                    }
-
-                    var added = false
                     try {
-                        wm.addView(container, layoutParams)
-                        added = true
+                        val appCtx = context.applicationContext
+                        val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+                        val container = FrameLayout(context)
+                        val padding = (12 * getDensity(context)).toInt()
+                        val innerStack = LinearLayout(context).apply {
+                            orientation = LinearLayout.VERTICAL
+                            setPadding(padding, padding, padding, padding)
+                        }
+                        container.addView(innerStack)
+
+                        // 移除LifecycleOwner设置，使用DisposeOnDetachedFromWindow替代DisposeOnViewTreeLifecycleDestroyed
+                        // 避免在浮窗中找不到LifecycleOwner时崩溃
+
+                        // 移除浮窗容器中的关闭指示器，统一由showCloseOverlay函数创建和管理
+                        // 浮窗容器只负责显示浮窗条目，关闭功能由专门的关闭层处理
+
+                        val layoutParams = WindowManager.LayoutParams(
+                            (FIXED_WIDTH_DP * getDensity(context)).toInt(),
+                            WindowManager.LayoutParams.WRAP_CONTENT,
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                            PixelFormat.TRANSLUCENT
+                        ).apply {
+                            gravity = Gravity.LEFT or Gravity.TOP
+                            x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * getDensity(context)).toInt()) / 2).coerceAtLeast(0)
+                            y = 100
+                        }
+
+                        var added = false
+                        try {
+                            wm.addView(container, layoutParams)
+                            added = true
+                        } catch (e: Exception) {
+                            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
+                        }
+                        if (added) {
+                            overlayView = WeakReference(container)
+                            stackContainer = WeakReference(innerStack)
+                            overlayLayoutParams = layoutParams
+                            windowManager = WeakReference(wm)
+                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
+                        }
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
+                        if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
                     }
-                    if (added) {
-                        overlayView = WeakReference(container)
-                        stackContainer = WeakReference(innerStack)
-                        overlayLayoutParams = layoutParams
-                        windowManager = WeakReference(wm)
-                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
-                    }
-                } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
                 }
-            }
 
             val stack = stackContainer?.get() ?: return
             val existing = entries[key]

@@ -126,29 +126,105 @@ fun parseParamV2(jsonString: String): ParamV2? {
         if (BuildConfig.DEBUG) Log.d("超级岛", "开始解析param_v2: ${jsonString.take(200)}...")
         val json = JSONObject(jsonString)
         val business = json.optString("business", "").takeIf { it.isNotBlank() }
-        val anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
-        val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
-            ?: parseHighlightFromIconText(json)
-        val paramV2 = ParamV2(
-            business = business,
-            baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
-            chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
-            highlightInfo = highlight,
-            animTextInfo = anim,
-            picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) },
-            progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) },
-            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let {
-                parseMultiProgressInfo(
-                    it
-                )
-            },
-            actions = json.optJSONArray("actions")?.let { parseActions(it) },
-            hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) },
-            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) },
+        
+        // 逐个字段解析，确保每个字段解析失败不会影响整体解析
+        var anim: AnimTextInfo? = null
+        var highlight: HighlightInfo? = null
+        var baseInfo: BaseInfo? = null
+        var chatInfo: ChatInfo? = null
+        var picInfo: PicInfo? = null
+        var progressInfo: ProgressInfo? = null
+        var multiProgressInfo: MultiProgressInfo? = null
+        var actions: List<ActionInfo>? = null
+        var hintInfo: HintInfo? = null
+        var textButton: TextButton? = null
+        var paramIsland: ParamIsland? = null
+        
+        // 解析各个字段，每个字段单独try-catch，避免一个字段解析失败导致整体失败
+        try {
+            anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析animTextInfo失败: ${e.message}")
+        }
+        
+        try {
+            highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
+                ?: parseHighlightFromIconText(json)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析highlightInfo失败: ${e.message}")
+        }
+        
+        try {
+            baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析baseInfo失败: ${e.message}")
+        }
+        
+        try {
+            chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析chatInfo失败: ${e.message}")
+        }
+        
+        try {
+            picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析picInfo失败: ${e.message}")
+        }
+        
+        try {
+            progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析progressInfo失败: ${e.message}")
+        }
+        
+        try {
+            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析multiProgressInfo失败: ${e.message}")
+        }
+        
+        try {
+            actions = json.optJSONArray("actions")?.let { parseActions(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析actions失败: ${e.message}")
+        }
+        
+        try {
+            hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析hintInfo失败: ${e.message}")
+        }
+        
+        try {
+            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析textButton失败: ${e.message}")
+        }
+        
+        try {
             paramIsland = (json.optJSONObject("param_island")
                 ?: json.optJSONObject("paramIsland")
                 ?: json.optJSONObject("islandParam"))?.let { parseParamIsland(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析paramIsland失败: ${e.message}")
+        }
+        
+        val paramV2 = ParamV2(
+            business = business,
+            baseInfo = baseInfo,
+            chatInfo = chatInfo,
+            highlightInfo = highlight,
+            animTextInfo = anim,
+            picInfo = picInfo,
+            progressInfo = progressInfo,
+            multiProgressInfo = multiProgressInfo,
+            actions = actions,
+            hintInfo = hintInfo,
+            textButton = textButton,
+            paramIsland = paramIsland
         )
+        
         if (BuildConfig.DEBUG) Log.d("超级岛", "解析param_v2成功: business=$business, baseInfo=${paramV2.baseInfo != null}")
         paramV2
     } catch (e: Exception) {
