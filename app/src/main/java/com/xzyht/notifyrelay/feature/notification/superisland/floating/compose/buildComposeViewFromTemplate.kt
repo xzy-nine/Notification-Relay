@@ -11,8 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
 
 /**
  * 构建Compose UI视图的主函数
@@ -69,6 +72,79 @@ suspend fun buildComposeViewFromTemplate(
                     MultiProgressCompose(it, picMap, business)
                 } ?: paramV2.progressInfo?.let {
                     ProgressCompose(it, picMap)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 从原始paramV2字符串构建Compose UI视图
+ */
+suspend fun buildComposeViewFromRawParam(
+    context: Context,
+    paramV2Raw: String,
+    picMap: Map<String, String>? = null
+): ComposeView {
+    return ComposeView(context).apply {
+        // Ensure the Compose view disposes with the view tree lifecycle
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        setContent {
+            SuperIslandComposeRoot {
+                // 尝试解析paramV2
+                val paramV2 = parseParamV2(paramV2Raw)
+                if (paramV2 != null) {
+                    // 如果解析成功，使用正常的模板渲染
+                    when {
+                        paramV2.baseInfo != null -> {
+                            BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
+                        }
+                        paramV2.chatInfo != null -> {
+                            ChatInfoCompose(paramV2, picMap = picMap)
+                        }
+                        paramV2.animTextInfo != null -> {
+                            AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
+                        }
+                        paramV2.highlightInfo != null -> {
+                            HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
+                        }
+                        paramV2.picInfo != null -> {
+                            PicInfoCompose(paramV2.picInfo, picMap = picMap)
+                        }
+                        paramV2.hintInfo != null -> {
+                            HintInfoCompose(paramV2.hintInfo, picMap = picMap)
+                        }
+                        paramV2.textButton != null -> {
+                            TextButtonCompose(paramV2.textButton, picMap = picMap)
+                        }
+                        paramV2.paramIsland != null -> {
+                            ParamIslandCompose(paramV2.paramIsland)
+                        }
+                        paramV2.actions?.isNotEmpty() == true -> {
+                            ActionCompose(paramV2.actions, picMap)
+                        }
+                        else -> {
+                            // 默认模板：未支持的模板类型
+                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Text(text = "未支持的模板", color = Color.White)
+                            }
+                        }
+                    }
+                    
+                    // 进度组件
+                    paramV2.multiProgressInfo?.let {
+                        MultiProgressCompose(it, picMap, paramV2.business)
+                    } ?: paramV2.progressInfo?.let {
+                        ProgressCompose(it, picMap)
+                    }
+                } else {
+                    // 解析失败，显示基本信息
+                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Column {
+                            Text(text = "手电筒", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "使用中", color = Color(0xFFDDDDDD), fontSize = 14.sp)
+                        }
+                    }
                 }
             }
         }

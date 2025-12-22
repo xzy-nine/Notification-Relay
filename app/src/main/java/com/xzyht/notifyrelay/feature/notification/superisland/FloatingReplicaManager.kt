@@ -30,6 +30,7 @@ import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromRawParam
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressBinding
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.HighlightInfo
@@ -144,12 +145,16 @@ object FloatingReplicaManager {
 
             CoroutineScope(Dispatchers.Main).launch {
                 try {
+                    // 尝试解析paramV2
                     val paramV2 = parseParamV2Safe(paramV2Raw)
-                    val summaryOnly = when (paramV2?.business) {
-                        // 仅摘要态的业务模板在这里枚举
-                        "miui_flashlight" -> true
+                    
+                    // 判断是否为摘要态
+                    val summaryOnly = when {
+                        paramV2?.business == "miui_flashlight" -> true
+                        paramV2Raw?.contains("miui_flashlight") == true -> true
                         else -> false
                     }
+                    
                     // 将所有图片 intern 为引用，避免重复保存相同图片
                     val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
                     val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
@@ -159,10 +164,32 @@ object FloatingReplicaManager {
                     // 使用Compose构建视图的开关
                     val useCompose = true
                     
-                    val expandedView = if (useCompose && paramV2 != null) {
-                        val composeView = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
-                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
-                        composeView as View
+                    // 优化渲染逻辑：即使paramV2为null，也尝试使用Compose渲染
+                    val expandedView = if (useCompose) {
+                        try {
+                            if (paramV2 != null) {
+                                val composeView = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null)
+                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
+                                composeView as View
+                            } else if (!paramV2Raw.isNullOrBlank()) {
+                                // 尝试直接使用paramV2Raw构建ComposeView
+                                val composeView = buildComposeViewFromRawParam(context, paramV2Raw, internedPicMap)
+                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染(直接从raw)，sourceId=$sourceId")
+                                composeView as View
+                            } else {
+                                // 回退到View渲染
+                                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                                val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
+                                view
+                            }
+                        } catch (e: Exception) {
+                            // Compose渲染失败，回退到View渲染
+                            val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                            val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
+                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: Compose渲染失败，回退到View渲染，sourceId=$sourceId, error=${e.message}")
+                            view
+                        }
                     } else {
                         val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
                         val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)

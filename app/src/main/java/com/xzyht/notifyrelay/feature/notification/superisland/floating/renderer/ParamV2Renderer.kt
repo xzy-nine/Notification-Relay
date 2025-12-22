@@ -123,12 +123,13 @@ suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, pic
 // 解析param_v2总容器，根据不同字段选择对应的子组件解析
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
+        if (BuildConfig.DEBUG) Log.d("超级岛", "开始解析param_v2: ${jsonString.take(200)}...")
         val json = JSONObject(jsonString)
         val business = json.optString("business", "").takeIf { it.isNotBlank() }
         val anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
         val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
             ?: parseHighlightFromIconText(json)
-        ParamV2(
+        val paramV2 = ParamV2(
             business = business,
             baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
             chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
@@ -148,8 +149,14 @@ fun parseParamV2(jsonString: String): ParamV2? {
                 ?: json.optJSONObject("paramIsland")
                 ?: json.optJSONObject("islandParam"))?.let { parseParamIsland(it) }
         )
+        if (BuildConfig.DEBUG) Log.d("超级岛", "解析param_v2成功: business=$business, baseInfo=${paramV2.baseInfo != null}")
+        paramV2
     } catch (e: Exception) {
-        if (BuildConfig.DEBUG) Log.w("超级岛", "解析param_v2失败: ${e.message}")
+        if (BuildConfig.DEBUG) {
+            Log.w("超级岛", "解析param_v2失败: ${e.message}")
+            Log.w("超级岛", "失败的JSON: ${jsonString.take(300)}...")
+            e.printStackTrace()
+        }
         null
     }
 }
