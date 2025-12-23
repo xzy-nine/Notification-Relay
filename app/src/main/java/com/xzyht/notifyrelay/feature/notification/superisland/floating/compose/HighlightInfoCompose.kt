@@ -21,10 +21,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.rememberSuperIslandImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.HighlightInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.TimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
@@ -39,8 +39,11 @@ fun HighlightInfoCompose(
 ) {
     val density = LocalConfiguration.current.densityDpi / 160f
     val iconKey = selectIconKey(highlightInfo)
-    val bitmap = decodeBitmap(picMap, iconKey)
-    val hasLeadingIcon = bitmap != null
+    
+    // 使用统一的图片加载工具获取painter
+    val iconUrl = picMap?.get(iconKey)
+    val painter = rememberSuperIslandImagePainter(iconUrl)
+    val hasLeadingIcon = painter != null
     
     Row(
         modifier = Modifier
@@ -49,13 +52,12 @@ fun HighlightInfoCompose(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 图标
-        if (bitmap != null) {
+        painter?.let {
             val iconSize = if (highlightInfo.iconOnly) (48 * density).dp else (40 * density).dp
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                painter = it,
                 contentDescription = null,
-                modifier = Modifier.size(iconSize),
-                contentScale = ContentScale.Fit
+                modifier = Modifier.size(iconSize)
             )
         }
 
@@ -151,13 +153,16 @@ fun HighlightInfoCompose(
                 modifier = Modifier.padding(start = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val leftBitmap = decodeBitmap(picMap, highlightInfo.bigImageLeft)
-                    ?: decodeBitmap(picMap, iconKey)
-                leftBitmap?.let { BigAreaImage(it, density) }
+                // 左侧图片
+                val leftImageUrl = picMap?.get(highlightInfo.bigImageLeft) ?: picMap?.get(iconKey)
+                val leftPainter = leftImageUrl?.let { rememberSuperIslandImagePainter(it) }
+                leftPainter?.let { BigAreaImage(it, density) }
 
-                val rightBitmap = decodeBitmap(picMap, highlightInfo.bigImageRight)
-                    ?: if (leftBitmap == null) decodeBitmap(picMap, iconKey) else null
-                rightBitmap?.let { BigAreaImage(it, density, showLeftMargin = true) }
+                // 右侧图片
+                val rightImageUrl = picMap?.get(highlightInfo.bigImageRight) 
+                    ?: if (leftPainter == null) picMap?.get(iconKey) else null
+                val rightPainter = rightImageUrl?.let { rememberSuperIslandImagePainter(it) }
+                rightPainter?.let { BigAreaImage(it, density, showLeftMargin = true) }
             }
         }
     }
@@ -165,7 +170,7 @@ fun HighlightInfoCompose(
 
 @Composable
 private fun BigAreaImage(
-    bitmap: Bitmap,
+    painter: androidx.compose.ui.graphics.painter.Painter,
     density: Float,
     showLeftMargin: Boolean = false
 ) {
@@ -173,10 +178,9 @@ private fun BigAreaImage(
     val modifier = if (showLeftMargin) Modifier.padding(start = 6.dp) else Modifier
 
     Image(
-        bitmap = bitmap.asImageBitmap(),
+        painter = painter,
         contentDescription = null,
-        modifier = modifier.size(size),
-        contentScale = ContentScale.Crop
+        modifier = modifier.size(size)
     )
 }
 
@@ -205,19 +209,7 @@ private fun selectIconKey(highlightInfo: HighlightInfo): String? {
     return candidates.firstOrNull { it.isNotBlank() }
 }
 
-private fun decodeBitmap(picMap: Map<String, String>?, key: String?): android.graphics.Bitmap? {
-    if (picMap.isNullOrEmpty() || key.isNullOrBlank()) return null
-    val raw = picMap[key] ?: return null
-    val resolved = SuperIslandImageStore.resolve(null, raw) ?: raw
-    return try {
-        when {
-            resolved.startsWith("data:", ignoreCase = true) -> DataUrlUtils.decodeDataUrlToBitmap(resolved)
-            else -> null
-        }
-    } catch (_: Exception) {
-        null
-    }
-}
+
 
 // 与 View 版相同的状态文本推导逻辑
 private fun resolveStatusText(highlightInfo: HighlightInfo): String? {

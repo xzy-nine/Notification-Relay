@@ -11,14 +11,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.resolveFallbackIconUrl
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.resolveIconUrl
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.rememberSuperIslandImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.AnimTextInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
 
@@ -34,20 +35,36 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
     Row(modifier = Modifier.padding(8.dp)) {
         // 左侧图标
         val iconSize = 40.dp
-        val iconKey = animTextInfo.icon.src
-        val iconUrl = picMap?.get(iconKey)
+        var finalIconUrl: String? = null
         
-        if (!iconUrl.isNullOrEmpty()) {
-            Image(
-                painter = rememberAsyncImagePainter(iconUrl),
-                contentDescription = null,
-                modifier = Modifier.size(iconSize),
-                contentScale = ContentScale.Fit
-            )
+        // 获取上下文
+        val context = androidx.compose.ui.platform.LocalContext.current
+        
+        // 完全复用View渲染的图标选择和解析逻辑
+        val iconKey = if (preferDark) (animTextInfo.icon.srcDark ?: animTextInfo.icon.src) else animTextInfo.icon.src
+        
+        // 1. 优先尝试直接用图标 key 加载，使用统一的URL解析工具
+        finalIconUrl = resolveIconUrl(picMap, iconKey, context)
+        
+        // 2. 如果失败，尝试 picMap 中以 "miui.focus.pic_" 开头的第二个 key
+        if (finalIconUrl.isNullOrEmpty() && picMap != null) {
+            finalIconUrl = resolveFallbackIconUrl(picMap)
+        }
+        
+        // 显示图标，使用统一的图片加载工具
+        if (!finalIconUrl.isNullOrEmpty()) {
+            val painter = rememberSuperIslandImagePainter(finalIconUrl)
+            painter?.let {
+                Image(
+                    painter = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
         }
         
         // 右侧文本区
-        val textColumnModifier = if (!iconUrl.isNullOrEmpty()) {
+        val textColumnModifier = if (!finalIconUrl.isNullOrEmpty()) {
             Modifier.padding(start = 8.dp).weight(1f)
         } else {
             Modifier.weight(1f)

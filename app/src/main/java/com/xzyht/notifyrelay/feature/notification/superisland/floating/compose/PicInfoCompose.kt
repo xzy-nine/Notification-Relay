@@ -7,12 +7,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.rememberSuperIslandImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.PicInfo
 
 /**
@@ -31,13 +30,15 @@ fun PicInfoCompose(picInfo: PicInfo, picMap: Map<String, String>?) {
         if (!picKey.isNullOrEmpty()) {
             val picUrl = picMap?.get(picKey)
             if (!picUrl.isNullOrEmpty()) {
-                Image(
-                    painter = rememberAsyncImagePainter(picUrl),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp),
-                    contentScale = ContentScale.Crop
-                )
+                val painter = rememberSuperIslandImagePainter(picUrl)
+                painter?.let {
+                    Image(
+                        painter = it,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                    )
+                }
             }
         }
         

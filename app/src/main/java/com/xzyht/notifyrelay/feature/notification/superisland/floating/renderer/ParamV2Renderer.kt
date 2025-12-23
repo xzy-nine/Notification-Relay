@@ -55,31 +55,38 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
     // 根据模板类型构建不同的布局，使用分支处理
     when {
         paramV2.baseInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: baseInfo")
             val view = buildBaseInfoView(context, paramV2.baseInfo, picMap)
             container.addView(view)
         }
         paramV2.chatInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: chatInfo")
             val result = buildChatInfoView(context, paramV2, picMap)
             container.addView(result.view)
             progressBinding = result.progressBinding
         }
-            paramV2.animTextInfo != null -> {
-                val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
-                container.addView(view)
-            }
+        paramV2.animTextInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: animTextInfo")
+            val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
+            container.addView(view)
+        }
         paramV2.highlightInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: highlightInfo")
             val view = buildHighlightInfoView(context, paramV2.highlightInfo, picMap)
             container.addView(view)
         }
         paramV2.picInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: picInfo")
             val view = buildPicInfoView(context, paramV2.picInfo, picMap)
             container.addView(view)
         }
         paramV2.hintInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: hintInfo")
             val view = buildHintInfoView(context, paramV2.hintInfo, picMap)
             container.addView(view)
         }
         paramV2.textButton != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: textButton")
             val tv = TextView(context).apply {
                 text = "此通知包含不可用的按钮"
                 setTextColor(0xFFFFFFFF.toInt())
@@ -87,6 +94,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
             container.addView(tv)
         }
         else -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: default")
             // 默认模板：未支持的模板类型
             val tv = TextView(context).apply {
                 text = "未支持的模板"

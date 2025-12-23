@@ -1,7 +1,11 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 
 import android.content.Context
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -15,9 +19,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
 import org.json.JSONObject
 
@@ -39,33 +44,43 @@ suspend fun buildComposeViewFromTemplate(
                 SuperIslandComposeRoot {
                     when {
                         paramV2.baseInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: baseInfo")
                             BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
                         }
                         paramV2.chatInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: chatInfo")
                             ChatInfoCompose(paramV2, picMap = picMap)
                         }
                         paramV2.animTextInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: animTextInfo")
                             AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
                         }
                         paramV2.highlightInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: highlightInfo")
                             HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
                         }
                         paramV2.picInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: picInfo")
                             PicInfoCompose(paramV2.picInfo, picMap = picMap)
                         }
                         paramV2.hintInfo != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: hintInfo")
                             HintInfoCompose(paramV2.hintInfo, picMap = picMap)
                         }
                         paramV2.textButton != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: textButton")
                             TextButtonCompose(paramV2.textButton, picMap = picMap)
                         }
                         paramV2.paramIsland != null -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: paramIsland")
                             ParamIslandCompose(paramV2.paramIsland)
                         }
                         paramV2.actions?.isNotEmpty() == true -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: actions")
                             ActionCompose(paramV2.actions, picMap)
                         }
                         else -> {
+                            if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: default")
                             // 默认模板：未支持的模板类型
                             Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                                 Text(text = "未支持的模板", color = Color.White)
@@ -117,33 +132,43 @@ suspend fun buildComposeViewFromRawParam(
                             // 根据paramV2的不同类型显示不同的Compose组件
                             when {
                                 paramV2.baseInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: baseInfo")
                                     BaseInfoCompose(paramV2.baseInfo, picMap = picMap)
                                 }
                                 paramV2.chatInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: chatInfo")
                                     ChatInfoCompose(paramV2, picMap = picMap)
                                 }
                                 paramV2.animTextInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: animTextInfo")
                                     AnimTextInfoCompose(paramV2.animTextInfo, picMap = picMap)
                                 }
                                 paramV2.highlightInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: highlightInfo")
                                     HighlightInfoCompose(paramV2.highlightInfo, picMap = picMap)
                                 }
                                 paramV2.picInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: picInfo")
                                     PicInfoCompose(paramV2.picInfo, picMap = picMap)
                                 }
                                 paramV2.hintInfo != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: hintInfo")
                                     HintInfoCompose(paramV2.hintInfo, picMap = picMap)
                                 }
                                 paramV2.textButton != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: textButton")
                                     TextButtonCompose(paramV2.textButton, picMap = picMap)
                                 }
                                 paramV2.paramIsland != null -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: paramIsland")
                                     ParamIslandCompose(paramV2.paramIsland)
                                 }
                                 paramV2.actions?.isNotEmpty() == true -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: actions")
                                     ActionCompose(paramV2.actions, picMap)
                                 }
                                 else -> {
+                                    if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: default")
                                     // 默认模板：未支持的模板类型
                                     Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                                         Text(text = "未支持的模板", color = Color.White)
