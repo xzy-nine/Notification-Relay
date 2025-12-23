@@ -547,7 +547,35 @@ object FloatingReplicaManager {
                 return
             }
 
-            val container = FrameLayout(context).apply {
+            val container = object : FrameLayout(context) {
+                private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+                private var startX = 0f
+                private var startY = 0f
+                private var isDragging = false
+
+                override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            startX = event.rawX
+                            startY = event.rawY
+                            isDragging = false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            if (!isDragging) {
+                                val dx = abs(event.rawX - startX)
+                                val dy = abs(event.rawY - startY)
+                                if (dx > touchSlop || dy > touchSlop) {
+                                    isDragging = true
+                                    // 拦截拖动事件，交给自己的OnTouchListener处理
+                                    return true
+                                }
+                            }
+                        }
+                    }
+                    // 不拦截点击事件，让事件传递给子视图
+                    return super.onInterceptTouchEvent(event)
+                }
+            }.apply {
                 val lp = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT

@@ -39,6 +39,15 @@ suspend fun buildComposeViewFromTemplate(
     return ComposeView(context).apply {
         // 浮窗环境通常没有 ViewTreeLifecycleOwner，统一使用在分离窗口时销毁
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        // 设置为不可点击、不可聚焦，确保触摸事件能传递到父容器
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+        // 设置触摸监听器，不消耗事件，让事件自然传递到父容器
+        setOnTouchListener { _, event ->
+            // 返回false表示不消耗事件，让事件继续传递给父容器的onTouch监听器
+            false
+        }
         setContent {
             val contentBlock: @Composable () -> Unit = {
                 SuperIslandComposeRoot {
@@ -120,6 +129,15 @@ suspend fun buildComposeViewFromRawParam(
         // 使用DisposeOnDetachedFromWindow替代DisposeOnViewTreeLifecycleDestroyed
         // 避免在浮窗中找不到LifecycleOwner时崩溃
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        // 设置为不可点击、不可聚焦，确保触摸事件能传递到父容器
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+        // 设置触摸监听器，不消耗事件，让事件自然传递到父容器
+        setOnTouchListener { _, event ->
+            // 返回false表示不消耗事件，让事件继续传递给父容器的onTouch监听器
+            false
+        }
         setContent {
             val contentBlock: @Composable () -> Unit = {
                 SuperIslandComposeRoot {
