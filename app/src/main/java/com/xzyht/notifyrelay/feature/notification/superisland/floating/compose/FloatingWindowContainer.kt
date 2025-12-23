@@ -1,0 +1,182 @@
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.LifecycleOwner
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
+
+/**
+ * 浮窗条目数据类，对应原有EntryRecord
+ */
+@Stable
+data class FloatingEntry(
+    val key: String,
+    val paramV2: ParamV2?,
+    val paramV2Raw: String?,
+    val picMap: Map<String, String>?,
+    val isExpanded: Boolean,
+    val summaryOnly: Boolean,
+    val business: String?
+)
+
+/**
+ * 超级岛浮窗父容器组件
+ */
+@Composable
+fun FloatingWindowContainer(
+    entries: List<FloatingEntry>,
+    onEntryClick: (String) -> Unit,
+    onEntryDrag: (String, Offset) -> Unit,
+    lifecycleOwner: LifecycleOwner?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    
+    Column(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        // 遍历所有条目，按顺序显示（最新的在顶部）
+        entries.forEach { entry ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(entry.key) {
+                        detectDragGestures { change, dragAmount ->
+                            // 处理拖拽事件
+                            change.consume()
+                            onEntryDrag(entry.key, dragAmount)
+                        }
+                    }
+                    .clickable { onEntryClick(entry.key) }
+            ) {
+                // 动画常量
+                val expandedEnterTransition = slideInVertically {
+                    // 从顶部滑入
+                    -it
+                } + expandVertically() + fadeIn()
+                
+                val expandedExitTransition = shrinkVertically() + slideOutVertically {
+                    // 向顶部滑出
+                    -it
+                } + fadeOut()
+                
+                val collapsedEnterTransition = fadeIn() + slideInVertically {
+                    // 从底部滑入
+                    it
+                }
+                
+                val collapsedExitTransition = fadeOut() + slideOutVertically {
+                    // 向底部滑出
+                    it
+                }
+                
+                // 展开态内容
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = entry.isExpanded,
+                    enter = expandedEnterTransition,
+                    exit = expandedExitTransition
+                ) {
+                    SuperIslandComposeRoot {
+                        entry.paramV2?.let { paramV2 ->
+                            when {
+                                paramV2.baseInfo != null -> {
+                                    BaseInfoCompose(paramV2.baseInfo, picMap = entry.picMap)
+                                }
+                                paramV2.chatInfo != null -> {
+                                    ChatInfoCompose(paramV2, picMap = entry.picMap)
+                                }
+                                paramV2.animTextInfo != null -> {
+                                    AnimTextInfoCompose(paramV2.animTextInfo, picMap = entry.picMap)
+                                }
+                                paramV2.highlightInfo != null -> {
+                                    HighlightInfoCompose(paramV2.highlightInfo, picMap = entry.picMap)
+                                }
+                                paramV2.picInfo != null -> {
+                                    PicInfoCompose(paramV2.picInfo, picMap = entry.picMap)
+                                }
+                                paramV2.hintInfo != null -> {
+                                    HintInfoCompose(paramV2.hintInfo, picMap = entry.picMap)
+                                }
+                                paramV2.textButton != null -> {
+                                    TextButtonCompose(paramV2.textButton, picMap = entry.picMap)
+                                }
+                                paramV2.paramIsland != null -> {
+                                    ParamIslandCompose(paramV2.paramIsland)
+                                }
+                                paramV2.actions?.isNotEmpty() == true -> {
+                                    ActionCompose(paramV2.actions, entry.picMap)
+                                }
+                                else -> {
+                                    // 默认模板：未支持的模板类型
+                                    Box(modifier = Modifier.padding(16.dp)) {
+                                        Text(text = "未支持的模板", color = Color.White)
+                                    }
+                                }
+                            }
+                            
+                            // 进度组件
+                            paramV2.multiProgressInfo?.let {
+                                MultiProgressCompose(it, entry.picMap, entry.business)
+                            } ?: paramV2.progressInfo?.let {
+                                ProgressCompose(it, entry.picMap)
+                            }
+                        }
+                    }
+                }
+                
+                // 摘要态内容
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !entry.isExpanded,
+                    enter = collapsedEnterTransition,
+                    exit = collapsedExitTransition
+                ) {
+                    // TODO 从paramV2中提取bigIsland信息
+                    val fallbackTitle = entry.paramV2?.baseInfo?.title
+                    val fallbackContent = entry.paramV2?.baseInfo?.content
+                    
+                    // TODO 这里需要解析bigIslandJson，后续需要从paramV2或paramV2Raw中提取
+                    val bigIslandJson = entry.paramV2Raw?.let {
+                        try {
+                            org.json.JSONObject(it)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    
+                    SummaryAndroidView(
+                        bigIslandJson = bigIslandJson,
+                        picMap = entry.picMap,
+                        fallbackTitle = fallbackTitle,
+                        fallbackContent = fallbackContent
+                    )
+                }
+            }
+        }
+    }
+}
