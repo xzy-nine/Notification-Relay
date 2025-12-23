@@ -54,16 +54,17 @@ class FloatingWindowManager {
         summaryOnly: Boolean = false,
         business: String?
     ) {
-        // 保留原有条目的isExpanded状态
+        // 保留原有条目的isExpanded状态，其他属性使用新传入的值
         val existingEntry = entriesMap[key]?.entry
         val finalIsExpanded = if (existingEntry != null) {
-            // 如果条目已存在，保留原有状态
+            // 如果条目已存在，保留原有展开状态
             existingEntry.isExpanded
         } else {
             // 新条目使用传入的状态
             isExpanded
         }
         
+        // 创建新的FloatingEntry，确保所有属性都使用新传入的值，除了isExpanded状态
         val entry = FloatingEntry(
             key = key,
             paramV2 = paramV2,

@@ -139,6 +139,10 @@ object FloatingReplicaManager {
             context.resources.displayMetrics.density
         }
     }
+    
+    // 保存sourceId到entryKey列表的映射，以便后续能正确移除条目
+    // 一个sourceId可能对应多个条目，所以使用列表保存
+    private val sourceIdToEntryKeyMap = mutableMapOf<String, MutableList<String>>()
 
     private data class EntryRecord(
         val key: String,
@@ -169,7 +173,7 @@ object FloatingReplicaManager {
     // sourceId: 用于区分不同来源的超级岛通知（通常传入 superPkg），用于刷新/去重同一来源的浮窗
     fun showFloating(
         context: Context,
-        sourceId: String?,
+        sourceId: String,
         title: String?,
         text: String?,
         paramV2Raw: String? = null,
@@ -177,7 +181,7 @@ object FloatingReplicaManager {
     ) {
         try {
             // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
-            if (!sourceId.isNullOrBlank() && isInstanceBlocked(sourceId)) {
+            if (sourceId.isNotBlank() && isInstanceBlocked(sourceId)) {
                 if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
                 return
             }
@@ -207,7 +211,9 @@ object FloatingReplicaManager {
                     
                     // 将所有图片 intern 为引用，避免重复保存相同图片
                     val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
-                    val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
+                    // 生成唯一的entryKey，确保包含sourceId，以便后续能正确移除
+                    // 对于同一通知的不同时间更新，应该使用相同的key，所以不能包含时间戳
+                    val entryKey = sourceId
                     val smallIsland = paramV2?.paramIsland?.smallIslandArea
                     val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
                     val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
@@ -225,6 +231,16 @@ object FloatingReplicaManager {
                         summaryOnly = summaryOnly,
                         business = paramV2?.business
                     )
+                    
+                    // 保存sourceId到entryKey的映射，以便后续能正确移除
+                    if (sourceId.isNotBlank()) {
+                        // 如果sourceId已存在，添加到列表中；否则创建新列表
+                        val entryKeys = sourceIdToEntryKeyMap.getOrPut(sourceId) { mutableListOf() }
+                        // 确保每个entryKey只添加一次
+                        if (!entryKeys.contains(entryKey)) {
+                            entryKeys.add(entryKey)
+                        }
+                    }
                     
                     // 移除传统的View创建和添加逻辑，完全使用Compose渲染
                     // 直接调用addOrUpdateEntry来确保Compose容器被正确创建
@@ -422,8 +438,9 @@ object FloatingReplicaManager {
                 expandedBackgroundCache.clear()
                 summaryBackgroundCache.clear()
                 
-                // 清理条目映射
+                // 清理所有映射
                 entries.clear()
+                sourceIdToEntryKeyMap.clear()
                 
                 // 无论移除是否成功，都置空全局引用，避免内存泄漏
                 overlayView = null
@@ -715,6 +732,17 @@ object FloatingReplicaManager {
         // 清理传统entries映射
         val record = entries.remove(key)
         
+        // 清理sourceIdToEntryKeyMap映射
+        for ((sourceId, entryKeys) in sourceIdToEntryKeyMap) {
+            if (entryKeys.remove(key)) {
+                // 如果列表为空，移除整个映射项
+                if (entryKeys.isEmpty()) {
+                    sourceIdToEntryKeyMap.remove(sourceId)
+                }
+                break
+            }
+        }
+        
         // 清理视图资源
         if (record != null) {
             try {
@@ -761,10 +789,21 @@ object FloatingReplicaManager {
     // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
     fun dismissBySource(sourceId: String) {
         try {
-            // 使用FloatingWindowManager移除条目
-            floatingWindowManager.removeEntry(sourceId)
-            // 清理传统entries映射
-            entries.remove(sourceId)
+            // 从映射中获取所有对应的entryKey
+            val entryKeys = sourceIdToEntryKeyMap[sourceId]
+            if (entryKeys != null) {
+                // 移除所有相关条目
+                entryKeys.forEach { entryKey ->
+                    floatingWindowManager.removeEntry(entryKey)
+                    entries.remove(entryKey)
+                }
+                // 清理映射关系
+                sourceIdToEntryKeyMap.remove(sourceId)
+            } else {
+                // 如果没有找到映射，尝试直接使用sourceId移除
+                floatingWindowManager.removeEntry(sourceId)
+                entries.remove(sourceId)
+            }
             // 如果对应的会话结束（SI_END），同步移除黑名单，允许后续同一通知重新展示
             blockedInstanceIds.remove(sourceId)
         } catch (_: Exception) {}

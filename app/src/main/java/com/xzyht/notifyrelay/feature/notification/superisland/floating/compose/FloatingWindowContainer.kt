@@ -20,6 +20,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,18 +64,20 @@ fun FloatingWindowContainer(
     ) {
         // 遍历所有条目，按顺序显示（最新的在顶部）
         entries.forEach { entry ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(entry.key) {
-                        detectDragGestures { change, dragAmount ->
-                            // 处理拖拽事件
-                            change.consume()
-                            onEntryDrag(entry.key, dragAmount)
+            // 使用key函数确保Compose能正确识别不同的条目，特别是当条目内容更新时
+            key(entry.key) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(entry.key) {
+                            detectDragGestures { change, dragAmount ->
+                                // 处理拖拽事件
+                                change.consume()
+                                onEntryDrag(entry.key, dragAmount)
+                            }
                         }
-                    }
-                    .clickable { onEntryClick(entry.key) }
-            ) {
+                        .clickable { onEntryClick(entry.key) }
+                ) {
                 // 简化动画，避免闪烁
                 val expandedEnterTransition = slideInVertically {
                     // 从顶部滑入
@@ -179,6 +182,8 @@ fun FloatingWindowContainer(
                         fallbackTitle = fallbackTitle,
                         fallbackContent = fallbackContent
                     )
+                }
+                // 闭合Box组件
                 }
             }
         }
