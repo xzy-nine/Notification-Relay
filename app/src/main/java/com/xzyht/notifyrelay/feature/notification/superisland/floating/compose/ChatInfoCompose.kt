@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.CircularProgressCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.rememberSuperIslandImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ChatInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
@@ -43,6 +44,29 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
                         .clip(androidx.compose.foundation.shape.CircleShape)
                 )
             }
+        }
+        
+        // 圆形进度条（从actions中获取）
+        val actionWithProgress = paramV2.actions?.firstOrNull { it.progressInfo != null }
+        val progressInfo = actionWithProgress?.progressInfo ?: paramV2.progressInfo
+        
+        if (progressInfo != null) {
+            // 与View渲染一致，添加8dp的margin
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // 创建圆形进度条
+            val progressColor = parseColor(progressInfo.colorProgress) ?: 0xFF3482FF.toInt()
+            val trackColor = parseColor(progressInfo.colorProgressEnd) 
+                ?: (progressColor and 0x00FFFFFF) or (0x33 shl 24)
+            
+            CircularProgressCompose(
+                size = 48.dp,
+                progress = progressInfo.progress,
+                progressColor = Color(progressColor),
+                trackColor = Color(trackColor),
+                clockwise = !(progressInfo.isCCW ?: false),
+                strokeWidth = 3.5.dp
+            )
         }
         
         // 文本内容

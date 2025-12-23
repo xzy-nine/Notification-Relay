@@ -203,6 +203,7 @@ object FloatingReplicaManager {
                     val useCompose = StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)
                     
                     // 优化渲染逻辑：即使paramV2为null，也尝试使用Compose渲染
+                    var expandedBinding: CircularProgressBinding? = null
                     val expandedView = if (useCompose) {
                         try {
                             if (paramV2 != null) {
@@ -217,6 +218,7 @@ object FloatingReplicaManager {
                             } else {
                                 // 回退到View渲染
                                 val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                                expandedBinding = templateResult?.progressBinding
                                 val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
                                 if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
                                 view
@@ -224,12 +226,14 @@ object FloatingReplicaManager {
                         } catch (e: Exception) {
                             // Compose渲染失败，回退到View渲染
                             val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                            expandedBinding = templateResult?.progressBinding
                             val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
                             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: Compose渲染失败，回退到View渲染，sourceId=$sourceId, error=${e.message}")
                             view
                         }
                     } else {
                         val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
+                        expandedBinding = templateResult?.progressBinding
                         val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
                         if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
                         view
@@ -251,7 +255,7 @@ object FloatingReplicaManager {
                         entryKey,
                         expandedView,
                         collapsedSummary.view,
-                        null, // Compose版本暂时不支持progressBinding
+                        expandedBinding, // View渲染传递实际的progressBinding，Compose暂时为null
                         collapsedSummary.progressBinding,
                         summaryOnly
                     )
