@@ -152,7 +152,7 @@ private fun testBaseInfo(context: Context) {
         {
             "baseInfo": {
                 "title": "基础文本测试",
-                "content": "这是一个基础文本组件的测试示例",
+                "content": "这是一个基础文本组件的展开态测试示例",
                 "colorTitle": "#FFFFFF",
                 "colorContent": "#CCCCCC"
             }
@@ -163,7 +163,7 @@ private fun testBaseInfo(context: Context) {
         context = context,
         sourceId = "test_base_info",
         title = "基础文本测试",
-        text = "这是一个基础文本组件的测试示例",
+        text = "这是一个基础文本组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = emptyMap()
     )
@@ -177,7 +177,7 @@ private fun testChatInfo(context: Context) {
         {
             "chatInfo": {
                 "title": "聊天测试",
-                "content": "这是一条聊天消息",
+                "content": "这是一条聊天消息展开态测试示例",
                 "picProfile": "profile_pic"
             }
         }
@@ -187,7 +187,7 @@ private fun testChatInfo(context: Context) {
         context = context,
         sourceId = "test_chat_info",
         title = "聊天测试",
-        text = "这是一条聊天消息",
+        text = "这是一条聊天消息展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "profile_pic" to createBlackBlockDataUrl()
@@ -203,7 +203,7 @@ private fun testAnimTextInfo(context: Context) {
         {
             "animTextInfo": {
                 "title": "动画文本测试",
-                "content": "这是一个动画文本组件的测试示例",
+                "content": "这是一个动画文本组件的展开态测试示例",
                 "animIconInfo": {
                     "src": "anim_icon",
                     "type": 2
@@ -216,7 +216,7 @@ private fun testAnimTextInfo(context: Context) {
         context = context,
         sourceId = "test_anim_text_info",
         title = "动画文本测试",
-        text = "这是一个动画文本组件的测试示例",
+        text = "这是一个动画文本组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "anim_icon" to createBlackBlockDataUrl()
@@ -232,7 +232,7 @@ private fun testHighlightInfo(context: Context) {
         {
             "highlightInfo": {
                 "title": "强调文本测试",
-                "content": "这是一个强调图文组件的测试示例",
+                "content": "这是一个强调图文组件的展开态测试示例",
                 "picFunction": "highlight_pic"
             }
         }
@@ -242,7 +242,7 @@ private fun testHighlightInfo(context: Context) {
         context = context,
         sourceId = "test_highlight_info",
         title = "强调文本测试",
-        text = "这是一个强调图文组件的测试示例",
+        text = "这是一个强调图文组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "highlight_pic" to createBlackBlockDataUrl()
@@ -267,7 +267,7 @@ private fun testPicInfo(context: Context) {
         context = context,
         sourceId = "test_pic_info",
         title = "图形测试",
-        text = "这是一个识别图形组件的测试示例",
+        text = "这是一个识别图形组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "test_pic" to createBlackBlockDataUrl()
@@ -283,7 +283,7 @@ private fun testHintInfo(context: Context) {
         {
             "hintInfo": {
                 "title": "提示测试",
-                "content": "这是一个提示组件的测试示例",
+                "content": "这是一个提示组件的展开态测试示例",
                 "picContent": "hint_pic"
             }
         }
@@ -293,7 +293,7 @@ private fun testHintInfo(context: Context) {
         context = context,
         sourceId = "test_hint_info",
         title = "提示测试",
-        text = "这是一个提示组件的测试示例",
+        text = "这是一个提示组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "hint_pic" to createBlackBlockDataUrl()
@@ -309,7 +309,7 @@ private fun testTextButton(context: Context) {
         {
             "textButton": {
                 "title": "文本按钮测试",
-                "content": "这是一个文本按钮组件的测试示例"
+                "content": "这是一个文本按钮组件的展开态测试示例"
             }
         }
     """
@@ -318,7 +318,7 @@ private fun testTextButton(context: Context) {
         context = context,
         sourceId = "test_text_button",
         title = "文本按钮测试",
-        text = "这是一个文本按钮组件的测试示例",
+        text = "这是一个文本按钮组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = emptyMap()
     )
@@ -332,7 +332,7 @@ private fun testProgressInfo(context: Context) {
         {
             "baseInfo": {
                 "title": "线性进度测试",
-                "content": "这是一个线性进度组件的测试示例"
+                "content": "这是一个线性进度组件的展开态测试示例"
             },
             "progressInfo": {
                 "progress": 40,
@@ -346,7 +346,7 @@ private fun testProgressInfo(context: Context) {
         context = context,
         sourceId = "test_progress_info",
         title = "线性进度测试",
-        text = "这是一个线性进度组件的测试示例",
+        text = "这是一个线性进度组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = emptyMap()
     )
@@ -360,7 +360,7 @@ private fun testMultiProgressInfo(context: Context) {
         {
             "baseInfo": {
                 "title": "多节点进度测试",
-                "content": "这是一个多节点进度组件的测试示例"
+                "content": "这是一个多节点进度组件的展开态测试示例"
             },
             "multiProgressInfo": {
                 "title": "正在排水",
@@ -375,34 +375,45 @@ private fun testMultiProgressInfo(context: Context) {
         context = context,
         sourceId = "test_multi_progress_info",
         title = "多节点进度测试",
-        text = "这是一个多节点进度组件的测试示例",
+        text = "这是一个多节点进度组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = emptyMap()
     )
 }
 
 /**
- * 测试圆形进度组件
+ * 测试圆形进度组件（基于真实小米互传数据）
  */
 private fun testCircularProgressInfo(context: Context) {
     val paramV2Raw = """
         {
-            "baseInfo": {
-                "title": "圆形进度测试",
-                "content": "这是一个圆形进度组件的测试示例"
+            "protocol": 1,
+            "islandFirstFloat": true,
+            "enableFloat": true,
+            "timeout": 720,
+            "updatable": true,
+            "ticker": "56%",
+            "chatInfo": {
+                "picProfile": "miui.focus.pic_thumbnail",
+                "title": "正在接收1个文件",
+                "content": "18.6 MB"
             },
             "actions": [
                 {
-                    "type": 1,
                     "progressInfo": {
-                        "progress": 75,
+                        "progress": 56,
                         "colorProgress": "#3482FF",
-                        "colorProgressDark": "#4788FF",
-                        "isAutoProgress": true,
+                        "colorProgressDark": "#3482FF",
+                        "colorProgressEnd": "#1A000000",
+                        "colorProgressEndDark": "#33FFFFFF",
                         "isCCW": true
-                    }
+                    },
+                    "type": 1,
+                    "actionTitle": "取消",
+                    "action": "miui.focus.action_cancel"
                 }
-            ]
+            ],
+            "business": "mishare"
         }
     """
     
@@ -410,9 +421,13 @@ private fun testCircularProgressInfo(context: Context) {
         context = context,
         sourceId = "test_circular_progress_info",
         title = "圆形进度测试",
-        text = "这是一个圆形进度组件的测试示例",
+        text = "这是一个基于真实数据的圆形进度组件测试",
         paramV2Raw = paramV2Raw,
-        picMap = emptyMap()
+        picMap = mapOf(
+            "miui.focus.pic_thumbnail" to createBlackBlockDataUrl(),
+            "miui.focus.pic_cancel" to createBlackBlockDataUrl(),
+            "miui.focus.pic_cancelDark" to createBlackBlockDataUrl()
+        )
     )
 }
 
