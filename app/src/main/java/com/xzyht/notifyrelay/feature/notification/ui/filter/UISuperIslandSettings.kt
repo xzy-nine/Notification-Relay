@@ -47,17 +47,19 @@ import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaMan
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Surface
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.MiuixIcons
 import java.util.Date
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
@@ -73,6 +75,7 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
+    var renderWithCompose by remember { mutableStateOf(StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)) }
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
     val groups = remember(history) {
@@ -89,70 +92,115 @@ fun UISuperIslandSettings() {
             .sortedByDescending { it.entries.firstOrNull()?.id ?: Long.MIN_VALUE }
     }
 
+    // 测试对话框状态
+    val showTestDialog = remember { mutableStateOf(false) }
+
     MiuixTheme {
         val colorScheme = MiuixTheme.colorScheme
         val textStyles = MiuixTheme.textStyles
 
-        Surface(color = colorScheme.background) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    SuperSwitch(
-                        title = "超级岛读取",
-                        summary = "控制是否尝试从本机通知中读取小米超级岛数据并转发",
-                        checked = enabled,
-                        onCheckedChange = {
-                            enabled = it
-                            StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(0.dp))
-
-                    SuperSwitch(
-                        title = "复制图片详细信息",
-                        summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
-                        checked = includeImageDataOnCopy,
-                        onCheckedChange = {
-                            includeImageDataOnCopy = it
-                            StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(0.dp))    
-
-                    if (groups.isEmpty()) {
-                        Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            top.yukonga.miuix.kmp.basic.Button(
-                                onClick = {
-                                    SuperIslandHistory.clearAll(context)
+        Scaffold(
+            popupHost = { }, // 置空，避免与顶层Scaffold冲突
+            // 悬浮工具栏
+            floatingToolbar = {
+                FloatingToolbar {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 渲染切换开关 - 使用普通Switch组件
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Compose渲染",
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Switch(
+                                checked = renderWithCompose,
+                                onCheckedChange = {
+                                    renderWithCompose = it
+                                    StorageManager.putBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, it)
                                 }
-                            ) {
-                                Text("清空超级岛历史")
+                            )
+                        }
+                        
+                        // 测试按钮
+                        Button(
+                            onClick = {
+                                showTestDialog.value = true
                             }
+                        ) {
+                            Text("测试超级岛分支")
                         }
                     }
                 }
-                
-                if (groups.isNotEmpty()) {
-                    items(groups, key = { it.packageName }) { group ->
-                        SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
+            },
+            floatingToolbarPosition = ToolbarPosition.BottomEnd
+        ) {
+            Surface(color = colorScheme.background) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        SuperSwitch(
+                            title = "超级岛读取",
+                            summary = "控制是否尝试从本机通知中读取小米超级岛数据并转发",
+                            checked = enabled,
+                            onCheckedChange = {
+                                enabled = it
+                                StorageManager.putBoolean(context, SUPER_ISLAND_KEY, it)
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(0.dp))
+
+                        SuperSwitch(
+                            title = "复制图片详细信息",
+                            summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
+                            checked = includeImageDataOnCopy,
+                            onCheckedChange = {
+                                includeImageDataOnCopy = it
+                                StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(0.dp))
+
+                        if (groups.isEmpty()) {
+                            Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Button(
+                                    onClick = {
+                                        SuperIslandHistory.clearAll(context)
+                                    }
+                                ) {
+                                    Text("清空超级岛历史")
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (groups.isNotEmpty()) {
+                        items(groups, key = { it.packageName }) { group ->
+                            SuperIslandHistoryGroupCard(group, includeImageDataOnCopy)
+                        }
                     }
                 }
             }
         }
+        
+        // 显示测试对话框
+        SuperIslandTestDialog(showTestDialog, context)
     }
 }
 

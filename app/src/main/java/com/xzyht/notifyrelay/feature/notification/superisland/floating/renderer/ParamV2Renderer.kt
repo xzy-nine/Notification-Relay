@@ -9,6 +9,9 @@ import com.xzyht.notifyrelay.BuildConfig
 import android.util.Log
 import android.widget.TextView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.LifecycleOwner
 
 // 摘要态组件解析
 
@@ -28,7 +31,7 @@ data class ParamV2(
     val business: String? = null // 可选的业务标识（例如 miui_flashlight）
 )
 
-// 构建UI视图的函数
+// 构建传统UI视图的函数
 suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): TemplateViewResult {
     val container = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -52,31 +55,38 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
     // 根据模板类型构建不同的布局，使用分支处理
     when {
         paramV2.baseInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: baseInfo")
             val view = buildBaseInfoView(context, paramV2.baseInfo, picMap)
             container.addView(view)
         }
         paramV2.chatInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: chatInfo")
             val result = buildChatInfoView(context, paramV2, picMap)
             container.addView(result.view)
             progressBinding = result.progressBinding
         }
-            paramV2.animTextInfo != null -> {
-                val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
-                container.addView(view)
-            }
+        paramV2.animTextInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: animTextInfo")
+            val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
+            container.addView(view)
+        }
         paramV2.highlightInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: highlightInfo")
             val view = buildHighlightInfoView(context, paramV2.highlightInfo, picMap)
             container.addView(view)
         }
         paramV2.picInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: picInfo")
             val view = buildPicInfoView(context, paramV2.picInfo, picMap)
             container.addView(view)
         }
         paramV2.hintInfo != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: hintInfo")
             val view = buildHintInfoView(context, paramV2.hintInfo, picMap)
             container.addView(view)
         }
         paramV2.textButton != null -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: textButton")
             val tv = TextView(context).apply {
                 text = "此通知包含不可用的按钮"
                 setTextColor(0xFFFFFFFF.toInt())
@@ -84,6 +94,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
             container.addView(tv)
         }
         else -> {
+            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: default")
             // 默认模板：未支持的模板类型
             val tv = TextView(context).apply {
                 text = "未支持的模板"
@@ -110,36 +121,127 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
     return TemplateViewResult(container, progressBinding)
 }
 
+// 构建Compose UI视图的函数
+suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null, lifecycleOwner: LifecycleOwner? = null): ComposeTemplateViewResult {
+    return ComposeTemplateViewResult(
+        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate(context, paramV2, picMap, business, lifecycleOwner),
+        progressBinding = null
+    )
+}
+
 // 解析param_v2总容器，根据不同字段选择对应的子组件解析
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
+        if (BuildConfig.DEBUG) Log.d("超级岛", "开始解析param_v2: ${jsonString.take(200)}...")
         val json = JSONObject(jsonString)
         val business = json.optString("business", "").takeIf { it.isNotBlank() }
-        val anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
-        val highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
-            ?: parseHighlightFromIconText(json)
-        ParamV2(
-            business = business,
-            baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) },
-            chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) },
-            highlightInfo = highlight,
-            animTextInfo = anim,
-            picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) },
-            progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) },
-            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let {
-                parseMultiProgressInfo(
-                    it
-                )
-            },
-            actions = json.optJSONArray("actions")?.let { parseActions(it) },
-            hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) },
-            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) },
+        
+        // 逐个字段解析，确保每个字段解析失败不会影响整体解析
+        var anim: AnimTextInfo? = null
+        var highlight: HighlightInfo? = null
+        var baseInfo: BaseInfo? = null
+        var chatInfo: ChatInfo? = null
+        var picInfo: PicInfo? = null
+        var progressInfo: ProgressInfo? = null
+        var multiProgressInfo: MultiProgressInfo? = null
+        var actions: List<ActionInfo>? = null
+        var hintInfo: HintInfo? = null
+        var textButton: TextButton? = null
+        var paramIsland: ParamIsland? = null
+        
+        // 解析各个字段，每个字段单独try-catch，避免一个字段解析失败导致整体失败
+        try {
+            anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析animTextInfo失败: ${e.message}")
+        }
+        
+        try {
+            highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
+                ?: parseHighlightFromIconText(json)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析highlightInfo失败: ${e.message}")
+        }
+        
+        try {
+            baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析baseInfo失败: ${e.message}")
+        }
+        
+        try {
+            chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析chatInfo失败: ${e.message}")
+        }
+        
+        try {
+            picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析picInfo失败: ${e.message}")
+        }
+        
+        try {
+            progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析progressInfo失败: ${e.message}")
+        }
+        
+        try {
+            multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析multiProgressInfo失败: ${e.message}")
+        }
+        
+        try {
+            actions = json.optJSONArray("actions")?.let { parseActions(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析actions失败: ${e.message}")
+        }
+        
+        try {
+            hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析hintInfo失败: ${e.message}")
+        }
+        
+        try {
+            textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析textButton失败: ${e.message}")
+        }
+        
+        try {
             paramIsland = (json.optJSONObject("param_island")
                 ?: json.optJSONObject("paramIsland")
                 ?: json.optJSONObject("islandParam"))?.let { parseParamIsland(it) }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("超级岛", "解析paramIsland失败: ${e.message}")
+        }
+        
+        val paramV2 = ParamV2(
+            business = business,
+            baseInfo = baseInfo,
+            chatInfo = chatInfo,
+            highlightInfo = highlight,
+            animTextInfo = anim,
+            picInfo = picInfo,
+            progressInfo = progressInfo,
+            multiProgressInfo = multiProgressInfo,
+            actions = actions,
+            hintInfo = hintInfo,
+            textButton = textButton,
+            paramIsland = paramIsland
         )
+        
+        if (BuildConfig.DEBUG) Log.d("超级岛", "解析param_v2成功: business=$business, baseInfo=${paramV2.baseInfo != null}")
+        paramV2
     } catch (e: Exception) {
-        if (BuildConfig.DEBUG) Log.w("超级岛", "解析param_v2失败: ${e.message}")
+        if (BuildConfig.DEBUG) {
+            Log.w("超级岛", "解析param_v2失败: ${e.message}")
+            Log.w("超级岛", "失败的JSON: ${jsonString.take(300)}...")
+            e.printStackTrace()
+        }
         null
     }
 }
@@ -184,5 +286,11 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
 
 data class TemplateViewResult(
     val view: View,
+    val progressBinding: CircularProgressBinding? = null
+)
+
+// 支持ComposeView的视图结果类
+data class ComposeTemplateViewResult(
+    val view: ComposeView,
     val progressBinding: CircularProgressBinding? = null
 )
