@@ -75,26 +75,26 @@ fun FloatingWindowContainer(
                     }
                     .clickable { onEntryClick(entry.key) }
             ) {
-                // 动画常量
+                // 简化动画，避免闪烁
                 val expandedEnterTransition = slideInVertically {
                     // 从顶部滑入
-                    -it
-                } + expandVertically() + fadeIn()
+                    -it / 2 // 减少滑入距离，使动画更平滑
+                } + fadeIn()
                 
-                val expandedExitTransition = shrinkVertically() + slideOutVertically {
+                val expandedExitTransition = slideOutVertically {
                     // 向顶部滑出
-                    -it
+                    -it / 2 // 减少滑出距离，使动画更平滑
                 } + fadeOut()
                 
-                val collapsedEnterTransition = fadeIn() + slideInVertically {
+                val collapsedEnterTransition = slideInVertically {
                     // 从底部滑入
-                    it
-                }
+                    it / 2 // 减少滑入距离，使动画更平滑
+                } + fadeIn()
                 
-                val collapsedExitTransition = fadeOut() + slideOutVertically {
+                val collapsedExitTransition = slideOutVertically {
                     // 向底部滑出
-                    it
-                }
+                    it / 2 // 减少滑出距离，使动画更平滑
+                } + fadeOut()
                 
                 // 展开态内容
                 androidx.compose.animation.AnimatedVisibility(

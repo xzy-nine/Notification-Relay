@@ -461,6 +461,11 @@ object FloatingReplicaManager {
                             this.lifecycleOwner = overlayLifecycleOwner ?: lifecycleManager.lifecycleOwner
                             // 设置条目点击回调
                             this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
+                            // 设置条目拖拽回调
+                            this.onEntryDrag = { entryKey, offset -> 
+                                // 处理拖拽逻辑
+                                handleEntryDrag(entryKey, offset)
+                            }
                         }
 
                         // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
@@ -778,6 +783,39 @@ object FloatingReplicaManager {
 
     private fun attachDragHandler(target: View, context: Context) {
         // 移除传统的拖拽处理逻辑，拖拽功能现在由Compose处理
+    }
+    
+    /**
+     * 处理来自Compose的拖拽事件
+     */
+    private fun handleEntryDrag(key: String, offset: androidx.compose.ui.geometry.Offset) {
+        // 获取浮窗容器的LayoutParams和WindowManager
+        val params = overlayLayoutParams ?: return
+        val wm = windowManager?.get() ?: return
+        val rootView = overlayView?.get() ?: return
+        
+        // 更新浮窗容器的位置
+        params.x += offset.x.toInt()
+        params.y += offset.y.toInt()
+        
+        // 边界检查：将位置限制在屏幕内
+        val displayMetrics = rootView.resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        val windowWidth = params.width
+        val windowHeight = params.height
+        
+        params.x = params.x.coerceIn(0, screenWidth - windowWidth)
+        params.y = params.y.coerceIn(0, screenHeight - windowHeight)
+        
+        // 更新浮窗位置
+        try {
+            wm.updateViewLayout(rootView, params)
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.w(TAG, "超级岛: 更新浮窗位置失败: ${e.message}")
+            }
+        }
     }
 
     // 显示全屏关闭层，底部中心有关闭指示器
