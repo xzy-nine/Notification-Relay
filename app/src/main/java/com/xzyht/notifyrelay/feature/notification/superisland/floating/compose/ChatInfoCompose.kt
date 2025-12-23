@@ -3,7 +3,7 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -13,10 +13,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.CircularProgressCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.rememberSuperIslandImagePainter
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ChatInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 /**
  * 聊天信息Compose组件，与传统View功能一致
@@ -54,18 +55,35 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
             // 与View渲染一致，添加8dp的margin
             Spacer(modifier = Modifier.width(8.dp))
             
-            // 创建圆形进度条
+            // 创建圆形进度条 - 使用Miuix的CircularProgressIndicator
             val progressColor = parseColor(progressInfo.colorProgress) ?: 0xFF3482FF.toInt()
             val trackColor = parseColor(progressInfo.colorProgressEnd) 
                 ?: (progressColor and 0x00FFFFFF) or (0x33 shl 24)
             
-            CircularProgressCompose(
+            // 使用Animatable实现平滑进度动画
+            val animatedProgress = remember { 
+                androidx.compose.animation.core.Animatable(progressInfo.progress.toFloat() / 100f)
+            }
+            
+            // 当progress变化时，使用动画平滑过渡
+            LaunchedEffect(progressInfo.progress) {
+                animatedProgress.animateTo(
+                    targetValue = progressInfo.progress.toFloat() / 100f,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 420, // 与View渲染保持一致的动画时长
+                        easing = androidx.compose.animation.core.LinearEasing
+                    )
+                )
+            }
+            
+            CircularProgressIndicator(
+                progress = animatedProgress.value,
                 size = 48.dp,
-                progress = progressInfo.progress,
-                progressColor = Color(progressColor),
-                trackColor = Color(trackColor),
-                clockwise = !(progressInfo.isCCW ?: false),
-                strokeWidth = 3.5.dp
+                strokeWidth = 3.5.dp,
+                colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                    foregroundColor = Color(progressColor),
+                    backgroundColor = Color(trackColor)
+                )
             )
         }
         
