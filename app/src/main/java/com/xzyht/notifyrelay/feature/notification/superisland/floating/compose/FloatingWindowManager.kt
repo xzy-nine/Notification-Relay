@@ -32,7 +32,8 @@ class FloatingWindowManager {
     // 记录条目的内部数据类
     private data class EntryWithTimestamp(
         val entry: FloatingEntry,
-        val timestamp: Long,
+        val initialTimestamp: Long, // 初始创建时间，仅在首次添加时设置
+        val timestamp: Long, // 更新时间，用于自动移除等逻辑
         var collapseRunnable: Runnable? = null,
         var removalRunnable: Runnable? = null
     )
@@ -78,11 +79,30 @@ class FloatingWindowManager {
         // 取消之前的任务
         cancelAllTasks(key)
         
+        // 获取当前时间
+        val currentTime = System.currentTimeMillis()
+        
         // 记录添加/更新时间
-        val entryWithTimestamp = EntryWithTimestamp(
-            entry = entry,
-            timestamp = System.currentTimeMillis()
-        )
+        val existingWithTimestamp = entriesMap[key]
+        val entryWithTimestamp = if (existingWithTimestamp != null) {
+            // 条目已存在，保留原有初始时间戳，只更新timestamp
+            EntryWithTimestamp(
+                entry = entry,
+                initialTimestamp = existingWithTimestamp.initialTimestamp,
+                timestamp = currentTime,
+                collapseRunnable = null,
+                removalRunnable = null
+            )
+        } else {
+            // 新条目，初始时间戳和timestamp都设置为当前时间
+            EntryWithTimestamp(
+                entry = entry,
+                initialTimestamp = currentTime,
+                timestamp = currentTime,
+                collapseRunnable = null,
+                removalRunnable = null
+            )
+        }
         entriesMap[key] = entryWithTimestamp
         
         // 如果不是摘要态且处于展开状态，添加自动收起和自动移除任务
@@ -170,7 +190,12 @@ class FloatingWindowManager {
             cancelAllTasks(key)
             
             val updatedEntry = currentEntry.copy(isExpanded = isExpanded)
-            entriesMap[key] = entryWithTimestamp.copy(entry = updatedEntry)
+            // 保留初始时间戳，只更新entry和timestamp
+            val updatedWithTimestamp = entryWithTimestamp.copy(
+                entry = updatedEntry,
+                timestamp = System.currentTimeMillis()
+            )
+            entriesMap[key] = updatedWithTimestamp
             
             // 如果切换到展开状态且不是摘要态，添加自动收起和自动移除任务
             if (isExpanded && !updatedEntry.summaryOnly) {
@@ -196,7 +221,12 @@ class FloatingWindowManager {
             cancelAllTasks(key)
             
             val updatedEntry = currentEntry.copy(isExpanded = isExpanded)
-            entriesMap[key] = entryWithTimestamp.copy(entry = updatedEntry)
+            // 保留初始时间戳，只更新entry和timestamp
+            val updatedWithTimestamp = entryWithTimestamp.copy(
+                entry = updatedEntry,
+                timestamp = System.currentTimeMillis()
+            )
+            entriesMap[key] = updatedWithTimestamp
             
             // 如果切换到展开状态且不是摘要态，添加自动收起任务
             if (isExpanded && !updatedEntry.summaryOnly) {
@@ -211,14 +241,14 @@ class FloatingWindowManager {
     }
     
     /**
-     * 更新条目列表，确保顺序正确（最新的在顶部）
+     * 更新条目列表，确保顺序正确（最新的在底部）
      */
     private fun updateEntriesList() {
         // 清空列表
         entriesList.clear()
-        // 按时间戳倒序排序，最新的在顶部
+        // 按初始时间戳升序排序，最新的在底部
         val sortedEntries = entriesMap.values
-            .sortedByDescending { it.timestamp }
+            .sortedBy { it.initialTimestamp }
             .map { it.entry }
         // 添加到列表
         entriesList.addAll(sortedEntries)
