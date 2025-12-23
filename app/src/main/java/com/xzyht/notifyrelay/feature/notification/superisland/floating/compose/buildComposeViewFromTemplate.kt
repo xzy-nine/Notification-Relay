@@ -82,7 +82,7 @@ suspend fun buildComposeViewFromTemplate(
                         else -> {
                             if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: default")
                             // 默认模板：未支持的模板类型
-                            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                            Box(modifier = Modifier.padding(16.dp)) {
                                 Text(text = "未支持的模板", color = Color.White)
                             }
                         }
@@ -170,7 +170,7 @@ suspend fun buildComposeViewFromRawParam(
                                 else -> {
                                     if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: default")
                                     // 默认模板：未支持的模板类型
-                                    Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                    Box(modifier = Modifier.padding(16.dp)) {
                                         Text(text = "未支持的模板", color = Color.White)
                                     }
                                 }

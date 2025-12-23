@@ -158,6 +158,20 @@ fun UISuperIslandSettings() {
                             }
                         }
                     }
+                    
+                    // 添加测试按钮
+                    val showTestDialog = remember { mutableStateOf(false) }
+                    top.yukonga.miuix.kmp.basic.Button(
+                        onClick = {
+                            showTestDialog.value = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试超级岛分支")
+                    }
+                    
+                    // 显示测试对话框
+                    SuperIslandTestDialog(showTestDialog, context)
                 }
                 
                 if (groups.isNotEmpty()) {
