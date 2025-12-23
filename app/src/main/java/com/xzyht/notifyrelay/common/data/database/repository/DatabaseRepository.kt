@@ -143,10 +143,25 @@ class DatabaseRepository(private val database: AppDatabase) {
     // 超级岛历史记录相关方法
     
     /**
-     * 获取所有超级岛历史记录
+     * 获取所有超级岛历史记录（摘要）——不加载 rawPayload，避免占用大量内存
      */
     suspend fun getSuperIslandHistory(): List<SuperIslandHistoryEntity> {
-        return superIslandHistoryDao.getAllHistory()
+        // 使用只读取小字段的摘要查询，然后构造实体（rawPayload 设为 null）
+        val summaries = superIslandHistoryDao.getAllHistorySummary()
+        return summaries.map { s ->
+            SuperIslandHistoryEntity(
+                id = s.id,
+                sourceDeviceUuid = s.sourceDeviceUuid,
+                originalPackage = s.originalPackage,
+                mappedPackage = s.mappedPackage,
+                appName = s.appName,
+                title = s.title,
+                text = s.text,
+                paramV2Raw = s.paramV2Raw,
+                picMap = s.picMap,
+                rawPayload = null
+            )
+        }
     }
     
     /**
@@ -168,6 +183,20 @@ class DatabaseRepository(private val database: AppDatabase) {
      */
     suspend fun clearSuperIslandHistory() {
         superIslandHistoryDao.clearAll()
+    }
+
+    /**
+     * 按 id 获取完整的超级岛历史记录（包含 rawPayload），按需调用以避免一次性加载大字段
+     */
+    suspend fun getSuperIslandHistoryById(id: Long): SuperIslandHistoryEntity? {
+        return superIslandHistoryDao.getById(id)
+    }
+
+    /**
+     * 获取指定 id 的 rawPayload（仅字符串），按需使用以减少内存峰值
+     */
+    suspend fun getRawPayloadById(id: Long): String? {
+        return superIslandHistoryDao.getRawPayloadById(id)
     }
     
 

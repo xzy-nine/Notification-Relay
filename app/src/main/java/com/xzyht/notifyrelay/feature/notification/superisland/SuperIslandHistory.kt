@@ -85,6 +85,32 @@ object SuperIslandHistory {
         return historyFlow.asStateFlow()
     }
 
+    /**
+     * 按需加载某条记录的完整内容（包含 rawPayload），用于打开详情时调用。
+     */
+    suspend fun loadEntryDetail(context: Context, id: Long): SuperIslandHistoryEntry? {
+        val repo = DatabaseRepository.getInstance(context)
+        val entity = try {
+            repo.getSuperIslandHistoryById(id)
+        } catch (_: Exception) {
+            null
+        }
+        return entity?.let { e ->
+            SuperIslandHistoryEntry(
+                id = e.id,
+                sourceDeviceUuid = e.sourceDeviceUuid,
+                originalPackage = e.originalPackage,
+                mappedPackage = e.mappedPackage,
+                appName = e.appName,
+                title = e.title,
+                text = e.text,
+                paramV2Raw = e.paramV2Raw,
+                picMap = gson.fromJson(e.picMap, Map::class.java) as Map<String, String>,
+                rawPayload = e.rawPayload
+            )
+        }
+    }
+
     fun append(context: Context, entry: SuperIslandHistoryEntry) {
         ensureLoaded(context)
         // 将图片字符串 intern 为引用以避免重复存储

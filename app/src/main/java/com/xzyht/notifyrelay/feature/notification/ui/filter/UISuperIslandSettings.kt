@@ -51,6 +51,8 @@ import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSetting
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.PaddingValues
@@ -300,9 +302,7 @@ private fun SuperIslandHistorySummaryRow(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
-    val copyText = remember(entry, includeImageDataOnCopy) {
-        buildEntryCopyText(entry, includeImageDataOnCopy)
-    }
+    val coroutineScope = rememberCoroutineScope()
 
     val titleText = entry.title?.takeIf { it.isNotBlank() }
         ?: entry.appName?.takeIf { it.isNotBlank() }
@@ -321,7 +321,12 @@ private fun SuperIslandHistorySummaryRow(
                     triggerFloatingReplica(context, entry)
                 },
                 onLongClick = {
-                    copyEntryToClipboard(context, copyText)
+                    coroutineScope.launch {
+                        val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                        val final = full ?: entry
+                        val text = buildEntryCopyText(final, includeImageDataOnCopy)
+                        copyEntryToClipboard(context, text)
+                    }
                 }
             )
     ) {
@@ -365,9 +370,7 @@ private fun SuperIslandHistoryEntryCard(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
-    val copyText = remember(entry, includeImageDataOnCopy) {
-        buildEntryCopyText(entry, includeImageDataOnCopy)
-    }
+        val coroutineScope = rememberCoroutineScope()
 
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -378,7 +381,12 @@ private fun SuperIslandHistoryEntryCard(
                     triggerFloatingReplica(context, entry)
                 },
                 onLongClick = {
-                    copyEntryToClipboard(context, copyText)
+                    coroutineScope.launch {
+                        val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                        val final = full ?: entry
+                        val text = buildEntryCopyText(final, includeImageDataOnCopy)
+                        copyEntryToClipboard(context, text)
+                    }
                 }
             )
     ) {
@@ -439,9 +447,10 @@ private fun SuperIslandHistoryEntryCard(
             )
         }
 
-        val rawPayload = entry.rawPayload
-        if (!rawPayload.isNullOrBlank()) {
-            val displayPayload = if (includeImageDataOnCopy) rawPayload else sanitizeImageContent(rawPayload, false)
+        var loadedDetail by remember { mutableStateOf<SuperIslandHistoryEntry?>(null) }
+        val displayPayloadRaw = loadedDetail?.rawPayload ?: entry.rawPayload
+        if (!displayPayloadRaw.isNullOrBlank()) {
+            val displayPayload = if (includeImageDataOnCopy) displayPayloadRaw else sanitizeImageContent(displayPayloadRaw, false)
             Text(
                 text = displayPayload,
                 style = textStyles.body2,
@@ -449,6 +458,18 @@ private fun SuperIslandHistoryEntryCard(
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis
             )
+        } else {
+            // 未加载 rawPayload，提供按需加载按钮
+            androidx.compose.material3.TextButton(onClick = {
+                coroutineScope.launch {
+                    val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                    if (full != null) {
+                        loadedDetail = full
+                    }
+                }
+            }) {
+                Text("加载详情")
+            }
         }
     }
 }

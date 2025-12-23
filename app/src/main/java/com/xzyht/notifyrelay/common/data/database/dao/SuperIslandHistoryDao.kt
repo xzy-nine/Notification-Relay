@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
+import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistorySummary
 
 /**
  * 超级岛历史记录DAO
@@ -18,6 +19,12 @@ interface SuperIslandHistoryDao {
      */
     @Query("SELECT * FROM super_island_history ORDER BY id DESC")
     suspend fun getAllHistory(): List<SuperIslandHistoryEntity>
+
+    /**
+     * 获取所有超级岛历史记录的摘要（不包含 rawPayload），用于列表/摘要态展示，避免一次性载入大字段
+     */
+    @Query("SELECT id, sourceDeviceUuid, originalPackage, mappedPackage, appName, title, text, paramV2Raw, picMap FROM super_island_history ORDER BY id DESC")
+    suspend fun getAllHistorySummary(): List<SuperIslandHistorySummary>
     
     /**
      * 插入超级岛历史记录（冲突时替换）
@@ -42,4 +49,16 @@ interface SuperIslandHistoryDao {
      */
     @Query("SELECT * FROM super_island_history ORDER BY id DESC LIMIT :limit")
     suspend fun getLatestHistory(limit: Int): List<SuperIslandHistoryEntity>
+
+    /**
+     * 获取指定 id 的完整记录（包含 rawPayload），按需加载大字段
+     */
+    @Query("SELECT * FROM super_island_history WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): SuperIslandHistoryEntity?
+
+    /**
+     * 仅按 id 获取 rawPayload 字段，便于按需加载大字符串
+     */
+    @Query("SELECT rawPayload FROM super_island_history WHERE id = :id LIMIT 1")
+    suspend fun getRawPayloadById(id: Long): String?
 }
