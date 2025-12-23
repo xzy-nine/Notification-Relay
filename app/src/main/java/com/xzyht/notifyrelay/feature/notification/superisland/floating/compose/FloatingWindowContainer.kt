@@ -156,14 +156,18 @@ fun FloatingWindowContainer(
                     enter = collapsedEnterTransition,
                     exit = collapsedExitTransition
                 ) {
-                    // TODO 从paramV2中提取bigIsland信息
+                    // 提取回落文本
                     val fallbackTitle = entry.paramV2?.baseInfo?.title
                     val fallbackContent = entry.paramV2?.baseInfo?.content
                     
-                    // TODO 这里需要解析bigIslandJson，后续需要从paramV2或paramV2Raw中提取
+                    // 从paramV2Raw中正确解析bigIslandJson，与传统实现保持一致
                     val bigIslandJson = entry.paramV2Raw?.let {
                         try {
-                            org.json.JSONObject(it)
+                            val root = org.json.JSONObject(it)
+                            val island = root.optJSONObject("param_island")
+                                ?: root.optJSONObject("paramIsland")
+                                ?: root.optJSONObject("islandParam")
+                            island?.optJSONObject("bigIslandArea") ?: island?.optJSONObject("bigIsland")
                         } catch (e: Exception) {
                             null
                         }

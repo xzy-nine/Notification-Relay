@@ -36,6 +36,9 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingW
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromRawParam
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingWindowContainer
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingWindowManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.LifecycleManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressBinding
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.HighlightInfo
@@ -112,6 +115,11 @@ object FloatingReplicaManager {
         // 由于我们使用的是postDelayed，这里不需要处理具体message
         false
     }
+    
+    // Compose浮窗管理器
+    private val floatingWindowManager = FloatingWindowManager()
+    // Compose生命周期管理器
+    private val lifecycleManager = LifecycleManager()
 
     // 会话级屏蔽池：进程结束后自然清空，value 为最后屏蔽时间戳
     private val blockedInstanceIds = ConcurrentHashMap<String, Long>()
@@ -149,6 +157,7 @@ object FloatingReplicaManager {
         val progressBinding: CircularProgressBinding?
     )
 
+    // 使用FloatingWindowManager替代原有entries映射
     private val entries = ConcurrentHashMap<String, EntryRecord>()
 
     /**
@@ -183,6 +192,8 @@ object FloatingReplicaManager {
                     if (overlayLifecycleOwner == null) {
                         overlayLifecycleOwner = FloatingWindowLifecycleOwner()
                     }
+                    // 通知Compose生命周期管理器浮窗显示
+                    lifecycleManager.onShow()
                     // 尝试解析paramV2
                     val paramV2 = parseParamV2Safe(paramV2Raw)
                     
@@ -207,6 +218,7 @@ object FloatingReplicaManager {
                     val expandedView = if (useCompose) {
                         try {
                             if (paramV2 != null) {
+                                // 使用新的Compose组件渲染
                                 val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null, overlayLifecycleOwner)
                                 if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
                                 composeResult.view
@@ -238,6 +250,17 @@ object FloatingReplicaManager {
                         if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
                         view
                     }
+                    
+                    // 更新Compose浮窗管理器的条目
+                    floatingWindowManager.addOrUpdateEntry(
+                        key = entryKey,
+                        paramV2 = paramV2,
+                        paramV2Raw = paramV2Raw,
+                        picMap = internedPicMap,
+                        isExpanded = !summaryOnly,
+                        summaryOnly = summaryOnly,
+                        business = paramV2?.business
+                    )
                     val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
                         ?: buildSummaryView(
                             context,
@@ -412,7 +435,7 @@ object FloatingReplicaManager {
             return
         }
 
-        if (entries.isEmpty()) {
+        if (floatingWindowManager.getEntryCount() == 0) {
             try {
                 // 首先隐藏关闭层
                 hideCloseOverlay()
@@ -422,6 +445,8 @@ object FloatingReplicaManager {
                     // 通知生命周期结束，便于 Compose 清理
                     try {
                         overlayLifecycleOwner?.onDestroy()
+                        lifecycleManager.onHide()
+                        lifecycleManager.onDestroy()
                     } catch (_: Exception) { }
                     wm.removeView(view)
                     if (BuildConfig.DEBUG) {
@@ -479,6 +504,7 @@ object FloatingReplicaManager {
                         }
                         // 安装 ViewTreeLifecycleOwner + ViewTreeSavedStateRegistryOwner，满足 ComposeView 附着校验
                         tryInstallViewTreeLifecycleOwner(container, lifecycleOwner)
+                        tryInstallViewTreeLifecycleOwner(container, lifecycleManager.lifecycleOwner)
                         try {
                             val savedStateOwner = lifecycleOwner as SavedStateRegistryOwner
                             tryInstallViewTreeSavedStateRegistryOwner(container, savedStateOwner)
@@ -511,6 +537,8 @@ object FloatingReplicaManager {
                         if (added) {
                             // 标记浮窗进入前台生命周期，供 Compose 使用
                             try { lifecycleOwner.onShow() } catch (_: Exception) {}
+                            // 通知Compose生命周期管理器浮窗显示
+                            lifecycleManager.onShow()
                             overlayView = WeakReference(container)
                             stackContainer = WeakReference(innerStack)
                             overlayLayoutParams = layoutParams

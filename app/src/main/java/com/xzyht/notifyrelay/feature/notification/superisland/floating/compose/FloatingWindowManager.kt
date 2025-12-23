@@ -14,11 +14,17 @@ import java.util.concurrent.ConcurrentHashMap
 @Stable
 class FloatingWindowManager {
     
-    // 条目映射，与原有entries保持一致
-    private val entriesMap = ConcurrentHashMap<String, FloatingEntry>()
+    // 条目映射，与原有entries保持一致，记录添加时间
+    private val entriesMap = ConcurrentHashMap<String, EntryWithTimestamp>()
     
     // 条目列表，用于Compose渲染
     val entriesList = mutableStateListOf<FloatingEntry>()
+    
+    // 记录条目的内部数据类
+    private data class EntryWithTimestamp(
+        val entry: FloatingEntry,
+        val timestamp: Long
+    )
     
     /**
      * 添加或更新浮窗条目
@@ -42,7 +48,11 @@ class FloatingWindowManager {
             business = business
         )
         
-        entriesMap[key] = entry
+        // 记录添加/更新时间
+        entriesMap[key] = EntryWithTimestamp(
+            entry = entry,
+            timestamp = System.currentTimeMillis()
+        )
         updateEntriesList()
     }
     
@@ -58,9 +68,10 @@ class FloatingWindowManager {
      * 切换条目展开/收起状态
      */
     fun toggleEntryExpanded(key: String) {
-        val entry = entriesMap[key]
-        if (entry != null) {
-            entriesMap[key] = entry.copy(isExpanded = !entry.isExpanded)
+        val entryWithTimestamp = entriesMap[key]
+        if (entryWithTimestamp != null) {
+            val updatedEntry = entryWithTimestamp.entry.copy(isExpanded = !entryWithTimestamp.entry.isExpanded)
+            entriesMap[key] = entryWithTimestamp.copy(entry = updatedEntry)
             updateEntriesList()
         }
     }
@@ -69,21 +80,26 @@ class FloatingWindowManager {
      * 设置条目展开状态
      */
     fun setEntryExpanded(key: String, isExpanded: Boolean) {
-        val entry = entriesMap[key]
-        if (entry != null) {
-            entriesMap[key] = entry.copy(isExpanded = isExpanded)
+        val entryWithTimestamp = entriesMap[key]
+        if (entryWithTimestamp != null) {
+            val updatedEntry = entryWithTimestamp.entry.copy(isExpanded = isExpanded)
+            entriesMap[key] = entryWithTimestamp.copy(entry = updatedEntry)
             updateEntriesList()
         }
     }
     
     /**
-     * 更新条目列表，确保顺序正确
+     * 更新条目列表，确保顺序正确（最新的在顶部）
      */
     private fun updateEntriesList() {
         // 清空列表
         entriesList.clear()
-        // TODO 添加所有条目（最新的在顶部，这里暂时按插入顺序）
-        entriesList.addAll(entriesMap.values)
+        // 按时间戳倒序排序，最新的在顶部
+        val sortedEntries = entriesMap.values
+            .sortedByDescending { it.timestamp }
+            .map { it.entry }
+        // 添加到列表
+        entriesList.addAll(sortedEntries)
     }
     
     /**
