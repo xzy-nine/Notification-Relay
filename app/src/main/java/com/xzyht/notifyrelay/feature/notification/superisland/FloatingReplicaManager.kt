@@ -36,6 +36,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingW
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromRawParam
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingComposeContainer
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingWindowContainer
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingWindowManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.LifecycleManager
@@ -213,45 +214,8 @@ object FloatingReplicaManager {
                     // 使用Compose构建视图的开关（来自设置页）
                     val useCompose = StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)
                     
-                    // 优化渲染逻辑：即使paramV2为null，也尝试使用Compose渲染
-                    var expandedBinding: CircularProgressBinding? = null
-                    val expandedView = if (useCompose) {
-                        try {
-                            if (paramV2 != null) {
-                                // 使用新的Compose组件渲染
-                                val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null, overlayLifecycleOwner)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
-                                composeResult.view
-                            } else if (!paramV2Raw.isNullOrBlank()) {
-                                // 尝试直接使用paramV2Raw构建ComposeView
-                                val composeView = buildComposeViewFromRawParam(context, paramV2Raw, internedPicMap, overlayLifecycleOwner)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染(直接从raw)，sourceId=$sourceId")
-                                composeView as View
-                            } else {
-                                // 回退到View渲染
-                                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                                expandedBinding = templateResult?.progressBinding
-                                val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
-                                view
-                            }
-                        } catch (e: Exception) {
-                            // Compose渲染失败，回退到View渲染
-                            val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                            expandedBinding = templateResult?.progressBinding
-                            val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: Compose渲染失败，回退到View渲染，sourceId=$sourceId, error=${e.message}")
-                            view
-                        }
-                    } else {
-                        val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                        expandedBinding = templateResult?.progressBinding
-                        val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
-                        view
-                    }
-                    
                     // 更新Compose浮窗管理器的条目
+                    // 直接通过FloatingWindowManager管理条目状态，不再创建传统View
                     floatingWindowManager.addOrUpdateEntry(
                         key = entryKey,
                         paramV2 = paramV2,
@@ -261,25 +225,18 @@ object FloatingReplicaManager {
                         summaryOnly = summaryOnly,
                         business = paramV2?.business
                     )
-                    val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
-                        ?: buildSummaryView(
-                            context,
-                            smallIsland,
-                            paramV2?.highlightInfo,
-                            title,
-                            text,
-                            summaryBitmap ?: fallbackBitmap,
-                            internedPicMap
-                        )
-
-                    // 增强空指针保护：确保所有必要参数都不为null
+                    
+                    // 移除传统的View创建和添加逻辑，完全使用Compose渲染
+                    // 直接调用addOrUpdateEntry来确保Compose容器被正确创建
+                    // 注意：这里传入的是占位View，实际渲染由Compose负责
+                    val placeholderView = View(context)
                     addOrUpdateEntry(
                         context,
                         entryKey,
-                        expandedView,
-                        collapsedSummary.view,
-                        expandedBinding, // View渲染传递实际的progressBinding，Compose暂时为null
-                        collapsedSummary.progressBinding,
+                        placeholderView,
+                        placeholderView,
+                        null,
+                        null,
                         summaryOnly
                     )
                 } catch (e: Exception) {
@@ -465,6 +422,9 @@ object FloatingReplicaManager {
                 expandedBackgroundCache.clear()
                 summaryBackgroundCache.clear()
                 
+                // 清理条目映射
+                entries.clear()
+                
                 // 无论移除是否成功，都置空全局引用，避免内存泄漏
                 overlayView = null
                 stackContainer = null
@@ -486,28 +446,33 @@ object FloatingReplicaManager {
     ) {
         try {
             // 首条条目到来时再创建 Overlay 容器，避免先有空容器
-            if (overlayView?.get() == null || stackContainer?.get() == null || windowManager?.get() == null || overlayLayoutParams == null) {
+            if (overlayView?.get() == null || windowManager?.get() == null || overlayLayoutParams == null) {
                     try {
                         val appCtx = context.applicationContext
                         val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-                        val container = FrameLayout(context)
-                        val padding = (12 * getDensity(context)).toInt()
-                        val innerStack = LinearLayout(context).apply {
-                            orientation = LinearLayout.VERTICAL
+                        
+                        // 使用Compose容器替代传统的FrameLayout和LinearLayout
+                        val composeContainer = FloatingComposeContainer(context).apply {
+                            val padding = (12 * getDensity(context)).toInt()
                             setPadding(padding, padding, padding, padding)
+                            // 设置浮窗管理器
+                            this.floatingWindowManager = this@FloatingReplicaManager.floatingWindowManager
+                            // 设置生命周期所有者
+                            this.lifecycleOwner = overlayLifecycleOwner ?: lifecycleManager.lifecycleOwner
+                            // 设置条目点击回调
+                            this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
                         }
-                        container.addView(innerStack)
 
                         // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
                         val lifecycleOwner = overlayLifecycleOwner ?: FloatingWindowLifecycleOwner().also {
                             overlayLifecycleOwner = it
                         }
                         // 安装 ViewTreeLifecycleOwner + ViewTreeSavedStateRegistryOwner，满足 ComposeView 附着校验
-                        tryInstallViewTreeLifecycleOwner(container, lifecycleOwner)
-                        tryInstallViewTreeLifecycleOwner(container, lifecycleManager.lifecycleOwner)
+                        tryInstallViewTreeLifecycleOwner(composeContainer, lifecycleOwner)
+                        tryInstallViewTreeLifecycleOwner(composeContainer, lifecycleManager.lifecycleOwner)
                         try {
                             val savedStateOwner = lifecycleOwner as SavedStateRegistryOwner
-                            tryInstallViewTreeSavedStateRegistryOwner(container, savedStateOwner)
+                            tryInstallViewTreeSavedStateRegistryOwner(composeContainer, savedStateOwner)
                         } catch (e: Exception) {
                             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: lifecycleOwner 非 SavedStateRegistryOwner 或安装失败: ${e.message}")
                         }
@@ -529,7 +494,7 @@ object FloatingReplicaManager {
 
                         var added = false
                         try {
-                            wm.addView(container, layoutParams)
+                            wm.addView(composeContainer, layoutParams)
                             added = true
                         } catch (e: Exception) {
                             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
@@ -539,8 +504,8 @@ object FloatingReplicaManager {
                             try { lifecycleOwner.onShow() } catch (_: Exception) {}
                             // 通知Compose生命周期管理器浮窗显示
                             lifecycleManager.onShow()
-                            overlayView = WeakReference(container)
-                            stackContainer = WeakReference(innerStack)
+                            overlayView = WeakReference(composeContainer)
+                            // 不再使用stackContainer，Compose容器自己管理内容
                             overlayLayoutParams = layoutParams
                             windowManager = WeakReference(wm)
                             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
@@ -550,28 +515,20 @@ object FloatingReplicaManager {
                     }
                 }
 
-            val stack = stackContainer?.get() ?: return
+            // 暂时保留原有逻辑，后续会移除
+            val stack = stackContainer?.get()
+            if (stack == null) {
+                // 如果stackContainer为null，说明使用了Compose容器
+                // 此时不需要添加传统View，直接返回
+                return
+            }
             val existing = entries[key]
             if (existing != null) {
-                val wasExpanded = existing.isExpanded
-                updateRecordContent(existing, expandedView, summaryView)
-                attachDragHandler(existing.container, context)
-                existing.lastExpandedProgress = applyProgressBinding(expandedBinding, existing.lastExpandedProgress)
-                existing.lastSummaryProgress = applyProgressBinding(summaryBinding, existing.lastSummaryProgress)
-                if (!existing.summaryOnly) {
-                    if (wasExpanded) {
-                        scheduleCollapse(existing)
-                    } else {
-                        cancelCollapse(existing)
-                    }
-                } else {
-                    existing.isExpanded = false
-                    existing.expandedView.visibility = View.GONE
-                    existing.summaryView.visibility = View.VISIBLE
-                    cancelCollapse(existing)
-                }
-                scheduleRemoval(existing, key)
-                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key，保持${if (wasExpanded) "展开" else "摘要"}态")
+                // 移除已删除方法的引用
+                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key")
+                // 清理旧条目，让FloatingWindowManager重新管理
+                entries.remove(key)
+                // 直接返回，让新条目替换旧条目
                 return
             }
 
@@ -652,49 +609,14 @@ object FloatingReplicaManager {
             entries[key] = record
             record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
             record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
-            if (!summaryOnly) {
-                showExpanded(record)
-                scheduleCollapse(record)
-            } else {
-                record.isExpanded = false
-            }
-            scheduleRemoval(record, key)
             if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 新增浮窗条目 key=$key")
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
         }
     }
 
-    private fun updateRecordContent(record: EntryRecord, expandedView: View, summaryView: View) {
-        val wasExpanded = record.isExpanded
-        detachFromParent(summaryView)
-        detachFromParent(expandedView)
-        record.container.removeAllViews()
-        // 确保容器具备统一背景
-        if (record.container.background !is GradientDrawable) {
-            record.container.background = createEntryBackground(record.container.context, wasExpanded && !record.summaryOnly)
-            record.container.elevation = 6f * record.container.resources.displayMetrics.density
-        }
-
-        // 标记状态并移除子根背景
-        expandedView.tag = "state_expanded"
-        summaryView.tag = "state_summary"
-        stripRootBackground(expandedView)
-        stripRootBackground(summaryView)
-
-        record.container.addView(summaryView)
-        record.container.addView(expandedView)
-        record.expandedView = expandedView
-        record.summaryView = summaryView
-        record.isExpanded = wasExpanded && !record.summaryOnly
-        if (record.summaryOnly || !record.isExpanded) {
-            record.expandedView.visibility = View.GONE
-            record.summaryView.visibility = View.VISIBLE
-        } else {
-            record.summaryView.visibility = View.GONE
-            record.expandedView.visibility = View.VISIBLE
-        }
-    }
+    // 移除传统的视图更新方法，这些功能现在由Compose处理
+    // private fun updateRecordContent(record: EntryRecord, expandedView: View, summaryView: View)
 
     private fun applyProgressBinding(
         binding: CircularProgressBinding?,
@@ -724,106 +646,28 @@ object FloatingReplicaManager {
     }
 
     private fun onEntryClicked(key: String) {
-        val record = entries[key] ?: return
-        if (record.summaryOnly) {
-            scheduleRemoval(record, key)
+        // 使用FloatingWindowManager管理条目状态
+        val entry = floatingWindowManager.getEntry(key)
+        if (entry == null) {
             return
         }
-        showExpanded(record)
-        scheduleCollapse(record)
-        scheduleRemoval(record, key)
-    }
-
-    private fun showExpanded(record: EntryRecord) {
-        if (record.isExpanded) return
-        crossfade(record.summaryView, record.expandedView)
-        record.isExpanded = true
-    }
-
-    private fun showSummary(record: EntryRecord) {
-        if (!record.isExpanded) return
-        crossfade(record.expandedView, record.summaryView)
-        record.isExpanded = false
-    }
-
-    private fun crossfade(fromView: View, toView: View) {
-        try {
-            // 取消可能存在的动画
-            fromView.animate()?.cancel()
-            toView.animate()?.cancel()
-
-            val density = getDensity(fromView.context)
-            val up = 4f * density
-
-            // 以上边框为基准进行缩放
-            fromView.pivotY = 0f
-            toView.pivotY = 0f
-
-            // 准备目标视图（向上边框缩 + 渐入）
-            toView.alpha = 0f
-            toView.scaleX = 0.96f
-            toView.scaleY = 0.96f
-            toView.translationY = -up
-            toView.visibility = View.VISIBLE
-
-            // 淡出 + 向上边框缩
-            fromView.animate()
-                .alpha(0f)
-                .scaleX(0.96f)
-                .scaleY(0.96f)
-                .translationY(-up)
-                .setDuration(TRANSITION_DURATION_MS)
-                .withEndAction {
-                    fromView.visibility = View.GONE
-                    fromView.alpha = 1f
-                    fromView.scaleX = 1f
-                    fromView.scaleY = 1f
-                    fromView.translationY = 0f
-                }
-                .start()
-
-            // 淡入 + 回弹
-            toView.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .translationY(0f)
-                .setDuration(TRANSITION_DURATION_MS)
-                .start()
-
-            // 同步圆角过渡（在容器背景上）
-            val parent = (fromView.parent as? View)
-            val bg = parent?.background as? GradientDrawable
-            if (bg != null) {
-                val dens = getDensity(fromView.context)
-                val expandedR = 16f * dens
-                val summaryR = 999f
-                val toIsExpanded = (toView.tag == "state_expanded")
-                val startR = if (toIsExpanded) summaryR else expandedR
-                val endR = if (toIsExpanded) expandedR else summaryR
-                val animator = ValueAnimator.ofFloat(startR, endR).apply {
-                    duration = TRANSITION_DURATION_MS
-                    addUpdateListener { a ->
-                        val r = a.animatedValue as Float
-                        bg.cornerRadius = r
-                    }
-                }
-                animator.start()
-            }
-        } catch (_: Exception) {
-            // 回退：无动画切换
-            fromView.visibility = View.GONE
-            toView.visibility = View.VISIBLE
-            fromView.alpha = 1f
-            fromView.scaleX = 1f
-            fromView.scaleY = 1f
-            fromView.translationY = 0f
-            toView.alpha = 1f
-            toView.scaleX = 1f
-            toView.scaleY = 1f
-            toView.translationY = 0f
+        
+        if (entry.summaryOnly) {
+            // 如果是摘要态，直接移除
+            floatingWindowManager.removeEntry(key)
+            return
         }
+        
+        // 切换展开/折叠状态
+        floatingWindowManager.toggleEntryExpanded(key)
+        
+        // 暂不处理自动折叠和移除，这些逻辑将在Compose中实现
     }
+
+    // 移除传统的视图管理方法，这些功能现在由Compose处理
+    // private fun showExpanded(record: EntryRecord)
+    // private fun showSummary(record: EntryRecord)
+    // private fun crossfade(fromView: View, toView: View)
 
     private fun createEntryBackground(context: Context, isExpanded: Boolean): GradientDrawable {
         // 优化：使用缓存避免重复创建GradientDrawable
@@ -850,23 +694,9 @@ object FloatingReplicaManager {
         record.collapseRunnable = null
     }
 
-    private fun scheduleCollapse(record: EntryRecord, delayMs: Long = EXPANDED_DURATION_MS) {
-        record.collapseRunnable?.let { handler.removeCallbacks(it) }
-        val runnable = Runnable {
-            if (!entries.containsKey(record.key)) return@Runnable
-            showSummary(record)
-            record.collapseRunnable = null
-        }
-        record.collapseRunnable = runnable
-        handler.postDelayed(runnable, delayMs)
-    }
-
-    private fun scheduleRemoval(record: EntryRecord, key: String, delayMs: Long = AUTO_DISMISS_DURATION_MS) {
-        record.removalRunnable?.let { handler.removeCallbacks(it) }
-        val runnable = Runnable { removeEntry(key) }
-        record.removalRunnable = runnable
-        handler.postDelayed(runnable, delayMs)
-    }
+    // 移除传统的自动折叠和移除方法，这些功能现在由Compose处理
+    // private fun scheduleCollapse(record: EntryRecord, delayMs: Long = EXPANDED_DURATION_MS)
+    // private fun scheduleRemoval(record: EntryRecord, key: String, delayMs: Long = AUTO_DISMISS_DURATION_MS)
 
     private fun removeEntry(key: String) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -874,45 +704,48 @@ object FloatingReplicaManager {
             return
         }
 
-        val record = entries.remove(key) ?: return
+        // 使用FloatingWindowManager移除条目
+        floatingWindowManager.removeEntry(key)
         
-        // 清理所有Runnable
-        record.collapseRunnable?.let { handler.removeCallbacks(it) }
-        record.removalRunnable?.let { handler.removeCallbacks(it) }
+        // 清理传统entries映射
+        val record = entries.remove(key)
         
         // 清理视图资源
-        try {
-            // 取消所有可能的动画
-            record.expandedView.animate()?.cancel()
-            record.summaryView.animate()?.cancel()
-            
-            // 简化：只移除必要的监听器
-            record.container.setOnTouchListener(null)
-            record.container.setOnClickListener(null)
-            
-            // 移除视图
-            stackContainer?.get()?.removeView(record.container)
-            
-            // 清理视图的背景
-            record.expandedView.background = null
-            record.summaryView.background = null
-            record.container.background = null
-            
-            // 移除所有子视图，确保资源被释放
-            record.container.removeAllViews()
-            
-            // 确保视图被完全分离，避免内存泄漏
-            detachFromParent(record.expandedView)
-            detachFromParent(record.summaryView)
-            
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 移除浮窗条目资源失败: ${e.message}")
+        if (record != null) {
+            try {
+                // 取消所有可能的动画
+                record.expandedView.animate()?.cancel()
+                record.summaryView.animate()?.cancel()
+                
+                // 简化：只移除必要的监听器
+                record.container.setOnTouchListener(null)
+                record.container.setOnClickListener(null)
+                
+                // 移除视图
+                val parentContainer = overlayView?.get() as? ViewGroup
+                parentContainer?.removeView(record.container)
+                
+                // 清理视图的背景
+                record.expandedView.background = null
+                record.summaryView.background = null
+                record.container.background = null
+                
+                // 移除所有子视图，确保资源被释放
+                record.container.removeAllViews()
+                
+                // 确保视图被完全分离，避免内存泄漏
+                detachFromParent(record.expandedView)
+                detachFromParent(record.summaryView)
+                
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) {
+                    Log.w(TAG, "超级岛: 移除浮窗条目资源失败: ${e.message}")
+                }
+            } finally {
+                // 确保所有Runnable引用被清空
+                record.collapseRunnable = null
+                record.removalRunnable = null
             }
-        } finally {
-            // 确保所有Runnable引用被清空
-            record.collapseRunnable = null
-            record.removalRunnable = null
         }
         
         if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 自动移除浮窗条目 key=$key")
@@ -923,7 +756,10 @@ object FloatingReplicaManager {
     // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
     fun dismissBySource(sourceId: String) {
         try {
-            removeEntry(sourceId)
+            // 使用FloatingWindowManager移除条目
+            floatingWindowManager.removeEntry(sourceId)
+            // 清理传统entries映射
+            entries.remove(sourceId)
             // 如果对应的会话结束（SI_END），同步移除黑名单，允许后续同一通知重新展示
             blockedInstanceIds.remove(sourceId)
         } catch (_: Exception) {}
@@ -941,16 +777,7 @@ object FloatingReplicaManager {
     }
 
     private fun attachDragHandler(target: View, context: Context) {
-        val params = overlayLayoutParams
-        val wm = windowManager?.get()
-        val root = overlayView?.get()
-        if (params != null && wm != null && root != null) {
-            // 这里的 tag 保存的是 entryKey，一般等于 instanceId/sourceId
-            val entryKey = (target.tag as? String)
-            target.setOnTouchListener(FloatingTouchListener(params, wm, root, context, entryKey))
-        } else {
-            target.setOnTouchListener(null)
-        }
+        // 移除传统的拖拽处理逻辑，拖拽功能现在由Compose处理
     }
 
     // 显示全屏关闭层，底部中心有关闭指示器
@@ -992,8 +819,11 @@ object FloatingReplicaManager {
                 contentDescription = "close_overlay_target"
                 setOnClickListener {
                     // 点击关闭按钮时，移除所有浮窗条目
-                    entries.keys.toList().forEach { key ->
-                        removeEntry(key)
+                    // 使用FloatingWindowManager移除所有条目
+                    floatingWindowManager.clearAllEntries()
+                    // 清理传统entries映射
+                    entries.keys.toList().forEach {
+                        entries.remove(it)
                     }
                     // 隐藏全屏关闭层
                     hideCloseOverlay()

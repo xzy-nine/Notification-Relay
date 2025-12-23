@@ -26,6 +26,11 @@ class FloatingWindowManager {
         val timestamp: Long
     )
     
+    // 获取条目
+    fun getEntry(key: String): FloatingEntry? {
+        return entriesMap[key]?.entry
+    }
+    
     /**
      * 添加或更新浮窗条目
      */
