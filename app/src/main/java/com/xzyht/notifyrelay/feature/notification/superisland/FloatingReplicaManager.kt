@@ -246,8 +246,7 @@ object FloatingReplicaManager {
                         }
                     }
                     
-                    // 移除传统的View创建和添加逻辑，完全使用Compose渲染
-                    // 直接调用addOrUpdateEntry来确保Compose容器被正确创建
+                    // 调用addOrUpdateEntry来确保Compose容器被正确创建
                     // 注意：这里传入的是占位View，实际渲染由Compose负责
                     val placeholderView = View(context)
                     addOrUpdateEntry(
@@ -545,6 +544,8 @@ object FloatingReplicaManager {
             val stack = stackContainer?.get()
             if (stack == null) {
                 // 如果stackContainer为null，说明使用了Compose容器
+                // 清理传统entries映射中的旧条目，避免内存泄漏
+                entries.remove(key)
                 // 此时不需要添加传统View，直接返回
                 return
             }
@@ -554,8 +555,11 @@ object FloatingReplicaManager {
                 if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key")
                 // 清理旧条目，让FloatingWindowManager重新管理
                 entries.remove(key)
-                // 直接返回，让新条目替换旧条目
-                return
+                // 移除旧视图
+                stack.removeView(existing.container)
+                // 取消相关任务
+                existing.collapseRunnable?.let { handler.removeCallbacks(it) }
+                existing.removalRunnable?.let { handler.removeCallbacks(it) }
             }
 
             val container = object : FrameLayout(context) {
@@ -624,18 +628,21 @@ object FloatingReplicaManager {
 
             stack.addView(container, 0)
 
-            val record = EntryRecord(
-                key = key,
-                container = container,
-                expandedView = expandedView,
-                summaryView = summaryView,
-                summaryOnly = summaryOnly,
-                isExpanded = !summaryOnly
-            )
-            entries[key] = record
-            record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
-            record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 新增浮窗条目 key=$key")
+            // 只有当使用传统渲染时，才将条目添加到entries映射中
+            if (stack != null) {
+                val record = EntryRecord(
+                    key = key,
+                    container = container,
+                    expandedView = expandedView,
+                    summaryView = summaryView,
+                    summaryOnly = summaryOnly,
+                    isExpanded = !summaryOnly
+                )
+                entries[key] = record
+                record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
+                record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
+                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 新增浮窗条目 key=$key")
+            }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
         }
@@ -746,7 +753,7 @@ object FloatingReplicaManager {
             }
         }
         
-        // 清理视图资源
+        // 清理传统视图资源（仅当使用传统渲染时才需要）
         if (record != null) {
             try {
                 // 取消所有可能的动画
@@ -756,10 +763,6 @@ object FloatingReplicaManager {
                 // 简化：只移除必要的监听器
                 record.container.setOnTouchListener(null)
                 record.container.setOnClickListener(null)
-                
-                // 移除视图
-                val parentContainer = overlayView?.get() as? ViewGroup
-                parentContainer?.removeView(record.container)
                 
                 // 清理视图的背景
                 record.expandedView.background = null

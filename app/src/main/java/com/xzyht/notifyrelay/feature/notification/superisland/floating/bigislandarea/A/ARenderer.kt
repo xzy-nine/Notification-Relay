@@ -42,9 +42,16 @@ fun buildAView(context: Context, component: AComponent, picMap: Map<String, Stri
         // 避免重复尝试主键
         val finalList = if (!primaryKey.isNullOrBlank()) candidates.filterNot { it.equals(primaryKey, true) } else candidates
 
+        // 3) 遍历所有候选图标，尝试加载
         for (k in finalList) {
             if (ImageLoader.loadKeyInto(iv, picMapLocal, k)) return true
         }
+
+        // 4) 所有候选图标都加载失败时，尝试加载 miui.focus.pic_app_icon 作为兜底
+        if (!primaryKey.equals("miui.focus.pic_app_icon", true)) {
+            if (ImageLoader.loadKeyInto(iv, picMapLocal, "miui.focus.pic_app_icon")) return true
+        }
+
         return false
     }
 
