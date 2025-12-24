@@ -182,7 +182,8 @@ object NotificationProcessor {
                         text = mText?.takeIf { it.isNotBlank() },
                         paramV2Raw = mParam2?.takeIf { it.isNotBlank() },
                         picMap = mPics.toMap(),
-                        rawPayload = decrypted
+                        rawPayload = decrypted,
+                        featureId = featureId // 传递特征ID，用于去重
                     )
                     try {
                         SuperIslandHistory.append(context, historyEntry)
@@ -194,7 +195,8 @@ object NotificationProcessor {
                                 sourceDeviceUuid = remoteUuid,
                                 originalPackage = pkg,
                                 mappedPackage = mappedPkg,
-                                rawPayload = decrypted
+                                rawPayload = decrypted,
+                                featureId = featureId // 传递特征ID，用于去重
                             )
                         )
                     }

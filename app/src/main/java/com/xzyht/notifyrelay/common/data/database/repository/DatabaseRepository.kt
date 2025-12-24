@@ -144,6 +144,7 @@ class DatabaseRepository(private val database: AppDatabase) {
     
     /**
      * 获取所有超级岛历史记录（摘要）——不加载 rawPayload，避免占用大量内存
+     * 包含所有记录，不进行去重，用于调试
      */
     suspend fun getSuperIslandHistory(): List<SuperIslandHistoryEntity> {
         // 使用只读取小字段的摘要查询，然后构造实体（rawPayload 设为 null）
@@ -159,9 +160,28 @@ class DatabaseRepository(private val database: AppDatabase) {
                 text = s.text,
                 paramV2Raw = s.paramV2Raw,
                 picMap = s.picMap,
-                rawPayload = null
+                rawPayload = null,
+                featureId = s.featureId
             )
         }
+    }
+    
+    /**
+     * 获取每个特征ID对应的最新一条超级岛历史记录
+     * 用于去重显示，避免重复数据
+     */
+    suspend fun getLatestSuperIslandHistoryByFeature(): List<SuperIslandHistoryEntity> {
+        // 直接使用数据库层面的去重查询
+        return superIslandHistoryDao.getLatestByDistinctFeatureId()
+    }
+    
+    // 删除不需要的isSameContent方法，因为现在使用数据库层面的去重
+    
+    /**
+     * 根据特征ID获取最新的超级岛历史记录
+     */
+    suspend fun getLatestSuperIslandHistoryByFeatureId(featureId: String): SuperIslandHistoryEntity? {
+        return superIslandHistoryDao.getLatestByFeatureId(featureId)
     }
     
     /**
@@ -197,6 +217,20 @@ class DatabaseRepository(private val database: AppDatabase) {
      */
     suspend fun getRawPayloadById(id: Long): String? {
         return superIslandHistoryDao.getRawPayloadById(id)
+    }
+    
+    /**
+     * 删除旧的超级岛历史记录，只保留最新的指定数量记录
+     */
+    suspend fun deleteOldSuperIslandHistory(keepCount: Int) {
+        superIslandHistoryDao.deleteOldestRecords(keepCount)
+    }
+    
+    /**
+     * 删除单条超级岛历史记录
+     */
+    suspend fun deleteSuperIslandHistory(history: SuperIslandHistoryEntity) {
+        superIslandHistoryDao.delete(history)
     }
     
 

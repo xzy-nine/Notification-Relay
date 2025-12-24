@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
         NotificationRecordEntity::class,
         SuperIslandHistoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                         }
                     }
                 })
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { INSTANCE = it }
             }
         }
@@ -110,6 +110,21 @@ abstract class AppDatabase : RoomDatabase() {
                 
                 // 5. 重命名新表
                 database.execSQL("ALTER TABLE notification_records_new RENAME TO notification_records")
+            }
+        }
+        
+        /**
+         * 数据库迁移：从版本2到版本3
+         * 为super_island_history表添加featureId字段和相关索引
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // 1. 为super_island_history表添加featureId字段
+                database.execSQL("ALTER TABLE super_island_history ADD COLUMN featureId TEXT")
+                
+                // 2. 创建索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_super_island_feature_id ON super_island_history(featureId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_super_island_device_feature ON super_island_history(sourceDeviceUuid, featureId)")
             }
         }
         

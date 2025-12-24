@@ -12,5 +12,6 @@ data class SuperIslandHistorySummary(
     val title: String? = null,
     val text: String? = null,
     val paramV2Raw: String? = null,
-    val picMap: String = "{}"
+    val picMap: String = "{}",
+    val featureId: String? = null // 特征ID，用于标识同一座“岛”的一次会话
 )
