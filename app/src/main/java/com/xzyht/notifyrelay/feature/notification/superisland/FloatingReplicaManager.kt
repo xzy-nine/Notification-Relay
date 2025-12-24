@@ -3,26 +3,20 @@ package com.xzyht.notifyrelay.feature.notification.superisland
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.PixelFormat
 import android.net.Uri
 import android.os.Build
-import android.os.Looper
 import android.provider.Settings
-import android.util.Log
-import java.lang.ref.WeakReference
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
-import android.graphics.PixelFormat
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingComposeContainer
-import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingComposeContainer
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.FloatingWindowManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.LifecycleManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
@@ -31,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -100,11 +95,12 @@ object FloatingReplicaManager {
         try {
             // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
             if (sourceId.isNotBlank() && isInstanceBlocked(sourceId)) {
-                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
+                Logger.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
                 return
             }
 
             if (!canShowOverlay(context)) {
+                Logger.i(TAG, "超级岛: 无悬浮窗权限，尝试请求权限")
                 requestOverlayPermission(context)
                 return
             }
@@ -160,11 +156,11 @@ object FloatingReplicaManager {
                     // 创建或更新浮窗UI
                     addOrUpdateEntry(context, entryKey, summaryOnly)
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${e.message}")
+                    Logger.w(TAG, "超级岛: 显示浮窗失败(协程): ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
+            Logger.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
         }
     }
 
@@ -174,19 +170,21 @@ object FloatingReplicaManager {
         if (instanceId.isNullOrBlank()) return false
         val now = System.currentTimeMillis()
         val ts = blockedInstanceIds[instanceId] ?: return false
-        // 超过过期时间则自动移除黑名单
+        // 检查是否超过过期时间
         if (now - ts > BLOCK_EXPIRE_MS) {
             blockedInstanceIds.remove(instanceId)
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 屏蔽过期，自动移除 instanceId=$instanceId")
+            Logger.i(TAG, "超级岛: 屏蔽过期，自动移除 instanceId=$instanceId")
             return false
         }
+        // 如果会话仍在活跃（有新请求），更新屏蔽时间，让屏蔽继续保持
+        blockedInstanceIds[instanceId] = now
         return true
     }
 
     private fun blockInstance(instanceId: String?) {
         if (instanceId.isNullOrBlank()) return
         blockedInstanceIds[instanceId] = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 会话级屏蔽 instanceId=$instanceId")
+        Logger.i(TAG, "超级岛: 会话级屏蔽 instanceId=$instanceId")
     }
 
     // 兼容空值的 param_v2 解析包装，避免在调用点产生空值分支和推断问题
@@ -338,23 +336,17 @@ object FloatingReplicaManager {
                             // 执行振动反馈
                             try {
                                 HapticFeedbackUtils.performLightHaptic(context)
-                                if (BuildConfig.DEBUG) {
-                                    Log.i(TAG, "超级岛: 执行振动反馈 - Key: ${entry.key}")
-                                }
+                                Logger.i(TAG, "超级岛: 执行振动反馈 - Key: ${entry.key}")
                             } catch (e: Exception) {
-                                if (BuildConfig.DEBUG) {
-                                    Log.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
-                                }
+                                Logger.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 更新条目重叠状态失败: ${e.message}")
-                e.printStackTrace()
-            }
+            Logger.w(TAG, "超级岛: 更新条目重叠状态失败: ${e.message}")
+               e.printStackTrace()
         }
     }
     
@@ -381,10 +373,8 @@ object FloatingReplicaManager {
             val estimatedEntryHeight = 150f * density
             
             // 添加调试日志，便于检查关闭区和容器位置
-            if (BuildConfig.DEBUG) {
-                Log.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
-                Log.i(TAG, "超级岛: 容器位置 - X: $containerX, Y: $containerY, Width: $containerWidth")
-            }
+            Logger.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
+            Logger.i(TAG, "超级岛: 容器位置 - X: $containerX, Y: $containerY, Width: $containerWidth")
             
             // 检查关闭区是否已经初始化（非默认值）
             if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
@@ -404,9 +394,7 @@ object FloatingReplicaManager {
                 val isHorizontallyOverlapping = entryCenterX > closeAreaLeft && entryCenterX < closeAreaRight
                 
                 // 添加调试日志
-                if (BuildConfig.DEBUG) {
-                    Log.i(TAG, "超级岛: 条目重叠检测 - Key: ${entry.key}, Index: $index, 垂直重叠: $isVerticallyOverlapping, 水平重叠: $isHorizontallyOverlapping")
-                }
+                Logger.i(TAG, "超级岛: 条目重叠检测 - Key: ${entry.key}, Index: $index, 垂直重叠: $isVerticallyOverlapping, 水平重叠: $isHorizontallyOverlapping")
                 
                 // 如果条目与关闭区重叠
                 if (isVerticallyOverlapping && isHorizontallyOverlapping) {
@@ -416,20 +404,18 @@ object FloatingReplicaManager {
                         // 执行振动反馈
                         try {
                             HapticFeedbackUtils.performLightHaptic(context)
-                            if (BuildConfig.DEBUG) {
-                                Log.i(TAG, "超级岛: 执行振动反馈")
-                            }
+                            Logger.i(TAG, "超级岛: 执行振动反馈")
                         } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) {
-                                Log.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
-                            }
+                            Logger.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
                         }
                     }
                     
                     // 关闭重叠的条目
-                    if (BuildConfig.DEBUG) {
-                        Log.i(TAG, "超级岛: 关闭重叠条目 - Key: ${entry.key}")
-                    }
+                    Logger.i(TAG, "超级岛: 关闭重叠条目 - Key: ${entry.key}")
+
+                    // 添加会话级屏蔽，避免用户刚关闭就再次弹出
+                    blockInstance(entry.key)
+                    
                     floatingWindowManager.removeEntry(entry.key)
                     
                     // 只关闭一个重叠条目，然后退出循环
@@ -437,10 +423,7 @@ object FloatingReplicaManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 检查条目与关闭区重叠失败: ${e.message}")
-                e.printStackTrace()
-            }
+            Logger.w(TAG, "超级岛: 检查条目与关闭区重叠失败: ${e.message}")
         }
     }
     
@@ -483,6 +466,10 @@ object FloatingReplicaManager {
                 contentDescription = "close_overlay_target"
                 setOnClickListener {
                     // 点击关闭按钮时，移除所有浮窗条目
+                    // 为每个条目添加会话级屏蔽
+                    floatingWindowManager.entriesList.forEach { entry ->
+                        blockInstance(entry.key)
+                    }
                     floatingWindowManager.clearAllEntries()
                     // 隐藏全屏关闭层
                     hideCloseOverlay(context)
@@ -512,9 +499,7 @@ object FloatingReplicaManager {
             closeAreaBottom = closeAreaTop + closeAreaSize
             
             // 添加调试日志，便于检查关闭区位置
-            if (BuildConfig.DEBUG) {
-                Log.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
-            }
+            Logger.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
             
             // 使用ValueAnimator实现淡入动画
             android.animation.ValueAnimator.ofFloat(0.7f, 1.0f).apply {
@@ -525,9 +510,7 @@ object FloatingReplicaManager {
                 start()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 显示关闭层失败: ${e.message}")
-            }
+            Logger.w(TAG, "超级岛: 显示关闭层失败: ${e.message}")
             // 清理资源
             try {
                 container.removeAllViews()
@@ -546,13 +529,9 @@ object FloatingReplicaManager {
         
         try {
             wm.removeView(view)
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "超级岛: 关闭层已隐藏")
-            }
+            Logger.d(TAG, "超级岛: 关闭层已隐藏")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 隐藏关闭层失败: ${e.message}")
-            }
+            Logger.w(TAG, "超级岛: 隐藏关闭层失败: ${e.message}")
         } finally {
             // 无论移除是否成功，都置空全局引用，避免内存泄漏
             closeTargetView = null
@@ -587,6 +566,9 @@ object FloatingReplicaManager {
      */
     private fun removeOverlayContainer() {
         try {
+            // 关闭关闭层，确保在移除浮窗容器前清理
+            hideCloseOverlay()
+            
             val view = overlayView?.get()
             val wm = windowManager?.get()
             val lp = overlayLayoutParams
@@ -594,7 +576,7 @@ object FloatingReplicaManager {
             if (view != null && wm != null && lp != null) {
                 // 移除浮窗容器
                 wm.removeView(view)
-                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已移除")
+                Logger.i(TAG, "超级岛: 浮窗容器已移除")
                 
                 // 清理资源
                 overlayView = null
@@ -610,11 +592,13 @@ object FloatingReplicaManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 移除浮窗容器失败: ${e.message}")
+            Logger.w(TAG, "超级岛: 移除浮窗容器失败: ${e.message}")
             // 即使移除失败，也要清理资源引用，避免内存泄漏
             overlayView = null
             overlayLayoutParams = null
             windowManager = null
+            // 确保关闭层被清理
+            hideCloseOverlay()
         }
     }
     
@@ -658,7 +642,7 @@ object FloatingReplicaManager {
                             y = 100
                         }
 
-                        // 使用Compose容器替代传统的FrameLayout和LinearLayout
+            // 使用Compose容器替代传统的FrameLayout和LinearLayout
             val composeContainer = FloatingComposeContainer(context).apply {
                 val padding = (12 * density).toInt()
                 setPadding(padding, padding, padding, padding)
@@ -684,20 +668,20 @@ object FloatingReplicaManager {
                             wm.addView(composeContainer, layoutParams)
                             added = true
                         } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
+                            Logger.w(TAG, "超级岛: addView 失败: ${e.message}")
                         }
                         if (added) {
                             overlayView = WeakReference(composeContainer)
                             overlayLayoutParams = layoutParams
                             windowManager = WeakReference(wm)
-                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
+                            Logger.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
                         }
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
+                        Logger.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
                     }
                 }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
+            Logger.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
         }
     }
 
@@ -715,7 +699,7 @@ object FloatingReplicaManager {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
+            Logger.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
         }
     }
 
@@ -734,7 +718,7 @@ object FloatingReplicaManager {
                 val bmp = withContext(Dispatchers.IO) { downloadBitmap(context, resolved, 5000) }
                 if (bmp != null) return bmp
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
+                Logger.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             }
         }
         return null
@@ -744,7 +728,7 @@ object FloatingReplicaManager {
         return try {
             ImageLoader.loadBitmapSuspend(context, url, timeoutMs)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
+            Logger.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             null
         }
     }
