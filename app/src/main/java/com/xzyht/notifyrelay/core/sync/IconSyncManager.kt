@@ -3,15 +3,13 @@ package com.xzyht.notifyrelay.core.sync
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -46,13 +44,13 @@ object IconSyncManager {
     ) {
         val exist = AppRepository.getExternalAppIcon(packageName)
         if (exist != null) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "图标已存在，跳过：$packageName")
+            Logger.d(TAG, "图标已存在，跳过：$packageName")
             return
         }
         val now = System.currentTimeMillis()
         val last = pendingRequests[packageName]
         if (last != null && (now - last) < ICON_REQUEST_TIMEOUT) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "单图标请求进行中，跳过：$packageName")
+            Logger.d(TAG, "单图标请求进行中，跳过：$packageName")
             return
         }
         pendingRequests[packageName] = now
@@ -60,7 +58,7 @@ object IconSyncManager {
             try {
                 requestIconsFromDevice(context, listOf(packageName), deviceManager, sourceDevice)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "请求图标失败：$packageName", e)
+                Logger.e(TAG, "请求图标失败：$packageName", e)
             } finally {
                 pendingRequests.remove(packageName)
             }
@@ -76,6 +74,7 @@ object IconSyncManager {
         deviceManager: DeviceConnectionManager,
         sourceDevice: DeviceInfo
     ) {
+        Logger.d(TAG, "批量请求图标：$packageNames")
         if (packageNames.isEmpty()) return
         val now = System.currentTimeMillis()
         val need = packageNames.filter { pkg ->
@@ -90,7 +89,7 @@ object IconSyncManager {
             try {
                 requestIconsFromDevice(context, need, deviceManager, sourceDevice)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "批量请求失败：$need", e)
+                Logger.e(TAG, "批量请求失败：$need", e)
             } finally {
                 need.forEach { pendingRequests.remove(it) }
             }
@@ -117,7 +116,7 @@ object IconSyncManager {
             put("time", System.currentTimeMillis())
         }.toString()
         ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_REQUEST", json, ICON_REQUEST_TIMEOUT)
-        if (BuildConfig.DEBUG) Log.d(TAG, "发送ICON_REQUEST(${packages.size}) -> ${sourceDevice.displayName}")
+        Logger.d(TAG, "发送ICON_REQUEST(${packages.size}) -> ${sourceDevice.displayName}")
     }
 
     /**
@@ -151,7 +150,7 @@ object IconSyncManager {
                     resultArr.put(item)
                 }
                 if (resultArr.length() == 0) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "批量请求均无可用图标，忽略")
+                    Logger.d(TAG, "批量请求均无可用图标，忽略")
                     return
                 }
                 val resp = JSONObject().apply {
@@ -160,11 +159,11 @@ object IconSyncManager {
                     put("time", System.currentTimeMillis())
                 }.toString()
                 ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_RESPONSE", resp, ICON_REQUEST_TIMEOUT)
-                if (BuildConfig.DEBUG) Log.d(TAG, "批量图标响应发送(${resultArr.length()}) -> ${sourceDevice.displayName}")
+                Logger.d(TAG, "批量图标响应发送(${resultArr.length()}) -> ${sourceDevice.displayName}")
             } else if (single.isNotEmpty()) {
                 val icon = getLocalAppIcon(context, single)
                 if (icon == null) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "本地无图标：$single")
+                    Logger.d(TAG, "本地无图标：$single")
                     return
                 }
                 val resp = JSONObject().apply {
@@ -174,10 +173,10 @@ object IconSyncManager {
                     put("time", System.currentTimeMillis())
                 }.toString()
                 ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_RESPONSE", resp, ICON_REQUEST_TIMEOUT)
-                if (BuildConfig.DEBUG) Log.d(TAG, "单图标响应发送：$single -> ${sourceDevice.displayName}")
+                Logger.d(TAG, "单图标响应发送：$single -> ${sourceDevice.displayName}")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "处理ICON_REQUEST异常", e)
+            Logger.e(TAG, "处理ICON_REQUEST异常", e)
         }
     }
 
@@ -197,7 +196,7 @@ object IconSyncManager {
                     val base64 = item.optString("iconData")
                     cacheDecodedIcon(pkg, base64)
                 }
-                if (BuildConfig.DEBUG) Log.d(TAG, "批量图标接收完成：${iconsArray.length()}")
+                Logger.d(TAG, "批量图标接收完成：${iconsArray.length()}")
                 return
             }
 
@@ -205,10 +204,10 @@ object IconSyncManager {
             val base64 = json.optString("iconData")
             if (pkg.isNotEmpty() && base64.isNotEmpty()) {
                 cacheDecodedIcon(pkg, base64)
-                if (BuildConfig.DEBUG) Log.d(TAG, "单图标接收：$pkg")
+                Logger.d(TAG, "单图标接收：$pkg")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "处理ICON_RESPONSE异常", e)
+            Logger.e(TAG, "处理ICON_RESPONSE异常", e)
         }
     }
 
@@ -218,7 +217,7 @@ object IconSyncManager {
             val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return
             AppRepository.cacheExternalAppIcon(packageName, bmp)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "图标解码失败：$packageName", e)
+            Logger.w(TAG, "图标解码失败：$packageName", e)
         }
     }
 
@@ -247,7 +246,7 @@ object IconSyncManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "获取本地图标失败：$packageName", e)
+            Logger.w(TAG, "获取本地图标失败：$packageName", e)
             null
         }
     }
@@ -256,7 +255,7 @@ object IconSyncManager {
         val now = System.currentTimeMillis()
         pendingRequests.entries.removeIf { (pkg, t) ->
             val expired = (now - t) > ICON_REQUEST_TIMEOUT * 2
-            if (expired && BuildConfig.DEBUG) Log.d(TAG, "清理过期请求：$pkg")
+            if (expired) Logger.d(TAG, "清理过期请求：$pkg")
             expired
         }
     }

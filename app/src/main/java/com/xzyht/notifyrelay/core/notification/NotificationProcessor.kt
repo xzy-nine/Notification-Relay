@@ -3,9 +3,10 @@ package com.xzyht.notifyrelay.core.notification
 import android.content.Context
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
-import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
@@ -57,12 +58,12 @@ object NotificationProcessor {
             try {
                 manager.decryptDataInternal(data, sharedSecret)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "解密失败: ${e.message}")
+                Logger.e(TAG, "解密失败: ${e.message}")
                 data
             }
         } else data
 
-        if (BuildConfig.DEBUG) Log.d(TAG, "处理通知数据: $decrypted")
+        Logger.d(TAG, "处理通知数据: $decrypted")
 
         // 2. JSON 级别处理：超级岛协议 + NotificationRepository 写入
         handleJsonLevel(context, manager, decrypted, sharedSecret, remoteUuid)
@@ -73,10 +74,10 @@ object NotificationProcessor {
         // 4. 通知 UI 回调
         notificationCallbacks.forEach { callback ->
             try {
-                if (BuildConfig.DEBUG) Log.d(TAG, "调用UI层回调: $callback")
+                Logger.d(TAG, "调用UI层回调: $callback")
                 callback.invoke(decrypted)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "调用UI层回调失败: ${e.message}")
+                Logger.e(TAG, "调用UI层回调失败: ${e.message}")
             }
         }
     }
@@ -109,11 +110,11 @@ object NotificationProcessor {
                     NotificationRepository.addRemoteNotification(mappedPkg, appName, title, text, time, remoteUuid, context)
                     NotificationRepository.scanDeviceList(context)
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e(TAG, "存储远程通知失败: ${e.message}")
+                    Logger.e(TAG, "存储远程通知失败: ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "handleJsonLevel异常: ${e.message}")
+            Logger.e(TAG, "handleJsonLevel异常: ${e.message}")
         }
     }
 
@@ -145,7 +146,7 @@ object NotificationProcessor {
 
             // SI_ACK 属于超岛协议的确认包，仅用于可靠性确认，不应进入通知/聊天管线
             if (siType == "SI_ACK") {
-                if (BuildConfig.DEBUG) Log.i("超级岛", "收到超级岛ACK: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, hash=${try { json.optString("hash", "") } catch (_: Exception) { "" }}")
+                Logger.i("超级岛", "收到超级岛ACK: remoteUuid=$remoteUuid, pkg=$pkg, mappedPkg=$mappedPkg, hash=${try { json.optString("hash", "") } catch (_: Exception) { "" }}")
                 return true
             }
 
@@ -164,7 +165,7 @@ object NotificationProcessor {
                     try { FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
                     // 移除去重缓存
                     superIslandDeduplicationCache.remove(dedupKey)
-                    if (BuildConfig.DEBUG) Log.i("超级岛", "收到终止通知，移除去重缓存: $dedupKey")
+                    Logger.i("超级岛", "收到终止通知，移除去重缓存: $dedupKey")
                     return true
                 }
                 
@@ -176,15 +177,15 @@ object NotificationProcessor {
                 if (isLocked) {
                     // 检查是否已经处理过相同的超级岛通知
                     if (superIslandDeduplicationCache.contains(dedupKey)) {
-                        if (BuildConfig.DEBUG) Log.i("超级岛", "锁屏重复通知去重: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
+                        Logger.i("超级岛", "锁屏重复通知去重: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
                         return true // 跳过重复通知
                     } else {
                         // 立即添加到去重缓存，防止同一时间点的重复通知
                         superIslandDeduplicationCache.add(dedupKey)
-                        if (BuildConfig.DEBUG) Log.i("超级岛", "首次处理超级岛通知，添加到去重缓存: $dedupKey, title=${mTitle ?: "无标题"}")
+                        Logger.i("超级岛", "首次处理超级岛通知，添加到去重缓存: $dedupKey, title=${mTitle ?: "无标题"}")
                     }
                 } else {
-                    if (BuildConfig.DEBUG) Log.i("超级岛", "非锁屏状态，正常处理超级岛通知: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
+                    Logger.i("超级岛", "非锁屏状态，正常处理超级岛通知: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
                 }
                 
                 val merged = SuperIslandRemoteStore.applyIncoming(sourceKey, json)
@@ -204,7 +205,7 @@ object NotificationProcessor {
                     try {
                         FloatingReplicaManager.showFloating(context, sourceKey, finalTitle, finalText, mParam2, mPics, appName)
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
+                        Logger.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
                     }
                     
                     val historyEntry = SuperIslandHistoryEntry(
@@ -242,7 +243,7 @@ object NotificationProcessor {
                     // 如果合并失败，移除去重缓存，允许后续重试
                     if (isLocked) {
                         superIslandDeduplicationCache.remove(dedupKey)
-                        if (BuildConfig.DEBUG) Log.i("超级岛", "合并失败，移除去重缓存: $dedupKey")
+                        Logger.i("超级岛", "合并失败，移除去重缓存: $dedupKey")
                     }
                     return true
                 }
