@@ -201,12 +201,7 @@ object FloatingReplicaManager {
             return
         }
         
-        if (entry.summaryOnly) {
-            // 如果是摘要态，不允许点击展开/消失，直接返回
-            return
-        }
-        
-        // 切换展开/折叠状态
+        // 切换展开/折叠状态，toggleEntryExpanded内部会处理摘要态的情况
         floatingWindowManager.toggleEntryExpanded(key)
     }
 

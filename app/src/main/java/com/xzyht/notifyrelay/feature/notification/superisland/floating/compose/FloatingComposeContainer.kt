@@ -122,18 +122,27 @@ class FloatingComposeContainer @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                // 记录拖动开始时的坐标
-                isDragging = true
+                // 记录初始触摸位置
                 downX = event.rawX
                 downY = event.rawY
                 startX = windowLayoutParams?.x ?: 0
                 startY = windowLayoutParams?.y ?: 0
-                // 立即调用容器拖动开始回调，显示关闭层
-                onContainerDragStart?.invoke()
-                // 消费事件，确保能收到后续事件
-                return true
+                // 拖动状态初始化为false
+                isDragging = false
             }
             MotionEvent.ACTION_MOVE -> {
+                // 计算移动距离
+                val deltaX = Math.abs(event.rawX - downX)
+                val deltaY = Math.abs(event.rawY - downY)
+                val moveThreshold = 10f // 拖动阈值
+                
+                if (!isDragging && (deltaX > moveThreshold || deltaY > moveThreshold)) {
+                    // 超过拖动阈值，开始拖动
+                    isDragging = true
+                    // 调用容器拖动开始回调，显示关闭层
+                    onContainerDragStart?.invoke()
+                }
+                
                 if (isDragging) {
                     // 计算拖动的偏移量
                     val deltaX = (event.rawX - downX).toInt()
@@ -155,13 +164,16 @@ class FloatingComposeContainer @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
-                // 调用容器拖动结束回调
-                onContainerDragEnd?.invoke()
+                if (isDragging) {
+                    // 调用容器拖动结束回调
+                    onContainerDragEnd?.invoke()
+                }
                 // 结束拖动
                 isDragging = false
             }
         }
-        return false
+        // 只有在拖动时才消费事件，否则让事件传递到Compose内容中
+        return isDragging
     }
     
     // 条目点击回调

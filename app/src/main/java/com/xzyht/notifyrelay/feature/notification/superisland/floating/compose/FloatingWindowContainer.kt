@@ -73,11 +73,18 @@ fun FloatingWindowContainer(
         entries.forEach { entry ->
             // 使用key函数确保Compose能正确识别不同的条目，特别是当条目内容更新时
             key(entry.key) {
+                // 创建一个无交互源，用于移除点击效果
+                val interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                
                 Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onEntryClick(entry.key) }
-            ) {
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null, // 移除默认点击效果
+                            onClick = { onEntryClick(entry.key) }
+                        )
+                ) {
                 // 简化动画，避免闪烁
                 val expandedEnterTransition = slideInVertically {
                     // 从顶部滑入
@@ -205,18 +212,16 @@ fun FloatingWindowContainer(
                         }
                     }
                     
-                    // 添加重叠状态的视觉反馈：红色背景
-                    Box(
-                        modifier = Modifier
-                            .background(if (entry.isOverlapping) Color.Red.copy(alpha = 0.3f) else Color.Transparent)
-                    ) {
-                        SummaryAndroidView(
-                            bigIslandJson = bigIslandJson,
-                            picMap = entry.picMap,
-                            fallbackTitle = fallbackTitle,
-                            fallbackContent = fallbackContent
-                        )
-                    }
+                    // 直接显示摘要态内容，不添加额外的Box包装，避免方形背景
+                    // 将isOverlapping参数传递给SummaryAndroidView，让其内部处理背景色
+                    SummaryAndroidView(
+                        bigIslandJson = bigIslandJson,
+                        picMap = entry.picMap,
+                        fallbackTitle = fallbackTitle,
+                        fallbackContent = fallbackContent,
+                        isOverlapping = entry.isOverlapping,
+                        modifier = Modifier.padding(8.dp)
+                    )
                 }
                 // 闭合Box组件
                 }

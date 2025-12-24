@@ -17,6 +17,7 @@ fun SummaryAndroidView(
     picMap: Map<String, String>?,
     fallbackTitle: String?,
     fallbackContent: String?,
+    isOverlapping: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -30,6 +31,28 @@ fun SummaryAndroidView(
                 fallbackTitle = fallbackTitle,
                 fallbackContent = fallbackContent
             )
+        },
+        update = { view ->
+            // 当isOverlapping参数变化时，更新视图背景色
+            val density = view.context.resources.displayMetrics.density
+            
+            if (isOverlapping) {
+                // 设置重叠时的红色背景，保持圆角
+                view.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 999f // 圆角
+                    setColor(0xEEFF0000.toInt()) // 半透明红色
+                    setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+                }
+            } else {
+                // 恢复默认背景色
+                view.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 999f // 圆角
+                    setColor(0xCC000000.toInt()) // 半透明黑
+                    setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+                }
+            }
         },
         modifier = modifier
     )
