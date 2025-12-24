@@ -56,8 +56,12 @@ class FloatingWindowManager {
         business: String?
     ) {
         // 保留原有条目的isExpanded状态，其他属性使用新传入的值
+        // 如果是摘要态，强制设为非展开状态
         val existingEntry = entriesMap[key]?.entry
-        val finalIsExpanded = if (existingEntry != null) {
+        val finalIsExpanded = if (summaryOnly) {
+            // 如果是摘要态，强制设为非展开状态
+            false
+        } else if (existingEntry != null) {
             // 如果条目已存在，保留原有展开状态
             existingEntry.isExpanded
         } else {
@@ -184,6 +188,12 @@ class FloatingWindowManager {
         val entryWithTimestamp = entriesMap[key]
         if (entryWithTimestamp != null) {
             val currentEntry = entryWithTimestamp.entry
+            
+            // 如果是摘要态，不允许切换展开状态
+            if (currentEntry.summaryOnly) {
+                return
+            }
+            
             val isExpanded = !currentEntry.isExpanded
             
             // 取消之前的任务
@@ -197,8 +207,8 @@ class FloatingWindowManager {
             )
             entriesMap[key] = updatedWithTimestamp
             
-            // 如果切换到展开状态且不是摘要态，添加自动收起和自动移除任务
-            if (isExpanded && !updatedEntry.summaryOnly) {
+            // 如果切换到展开状态，添加自动收起和自动移除任务
+            if (isExpanded) {
                 scheduleCollapse(key, EXPANDED_DURATION_MS)
             }
             
@@ -217,10 +227,13 @@ class FloatingWindowManager {
         if (entryWithTimestamp != null) {
             val currentEntry = entryWithTimestamp.entry
             
+            // 如果是摘要态，不允许设置为展开状态
+            val finalIsExpanded = if (currentEntry.summaryOnly) false else isExpanded
+            
             // 取消之前的任务
             cancelAllTasks(key)
             
-            val updatedEntry = currentEntry.copy(isExpanded = isExpanded)
+            val updatedEntry = currentEntry.copy(isExpanded = finalIsExpanded)
             // 保留初始时间戳，只更新entry和timestamp
             val updatedWithTimestamp = entryWithTimestamp.copy(
                 entry = updatedEntry,
@@ -228,8 +241,8 @@ class FloatingWindowManager {
             )
             entriesMap[key] = updatedWithTimestamp
             
-            // 如果切换到展开状态且不是摘要态，添加自动收起任务
-            if (isExpanded && !updatedEntry.summaryOnly) {
+            // 如果切换到展开状态，添加自动收起任务
+            if (finalIsExpanded) {
                 scheduleCollapse(key, EXPANDED_DURATION_MS)
             }
             

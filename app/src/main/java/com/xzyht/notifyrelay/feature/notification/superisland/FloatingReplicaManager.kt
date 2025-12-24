@@ -675,8 +675,7 @@ object FloatingReplicaManager {
         }
         
         if (entry.summaryOnly) {
-            // 如果是摘要态，直接移除
-            floatingWindowManager.removeEntry(key)
+            // 如果是摘要态，不允许点击展开/消失，直接返回
             return
         }
         
