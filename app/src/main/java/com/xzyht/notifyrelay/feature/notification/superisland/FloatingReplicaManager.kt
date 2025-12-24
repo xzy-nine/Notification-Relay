@@ -43,7 +43,10 @@ object FloatingReplicaManager {
     private const val FIXED_WIDTH_DP = 320 // 固定悬浮窗宽度，以确保MultiProgressRenderer完整显示
 
     // Compose浮窗管理器
-    private val floatingWindowManager = FloatingWindowManager()
+    private val floatingWindowManager = FloatingWindowManager().apply {
+        // 设置条目为空时的回调
+        onEntriesEmpty = { removeOverlayContainer() }
+    }
     // Compose生命周期管理器
     private val lifecycleManager = LifecycleManager()
     // 提供给 Compose 的生命周期所有者（不依赖 ViewTree）
@@ -579,6 +582,42 @@ object FloatingReplicaManager {
         } catch (_: Exception) {}
     }
 
+    /**
+     * 移除浮窗容器
+     */
+    private fun removeOverlayContainer() {
+        try {
+            val view = overlayView?.get()
+            val wm = windowManager?.get()
+            val lp = overlayLayoutParams
+            
+            if (view != null && wm != null && lp != null) {
+                // 移除浮窗容器
+                wm.removeView(view)
+                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已移除")
+                
+                // 清理资源
+                overlayView = null
+                overlayLayoutParams = null
+                windowManager = null
+                
+                // 通知Compose生命周期管理器浮窗隐藏
+                lifecycleManager.onHide()
+                
+                // 调用生命周期所有者的onHide方法
+                overlayLifecycleOwner?.let {
+                    try { it.onHide() } catch (_: Exception) {}
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 移除浮窗容器失败: ${e.message}")
+            // 即使移除失败，也要清理资源引用，避免内存泄漏
+            overlayView = null
+            overlayLayoutParams = null
+            windowManager = null
+        }
+    }
+    
     /**
      * 添加或更新浮窗条目
      * @param context 上下文

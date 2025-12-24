@@ -54,6 +54,11 @@ fun FloatingWindowContainer(
 ) {
     val context = LocalContext.current
     
+    // 当entries列表为空时，不渲染任何内容，避免拦截触摸事件
+    if (entries.isEmpty()) {
+        return
+    }
+    
     Column(
         modifier = modifier.fillMaxWidth()
     ) {

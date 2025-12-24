@@ -29,6 +29,9 @@ class FloatingWindowManager {
     // 条目列表，用于Compose渲染
     val entriesList = mutableStateListOf<FloatingEntry>()
     
+    // 条目数量变化回调，当条目数量变为0时调用
+    var onEntriesEmpty: (() -> Unit)? = null
+    
     // 记录条目的内部数据类
     private data class EntryWithTimestamp(
         val entry: FloatingEntry,
@@ -315,6 +318,9 @@ class FloatingWindowManager {
      * 更新条目列表，确保顺序正确（最新的在底部）
      */
     private fun updateEntriesList() {
+        // 保存之前的条目数量
+        val previousSize = entriesList.size
+        
         // 清空列表
         entriesList.clear()
         // 按初始时间戳升序排序，最新的在底部
@@ -323,6 +329,13 @@ class FloatingWindowManager {
             .map { it.entry }
         // 添加到列表
         entriesList.addAll(sortedEntries)
+        
+        // 检查条目数量变化
+        val currentSize = entriesList.size
+        if (previousSize > 0 && currentSize == 0) {
+            // 如果之前有条目，现在变为空，调用回调
+            onEntriesEmpty?.invoke()
+        }
     }
     
     /**
