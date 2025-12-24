@@ -53,7 +53,10 @@ class FloatingWindowManager {
         picMap: Map<String, String>?,
         isExpanded: Boolean = false,
         summaryOnly: Boolean = false,
-        business: String?
+        business: String?,
+        title: String? = null,
+        text: String? = null,
+        appName: String? = null
     ) {
         // 保留原有条目的isExpanded状态，其他属性使用新传入的值
         // 如果是摘要态，强制设为非展开状态
@@ -77,7 +80,10 @@ class FloatingWindowManager {
             picMap = picMap,
             isExpanded = finalIsExpanded,
             summaryOnly = summaryOnly,
-            business = business
+            business = business,
+            title = title,
+            text = text,
+            appName = appName
         )
         
         // 取消之前的任务

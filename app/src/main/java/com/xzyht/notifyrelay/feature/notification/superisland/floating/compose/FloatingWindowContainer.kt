@@ -27,7 +27,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
@@ -43,7 +45,10 @@ data class FloatingEntry(
     val picMap: Map<String, String>?,
     val isExpanded: Boolean,
     val summaryOnly: Boolean,
-    val business: String?
+    val business: String?,
+    val title: String? = null,
+    val text: String? = null,
+    val appName: String? = null
 )
 
 /**
@@ -106,48 +111,74 @@ fun FloatingWindowContainer(
                     exit = expandedExitTransition
                 ) {
                     SuperIslandComposeRoot {
-                        entry.paramV2?.let { paramV2 ->
-                            when {
-                                paramV2.baseInfo != null -> {
-                                    BaseInfoCompose(paramV2.baseInfo, picMap = entry.picMap)
-                                }
-                                paramV2.chatInfo != null -> {
-                                    ChatInfoCompose(paramV2, picMap = entry.picMap)
-                                }
-                                paramV2.animTextInfo != null -> {
-                                    AnimTextInfoCompose(paramV2.animTextInfo, picMap = entry.picMap)
-                                }
-                                paramV2.highlightInfo != null -> {
-                                    HighlightInfoCompose(paramV2.highlightInfo, picMap = entry.picMap)
-                                }
-                                paramV2.picInfo != null -> {
-                                    PicInfoCompose(paramV2.picInfo, picMap = entry.picMap)
-                                }
-                                paramV2.hintInfo != null -> {
-                                    HintInfoCompose(paramV2.hintInfo, picMap = entry.picMap)
-                                }
-                                paramV2.textButton != null -> {
-                                    TextButtonCompose(paramV2.textButton, picMap = entry.picMap)
-                                }
-                                paramV2.paramIsland != null -> {
-                                    ParamIslandCompose(paramV2.paramIsland)
-                                }
-                                paramV2.actions?.isNotEmpty() == true -> {
-                                    ActionCompose(paramV2.actions, entry.picMap)
-                                }
-                                else -> {
-                                    // 默认模板：未支持的模板类型
-                                    Box(modifier = Modifier.padding(16.dp)) {
-                                        Text(text = "未支持的模板", color = Color.White)
+                        val hasParamV2 = entry.paramV2 != null
+                        
+                        if (hasParamV2) {
+                            entry.paramV2?.let { paramV2 ->
+                                when {
+                                    paramV2.baseInfo != null -> {
+                                        BaseInfoCompose(paramV2.baseInfo, picMap = entry.picMap)
+                                    }
+                                    paramV2.chatInfo != null -> {
+                                        ChatInfoCompose(paramV2, picMap = entry.picMap)
+                                    }
+                                    paramV2.animTextInfo != null -> {
+                                        AnimTextInfoCompose(paramV2.animTextInfo, picMap = entry.picMap)
+                                    }
+                                    paramV2.highlightInfo != null -> {
+                                        HighlightInfoCompose(paramV2.highlightInfo, picMap = entry.picMap)
+                                    }
+                                    paramV2.picInfo != null -> {
+                                        PicInfoCompose(paramV2.picInfo, picMap = entry.picMap)
+                                    }
+                                    paramV2.hintInfo != null -> {
+                                        HintInfoCompose(paramV2.hintInfo, picMap = entry.picMap)
+                                    }
+                                    paramV2.textButton != null -> {
+                                        TextButtonCompose(paramV2.textButton, picMap = entry.picMap)
+                                    }
+                                    paramV2.paramIsland != null -> {
+                                        ParamIslandCompose(paramV2.paramIsland)
+                                    }
+                                    paramV2.actions?.isNotEmpty() == true -> {
+                                        ActionCompose(paramV2.actions, entry.picMap)
+                                    }
+                                    else -> {
+                                        // 默认模板：未支持的模板类型
+                                        Box(modifier = Modifier.padding(16.dp)) {
+                                            Text(text = "未支持的模板", color = Color.White)
+                                        }
                                     }
                                 }
+                                
+                                // 进度组件
+                                paramV2.multiProgressInfo?.let {
+                                    MultiProgressCompose(it, entry.picMap, entry.business)
+                                } ?: paramV2.progressInfo?.let {
+                                    ProgressCompose(it, entry.picMap)
+                                }
                             }
-                            
-                            // 进度组件
-                            paramV2.multiProgressInfo?.let {
-                                MultiProgressCompose(it, entry.picMap, entry.business)
-                            } ?: paramV2.progressInfo?.let {
-                                ProgressCompose(it, entry.picMap)
+                        } else {
+                            // 兜底显示：当没有paramV2时，使用title和text作为fallback
+                            Box(modifier = Modifier.padding(16.dp)) {
+                                Column {
+                                    if (!entry.title.isNullOrEmpty()) {
+                                        Text(
+                                            text = entry.title,
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                    }
+                                    if (!entry.text.isNullOrEmpty()) {
+                                        Text(
+                                            text = entry.text,
+                                            color = Color(0xFFDDDDDD),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -159,9 +190,9 @@ fun FloatingWindowContainer(
                     enter = collapsedEnterTransition,
                     exit = collapsedExitTransition
                 ) {
-                    // 提取回落文本
-                    val fallbackTitle = entry.paramV2?.baseInfo?.title
-                    val fallbackContent = entry.paramV2?.baseInfo?.content
+                    // 提取回落文本：摘要态显示appName和title
+                    val fallbackTitle = entry.appName?.takeIf { it.isNotBlank() }
+                    val fallbackContent = entry.title?.takeIf { it.isNotBlank() }
                     
                     // 从paramV2Raw中正确解析bigIslandJson，与传统实现保持一致
                     val bigIslandJson = entry.paramV2Raw?.let {

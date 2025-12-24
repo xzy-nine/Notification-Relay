@@ -177,7 +177,8 @@ object FloatingReplicaManager {
         title: String?,
         text: String?,
         paramV2Raw: String? = null,
-        picMap: Map<String, String>? = null
+        picMap: Map<String, String>? = null,
+        appName: String? = null
     ) {
         try {
             // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
@@ -229,7 +230,10 @@ object FloatingReplicaManager {
                         picMap = internedPicMap,
                         isExpanded = !summaryOnly,
                         summaryOnly = summaryOnly,
-                        business = paramV2?.business
+                        business = paramV2?.business,
+                        title = title,
+                        text = text,
+                        appName = appName
                     )
                     
                     // 保存sourceId到entryKey的映射，以便后续能正确移除
