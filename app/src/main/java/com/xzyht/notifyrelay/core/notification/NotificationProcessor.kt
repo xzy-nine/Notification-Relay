@@ -28,6 +28,10 @@ import kotlinx.coroutines.launch
 object NotificationProcessor {
 
     private const val TAG = "NotificationProcessor"
+    
+    // 超级岛通知去重缓存，用于处理锁屏时的重复通知
+    // 键: 去重键（remoteUuid|mappedPkg|featureId）
+    private val superIslandDeduplicationCache = mutableSetOf<String>()
 
     data class NotificationInput(
         val rawData: String,
@@ -146,9 +150,43 @@ object NotificationProcessor {
             }
 
             if (siType.startsWith("SI_") || hasFeature) {
+                // 获取发送设备的锁屏状态
+                val isLocked = try { json.optBoolean("isLocked", false) } catch (_: Exception) { false }
+                
                 // 新协议：差异合并
                 val featureId = try { json.optString("featureKeyValue", "") } catch (_: Exception) { "" }
                 val sourceKey = listOfNotNull(remoteUuid, mappedPkg, featureId.takeIf { it.isNotBlank() }).joinToString("|")
+                
+                // 构建去重键
+                val dedupKey = "${remoteUuid}|${mappedPkg}|${featureId}"
+                
+                if (siType == SuperIslandProtocol.TYPE_END) {
+                    try { FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
+                    // 移除去重缓存
+                    superIslandDeduplicationCache.remove(dedupKey)
+                    if (BuildConfig.DEBUG) Log.i("超级岛", "收到终止通知，移除去重缓存: $dedupKey")
+                    return true
+                }
+                
+                // 提前获取通知标题和内容，用于更详细的日志记录
+                val mTitle = try { json.optString("title", title) } catch (_: Exception) { title }
+                val mText = try { json.optString("text", text) } catch (_: Exception) { text }
+                
+                // 锁屏状态下的超级岛通知去重处理
+                if (isLocked) {
+                    // 检查是否已经处理过相同的超级岛通知
+                    if (superIslandDeduplicationCache.contains(dedupKey)) {
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "锁屏重复通知去重: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
+                        return true // 跳过重复通知
+                    } else {
+                        // 立即添加到去重缓存，防止同一时间点的重复通知
+                        superIslandDeduplicationCache.add(dedupKey)
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "首次处理超级岛通知，添加到去重缓存: $dedupKey, title=${mTitle ?: "无标题"}")
+                    }
+                } else {
+                    if (BuildConfig.DEBUG) Log.i("超级岛", "非锁屏状态，正常处理超级岛通知: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
+                }
+                
                 val merged = SuperIslandRemoteStore.applyIncoming(sourceKey, json)
 
                 // 发送 ACK
@@ -157,34 +195,32 @@ object NotificationProcessor {
                     try { manager.sendSuperIslandAckInternal(remoteUuid, sharedSecret, recvHash, featureId, mappedPkg) } catch (_: Exception) {}
                 }
 
-                if (siType == SuperIslandProtocol.TYPE_END) {
-                    try { FloatingReplicaManager.dismissBySource(sourceKey) } catch (_: Exception) {}
-                    return true
-                }
-
                 if (merged != null) {
-                    val mTitle = merged.title ?: title
-                    val mText = merged.text ?: text
+                    val finalTitle = merged.title ?: mTitle
+                    val finalText = merged.text ?: mText
                     val mParam2 = merged.paramV2Raw
                     val mPics = merged.pics
+                    
                     try {
-                        FloatingReplicaManager.showFloating(context, sourceKey, mTitle, mText, mParam2, mPics, appName)
+                        FloatingReplicaManager.showFloating(context, sourceKey, finalTitle, finalText, mParam2, mPics, appName)
                     } catch (e: Exception) {
                         if (BuildConfig.DEBUG) Log.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
                     }
+                    
                     val historyEntry = SuperIslandHistoryEntry(
                         id = System.currentTimeMillis(),
                         sourceDeviceUuid = remoteUuid,
                         originalPackage = pkg,
                         mappedPackage = mappedPkg,
                         appName = appName?.takeIf { it.isNotEmpty() },
-                        title = mTitle?.takeIf { it.isNotBlank() },
-                        text = mText?.takeIf { it.isNotBlank() },
+                        title = finalTitle?.takeIf { it.isNotBlank() },
+                        text = finalText?.takeIf { it.isNotBlank() },
                         paramV2Raw = mParam2?.takeIf { it.isNotBlank() },
                         picMap = mPics.toMap(),
                         rawPayload = decrypted,
                         featureId = featureId // 传递特征ID，用于去重
                     )
+                    
                     try {
                         SuperIslandHistory.append(context, historyEntry)
                     } catch (_: Exception) {
@@ -200,8 +236,14 @@ object NotificationProcessor {
                             )
                         )
                     }
+                    
                     return true
                 } else {
+                    // 如果合并失败，移除去重缓存，允许后续重试
+                    if (isLocked) {
+                        superIslandDeduplicationCache.remove(dedupKey)
+                        if (BuildConfig.DEBUG) Log.i("超级岛", "合并失败，移除去重缓存: $dedupKey")
+                    }
                     return true
                 }
             } else {
