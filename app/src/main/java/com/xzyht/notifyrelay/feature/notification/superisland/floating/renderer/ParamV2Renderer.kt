@@ -1,11 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
-import android.graphics.drawable.GradientDrawable
 import android.util.Log
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.BuildConfig
@@ -30,95 +26,7 @@ data class ParamV2(
     val business: String? = null // 可选的业务标识（例如 miui_flashlight）
 )
 
-// 构建传统UI视图的函数
-suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null): TemplateViewResult {
-    val container = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        val padding = (8 * context.resources.displayMetrics.density).toInt()
-        setPadding(padding, padding, padding, padding)
-        // 圆角矩形背景（展开态）
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 16f * context.resources.displayMetrics.density
-            setColor(0xEE000000.toInt())
-            val d = context.resources.displayMetrics.density
-            setStroke(d.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
-        }
-        clipToOutline = true
-        // 提升阴影层级
-        elevation = 6f * context.resources.displayMetrics.density
-    }
 
-    var progressBinding: CircularProgressBinding? = null
-
-    // 根据模板类型构建不同的布局，使用分支处理
-    when {
-        paramV2.baseInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: baseInfo")
-            val view = buildBaseInfoView(context, paramV2.baseInfo, picMap)
-            container.addView(view)
-        }
-        paramV2.chatInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: chatInfo")
-            val result = buildChatInfoView(context, paramV2, picMap)
-            container.addView(result.view)
-            progressBinding = result.progressBinding
-        }
-        paramV2.animTextInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: animTextInfo")
-            val view = buildAnimTextInfoView(context, paramV2.animTextInfo, picMap)
-            container.addView(view)
-        }
-        paramV2.highlightInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: highlightInfo")
-            val view = buildHighlightInfoView(context, paramV2.highlightInfo, picMap)
-            container.addView(view)
-        }
-        paramV2.picInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: picInfo")
-            val view = buildPicInfoView(context, paramV2.picInfo, picMap)
-            container.addView(view)
-        }
-        paramV2.hintInfo != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: hintInfo")
-            val view = buildHintInfoView(context, paramV2.hintInfo, picMap)
-            container.addView(view)
-        }
-        paramV2.textButton != null -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: textButton")
-            val tv = TextView(context).apply {
-                text = "此通知包含不可用的按钮"
-                setTextColor(0xFFFFFFFF.toInt())
-            }
-            container.addView(tv)
-        }
-        else -> {
-            if (BuildConfig.DEBUG) Log.i("超级岛", "分支选择-View: default")
-            // 默认模板：未支持的模板类型
-            val tv = TextView(context).apply {
-                text = "未支持的模板"
-                setTextColor(0xFFFFFFFF.toInt())
-            }
-            container.addView(tv)
-        }
-    }
-
-    val resolvedMultiProgress = paramV2.multiProgressInfo
-        ?: paramV2.progressInfo?.toMultiProgressInfo(paramV2.baseInfo?.title)
-
-    if (resolvedMultiProgress != null) {
-        val multiView = buildMultiProgressInfoView(context, resolvedMultiProgress, picMap, business)
-        container.addView(multiView)
-    } else {
-        paramV2.progressInfo?.let {
-            val progressBar = buildProgressInfoView(context, it, picMap)
-            container.addView(progressBar)
-        }
-    }
-
-    // 添加按钮如果有
-    return TemplateViewResult(container, progressBinding)
-}
 
 // 构建Compose UI视图的函数
 suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null, lifecycleOwner: LifecycleOwner? = null): ComposeTemplateViewResult {
@@ -282,11 +190,6 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
     )
 }
 
-
-data class TemplateViewResult(
-    val view: View,
-    val progressBinding: CircularProgressBinding? = null
-)
 
 // 支持ComposeView的视图结果类
 data class ComposeTemplateViewResult(
