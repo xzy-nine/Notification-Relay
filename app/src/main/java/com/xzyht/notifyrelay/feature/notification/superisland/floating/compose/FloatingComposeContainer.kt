@@ -145,6 +145,10 @@ class FloatingComposeContainer @JvmOverloads constructor(
                         lp.y = startY + deltaY
                         windowManager?.updateViewLayout(this, lp)
                     }
+                    
+                    // 调用容器拖动中回调，用于实时检测重叠
+                    onContainerDragging?.invoke()
+                    
                     // 消费事件，确保能继续拖动
                     return true
                 }
@@ -168,6 +172,9 @@ class FloatingComposeContainer @JvmOverloads constructor(
     
     // 容器拖动结束回调
     var onContainerDragEnd: (() -> Unit)? = null
+    
+    // 容器拖动中回调，用于实时检测重叠
+    var onContainerDragging: (() -> Unit)? = null
     
     @Composable
     override fun Content() {

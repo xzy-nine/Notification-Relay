@@ -72,6 +72,12 @@ object FloatingReplicaManager {
     
     // 当前是否正在拖动容器
     private var isContainerDragging = false
+    
+    // 关闭区位置信息
+    private var closeAreaTop: Int = 0
+    private var closeAreaBottom: Int = 0
+    private var closeAreaLeft: Int = 0
+    private var closeAreaRight: Int = 0
 
     /**
      * 显示超级岛复刻悬浮窗。
@@ -263,10 +269,181 @@ object FloatingReplicaManager {
      * 处理容器拖动结束事件
      */
     private fun onContainerDragEnded() {
+        // 检查是否有条目与关闭区重叠
+        checkEntriesInCloseArea()
+        // 清除所有条目的重叠状态
+        floatingWindowManager.clearAllEntriesOverlapping()
         // 隐藏关闭层
         hideCloseOverlay()
         // 记录容器拖动结束
         isContainerDragging = false
+    }
+    
+    /**
+     * 更新条目的重叠状态，用于实时检测
+     */
+    private fun updateEntriesOverlappingStatus() {
+        try {
+            // 获取所有条目
+            val entries = floatingWindowManager.entriesList
+            if (entries.isEmpty()) return
+            
+            // 获取容器当前位置
+            val containerX = overlayLayoutParams?.x ?: 0
+            val containerY = overlayLayoutParams?.y ?: 0
+            
+            // 获取显示密度
+            val density = overlayView?.get()?.context?.resources?.displayMetrics?.density ?: 1f
+            
+            // 计算容器宽度
+            val containerWidth = (FIXED_WIDTH_DP * density).toInt()
+            
+            // 计算单个条目高度（估算）
+            val estimatedEntryHeight = 150f * density
+            
+            // 检查关闭区是否已经初始化（非默认值）
+            if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
+                // 如果关闭区位置没有初始化，直接返回
+                return
+            }
+            
+            // 记录之前的重叠状态，用于判断是否需要振动
+            val previousOverlappingKeys = mutableSetOf<String>()
+            entries.forEach { entry ->
+                if (entry.isOverlapping) {
+                    previousOverlappingKeys.add(entry.key)
+                }
+            }
+            
+            // 遍历所有条目，检查每个条目是否与关闭区重叠
+            for ((index, entry) in entries.withIndex()) {
+                // 计算当前条目的位置（假设条目是垂直排列的，最新的在底部）
+                val entryTop = containerY + (index * estimatedEntryHeight).toInt()
+                val entryBottom = entryTop + estimatedEntryHeight.toInt()
+                val entryCenterX = containerX + containerWidth / 2
+                
+                // 检查条目是否与关闭区重叠
+                val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom
+                val isHorizontallyOverlapping = entryCenterX > closeAreaLeft && entryCenterX < closeAreaRight
+                val isOverlapping = isVerticallyOverlapping && isHorizontallyOverlapping
+                
+                // 如果条目重叠状态发生变化
+                if (entry.isOverlapping != isOverlapping) {
+                    // 更新条目重叠状态
+                    floatingWindowManager.setEntryOverlapping(entry.key, isOverlapping)
+                    
+                    // 如果条目开始重叠，执行振动反馈
+                    if (isOverlapping) {
+                        // 获取上下文，用于振动反馈
+                        val context = overlayView?.get()?.context
+                        if (context != null) {
+                            // 执行振动反馈
+                            try {
+                                HapticFeedbackUtils.performLightHaptic(context)
+                                if (BuildConfig.DEBUG) {
+                                    Log.i(TAG, "超级岛: 执行振动反馈 - Key: ${entry.key}")
+                                }
+                            } catch (e: Exception) {
+                                if (BuildConfig.DEBUG) {
+                                    Log.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.w(TAG, "超级岛: 更新条目重叠状态失败: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    /**
+     * 检查条目是否与关闭区重叠
+     */
+    private fun checkEntriesInCloseArea() {
+        try {
+            // 获取所有条目
+            val entries = floatingWindowManager.entriesList
+            if (entries.isEmpty()) return
+            
+            // 获取容器当前位置
+            val containerX = overlayLayoutParams?.x ?: 0
+            val containerY = overlayLayoutParams?.y ?: 0
+            
+            // 获取显示密度
+            val density = overlayView?.get()?.context?.resources?.displayMetrics?.density ?: 1f
+            
+            // 计算容器宽度
+            val containerWidth = (FIXED_WIDTH_DP * density).toInt()
+            
+            // 计算单个条目高度（估算）
+            val estimatedEntryHeight = 150f * density
+            
+            // 添加调试日志，便于检查关闭区和容器位置
+            if (BuildConfig.DEBUG) {
+                Log.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
+                Log.i(TAG, "超级岛: 容器位置 - X: $containerX, Y: $containerY, Width: $containerWidth")
+            }
+            
+            // 检查关闭区是否已经初始化（非默认值）
+            if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
+                // 如果关闭区位置没有初始化，直接返回
+                return
+            }
+            
+            // 遍历所有条目，检查每个条目是否与关闭区重叠
+            for ((index, entry) in entries.withIndex()) {
+                // 计算当前条目的位置（假设条目是垂直排列的，最新的在底部）
+                val entryTop = containerY + (index * estimatedEntryHeight).toInt()
+                val entryBottom = entryTop + estimatedEntryHeight.toInt()
+                val entryCenterX = containerX + containerWidth / 2
+                
+                // 检查条目是否与关闭区重叠
+                val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom
+                val isHorizontallyOverlapping = entryCenterX > closeAreaLeft && entryCenterX < closeAreaRight
+                
+                // 添加调试日志
+                if (BuildConfig.DEBUG) {
+                    Log.i(TAG, "超级岛: 条目重叠检测 - Key: ${entry.key}, Index: $index, 垂直重叠: $isVerticallyOverlapping, 水平重叠: $isHorizontallyOverlapping")
+                }
+                
+                // 如果条目与关闭区重叠
+                if (isVerticallyOverlapping && isHorizontallyOverlapping) {
+                    // 获取上下文，用于振动反馈
+                    val context = overlayView?.get()?.context
+                    if (context != null) {
+                        // 执行振动反馈
+                        try {
+                            HapticFeedbackUtils.performLightHaptic(context)
+                            if (BuildConfig.DEBUG) {
+                                Log.i(TAG, "超级岛: 执行振动反馈")
+                            }
+                        } catch (e: Exception) {
+                            if (BuildConfig.DEBUG) {
+                                Log.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
+                            }
+                        }
+                    }
+                    
+                    // 关闭重叠的条目
+                    if (BuildConfig.DEBUG) {
+                        Log.i(TAG, "超级岛: 关闭重叠条目 - Key: ${entry.key}")
+                    }
+                    floatingWindowManager.removeEntry(entry.key)
+                    
+                    // 只关闭一个重叠条目，然后退出循环
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) {
+                Log.w(TAG, "超级岛: 检查条目与关闭区重叠失败: ${e.message}")
+                e.printStackTrace()
+            }
+        }
     }
     
     // 显示全屏关闭层，底部中心有关闭指示器
@@ -320,6 +497,27 @@ object FloatingReplicaManager {
             closeOverlayView = WeakReference(container)
             closeOverlayLayoutParams = lp
             closeTargetView = WeakReference(closeView)
+            
+            // 计算关闭区位置信息 - 确保在屏幕底部中心
+            val displayMetrics = context.resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
+            
+            // 关闭区大小和边距（与关闭按钮一致）
+            val closeAreaSize = closeSize
+            val closeAreaMargin = (24 * density).toInt()
+            
+            // 计算关闭区的边界 - 底部中心位置
+            closeAreaLeft = (screenWidth - closeAreaSize) / 2
+            closeAreaRight = closeAreaLeft + closeAreaSize
+            closeAreaTop = screenHeight - closeAreaSize - closeAreaMargin
+            closeAreaBottom = closeAreaTop + closeAreaSize
+            
+            // 添加调试日志，便于检查关闭区位置
+            if (BuildConfig.DEBUG) {
+                Log.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
+            }
+            
             // 使用ValueAnimator实现淡入动画
             android.animation.ValueAnimator.ofFloat(0.7f, 1.0f).apply {
                 duration = 150L
@@ -427,23 +625,25 @@ object FloatingReplicaManager {
                         }
 
                         // 使用Compose容器替代传统的FrameLayout和LinearLayout
-                        val composeContainer = FloatingComposeContainer(context).apply {
-                            val padding = (12 * density).toInt()
-                            setPadding(padding, padding, padding, padding)
-                            // 设置浮窗管理器
-                            this.floatingWindowManager = this@FloatingReplicaManager.floatingWindowManager
-                            // 设置生命周期所有者
-                            this.lifecycleOwner = lifecycleOwner
-                            // 设置WindowManager和LayoutParams，用于更新浮窗位置
-                            this.windowManager = wm
-                            this.windowLayoutParams = layoutParams
-                            // 设置条目点击回调
-                            this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
-                            // 设置容器拖动开始回调
-                            this.onContainerDragStart = { onContainerDragStarted() }
-                            // 设置容器拖动结束回调
-                            this.onContainerDragEnd = { onContainerDragEnded() }
-                        }
+            val composeContainer = FloatingComposeContainer(context).apply {
+                val padding = (12 * density).toInt()
+                setPadding(padding, padding, padding, padding)
+                // 设置浮窗管理器
+                this.floatingWindowManager = this@FloatingReplicaManager.floatingWindowManager
+                // 设置生命周期所有者
+                this.lifecycleOwner = lifecycleOwner
+                // 设置WindowManager和LayoutParams，用于更新浮窗位置
+                this.windowManager = wm
+                this.windowLayoutParams = layoutParams
+                // 设置条目点击回调
+                this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
+                // 设置容器拖动开始回调
+                this.onContainerDragStart = { onContainerDragStarted() }
+                // 设置容器拖动中回调，用于实时检测重叠
+                this.onContainerDragging = { updateEntriesOverlappingStatus() }
+                // 设置容器拖动结束回调
+                this.onContainerDragEnd = { onContainerDragEnded() }
+            }
 
                         var added = false
                         try {

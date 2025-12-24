@@ -58,7 +58,7 @@ class FloatingWindowManager {
         text: String? = null,
         appName: String? = null
     ) {
-        // 保留原有条目的isExpanded状态，其他属性使用新传入的值
+        // 保留原有条目的isExpanded和isOverlapping状态，其他属性使用新传入的值
         // 如果是摘要态，强制设为非展开状态
         val existingEntry = entriesMap[key]?.entry
         val finalIsExpanded = if (summaryOnly) {
@@ -72,7 +72,10 @@ class FloatingWindowManager {
             isExpanded
         }
         
-        // 创建新的FloatingEntry，确保所有属性都使用新传入的值，除了isExpanded状态
+        // 保留原有条目的重叠状态
+        val finalIsOverlapping = existingEntry?.isOverlapping ?: false
+        
+        // 创建新的FloatingEntry，确保所有属性都使用新传入的值，除了isExpanded和isOverlapping状态
         val entry = FloatingEntry(
             key = key,
             paramV2 = paramV2,
@@ -83,7 +86,8 @@ class FloatingWindowManager {
             business = business,
             title = title,
             text = text,
-            appName = appName
+            appName = appName,
+            isOverlapping = finalIsOverlapping
         )
         
         // 取消之前的任务
@@ -257,6 +261,52 @@ class FloatingWindowManager {
             
             updateEntriesList()
         }
+    }
+    
+    /**
+     * 设置条目重叠状态
+     */
+    fun setEntryOverlapping(key: String, isOverlapping: Boolean) {
+        val entryWithTimestamp = entriesMap[key]
+        if (entryWithTimestamp != null) {
+            val currentEntry = entryWithTimestamp.entry
+            
+            // 如果状态没有变化，直接返回
+            if (currentEntry.isOverlapping == isOverlapping) {
+                return
+            }
+            
+            val updatedEntry = currentEntry.copy(isOverlapping = isOverlapping)
+            // 保留初始时间戳，只更新entry和timestamp
+            val updatedWithTimestamp = entryWithTimestamp.copy(
+                entry = updatedEntry,
+                timestamp = System.currentTimeMillis()
+            )
+            entriesMap[key] = updatedWithTimestamp
+            
+            updateEntriesList()
+        }
+    }
+    
+    /**
+     * 清除所有条目的重叠状态
+     */
+    fun clearAllEntriesOverlapping() {
+        val updatedEntriesMap = entriesMap.mapValues { (_, entryWithTimestamp) ->
+            val currentEntry = entryWithTimestamp.entry
+            if (currentEntry.isOverlapping) {
+                val updatedEntry = currentEntry.copy(isOverlapping = false)
+                entryWithTimestamp.copy(
+                    entry = updatedEntry,
+                    timestamp = System.currentTimeMillis()
+                )
+            } else {
+                entryWithTimestamp
+            }
+        }
+        entriesMap.clear()
+        entriesMap.putAll(updatedEntriesMap)
+        updateEntriesList()
     }
     
 

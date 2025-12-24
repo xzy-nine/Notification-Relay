@@ -15,29 +15,111 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
 import org.json.JSONObject
 
 /**
- * 构建Compose UI视图的主函数
+ * 解析结果密封类
  */
-suspend fun buildComposeViewFromTemplate(
+private sealed class ParseResult {
+    data class Success(val paramV2: ParamV2) : ParseResult()
+    data class Error(val title: String, val content: String) : ParseResult()
+}
+
+/**
+ * 解析paramV2，返回解析结果
+ */
+private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
+    return try {
+        val paramV2 = parseParamV2(paramV2Raw)
+        if (paramV2 != null) {
+            ParseResult.Success(paramV2)
+        } else {
+            // 解析失败，尝试从原始JSON中提取基本信息
+            try {
+                val json = JSONObject(paramV2Raw)
+                val baseInfo = json.optJSONObject("baseInfo")
+                val title = baseInfo?.optString("title", "") ?: ""
+                val content = baseInfo?.optString("content", "") ?: ""
+                
+                ParseResult.Error(
+                    title = title.takeIf { it.isNotBlank() } ?: "超级岛",
+                    content = content.takeIf { it.isNotBlank() } ?: ""
+                )
+            } catch (e: Exception) {
+                // JSON解析也失败，显示基本信息
+                ParseResult.Error(
+                    title = "超级岛通知",
+                    content = ""
+                )
+            }
+        }
+    } catch (e: Exception) {
+        // 任何异常都返回失败结果
+        ParseResult.Error(
+            title = "超级岛通知",
+            content = ""
+        )
+    }
+}
+
+/**
+ * 超级岛Compose根组件
+ */
+@Composable
+fun SuperIslandComposeRoot(
+    content: @Composable () -> Unit,
+    isOverlapping: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isOverlapping) {
+                    // 重叠时显示红色背景
+                    Color.Red.copy(alpha = 0.92f)
+                } else {
+                    // 正常时显示黑色背景
+                    Color.Black.copy(alpha = 0.92f)
+                }
+            ),
+            elevation = CardDefaults.cardElevation(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+/**
+ * 从paramV2对象构建Compose UI视图
+ */
+suspend fun buildComposeViewFromParam(
     context: Context,
     paramV2: ParamV2,
-    picMap: Map<String, String>? = null, 
+    picMap: Map<String, String>? = null,
     business: String? = null,
     lifecycleOwner: LifecycleOwner? = null
 ): ComposeView {
     return ComposeView(context).apply {
-        // 浮窗环境通常没有 ViewTreeLifecycleOwner，统一使用在分离窗口时销毁
+        // 使用DisposeOnDetachedFromWindow替代DisposeOnViewTreeLifecycleDestroyed
+        // 避免在浮窗中找不到LifecycleOwner时崩溃
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         // 设置为不可点击、不可聚焦，确保触摸事件能传递到父容器
         isClickable = false
@@ -50,7 +132,7 @@ suspend fun buildComposeViewFromTemplate(
         }
         setContent {
             val contentBlock: @Composable () -> Unit = {
-                SuperIslandComposeRoot {
+                SuperIslandComposeRoot(content = {
                     when {
                         paramV2.baseInfo != null -> {
                             if (BuildConfig.DEBUG) android.util.Log.i("超级岛", "分支选择-Compose: baseInfo")
@@ -103,7 +185,7 @@ suspend fun buildComposeViewFromTemplate(
                     } ?: paramV2.progressInfo?.let {
                         ProgressCompose(it, picMap)
                     }
-                }
+                })
             }
             if (lifecycleOwner != null) {
                 CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
@@ -140,7 +222,7 @@ suspend fun buildComposeViewFromRawParam(
         }
         setContent {
             val contentBlock: @Composable () -> Unit = {
-                SuperIslandComposeRoot {
+                SuperIslandComposeRoot(content = {
                     // 解析paramV2，在Composable函数之外处理异常
                     val parseResult = parseParamV2WithResult(paramV2Raw)
                     
@@ -201,7 +283,7 @@ suspend fun buildComposeViewFromRawParam(
                                 ProgressCompose(it, picMap)
                             }
                         }
-                        is ParseResult.Failure -> {
+                        is ParseResult.Error -> {
                             // 解析失败，显示默认信息
                             Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                                 Column {
@@ -216,7 +298,7 @@ suspend fun buildComposeViewFromRawParam(
                             }
                         }
                     }
-                }
+                })
             }
             if (lifecycleOwner != null) {
                 CompositionLocalProvider(LocalLifecycleOwner provides lifecycleOwner) {
@@ -224,80 +306,6 @@ suspend fun buildComposeViewFromRawParam(
                 }
             } else {
                 contentBlock()
-            }
-        }
-    }
-}
-
-/**
- * 解析结果密封类
- */
-private sealed class ParseResult {
-    data class Success(val paramV2: ParamV2) : ParseResult()
-    data class Failure(val title: String, val content: String) : ParseResult()
-}
-
-/**
- * 解析paramV2，返回解析结果
- */
-private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
-    return try {
-        val paramV2 = parseParamV2(paramV2Raw)
-        if (paramV2 != null) {
-            ParseResult.Success(paramV2)
-        } else {
-            // 解析失败，尝试从原始JSON中提取基本信息
-            try {
-                val json = JSONObject(paramV2Raw)
-                val baseInfo = json.optJSONObject("baseInfo")
-                val title = baseInfo?.optString("title", "") ?: ""
-                val content = baseInfo?.optString("content", "") ?: ""
-                
-                ParseResult.Failure(
-                    title = title.takeIf { it.isNotBlank() } ?: "超级岛",
-                    content = content.takeIf { it.isNotBlank() } ?: ""
-                )
-            } catch (e: Exception) {
-                // JSON解析也失败，显示基本信息
-                ParseResult.Failure(
-                    title = "超级岛通知",
-                    content = ""
-                )
-            }
-        }
-    } catch (e: Exception) {
-        // 任何异常都返回失败结果
-        ParseResult.Failure(
-            title = "超级岛通知",
-            content = ""
-        )
-    }
-}
-
-/**
- * 超级岛Compose根组件
- */
-@Composable
-fun SuperIslandComposeRoot(
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-    ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.Black.copy(alpha = 0.92f)
-            ),
-            elevation = CardDefaults.cardElevation(6.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(8.dp)
-            ) {
-                content()
             }
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -50,8 +51,7 @@ data class FloatingEntry(
     val title: String? = null,
     val text: String? = null,
     val appName: String? = null,
-    val x: Float = 0f,
-    val y: Float = 0f
+    val isOverlapping: Boolean = false
 )
 
 /**
@@ -105,78 +105,81 @@ fun FloatingWindowContainer(
                     enter = expandedEnterTransition,
                     exit = expandedExitTransition
                 ) {
-                    SuperIslandComposeRoot {
-                        val hasParamV2 = entry.paramV2 != null
-                        
-                        if (hasParamV2) {
-                            entry.paramV2?.let { paramV2 ->
-                                when {
-                                    paramV2.baseInfo != null -> {
-                                        BaseInfoCompose(paramV2.baseInfo, picMap = entry.picMap)
+                    SuperIslandComposeRoot(
+                        content = {
+                            val hasParamV2 = entry.paramV2 != null
+                            
+                            if (hasParamV2) {
+                                entry.paramV2?.let { paramV2 ->
+                                    when {
+                                        paramV2.baseInfo != null -> {
+                                            BaseInfoCompose(paramV2.baseInfo, picMap = entry.picMap)
+                                        }
+                                        paramV2.chatInfo != null -> {
+                                            ChatInfoCompose(paramV2, picMap = entry.picMap)
+                                        }
+                                        paramV2.animTextInfo != null -> {
+                                            AnimTextInfoCompose(paramV2.animTextInfo, picMap = entry.picMap)
+                                        }
+                                        paramV2.highlightInfo != null -> {
+                                            HighlightInfoCompose(paramV2.highlightInfo, picMap = entry.picMap)
+                                        }
+                                        paramV2.picInfo != null -> {
+                                            PicInfoCompose(paramV2.picInfo, picMap = entry.picMap)
+                                        }
+                                        paramV2.hintInfo != null -> {
+                                            HintInfoCompose(paramV2.hintInfo, picMap = entry.picMap)
+                                        }
+                                        paramV2.textButton != null -> {
+                                            TextButtonCompose(paramV2.textButton, picMap = entry.picMap)
+                                        }
+                                        paramV2.paramIsland != null -> {
+                                            ParamIslandCompose(paramV2.paramIsland)
+                                        }
+                                        paramV2.actions?.isNotEmpty() == true -> {
+                                            ActionCompose(paramV2.actions, entry.picMap)
+                                        }
+                                        else -> {
+                                            // 默认模板：未支持的模板类型
+                                            Box(modifier = Modifier.padding(16.dp)) {
+                                                Text(text = "未支持的模板", color = Color.White)
+                                            }
+                                        }
                                     }
-                                    paramV2.chatInfo != null -> {
-                                        ChatInfoCompose(paramV2, picMap = entry.picMap)
+                                    
+                                    // 进度组件
+                                    paramV2.multiProgressInfo?.let {
+                                        MultiProgressCompose(it, entry.picMap, entry.business)
+                                    } ?: paramV2.progressInfo?.let {
+                                        ProgressCompose(it, entry.picMap)
                                     }
-                                    paramV2.animTextInfo != null -> {
-                                        AnimTextInfoCompose(paramV2.animTextInfo, picMap = entry.picMap)
-                                    }
-                                    paramV2.highlightInfo != null -> {
-                                        HighlightInfoCompose(paramV2.highlightInfo, picMap = entry.picMap)
-                                    }
-                                    paramV2.picInfo != null -> {
-                                        PicInfoCompose(paramV2.picInfo, picMap = entry.picMap)
-                                    }
-                                    paramV2.hintInfo != null -> {
-                                        HintInfoCompose(paramV2.hintInfo, picMap = entry.picMap)
-                                    }
-                                    paramV2.textButton != null -> {
-                                        TextButtonCompose(paramV2.textButton, picMap = entry.picMap)
-                                    }
-                                    paramV2.paramIsland != null -> {
-                                        ParamIslandCompose(paramV2.paramIsland)
-                                    }
-                                    paramV2.actions?.isNotEmpty() == true -> {
-                                        ActionCompose(paramV2.actions, entry.picMap)
-                                    }
-                                    else -> {
-                                        // 默认模板：未支持的模板类型
-                                        Box(modifier = Modifier.padding(16.dp)) {
-                                            Text(text = "未支持的模板", color = Color.White)
+                                }
+                            } else {
+                                // 兜底显示：当没有paramV2时，使用title和text作为fallback
+                                Box(modifier = Modifier.padding(16.dp)) {
+                                    Column {
+                                        if (!entry.title.isNullOrEmpty()) {
+                                            Text(
+                                                text = entry.title,
+                                                color = Color.White,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(bottom = 8.dp)
+                                            )
+                                        }
+                                        if (!entry.text.isNullOrEmpty()) {
+                                            Text(
+                                                text = entry.text,
+                                                color = Color(0xFFDDDDDD),
+                                                fontSize = 14.sp
+                                            )
                                         }
                                     }
                                 }
-                                
-                                // 进度组件
-                                paramV2.multiProgressInfo?.let {
-                                    MultiProgressCompose(it, entry.picMap, entry.business)
-                                } ?: paramV2.progressInfo?.let {
-                                    ProgressCompose(it, entry.picMap)
-                                }
                             }
-                        } else {
-                            // 兜底显示：当没有paramV2时，使用title和text作为fallback
-                            Box(modifier = Modifier.padding(16.dp)) {
-                                Column {
-                                    if (!entry.title.isNullOrEmpty()) {
-                                        Text(
-                                            text = entry.title,
-                                            color = Color.White,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(bottom = 8.dp)
-                                        )
-                                    }
-                                    if (!entry.text.isNullOrEmpty()) {
-                                        Text(
-                                            text = entry.text,
-                                            color = Color(0xFFDDDDDD),
-                                            fontSize = 14.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        },
+                        isOverlapping = entry.isOverlapping
+                    )
                 }
                 
                 // 摘要态内容
@@ -202,12 +205,18 @@ fun FloatingWindowContainer(
                         }
                     }
                     
-                    SummaryAndroidView(
-                        bigIslandJson = bigIslandJson,
-                        picMap = entry.picMap,
-                        fallbackTitle = fallbackTitle,
-                        fallbackContent = fallbackContent
-                    )
+                    // 添加重叠状态的视觉反馈：红色背景
+                    Box(
+                        modifier = Modifier
+                            .background(if (entry.isOverlapping) Color.Red.copy(alpha = 0.3f) else Color.Transparent)
+                    ) {
+                        SummaryAndroidView(
+                            bigIslandJson = bigIslandJson,
+                            picMap = entry.picMap,
+                            fallbackTitle = fallbackTitle,
+                            fallbackContent = fallbackContent
+                        )
+                    }
                 }
                 // 闭合Box组件
                 }

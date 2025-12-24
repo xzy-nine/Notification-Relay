@@ -2,16 +2,15 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
+import android.util.Log
 import android.view.View
 import android.widget.LinearLayout
-import org.json.JSONObject
-import com.xzyht.notifyrelay.BuildConfig
-import android.util.Log
 import android.widget.TextView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleOwner
+import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
+import org.json.JSONObject
 
 // 摘要态组件解析
 
@@ -124,7 +123,7 @@ suspend fun buildViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Ma
 // 构建Compose UI视图的函数
 suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null, lifecycleOwner: LifecycleOwner? = null): ComposeTemplateViewResult {
     return ComposeTemplateViewResult(
-        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromTemplate(context, paramV2, picMap, business, lifecycleOwner),
+        view = com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromParam(context, paramV2, picMap, business, lifecycleOwner),
         progressBinding = null
     )
 }
