@@ -33,6 +33,22 @@ interface SuperIslandHistoryDao {
     suspend fun getLatestByFeatureId(featureId: String): SuperIslandHistoryEntity?
     
     /**
+     * 根据特征ID删除所有历史记录
+     */
+    @Query("DELETE FROM super_island_history WHERE featureId = :featureId")
+    suspend fun deleteByFeatureId(featureId: String)
+    
+    /**
+     * 根据特征ID和内容更新记录（如果存在相同特征ID和内容的记录则更新，否则插入）
+     * 注意：相同特征ID但内容不同的记录会被保留
+     */
+    suspend fun upsertByFeatureAndContent(history: SuperIslandHistoryEntity) {
+        // 这里不实现UPSERT，因为我们希望保留相同特征ID但内容不同的记录
+        // 实际的去重逻辑在应用层实现
+        insert(history)
+    }
+    
+    /**
      * 获取每个特征ID对应的最新一条记录
      */
     @Query("SELECT * FROM super_island_history WHERE id IN (SELECT MAX(id) FROM super_island_history GROUP BY featureId) ORDER BY id DESC")

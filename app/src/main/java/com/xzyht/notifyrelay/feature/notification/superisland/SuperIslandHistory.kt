@@ -46,21 +46,12 @@ object SuperIslandHistory {
             // 异步加载历史记录，避免阻塞主线程
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    // 从Room数据库加载历史记录（只加载摘要，不包含rawPayload）
+                    // 从Room数据库加载所有历史记录（只加载摘要，不包含rawPayload）
                     val repository = DatabaseRepository.getInstance(context)
-                    val entities = if (deduplicate) {
-                        // 使用去重逻辑，只获取每个特征ID的最新一条记录
-                        repository.getLatestSuperIslandHistoryByFeature()
-                    } else {
-                        // 加载所有历史记录（不去重）
-                        repository.getSuperIslandHistory()
-                    }
-                    
-                    // 限制加载的历史记录数量，避免内存占用过高
-                    val limitedEntities = entities.takeLast(MAX_ENTRIES)
+                    val allEntities = repository.getSuperIslandHistory()
                     
                     // 转换为SuperIslandHistoryEntry
-                    val history = limitedEntities.map { entity: SuperIslandHistoryEntity ->
+                    val allEntries = allEntities.map { entity: SuperIslandHistoryEntity ->
                         SuperIslandHistoryEntry(
                             id = entity.id,
                             sourceDeviceUuid = entity.sourceDeviceUuid,
@@ -75,6 +66,53 @@ object SuperIslandHistory {
                             featureId = entity.featureId // 包含特征ID
                         )
                     }
+                    
+                    // 应用去重逻辑（如果需要）
+                    val finalEntries = if (deduplicate) {
+                        // 基于特征ID和内容的去重：
+                        // - 相同特征ID和内容的记录只保留最新一条
+                        // - 相同特征ID但内容不同的记录全部保留
+                        allEntries.asSequence()
+                            // 按特征ID分组
+                            .groupBy { it.featureId }
+                            .flatMap { (featureId, entries) ->
+                                if (featureId == null || featureId.isEmpty()) {
+                                    // 无特征ID的记录全部保留
+                                    entries
+                                } else {
+                                    // 有特征ID的记录，按内容分组，每组只保留最新一条
+                                    entries.groupBy { entry ->
+                                        // 使用内容作为分组键
+                                        listOf(
+                                            entry.sourceDeviceUuid,
+                                            entry.originalPackage,
+                                            entry.mappedPackage,
+                                            entry.appName,
+                                            entry.title,
+                                            entry.text,
+                                            entry.paramV2Raw,
+                                            entry.picMap
+                                        )
+                                    }
+                                    .mapValues { (_, entries) ->
+                                        // 每组只保留最新一条记录（按id降序）
+                                        entries.maxByOrNull { it.id } ?: entries.first()
+                                    }
+                                    .values
+                                }
+                            }
+                            // 按id降序排序
+                            .sortedByDescending { it.id }
+                            // 限制数量
+                            .take(MAX_ENTRIES)
+                            .toList()
+                    } else {
+                        // 不去重，直接限制数量
+                        allEntries.takeLast(MAX_ENTRIES)
+                    }
+                    
+                    // 转换为最终的历史记录列表
+                    val history = finalEntries
                     
                     // 在主线程更新状态
                     withContext(Dispatchers.Main) {
@@ -172,133 +210,58 @@ object SuperIslandHistory {
         
         // 基于特征ID和内容的去重逻辑
         val updated = if (entry.featureId != null && entry.featureId.isNotEmpty()) {
-            // 如果存在特征ID，检查是否已存在相同特征ID的记录
-            val existingIndex = historyFlow.value.indexOfFirst { it.featureId == entry.featureId }
+            // 检查是否已存在相同特征ID和内容的记录
+            val existingIndex = historyFlow.value.indexOfFirst { existingEntry ->
+                existingEntry.featureId == entry.featureId && isSameContent(existingEntry, sanitizedEntry)
+            }
             if (existingIndex != -1) {
-                val existingEntry = historyFlow.value[existingIndex]
-                // 比较记录内容是否真正相同（忽略id和时间相关字段）
-                val isContentSame = isSameContent(existingEntry, sanitizedEntry)
-                if (isContentSame) {
-                    // 内容相同，不添加新记录，只更新现有记录
-                    val updatedList = historyFlow.value.toMutableList()
-                    updatedList[existingIndex] = sanitizedEntry
-                    updatedList
-                } else {
-                    // 内容不同，添加新记录
-                    (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
-                }
+                // 相同特征ID和内容的记录已存在，更新现有记录
+                val updatedList = historyFlow.value.toMutableList()
+                updatedList[existingIndex] = sanitizedEntry
+                updatedList
             } else {
-                // 添加新记录
+                // 相同特征ID但内容不同，或特征ID不存在，添加新记录
                 (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
             }
         } else {
-            // 旧逻辑：直接添加
+            // 无特征ID，直接添加
             (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
         }
         
         historyFlow.value = updated
         
-        // 保存到Room数据库 - 基于特征ID和内容的去重
+        // 保存到数据库：只去重真正相同的内容，保留相同特征ID但内容不同的记录
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val repository = DatabaseRepository.getInstance(context)
-                val entity = if (entry.featureId != null && entry.featureId.isNotEmpty()) {
-                    // 检查数据库中是否已存在相同特征ID的记录
-                    val existing = repository.getLatestSuperIslandHistoryByFeatureId(entry.featureId)
-                    if (existing != null) {
-                        // 比较记录内容是否真正相同（忽略id和时间相关字段）
-                        val existingEntry = SuperIslandHistoryEntry(
-                            id = existing.id,
-                            sourceDeviceUuid = existing.sourceDeviceUuid,
-                            originalPackage = existing.originalPackage,
-                            mappedPackage = existing.mappedPackage,
-                            appName = existing.appName,
-                            title = existing.title,
-                            text = existing.text,
-                            paramV2Raw = existing.paramV2Raw,
-                            picMap = gson.fromJson(existing.picMap, Map::class.java) as Map<String, String>,
-                            rawPayload = existing.rawPayload,
-                            featureId = existing.featureId
-                        )
-                        
-                        val isContentSame = isSameContent(existingEntry, sanitizedEntry)
-                        if (isContentSame) {
-                            // 内容相同，更新现有记录
-                            SuperIslandHistoryEntity(
-                                id = existing.id, // 使用现有记录的ID
-                                sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
-                                originalPackage = sanitizedEntry.originalPackage,
-                                mappedPackage = sanitizedEntry.mappedPackage,
-                                appName = sanitizedEntry.appName,
-                                title = sanitizedEntry.title,
-                                text = sanitizedEntry.text,
-                                paramV2Raw = sanitizedEntry.paramV2Raw,
-                                picMap = gson.toJson(sanitizedEntry.picMap),
-                                rawPayload = sanitizedEntry.rawPayload,
-                                featureId = entry.featureId
-                            )
-                        } else {
-                            // 内容不同，添加新记录
-                            SuperIslandHistoryEntity(
-                                id = sanitizedEntry.id,
-                                sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
-                                originalPackage = sanitizedEntry.originalPackage,
-                                mappedPackage = sanitizedEntry.mappedPackage,
-                                appName = sanitizedEntry.appName,
-                                title = sanitizedEntry.title,
-                                text = sanitizedEntry.text,
-                                paramV2Raw = sanitizedEntry.paramV2Raw,
-                                picMap = gson.toJson(sanitizedEntry.picMap),
-                                rawPayload = sanitizedEntry.rawPayload,
-                                featureId = entry.featureId
-                            )
-                        }
-                    } else {
-                        // 添加新记录
-                        SuperIslandHistoryEntity(
-                            id = sanitizedEntry.id,
-                            sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
-                            originalPackage = sanitizedEntry.originalPackage,
-                            mappedPackage = sanitizedEntry.mappedPackage,
-                            appName = sanitizedEntry.appName,
-                            title = sanitizedEntry.title,
-                            text = sanitizedEntry.text,
-                            paramV2Raw = sanitizedEntry.paramV2Raw,
-                            picMap = gson.toJson(sanitizedEntry.picMap),
-                            rawPayload = sanitizedEntry.rawPayload,
-                            featureId = entry.featureId
-                        )
-                    }
-                } else {
-                    // 旧逻辑：直接创建新实体
-                    SuperIslandHistoryEntity(
-                        id = sanitizedEntry.id,
-                        sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
-                        originalPackage = sanitizedEntry.originalPackage,
-                        mappedPackage = sanitizedEntry.mappedPackage,
-                        appName = sanitizedEntry.appName,
-                        title = sanitizedEntry.title,
-                        text = sanitizedEntry.text,
-                        paramV2Raw = sanitizedEntry.paramV2Raw,
-                        picMap = gson.toJson(sanitizedEntry.picMap),
-                        rawPayload = sanitizedEntry.rawPayload
-                    )
-                }
+                val entity = SuperIslandHistoryEntity(
+                    id = sanitizedEntry.id,
+                    sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
+                    originalPackage = sanitizedEntry.originalPackage,
+                    mappedPackage = sanitizedEntry.mappedPackage,
+                    appName = sanitizedEntry.appName,
+                    title = sanitizedEntry.title,
+                    text = sanitizedEntry.text,
+                    paramV2Raw = sanitizedEntry.paramV2Raw,
+                    picMap = gson.toJson(sanitizedEntry.picMap),
+                    rawPayload = sanitizedEntry.rawPayload,
+                    featureId = entry.featureId
+                )
                 
-                repository.saveSuperIslandHistory(listOf(entity))
+                // 直接插入记录，不去重（去重逻辑在应用层实现）
+                repository.saveSuperIslandHistory(entity)
                 
                 // 清理旧记录，确保数据库中只保留最新的MAX_ENTRIES条
-                // 直接在数据库层面删除旧记录，避免加载所有数据
                 repository.deleteOldSuperIslandHistory(MAX_ENTRIES)
             } catch (_: Exception) {}
         }
     }
     
     /**
-     * 比较两个SuperIslandHistoryEntry的内容是否相同（忽略id字段）
+     * 比较两个SuperIslandHistoryEntry的内容是否相同（忽略id和时间字段）
      */
     private fun isSameContent(entry1: SuperIslandHistoryEntry, entry2: SuperIslandHistoryEntry): Boolean {
-        // 比较除id外的所有字段
+        // 比较除id外的所有字段，忽略时间相关字段
         return entry1.sourceDeviceUuid == entry2.sourceDeviceUuid &&
                entry1.originalPackage == entry2.originalPackage &&
                entry1.mappedPackage == entry2.mappedPackage &&

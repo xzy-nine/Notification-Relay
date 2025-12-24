@@ -185,7 +185,7 @@ class DatabaseRepository(private val database: AppDatabase) {
     }
     
     /**
-     * 保存超级岛历史记录
+     * 保存超级岛历史记录列表
      */
     suspend fun saveSuperIslandHistory(history: List<SuperIslandHistoryEntity>) {
         superIslandHistoryDao.insertAll(history)
@@ -196,6 +196,21 @@ class DatabaseRepository(private val database: AppDatabase) {
      */
     suspend fun saveSuperIslandHistory(history: SuperIslandHistoryEntity) {
         superIslandHistoryDao.insert(history)
+    }
+    
+    /**
+     * 根据特征ID和内容更新或插入超级岛历史记录
+     * 相同特征ID但内容不同的记录会被保留
+     */
+    suspend fun upsertSuperIslandHistoryByFeatureAndContent(history: SuperIslandHistoryEntity) {
+        superIslandHistoryDao.upsertByFeatureAndContent(history)
+    }
+    
+    /**
+     * 根据特征ID获取最新的超级岛历史记录
+     */
+    suspend fun getSuperIslandHistoryByFeatureId(featureId: String): List<SuperIslandHistoryEntity> {
+        return superIslandHistoryDao.getAllHistory().filter { it.featureId == featureId }
     }
     
     /**
