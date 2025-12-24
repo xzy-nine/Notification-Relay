@@ -171,6 +171,9 @@ object FloatingReplicaManager {
     // 拖拽开始时的条目位置
     private val draggingEntryPositions = mutableMapOf<String, Pair<Float, Float>>()
     
+    // 记录条目是否在关闭区域内
+    private val draggingEntryInCloseArea = mutableMapOf<String, Boolean>()
+    
     /**
      * 显示超级岛复刻悬浮窗。
      * paramV2Raw: miui.focus.param 中 param_v2 的原始 JSON 字符串（可为 null）
@@ -856,6 +859,9 @@ object FloatingReplicaManager {
         val containerX = params.x.toFloat()
         val containerY = params.y.toFloat()
         draggingEntryPositions[key] = Pair(containerX, containerY)
+        
+        // 初始化关闭区域状态
+        draggingEntryInCloseArea[key] = false
     }
     
     /**
@@ -866,6 +872,7 @@ object FloatingReplicaManager {
         val params = overlayLayoutParams ?: return
         val wm = windowManager?.get() ?: return
         val rootView = overlayView?.get() ?: return
+        val closeView = closeTargetView?.get() ?: return
         
         // 更新浮窗容器的位置
         params.x += offset.x.toInt()
@@ -880,6 +887,47 @@ object FloatingReplicaManager {
         
         params.x = params.x.coerceIn(0, screenWidth - windowWidth)
         params.y = params.y.coerceIn(0, screenHeight - windowHeight)
+        
+        // 检测条目是否进入/离开关闭区域，触发触觉反馈
+        val closeLocation = IntArray(2)
+        closeView.getLocationOnScreen(closeLocation)
+        val closeX = closeLocation[0]
+        val closeY = closeLocation[1]
+        val closeWidth = closeView.width
+        val closeHeight = closeView.height
+        
+        // 计算关闭区域的中心点和半径
+        val closeCenterX = closeX + closeWidth / 2f
+        val closeCenterY = closeY + closeHeight / 2f
+        val closeRadius = Math.min(closeWidth, closeHeight) / 2f
+        
+        // 计算当前条目的位置和中心点
+        val entryIndex = floatingWindowManager.entriesList.indexOfFirst { it.key == key }
+        if (entryIndex != -1) {
+            val density = getDensity(rootView.context)
+            val estimatedEntryHeight = (100 * density).toInt()
+            val entryY = params.y + entryIndex * estimatedEntryHeight
+            val entryCenterX = params.x + windowWidth / 2f
+            val entryCenterY = entryY + estimatedEntryHeight / 2f
+            
+            // 检查条目中心点是否在关闭区域内
+            val dx = entryCenterX - closeCenterX
+            val dy = entryCenterY - closeCenterY
+            val distanceSq = dx * dx + dy * dy
+            val isInCloseArea = distanceSq <= closeRadius * closeRadius
+            
+            // 获取之前的状态
+            val previousIsInCloseArea = draggingEntryInCloseArea[key] ?: false
+            
+            // 如果状态发生变化，触发触觉反馈
+            if (isInCloseArea != previousIsInCloseArea) {
+                performHapticFeedback(rootView.context)
+                animateCloseTargetHighlight(isInCloseArea)
+            }
+            
+            // 更新状态
+            draggingEntryInCloseArea[key] = isInCloseArea
+        }
         
         // 更新浮窗位置
         try {
@@ -903,6 +951,8 @@ object FloatingReplicaManager {
         currentDraggingKey = null
         // 清除拖拽位置记录
         draggingEntryPositions.remove(key)
+        // 清除关闭区域状态记录
+        draggingEntryInCloseArea.remove(key)
     }
     
     /**
@@ -915,6 +965,8 @@ object FloatingReplicaManager {
         currentDraggingKey = null
         // 清除拖拽位置记录
         draggingEntryPositions.remove(key)
+        // 清除关闭区域状态记录
+        draggingEntryInCloseArea.remove(key)
     }
     
     /**
@@ -963,12 +1015,14 @@ object FloatingReplicaManager {
         
         if (distanceSq <= closeRadius * closeRadius) {
             // 命中关闭区域：会话级屏蔽 + 移除浮窗条目
+            // 添加触觉反馈
+            performHapticFeedback(rootView.context)
             blockInstance(key)
             floatingWindowManager.removeEntry(key)
             entries.remove(key)
         }
     }
-
+    
     // 显示全屏关闭层，底部中心有关闭指示器
     private fun showCloseOverlay(context: Context) {
         if (closeOverlayView?.get() != null) return
