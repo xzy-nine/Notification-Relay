@@ -1,6 +1,5 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -12,7 +11,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.TemplateViewResult
 
 /**
  * ParamV2主容器Compose组件，根据ParamV2数据选择不同的模板组件进行渲染

@@ -3,7 +3,6 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 import android.content.Context
 import android.util.AttributeSet
 import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -16,6 +15,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
+import kotlin.math.abs
 
 /**
  * Compose浮窗容器视图，作为传统View系统与Compose之间的桥梁
@@ -82,7 +82,7 @@ class FloatingComposeContainer @JvmOverloads constructor(
             val savedStateRegistryOwnerClass = Class.forName("androidx.savedstate.SavedStateRegistryOwner")
             val setSavedStateMethod = viewTreeSavedStateRegistryOwnerClass.getDeclaredMethod("set", viewClass, savedStateRegistryOwnerClass)
             setSavedStateMethod.invoke(null, this, internalLifecycleOwner)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // 忽略异常，继续执行
         }
         
@@ -104,7 +104,7 @@ class FloatingComposeContainer @JvmOverloads constructor(
             val savedStateRegistryOwnerClass = Class.forName("androidx.savedstate.SavedStateRegistryOwner")
             val setSavedStateMethod = viewTreeSavedStateRegistryOwnerClass.getDeclaredMethod("set", viewClass, savedStateRegistryOwnerClass)
             setSavedStateMethod.invoke(null, this, null)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // 忽略异常
         }
     }
@@ -132,8 +132,8 @@ class FloatingComposeContainer @JvmOverloads constructor(
             }
             MotionEvent.ACTION_MOVE -> {
                 // 计算移动距离
-                val deltaX = Math.abs(event.rawX - downX)
-                val deltaY = Math.abs(event.rawY - downY)
+                val deltaX = abs(event.rawX - downX)
+                val deltaY = abs(event.rawY - downY)
                 val moveThreshold = 10f // 拖动阈值
                 
                 if (!isDragging && (deltaX > moveThreshold || deltaY > moveThreshold)) {

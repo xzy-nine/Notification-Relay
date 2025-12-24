@@ -183,9 +183,8 @@ fun MultiProgressCompose(
                 val pointerSizePx = with(density) { pointerSize.toPx() }
                 val pointerHalfSizePx = pointerSizePx / 2f
                 val pointerCenterPx = safeContainerWidth * ratio
-                val minValuePx = pointerHalfSizePx
-                val maxValuePx = max(minValuePx, safeContainerWidth - pointerHalfSizePx)
-                val clampedPointerCenterPx = pointerCenterPx.coerceIn(minValuePx, maxValuePx)
+                val maxValuePx = max(pointerHalfSizePx, safeContainerWidth - pointerHalfSizePx)
+                val clampedPointerCenterPx = pointerCenterPx.coerceIn(pointerHalfSizePx, maxValuePx)
                 val pointerLeftDp = with(density) { (clampedPointerCenterPx - pointerHalfSizePx).toDp() }
                 
                 // 指针图应该悬浮在最上面，使用zIndex提升层级

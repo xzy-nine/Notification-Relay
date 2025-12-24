@@ -54,7 +54,7 @@ private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
                     title = title.takeIf { it.isNotBlank() } ?: "超级岛",
                     content = content.takeIf { it.isNotBlank() } ?: ""
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // JSON解析也失败，显示基本信息
                 ParseResult.Error(
                     title = "超级岛通知",
@@ -62,7 +62,7 @@ private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
                 )
             }
         }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         // 任何异常都返回失败结果
         ParseResult.Error(
             title = "超级岛通知",
@@ -224,9 +224,7 @@ suspend fun buildComposeViewFromRawParam(
             val contentBlock: @Composable () -> Unit = {
                 SuperIslandComposeRoot(content = {
                     // 解析paramV2，在Composable函数之外处理异常
-                    val parseResult = parseParamV2WithResult(paramV2Raw)
-                    
-                    when (parseResult) {
+                    when (val parseResult = parseParamV2WithResult(paramV2Raw)) {
                         is ParseResult.Success -> {
                             val paramV2 = parseResult.paramV2
                             // 根据paramV2的不同类型显示不同的Compose组件

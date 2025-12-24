@@ -3,13 +3,10 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ActionInfo
 
 /**
@@ -27,7 +24,7 @@ fun ActionCompose(actions: List<ActionInfo>, picMap: Map<String, String>? = null
                     ) {
                         androidx.compose.material3.Text(
                             text = title,
-                            color = androidx.compose.ui.graphics.Color.White
+                            color = Color.White
                         )
                     }
                 }
