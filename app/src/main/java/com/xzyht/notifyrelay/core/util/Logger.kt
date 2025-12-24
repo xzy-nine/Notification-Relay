@@ -2,7 +2,7 @@ package com.xzyht.notifyrelay.core.util
 
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
-
+//TODO 记得修改其他文件的替换为Logger
 /**
  * 日志工具类
  * 用于统一管理日志输出，支持按级别控制是否输出到控制台
@@ -31,7 +31,7 @@ object Logger {
      */
     fun v(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.VERBOSE) {
-            Logger.v(tag, message)
+            Log.v(tag, message)
         }
     }
 
@@ -40,7 +40,7 @@ object Logger {
      */
     fun v(tag: String, message: String, throwable: Throwable) {
         if (CURRENT_LEVEL <= Level.VERBOSE) {
-            Logger.v(tag, message, throwable)
+            Log.v(tag, message, throwable)
         }
     }
 
@@ -49,7 +49,7 @@ object Logger {
      */
     fun d(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.DEBUG) {
-            Logger.d(tag, message)
+            Log.d(tag, message)
         }
     }
 
@@ -58,7 +58,7 @@ object Logger {
      */
     fun d(tag: String, message: String, throwable: Throwable) {
         if (CURRENT_LEVEL <= Level.DEBUG) {
-            Logger.d(tag, message, throwable)
+            Log.d(tag, message, throwable)
         }
     }
 
@@ -67,7 +67,7 @@ object Logger {
      */
     fun i(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.INFO) {
-            Logger.i(tag, message)
+            Log.i(tag, message)
         }
     }
 
@@ -76,7 +76,7 @@ object Logger {
      */
     fun i(tag: String, message: String, throwable: Throwable) {
         if (CURRENT_LEVEL <= Level.INFO) {
-            Logger.i(tag, message, throwable)
+            Log.i(tag, message, throwable)
         }
     }
 
@@ -85,7 +85,7 @@ object Logger {
      */
     fun w(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.WARN) {
-            Logger.w(tag, message)
+            Log.w(tag, message)
         }
     }
 
@@ -94,7 +94,7 @@ object Logger {
      */
     fun w(tag: String, message: String, throwable: Throwable) {
         if (CURRENT_LEVEL <= Level.WARN) {
-            Logger.w(tag, message, throwable)
+            Log.w(tag, message, throwable)
         }
     }
 
@@ -103,7 +103,7 @@ object Logger {
      */
     fun e(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.ERROR) {
-            Logger.e(tag, message)
+            Log.e(tag, message)
         }
     }
 
@@ -112,7 +112,7 @@ object Logger {
      */
     fun e(tag: String, message: String, throwable: Throwable) {
         if (CURRENT_LEVEL <= Level.ERROR) {
-            Logger.e(tag, message, throwable)
+            Log.e(tag, message, throwable)
         }
     }
 
@@ -121,7 +121,7 @@ object Logger {
      */
     fun logSbnDetail(tag: String, message: String) {
         if (CURRENT_LEVEL <= Level.DEBUG) {
-            Logger.d(tag, message)
+            Log.d(tag, message)
         }
     }
 }
