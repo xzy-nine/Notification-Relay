@@ -164,7 +164,13 @@ object FloatingReplicaManager {
 
     // 使用FloatingWindowManager替代原有entries映射
     private val entries = ConcurrentHashMap<String, EntryRecord>()
-
+    
+    // 当前正在拖拽的条目key
+    private var currentDraggingKey: String? = null
+    
+    // 拖拽开始时的条目位置
+    private val draggingEntryPositions = mutableMapOf<String, Pair<Float, Float>>()
+    
     /**
      * 显示超级岛复刻悬浮窗。
      * paramV2Raw: miui.focus.param 中 param_v2 的原始 JSON 字符串（可为 null）
@@ -481,11 +487,17 @@ object FloatingReplicaManager {
                             this.lifecycleOwner = overlayLifecycleOwner ?: lifecycleManager.lifecycleOwner
                             // 设置条目点击回调
                             this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
+                            // 设置条目拖拽开始回调
+                            this.onEntryDragStart = { entryKey -> onEntryDragStarted(entryKey, context) }
                             // 设置条目拖拽回调
                             this.onEntryDrag = { entryKey, offset -> 
                                 // 处理拖拽逻辑
                                 handleEntryDrag(entryKey, offset)
                             }
+                            // 设置条目拖拽结束回调
+                            this.onEntryDragEnd = { entryKey -> onEntryDragEnded(entryKey) }
+                            // 设置条目拖拽取消回调
+                            this.onEntryDragCancel = { entryKey -> onEntryDragCancelled(entryKey) }
                         }
 
                         // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
@@ -831,6 +843,22 @@ object FloatingReplicaManager {
     }
     
     /**
+     * 处理条目拖拽开始事件
+     */
+    private fun onEntryDragStarted(key: String, context: Context) {
+        // 显示关闭层
+        showCloseOverlay(context)
+        // 记录当前正在拖拽的条目
+        currentDraggingKey = key
+        
+        // 记录条目初始位置
+        val params = overlayLayoutParams ?: return
+        val containerX = params.x.toFloat()
+        val containerY = params.y.toFloat()
+        draggingEntryPositions[key] = Pair(containerX, containerY)
+    }
+    
+    /**
      * 处理来自Compose的拖拽事件
      */
     private fun handleEntryDrag(key: String, offset: androidx.compose.ui.geometry.Offset) {
@@ -860,6 +888,84 @@ object FloatingReplicaManager {
             if (BuildConfig.DEBUG) {
                 Log.w(TAG, "超级岛: 更新浮窗位置失败: ${e.message}")
             }
+        }
+    }
+    
+    /**
+     * 处理条目拖拽结束事件
+     */
+    private fun onEntryDragEnded(key: String) {
+        // 拖拽结束，检查是否需要移除条目
+        checkAndRemoveEntryIfNeeded(key)
+        // 隐藏关闭层
+        hideCloseOverlay()
+        // 清除当前正在拖拽的条目记录
+        currentDraggingKey = null
+        // 清除拖拽位置记录
+        draggingEntryPositions.remove(key)
+    }
+    
+    /**
+     * 处理条目拖拽取消事件
+     */
+    private fun onEntryDragCancelled(key: String) {
+        // 隐藏关闭层
+        hideCloseOverlay()
+        // 清除当前正在拖拽的条目记录
+        currentDraggingKey = null
+        // 清除拖拽位置记录
+        draggingEntryPositions.remove(key)
+    }
+    
+    /**
+     * 检查条目是否需要被移除（拖拽到关闭区域）
+     */
+    private fun checkAndRemoveEntryIfNeeded(key: String) {
+        val rootView = overlayView?.get() ?: return
+        val closeView = closeTargetView?.get() ?: return
+        
+        // 获取关闭区域的位置和大小
+        val closeLocation = IntArray(2)
+        closeView.getLocationOnScreen(closeLocation)
+        val closeX = closeLocation[0]
+        val closeY = closeLocation[1]
+        val closeWidth = closeView.width
+        val closeHeight = closeView.height
+        
+        // 计算关闭区域的中心点
+        val closeCenterX = closeX + closeWidth / 2f
+        val closeCenterY = closeY + closeHeight / 2f
+        val closeRadius = Math.min(closeWidth, closeHeight) / 2f
+        
+        // 获取浮窗容器的位置和大小
+        val params = overlayLayoutParams ?: return
+        val containerX = params.x
+        val containerY = params.y
+        val containerWidth = params.width
+        
+        // 计算当前条目的位置（假设条目是垂直排列的）
+        val entryIndex = floatingWindowManager.entriesList.indexOfFirst { it.key == key }
+        if (entryIndex == -1) return
+        
+        // 假设每个条目的高度大约是100dp，需要根据实际情况调整
+        val density = getDensity(rootView.context)
+        val estimatedEntryHeight = (100 * density).toInt()
+        val entryY = containerY + entryIndex * estimatedEntryHeight
+        
+        // 计算条目的中心点
+        val entryCenterX = containerX + containerWidth / 2f
+        val entryCenterY = entryY + estimatedEntryHeight / 2f
+        
+        // 检查条目中心点是否在关闭区域内
+        val dx = entryCenterX - closeCenterX
+        val dy = entryCenterY - closeCenterY
+        val distanceSq = dx * dx + dy * dy
+        
+        if (distanceSq <= closeRadius * closeRadius) {
+            // 命中关闭区域：会话级屏蔽 + 移除浮窗条目
+            blockInstance(key)
+            floatingWindowManager.removeEntry(key)
+            entries.remove(key)
         }
     }
 

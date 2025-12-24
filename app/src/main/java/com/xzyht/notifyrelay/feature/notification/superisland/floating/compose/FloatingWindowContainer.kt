@@ -58,7 +58,10 @@ data class FloatingEntry(
 fun FloatingWindowContainer(
     entries: List<FloatingEntry>,
     onEntryClick: (String) -> Unit,
+    onEntryDragStart: (String) -> Unit,
     onEntryDrag: (String, Offset) -> Unit,
+    onEntryDragEnd: (String) -> Unit,
+    onEntryDragCancel: (String) -> Unit,
     lifecycleOwner: LifecycleOwner?,
     modifier: Modifier = Modifier
 ) {
@@ -75,11 +78,25 @@ fun FloatingWindowContainer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .pointerInput(entry.key) {
-                            detectDragGestures { change, dragAmount ->
-                                // 处理拖拽事件
-                                change.consume()
-                                onEntryDrag(entry.key, dragAmount)
-                            }
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    // 拖拽开始
+                                    onEntryDragStart(entry.key)
+                                },
+                                onDrag = { change, dragAmount ->
+                                    // 处理拖拽事件
+                                    change.consume()
+                                    onEntryDrag(entry.key, dragAmount)
+                                },
+                                onDragEnd = {
+                                    // 拖拽结束
+                                    onEntryDragEnd(entry.key)
+                                },
+                                onDragCancel = {
+                                    // 拖拽取消
+                                    onEntryDragCancel(entry.key)
+                                }
+                            )
                         }
                         .clickable { onEntryClick(entry.key) }
                 ) {

@@ -29,6 +29,15 @@ class FloatingWindowManager {
     // 条目列表，用于Compose渲染
     val entriesList = mutableStateListOf<FloatingEntry>()
     
+    // 当前正在拖拽的条目key
+    private var _currentDraggingKey: String? by mutableStateOf(null)
+    
+    // 是否正在拖拽
+    val isDragging: Boolean get() = _currentDraggingKey != null
+    
+    // 当前正在拖拽的条目
+    val currentDraggingEntry: FloatingEntry? get() = _currentDraggingKey?.let { getEntry(it) }
+    
     // 记录条目的内部数据类
     private data class EntryWithTimestamp(
         val entry: FloatingEntry,
@@ -290,5 +299,21 @@ class FloatingWindowManager {
         }
         entriesMap.clear()
         entriesList.clear()
+        // 清除拖拽状态
+        _currentDraggingKey = null
+    }
+    
+    /**
+     * 设置当前正在拖拽的条目
+     */
+    fun setDraggingEntry(key: String?) {
+        _currentDraggingKey = key
+    }
+    
+    /**
+     * 清除拖拽状态
+     */
+    fun clearDraggingState() {
+        _currentDraggingKey = null
     }
 }

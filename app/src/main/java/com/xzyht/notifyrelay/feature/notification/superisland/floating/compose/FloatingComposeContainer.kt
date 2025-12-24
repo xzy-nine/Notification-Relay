@@ -27,8 +27,17 @@ class FloatingComposeContainer @JvmOverloads constructor(
     // 条目点击回调
     var onEntryClick: ((String) -> Unit)? = null
     
+    // 条目拖拽开始回调
+    var onEntryDragStart: ((String) -> Unit)? = null
+    
     // 条目拖拽回调
     var onEntryDrag: ((String, androidx.compose.ui.geometry.Offset) -> Unit)? = null
+    
+    // 条目拖拽结束回调
+    var onEntryDragEnd: ((String) -> Unit)? = null
+    
+    // 条目拖拽取消回调
+    var onEntryDragCancel: ((String) -> Unit)? = null
     
     @Composable
     override fun Content() {
@@ -37,7 +46,10 @@ class FloatingComposeContainer @JvmOverloads constructor(
             FloatingWindowContainer(
                 entries = floatingWindowManager.entriesList,
                 onEntryClick = { key -> onEntryClick?.invoke(key) },
+                onEntryDragStart = { key -> onEntryDragStart?.invoke(key) },
                 onEntryDrag = { key, offset -> onEntryDrag?.invoke(key, offset) },
+                onEntryDragEnd = { key -> onEntryDragEnd?.invoke(key) },
+                onEntryDragCancel = { key -> onEntryDragCancel?.invoke(key) },
                 lifecycleOwner = lifecycleOwner
             )
         }
