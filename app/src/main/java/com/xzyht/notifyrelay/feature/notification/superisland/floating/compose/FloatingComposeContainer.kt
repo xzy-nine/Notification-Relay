@@ -2,12 +2,20 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 
 import android.content.Context
 import android.util.AttributeSet
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.AbstractComposeView
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
 
 /**
  * Compose浮窗容器视图，作为传统View系统与Compose之间的桥梁
@@ -24,34 +32,164 @@ class FloatingComposeContainer @JvmOverloads constructor(
     // 生命周期所有者
     var lifecycleOwner: LifecycleOwner? = null
     
+    // 内部LifecycleOwner实现，用于浮窗环境
+    private val internalLifecycleOwner = object : LifecycleOwner, SavedStateRegistryOwner {
+        private val lifecycleRegistry = LifecycleRegistry(this)
+        private val savedStateController = SavedStateRegistryController.create(this)
+        
+        init {
+            // 初始化SavedStateRegistry
+            savedStateController.performAttach()
+            savedStateController.performRestore(null)
+            // 设置初始生命周期状态为RESUMED
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        }
+        
+        override val lifecycle: Lifecycle get() = lifecycleRegistry
+        override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
+    }
+    
+    // 拖动相关变量
+    private var isDragging = false
+    private var downX = 0f
+    private var downY = 0f
+    private var startX = 0
+    private var startY = 0
+    
+    // WindowManager和LayoutParams引用，用于更新浮窗位置
+    var windowManager: WindowManager? = null
+    var windowLayoutParams: WindowManager.LayoutParams? = null
+    
+    init {
+        // 设置Compose视图的合成策略，确保在浮窗环境中正确处理生命周期
+        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+    }
+    
+    override fun onAttachedToWindow() {
+        try {
+            // 先设置ViewTreeLifecycleOwner，再调用super.onAttachedToWindow()
+            // 这样父类方法在调用时就能找到LifecycleOwner
+            val viewTreeLifecycleOwnerClass = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
+            val viewClass = Class.forName("android.view.View")
+            val lifecycleOwnerClass = Class.forName("androidx.lifecycle.LifecycleOwner")
+            val setMethod = viewTreeLifecycleOwnerClass.getDeclaredMethod("set", viewClass, lifecycleOwnerClass)
+            setMethod.invoke(null, this, internalLifecycleOwner)
+            
+            // 同时设置SavedStateRegistryOwner
+            val viewTreeSavedStateRegistryOwnerClass = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
+            val savedStateRegistryOwnerClass = Class.forName("androidx.savedstate.SavedStateRegistryOwner")
+            val setSavedStateMethod = viewTreeSavedStateRegistryOwnerClass.getDeclaredMethod("set", viewClass, savedStateRegistryOwnerClass)
+            setSavedStateMethod.invoke(null, this, internalLifecycleOwner)
+        } catch (e: Exception) {
+            // 忽略异常，继续执行
+        }
+        
+        // 调用父类方法
+        super.onAttachedToWindow()
+    }
+    
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        try {
+            // 清理LifecycleOwner和SavedStateRegistryOwner
+            val viewTreeLifecycleOwnerClass = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
+            val viewClass = Class.forName("android.view.View")
+            val lifecycleOwnerClass = Class.forName("androidx.lifecycle.LifecycleOwner")
+            val setMethod = viewTreeLifecycleOwnerClass.getDeclaredMethod("set", viewClass, lifecycleOwnerClass)
+            setMethod.invoke(null, this, null)
+            
+            val viewTreeSavedStateRegistryOwnerClass = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
+            val savedStateRegistryOwnerClass = Class.forName("androidx.savedstate.SavedStateRegistryOwner")
+            val setSavedStateMethod = viewTreeSavedStateRegistryOwnerClass.getDeclaredMethod("set", viewClass, savedStateRegistryOwnerClass)
+            setSavedStateMethod.invoke(null, this, null)
+        } catch (e: Exception) {
+            // 忽略异常
+        }
+    }
+    
+    // 重写dispatchTouchEvent，确保触摸事件能够被正确传递和处理
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // 先处理触摸事件，再调用父类方法
+        if (onTouchEvent(event)) {
+            return true
+        }
+        return super.dispatchTouchEvent(event)
+    }
+    
+    // 处理触摸事件，实现浮窗拖动
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                // 记录拖动开始时的坐标
+                isDragging = true
+                downX = event.rawX
+                downY = event.rawY
+                startX = windowLayoutParams?.x ?: 0
+                startY = windowLayoutParams?.y ?: 0
+                // 立即调用容器拖动开始回调，显示关闭层
+                onContainerDragStart?.invoke()
+                // 消费事件，确保能收到后续事件
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (isDragging) {
+                    // 计算拖动的偏移量
+                    val deltaX = (event.rawX - downX).toInt()
+                    val deltaY = (event.rawY - downY).toInt()
+                    
+                    // 更新浮窗位置
+                    windowLayoutParams?.let { lp ->
+                        lp.x = startX + deltaX
+                        lp.y = startY + deltaY
+                        windowManager?.updateViewLayout(this, lp)
+                    }
+                    // 消费事件，确保能继续拖动
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                // 调用容器拖动结束回调
+                onContainerDragEnd?.invoke()
+                // 结束拖动
+                isDragging = false
+            }
+        }
+        return false
+    }
+    
     // 条目点击回调
     var onEntryClick: ((String) -> Unit)? = null
     
-    // 条目拖拽开始回调
-    var onEntryDragStart: ((String) -> Unit)? = null
+    // 容器拖动开始回调
+    var onContainerDragStart: (() -> Unit)? = null
     
-    // 条目拖拽回调
-    var onEntryDrag: ((String, androidx.compose.ui.geometry.Offset) -> Unit)? = null
-    
-    // 条目拖拽结束回调
-    var onEntryDragEnd: ((String) -> Unit)? = null
-    
-    // 条目拖拽取消回调
-    var onEntryDragCancel: ((String) -> Unit)? = null
+    // 容器拖动结束回调
+    var onContainerDragEnd: (() -> Unit)? = null
     
     @Composable
     override fun Content() {
         // 只有当浮窗管理器初始化后才渲染内容
         if (::floatingWindowManager.isInitialized) {
-            FloatingWindowContainer(
-                entries = floatingWindowManager.entriesList,
-                onEntryClick = { key -> onEntryClick?.invoke(key) },
-                onEntryDragStart = { key -> onEntryDragStart?.invoke(key) },
-                onEntryDrag = { key, offset -> onEntryDrag?.invoke(key, offset) },
-                onEntryDragEnd = { key -> onEntryDragEnd?.invoke(key) },
-                onEntryDragCancel = { key -> onEntryDragCancel?.invoke(key) },
-                lifecycleOwner = lifecycleOwner
-            )
+            val currentLifecycleOwner = lifecycleOwner
+            val contentBlock: @Composable () -> Unit = {
+                FloatingWindowContainer(
+                    entries = floatingWindowManager.entriesList,
+                    onEntryClick = { key -> onEntryClick?.invoke(key) },
+                    lifecycleOwner = currentLifecycleOwner
+                )
+            }
+            
+            // 使用CompositionLocalProvider为Compose内容提供LifecycleOwner
+            if (currentLifecycleOwner != null) {
+                CompositionLocalProvider(LocalLifecycleOwner provides currentLifecycleOwner) {
+                    contentBlock()
+                }
+            } else {
+                contentBlock()
+            }
         }
     }
 }

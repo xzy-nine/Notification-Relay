@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,7 +49,9 @@ data class FloatingEntry(
     val business: String?,
     val title: String? = null,
     val text: String? = null,
-    val appName: String? = null
+    val appName: String? = null,
+    val x: Float = 0f,
+    val y: Float = 0f
 )
 
 /**
@@ -58,10 +61,6 @@ data class FloatingEntry(
 fun FloatingWindowContainer(
     entries: List<FloatingEntry>,
     onEntryClick: (String) -> Unit,
-    onEntryDragStart: (String) -> Unit,
-    onEntryDrag: (String, Offset) -> Unit,
-    onEntryDragEnd: (String) -> Unit,
-    onEntryDragCancel: (String) -> Unit,
     lifecycleOwner: LifecycleOwner?,
     modifier: Modifier = Modifier
 ) {
@@ -75,31 +74,10 @@ fun FloatingWindowContainer(
             // 使用key函数确保Compose能正确识别不同的条目，特别是当条目内容更新时
             key(entry.key) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .pointerInput(entry.key) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    // 拖拽开始
-                                    onEntryDragStart(entry.key)
-                                },
-                                onDrag = { change, dragAmount ->
-                                    // 处理拖拽事件
-                                    change.consume()
-                                    onEntryDrag(entry.key, dragAmount)
-                                },
-                                onDragEnd = {
-                                    // 拖拽结束
-                                    onEntryDragEnd(entry.key)
-                                },
-                                onDragCancel = {
-                                    // 拖拽取消
-                                    onEntryDragCancel(entry.key)
-                                }
-                            )
-                        }
-                        .clickable { onEntryClick(entry.key) }
-                ) {
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEntryClick(entry.key) }
+            ) {
                 // 简化动画，避免闪烁
                 val expandedEnterTransition = slideInVertically {
                     // 从顶部滑入
