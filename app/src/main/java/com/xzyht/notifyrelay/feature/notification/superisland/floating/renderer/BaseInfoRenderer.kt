@@ -1,11 +1,5 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
-import android.content.Context
-import android.text.Html
-import android.widget.LinearLayout
-import android.widget.TextView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import org.json.JSONObject
 
 // 数据类定义模板组件，使用分支结构避免重复定义
@@ -67,33 +61,3 @@ fun parseBaseInfo(json: JSONObject): BaseInfo {
     )
 }
 
-// 构建BaseInfo视图
-fun buildBaseInfoView(context: Context, baseInfo: BaseInfo, picMap: Map<String, String>?): LinearLayout {
-    val textContainer = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-    }
-
-    baseInfo.title?.let {
-        val tv = TextView(context).apply {
-            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
-            setTextColor(parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
-            textSize = 14f
-        }
-        textContainer.addView(tv)
-    }
-
-    baseInfo.content?.let {
-        val tv = TextView(context).apply {
-            text = Html.fromHtml(unescapeHtml(it), Html.FROM_HTML_MODE_COMPACT)
-            setTextColor(parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt())
-            textSize = 12f
-        }
-        textContainer.addView(tv)
-    }
-
-    return textContainer
-}

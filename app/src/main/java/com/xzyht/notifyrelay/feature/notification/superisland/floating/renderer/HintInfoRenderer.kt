@@ -1,11 +1,5 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
-import android.content.Context
-import android.text.Html
-import android.widget.LinearLayout
-import android.widget.TextView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import org.json.JSONObject
 
 // 提示信息模板：按钮组件2和3，包含文本和按钮
@@ -52,22 +46,3 @@ fun parseHintInfo(json: JSONObject): HintInfo {
     )
 }
 
-// 构建HintInfo视图
-fun buildHintInfoView(context: Context, hintInfo: HintInfo, picMap: Map<String, String>?): LinearLayout {
-    val container = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-    }
-
-    val tv = TextView(context).apply {
-        text = Html.fromHtml(unescapeHtml(hintInfo.title ?: "提示信息"), Html.FROM_HTML_MODE_COMPACT)
-        setTextColor(parseColor(hintInfo.colorTitle) ?: 0xFFFFFFFF.toInt())
-        textSize = 14f
-    }
-    container.addView(tv)
-
-    return container
-}

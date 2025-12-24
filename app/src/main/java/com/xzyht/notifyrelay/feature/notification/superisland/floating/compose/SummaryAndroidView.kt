@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.compose
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -21,38 +22,41 @@ fun SummaryAndroidView(
 ) {
     val context = LocalContext.current
     
-    AndroidView(
-        factory = { ctx ->
-            buildBigIslandCollapsedView(
-                context = ctx,
-                bigIsland = bigIslandJson,
-                picMap = picMap,
-                fallbackTitle = fallbackTitle,
-                fallbackContent = fallbackContent
-            )
-        },
-        update = { view ->
-            // 当isOverlapping参数变化时，更新视图背景色
-            val density = view.context.resources.displayMetrics.density
-            
-            if (isOverlapping) {
-                // 设置重叠时的红色背景，保持圆角
-                view.background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                    cornerRadius = 999f // 圆角
-                    setColor(0xEEFF0000.toInt()) // 半透明红色
-                    setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+    // 使用Compose的key函数，确保bigIslandJson变化时重新创建AndroidView
+    key(bigIslandJson?.toString()) {
+        AndroidView(
+            factory = { ctx ->
+                buildBigIslandCollapsedView(
+                    context = ctx,
+                    bigIsland = bigIslandJson,
+                    picMap = picMap,
+                    fallbackTitle = fallbackTitle,
+                    fallbackContent = fallbackContent
+                )
+            },
+            update = { view ->
+                // 当isOverlapping参数变化时，更新视图背景色
+                val density = view.context.resources.displayMetrics.density
+                
+                if (isOverlapping) {
+                    // 设置重叠时的红色背景，保持圆角
+                    view.background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = 999f // 圆角
+                        setColor(0xEEFF0000.toInt()) // 半透明红色
+                        setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+                    }
+                } else {
+                    // 恢复默认背景色
+                    view.background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                        cornerRadius = 999f // 圆角
+                        setColor(0xCC000000.toInt()) // 半透明黑
+                        setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
+                    }
                 }
-            } else {
-                // 恢复默认背景色
-                view.background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                    cornerRadius = 999f // 圆角
-                    setColor(0xCC000000.toInt()) // 半透明黑
-                    setStroke((density).toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
-                }
-            }
-        },
-        modifier = modifier
-    )
+            },
+            modifier = modifier
+        )
+    }
 }

@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -187,15 +188,18 @@ fun FloatingWindowContainer(
                     val fallbackContent = entry.title?.takeIf { it.isNotBlank() }
                     
                     // 从paramV2Raw中正确解析bigIslandJson，与传统实现保持一致
-                    val bigIslandJson = entry.paramV2Raw?.let {
-                        try {
-                            val root = org.json.JSONObject(it)
-                            val island = root.optJSONObject("param_island")
-                                ?: root.optJSONObject("paramIsland")
-                                ?: root.optJSONObject("islandParam")
-                            island?.optJSONObject("bigIslandArea") ?: island?.optJSONObject("bigIsland")
-                        } catch (e: Exception) {
-                            null
+                    // 使用remember块确保entry.paramV2Raw变化时重新解析
+                    val bigIslandJson = remember(entry.paramV2Raw) {
+                        entry.paramV2Raw?.let {
+                            try {
+                                val root = org.json.JSONObject(it)
+                                val island = root.optJSONObject("param_island")
+                                    ?: root.optJSONObject("paramIsland")
+                                    ?: root.optJSONObject("islandParam")
+                                island?.optJSONObject("bigIslandArea") ?: island?.optJSONObject("bigIsland")
+                            } catch (e: Exception) {
+                                null
+                            }
                         }
                     }
                     
