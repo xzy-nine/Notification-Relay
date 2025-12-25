@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 
 /**
  * 通用图片加载组件
@@ -35,15 +36,19 @@ fun CommonImageCompose(
     isFocusIcon: Boolean = false,
     contentDescription: String? = null
 ) {
-    if (picKey.isNullOrBlank()) return
+    // 对于焦点图标，即使picKey为空，也尝试从picMap中获取
+    if (!isFocusIcon && picKey.isNullOrBlank()) return
+    
+    // 获取当前主题
+    val isDarkTheme = isSystemInDarkTheme()
     
     val iconUrl = if (isFocusIcon) {
-        resolveFocusIconUrl(picMap, picKey)
+        resolveFocusIconUrl(picMap, picKey, isDarkTheme)
     } else {
         resolveIconUrl(picMap, picKey)
     }
     
-    val painter = rememberSuperIslandImagePainter(iconUrl, picMap, picKey)
+    val painter = rememberSuperIslandImagePainter(iconUrl, picMap)
     
     if (painter != null) {
         Image(

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.AImageText1
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.parseAComponent
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right.BEmpty
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right.BTextInfo
@@ -60,8 +61,13 @@ fun BigIslandCollapsedCompose(
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         // 解析A区和B区组件
-        val aComp = parseAComponent(bigIsland)
+        var aComp = parseAComponent(bigIsland)
         var bComp = parseBComponent(bigIsland)
+        
+        // 如果A区组件为空，创建一个默认的AImageText1对象来显示兜底应用图标
+        if (aComp == null) {
+            aComp = AImageText1(picKey = null)
+        }
         
         // 如果 B 为空且存在兜底文本，则用兜底文本填充 B
         val bIsEmptyInitial = (bComp is BEmpty)

@@ -31,20 +31,15 @@ fun ACompose(
                 val hasText = !aComp.title.isNullOrBlank() || !aComp.content.isNullOrBlank()
                 val iconSize = if (hasText) 18.dp else 24.dp
                 
-                // 检查是否有可用的图片资源
-                val hasFocusCandidates = picMap?.keys?.any { it.startsWith("miui.focus.pic_", ignoreCase = true) } == true
-                val hasIcon = hasFocusCandidates || !aComp.picKey.isNullOrBlank()
-                
-                if (hasIcon) {
-                    // 使用通用图片加载组件
-                    CommonImageCompose(
-                        picKey = aComp.picKey,
-                        picMap = picMap,
-                        size = iconSize,
-                        isFocusIcon = true,
-                        contentDescription = null
-                    )
-                }
+                // 对于焦点图标，即使picKey为空，也应该尝试加载
+                // 直接调用CommonImageCompose，让它内部处理图片资源的解析和加载
+                CommonImageCompose(
+                    picKey = aComp.picKey,
+                    picMap = picMap,
+                    size = iconSize,
+                    isFocusIcon = true,
+                    contentDescription = null
+                )
                 
                 // 文本内容
                 val hasTitleOrContent = !aComp.title.isNullOrBlank() || !aComp.content.isNullOrBlank()
@@ -62,19 +57,14 @@ fun ACompose(
             
             is AImageText5 -> {
                 // 处理图标
-                val hasFocusCandidates = picMap?.keys?.any { it.startsWith("miui.focus.pic_", ignoreCase = true) } == true
-                val hasIcon = hasFocusCandidates || !aComp.picKey.isNullOrBlank()
-                
-                if (hasIcon) {
-                    // 使用通用图片加载组件
-                    CommonImageCompose(
-                        picKey = aComp.picKey,
-                        picMap = picMap,
-                        size = 18.dp,
-                        isFocusIcon = true,
-                        contentDescription = null
-                    )
-                }
+                // 直接调用CommonImageCompose，让它内部处理图片资源的解析和加载
+                CommonImageCompose(
+                    picKey = aComp.picKey,
+                    picMap = picMap,
+                    size = 18.dp,
+                    isFocusIcon = true,
+                    contentDescription = null
+                )
                 
                 // 文本内容
                 CommonTextBlockCompose(

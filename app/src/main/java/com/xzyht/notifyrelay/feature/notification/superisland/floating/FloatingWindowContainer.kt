@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -15,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.builder.SuperIslandComposeRoot
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose
@@ -202,22 +205,39 @@ fun FloatingWindowContainer(
                                 } else {
                                     // 兜底显示：当没有paramV2时，使用title和text作为fallback
                                     Box(modifier = Modifier.Companion.padding(16.dp)) {
-                                        Column {
-                                            if (!entry.title.isNullOrEmpty()) {
-                                                Text(
-                                                    text = entry.title,
-                                                    color = Color.Companion.White,
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.Companion.Bold,
-                                                    modifier = Modifier.Companion.padding(bottom = 8.dp)
-                                                )
-                                            }
-                                            if (!entry.text.isNullOrEmpty()) {
-                                                Text(
-                                                    text = entry.text,
-                                                    color = Color(0xFFDDDDDD),
-                                                    fontSize = 14.sp
-                                                )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            // 添加a区图标
+                                            CommonImageCompose(
+                                                picKey = null,
+                                                picMap = entry.picMap,
+                                                size = 24.dp,
+                                                isFocusIcon = true,
+                                                contentDescription = null
+                                            )
+                                            
+                                            // 文本内容
+                                            Column(
+                                                modifier = Modifier.Companion.padding(start = 8.dp)
+                                            ) {
+                                                if (!entry.title.isNullOrEmpty()) {
+                                                    Text(
+                                                        text = entry.title,
+                                                        color = Color.Companion.White,
+                                                        fontSize = 16.sp,
+                                                        fontWeight = FontWeight.Companion.Bold,
+                                                        modifier = Modifier.Companion.padding(bottom = 8.dp)
+                                                    )
+                                                }
+                                                if (!entry.text.isNullOrEmpty()) {
+                                                    Text(
+                                                        text = entry.text,
+                                                        color = Color(0xFFDDDDDD),
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
