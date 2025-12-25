@@ -9,6 +9,7 @@ import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
 import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
 import org.json.JSONArray
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity as OldNotificationRecordEntity
 
@@ -198,7 +199,7 @@ object MigrationHelper {
         
         try {
             // 从旧存储读取超级岛历史记录
-            val oldHistoryTypeToken = object : TypeToken<List<com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry>>() {}
+            val oldHistoryTypeToken = object : TypeToken<List<SuperIslandHistoryEntry>>() {}
             val oldHistory = PersistenceManager.readNotificationRecords(
                 context,
                 "super_island_history",

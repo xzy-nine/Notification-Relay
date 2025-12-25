@@ -13,7 +13,7 @@ import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 
 /**
  * 统一图片加载器：同时支持 data: URL 与 http(s) URL。

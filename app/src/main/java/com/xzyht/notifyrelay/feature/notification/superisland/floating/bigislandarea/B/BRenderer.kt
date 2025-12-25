@@ -12,7 +12,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.param.CircularProgressView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.model.bindTimerUpdater

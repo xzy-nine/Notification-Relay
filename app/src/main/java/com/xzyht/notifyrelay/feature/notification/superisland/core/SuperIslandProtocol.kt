@@ -1,5 +1,6 @@
-package com.xzyht.notifyrelay.feature.notification.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland.core
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import kotlin.collections.iterator
@@ -114,7 +115,7 @@ object SuperIslandProtocol {
             if (text != null) put("text", text)
             if (paramV2Raw != null) put("param_v2_raw", paramV2Raw)
             if (picsChanged.isNotEmpty()) put("pics", JSONObject(picsChanged))
-            if (picsRemoved.isNotEmpty()) put("pics_removed", org.json.JSONArray(picsRemoved))
+            if (picsRemoved.isNotEmpty()) put("pics_removed", JSONArray(picsRemoved))
         }
     }
 

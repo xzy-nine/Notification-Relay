@@ -46,9 +46,9 @@ import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.SuperIslandTestDialog
 import kotlinx.coroutines.Dispatchers

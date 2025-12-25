@@ -1,18 +1,16 @@
-package com.xzyht.notifyrelay.feature.notification.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland.core
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Bundle
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.Icon
-import android.graphics.drawable.Drawable
-import android.util.Base64
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
-import com.xzyht.notifyrelay.BuildConfig
+import android.util.Base64
 import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.core.util.Logger
 import org.json.JSONObject
 

@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 
 fun parseColor(colorString: String?): Int? {
     return try {

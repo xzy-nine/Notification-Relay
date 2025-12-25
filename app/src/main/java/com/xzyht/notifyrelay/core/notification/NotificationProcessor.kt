@@ -7,9 +7,9 @@ import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandRemoteStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay

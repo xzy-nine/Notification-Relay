@@ -9,8 +9,8 @@ import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandManager
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

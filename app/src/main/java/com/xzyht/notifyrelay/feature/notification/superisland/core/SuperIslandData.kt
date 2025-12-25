@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland.core
 
 import android.os.Bundle
 

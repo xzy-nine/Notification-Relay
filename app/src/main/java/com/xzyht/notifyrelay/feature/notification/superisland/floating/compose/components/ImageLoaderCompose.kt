@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import coil.compose.rememberAsyncImagePainter
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 
 /**
  * 统一的Compose图片加载工具，封装了现有ImageLoader和DataUrlUtils的功能

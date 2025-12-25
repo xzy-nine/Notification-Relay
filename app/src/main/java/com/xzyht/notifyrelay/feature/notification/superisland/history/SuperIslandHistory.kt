@@ -1,16 +1,16 @@
-package com.xzyht.notifyrelay.feature.notification.superisland
+package com.xzyht.notifyrelay.feature.notification.superisland.history
 
 import android.content.Context
 import com.google.gson.Gson
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
 import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
@@ -47,9 +47,9 @@ object SuperIslandHistory {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     // 从Room数据库加载所有历史记录（只加载摘要，不包含rawPayload）
-                    val repository = DatabaseRepository.getInstance(context)
+                    val repository = DatabaseRepository.Companion.getInstance(context)
                     val allEntities = repository.getSuperIslandHistory()
-                    
+
                     // 转换为SuperIslandHistoryEntry
                     val allEntries = allEntities.map { entity: SuperIslandHistoryEntity ->
                         SuperIslandHistoryEntry(
@@ -66,7 +66,7 @@ object SuperIslandHistory {
                             featureId = entity.featureId // 包含特征ID
                         )
                     }
-                    
+
                     // 应用去重逻辑（如果需要）
                     val finalEntries = if (deduplicate) {
                         // 基于特征ID和内容的去重：
@@ -110,16 +110,16 @@ object SuperIslandHistory {
                         // 不去重，直接限制数量
                         allEntries.takeLast(MAX_ENTRIES)
                     }
-                    
+
                     // 转换为最终的历史记录列表
                     val history = finalEntries
-                    
+
                     // 在主线程更新状态
                     withContext(Dispatchers.Main) {
                         historyFlow.value = history
                         initialized = true
                     }
-                    
+
                     // 异步重建图片引用计数并执行 GC（按时间与条目数限制），避免阻塞加载流程
                     try {
                         SuperIslandImageStore.rebuildRefCountsAndPrune(context, history)
@@ -135,7 +135,7 @@ object SuperIslandHistory {
             }
         }
     }
-    
+
     /**
      * 重新加载历史记录，支持选择是否去重
      */
@@ -150,13 +150,13 @@ object SuperIslandHistory {
         ensureLoaded(context)
         return historyFlow.asStateFlow()
     }
-    
+
     /**
      * 获取所有历史记录（包含重复记录，用于调试）
      * 注意：这个方法会重新加载所有历史记录，可能会影响性能
      */
     suspend fun getAllHistory(context: Context): List<SuperIslandHistoryEntry> {
-        val repository = DatabaseRepository.getInstance(context)
+        val repository = DatabaseRepository.Companion.getInstance(context)
         val entities = repository.getSuperIslandHistory()
         return entities.map { entity ->
             SuperIslandHistoryEntry(
@@ -179,7 +179,7 @@ object SuperIslandHistory {
      * 按需加载某条记录的完整内容（包含 rawPayload），用于打开详情时调用。
      */
     suspend fun loadEntryDetail(context: Context, id: Long): SuperIslandHistoryEntry? {
-        val repo = DatabaseRepository.getInstance(context)
+        val repo = DatabaseRepository.Companion.getInstance(context)
         val entity = try {
             repo.getSuperIslandHistoryById(id)
         } catch (_: Exception) {
@@ -207,7 +207,7 @@ object SuperIslandHistory {
         // 将图片字符串 intern 为引用以避免重复存储
         val interned = SuperIslandImageStore.internAll(context, entry.picMap)
         val sanitizedEntry = entry.copy(picMap = interned.toMap())
-        
+
         // 基于特征ID和内容的去重逻辑
         val updated = if (entry.featureId != null && entry.featureId.isNotEmpty()) {
             // 检查是否已存在相同特征ID和内容的记录
@@ -227,13 +227,13 @@ object SuperIslandHistory {
             // 无特征ID，直接添加
             (historyFlow.value + sanitizedEntry).takeLast(MAX_ENTRIES)
         }
-        
+
         historyFlow.value = updated
-        
+
         // 保存到数据库：只去重真正相同的内容，保留相同特征ID但内容不同的记录
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.getInstance(context)
+                val repository = DatabaseRepository.Companion.getInstance(context)
                 val entity = SuperIslandHistoryEntity(
                     id = sanitizedEntry.id,
                     sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
@@ -247,16 +247,16 @@ object SuperIslandHistory {
                     rawPayload = sanitizedEntry.rawPayload,
                     featureId = entry.featureId
                 )
-                
+
                 // 直接插入记录，不去重（去重逻辑在应用层实现）
                 repository.saveSuperIslandHistory(entity)
-                
+
                 // 清理旧记录，确保数据库中只保留最新的MAX_ENTRIES条
                 repository.deleteOldSuperIslandHistory(MAX_ENTRIES)
             } catch (_: Exception) {}
         }
     }
-    
+
     /**
      * 比较两个SuperIslandHistoryEntry的内容是否相同（忽略id和时间字段）
      */
@@ -276,11 +276,11 @@ object SuperIslandHistory {
     fun clear(context: Context) {
         ensureLoaded(context)
         historyFlow.value = emptyList()
-        
+
         // 清空Room数据库
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.getInstance(context)
+                val repository = DatabaseRepository.Companion.getInstance(context)
                 repository.clearSuperIslandHistory()
             } catch (_: Exception) {}
         }
@@ -293,15 +293,15 @@ object SuperIslandHistory {
     fun clearAll(context: Context) {
         ensureLoaded(context)
         historyFlow.value = emptyList()
-        
+
         // 清空Room数据库
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.getInstance(context)
+                val repository = DatabaseRepository.Companion.getInstance(context)
                 repository.clearSuperIslandHistory()
             } catch (_: Exception) {}
         }
-        
+
         try {
             SuperIslandImageStore.prune(context, maxEntries = 0, maxAgeDays = 0)
         } catch (_: Exception) {}
