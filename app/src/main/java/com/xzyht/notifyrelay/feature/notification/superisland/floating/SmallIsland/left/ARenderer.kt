@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.A
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left
 
 import android.content.Context
 import android.graphics.Typeface
@@ -8,7 +8,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
 
 /**
  * 创建 A区 浮窗视图（细化：图文组件1 + 兼容图文组件5 基础）。

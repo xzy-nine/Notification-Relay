@@ -8,8 +8,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ProgressInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
 
 /**
  * 进度信息Compose组件

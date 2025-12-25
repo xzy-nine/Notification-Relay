@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -13,7 +13,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
-import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.CircularProgressView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.bindTimerUpdater
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.formatTimerInfo

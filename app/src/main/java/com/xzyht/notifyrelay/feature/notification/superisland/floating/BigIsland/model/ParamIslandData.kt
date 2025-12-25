@@ -1,7 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model
 
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.BigIslandArea
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.parseBigIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.core.BigIslandArea
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.core.parseBigIslandArea
 import org.json.JSONArray
 import org.json.JSONObject
 

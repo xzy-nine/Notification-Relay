@@ -19,11 +19,12 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.HighlightInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.formatTimerInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
 import kotlinx.coroutines.delay
 
 /**

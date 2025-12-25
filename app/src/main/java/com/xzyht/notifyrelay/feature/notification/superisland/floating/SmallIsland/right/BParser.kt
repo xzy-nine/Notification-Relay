@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right
 
 import org.json.JSONObject
 

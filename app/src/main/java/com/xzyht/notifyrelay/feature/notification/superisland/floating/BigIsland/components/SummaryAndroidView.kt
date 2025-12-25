@@ -6,7 +6,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.buildBigIslandCollapsedView
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.core.buildBigIslandCollapsedView
 import org.json.JSONObject
 
 /**

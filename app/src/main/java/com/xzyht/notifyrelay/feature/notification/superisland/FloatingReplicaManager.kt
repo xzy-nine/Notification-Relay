@@ -16,7 +16,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.xzyht.notifyrelay.R
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
-import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer

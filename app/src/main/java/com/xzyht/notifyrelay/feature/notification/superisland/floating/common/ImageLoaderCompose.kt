@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.common
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -25,7 +25,7 @@ fun rememberSuperIslandImagePainter(
     // 状态管理
     val bitmapState = remember { mutableStateOf<Bitmap?>(null) }
     val isLoading = remember { mutableStateOf(false) }
-    
+
     // 如果提供了iconKey，先从picMap中获取url
     val resolvedUrl = remember(url, picMap, iconKey) {
         if (!iconKey.isNullOrEmpty() && picMap != null) {
@@ -34,7 +34,7 @@ fun rememberSuperIslandImagePainter(
             url
         }
     }
-    
+
     // 处理ref: URL
     val processedUrl = remember(resolvedUrl) {
         if (!resolvedUrl.isNullOrEmpty() && resolvedUrl.startsWith("ref:", ignoreCase = true)) {
@@ -47,7 +47,7 @@ fun rememberSuperIslandImagePainter(
             resolvedUrl
         }
     }
-    
+
     // 对于data: URL，使用DataUrlUtils解码
     if (!processedUrl.isNullOrEmpty() && processedUrl.startsWith("data:", ignoreCase = true)) {
         // 同步解码data: URL
@@ -56,7 +56,7 @@ fun rememberSuperIslandImagePainter(
             return BitmapPainter(bitmap.asImageBitmap())
         }
     }
-    
+
     // 对于其他URL，使用Coil
     return if (!processedUrl.isNullOrEmpty()) {
         rememberAsyncImagePainter(model = processedUrl)
@@ -69,16 +69,16 @@ fun rememberSuperIslandImagePainter(
  * 解析图标URL，与View渲染的ImageLoader.loadKeyInto逻辑完全一致
  */
 fun resolveIconUrl(
-    picMap: Map<String, String>?, 
+    picMap: Map<String, String>?,
     iconKey: String?,
     context: Context? = null
 ): String? {
     if (iconKey.isNullOrEmpty() || picMap == null) return null
-    
+
     // 1. 从picMap获取原始URL
     var url = picMap[iconKey]
     if (url.isNullOrEmpty()) return null
-    
+
     // 2. 处理ref: URL
     if (url.startsWith("ref:", ignoreCase = true)) {
         url = try {
@@ -87,7 +87,7 @@ fun resolveIconUrl(
             url
         }
     }
-    
+
     return url
 }
 
@@ -96,12 +96,12 @@ fun resolveIconUrl(
  */
 fun resolveFallbackIconUrl(picMap: Map<String, String>?): String? {
     if (picMap == null) return null
-    
+
     val prefix = "miui.focus.pic_"
     val focusKeys = picMap.keys
         .filter { it.startsWith(prefix) }
         .toList()
-    
+
     val secondKey = focusKeys.getOrNull(1)
     if (secondKey != null) {
         var url = picMap[secondKey]
@@ -114,6 +114,6 @@ fun resolveFallbackIconUrl(picMap: Map<String, String>?): String? {
         }
         return url
     }
-    
+
     return null
 }

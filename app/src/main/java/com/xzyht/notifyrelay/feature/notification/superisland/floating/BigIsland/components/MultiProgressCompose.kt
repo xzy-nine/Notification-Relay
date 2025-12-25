@@ -25,8 +25,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MultiProgressInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
 import kotlin.math.max
 
 private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF

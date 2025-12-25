@@ -14,9 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.PicInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
 
 /**
  * 图片信息Compose组件

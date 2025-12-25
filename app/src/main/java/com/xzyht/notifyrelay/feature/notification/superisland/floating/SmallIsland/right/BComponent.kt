@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.B
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right
 
 /**
  * B区（右侧 imageTextInfoRight + 其它文本/图片/进度组件）模型。

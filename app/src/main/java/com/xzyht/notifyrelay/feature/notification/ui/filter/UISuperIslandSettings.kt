@@ -43,13 +43,13 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.SuperIslandTestDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -1,9 +1,8 @@
-﻿package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.common
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
-import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 

@@ -1,19 +1,21 @@
-package com.xzyht.notifyrelay.core.util
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.common
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.os.Handler
 import android.os.Looper
 import android.widget.ImageView
-import coil.ImageLoader as CoilImageLoader
+import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.xzyht.notifyrelay.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import java.lang.ref.WeakReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
-import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 
 /**
  * 统一图片加载器：同时支持 data: URL 与 http(s) URL。
@@ -100,7 +102,7 @@ object ImageLoader {
             if (urlOrData.startsWith("data:", ignoreCase = true)) {
                 DataUrlUtils.decodeDataUrlToBitmap(urlOrData)
             } else {
-                val loader = CoilImageLoader(context)
+                val loader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(urlOrData)
                     .allowHardware(false)
@@ -108,7 +110,7 @@ object ImageLoader {
                 val result = loader.execute(request)
                 if (result is SuccessResult) {
                     val drawable = result.drawable
-                    if (drawable is android.graphics.drawable.BitmapDrawable) return drawable.bitmap
+                    if (drawable is BitmapDrawable) return drawable.bitmap
                     // 将 drawable 转换为 bitmap
                     val bmp = DataUrlUtils.drawableToBitmap(drawable)
                     bmp
