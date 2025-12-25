@@ -24,45 +24,9 @@ fun parseTimerInfo(json: JSONObject): TimerInfo {
 }
 
 // 格式化计时器信息为显示文本
+// 使用CommonCompose.kt中的公共实现
 fun formatTimerInfo(timerInfo: TimerInfo): String {
-    val now = System.currentTimeMillis()
-    val timerWhen = timerInfo.timerWhen // 倒计时结束时间
-    val timerSystemCurrent = timerInfo.timerSystemCurrent // 服务器发送时的时间戳
-    val timerTotal = timerInfo.timerTotal // 总时长（毫秒）
-    
-    val displayValue: Long = when (timerInfo.timerType) {
-        -2 -> { // 倒计时暂停
-            // 暂停状态：剩余时间 = 结束时间 - 发送时间，保持不变
-            val remainingAtSend = timerWhen - timerSystemCurrent
-            remainingAtSend.coerceAtLeast(0)
-        }
-        -1 -> { // 倒计时进行中
-            // 进行中状态：剩余时间 = 结束时间 - 当前时间
-            val remaining = timerWhen - now
-            remaining.coerceAtLeast(0)
-        }
-        2 -> { // 正计时暂停
-            // 暂停状态：已过时间 = 发送时间 - 开始时间，保持不变
-            val elapsedAtSend = timerSystemCurrent - timerWhen
-            elapsedAtSend.coerceAtLeast(0)
-        }
-        1 -> { // 正计时进行中
-            // 进行中状态：已过时间 = 当前时间 - 开始时间
-            val elapsed = now - timerWhen
-            elapsed.coerceAtLeast(0)
-        }
-        else -> 0
-    }
-    
-    val seconds = (displayValue / 1000).toInt()
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    
-    return if (hours > 0) {
-        String.format("%02d:%02d:%02d", hours, minutes % 60, seconds % 60)
-    } else {
-        String.format("%02d:%02d", minutes % 60, seconds % 60)
-    }
+    return com.xzyht.notifyrelay.feature.notification.superisland.floating.common.formatTimerInfo(timerInfo)
 }
 
 // 简化的CircularProgressBinding类，用于兼容现有代码

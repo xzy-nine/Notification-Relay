@@ -65,31 +65,7 @@ fun rememberSuperIslandImagePainter(
     }
 }
 
-/**
- * 解析图标URL，与View渲染的ImageLoader.loadKeyInto逻辑完全一致
- */
-fun resolveIconUrl(
-    picMap: Map<String, String>?,
-    iconKey: String?,
-    context: Context? = null
-): String? {
-    if (iconKey.isNullOrEmpty() || picMap == null) return null
 
-    // 1. 从picMap获取原始URL
-    var url = picMap[iconKey]
-    if (url.isNullOrEmpty()) return null
-
-    // 2. 处理ref: URL
-    if (url.startsWith("ref:", ignoreCase = true)) {
-        url = try {
-            SuperIslandImageStore.resolve(context, url) ?: url
-        } catch (_: Exception) {
-            url
-        }
-    }
-
-    return url
-}
 
 /**
  * 解析备选图标URL，与View渲染的逻辑完全一致
