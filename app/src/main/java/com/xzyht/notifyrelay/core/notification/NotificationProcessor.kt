@@ -169,8 +169,8 @@ object NotificationProcessor {
                 }
                 
                 // 提前获取通知标题和内容，用于更详细的日志记录
-                val mTitle = try { json.optString("title", title) } catch (_: Exception) { title }
-                val mText = try { json.optString("text", text) } catch (_: Exception) { text }
+                val mTitle = try { json.optString("title", title.orEmpty()) } catch (_: Exception) { title.orEmpty() }
+                val mText = try { json.optString("text", text.orEmpty()) } catch (_: Exception) { text.orEmpty() }
                 
                 // 锁屏状态下的超级岛通知去重处理
                 if (isLocked) {

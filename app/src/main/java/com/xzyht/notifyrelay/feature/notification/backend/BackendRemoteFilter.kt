@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.backend
+package com.xzyht.notifyrelay.feature.notification.backend
 
 import android.content.Context
 import com.xzyht.notifyrelay.BuildConfig
@@ -6,7 +6,9 @@ import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
@@ -14,6 +16,9 @@ import kotlinx.coroutines.launch
  * 处理从远程设备接收的通知的过滤逻辑
  */
 object BackendRemoteFilter {
+
+    // 结构化协程作用域，替代 GlobalScope
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // 延迟去重缓存（10秒内）- 用于智能去重机制
     private val dedupCache = mutableListOf<Triple<String, String, Long>>() // title, text, time
@@ -415,7 +420,7 @@ object BackendRemoteFilter {
      */
     private fun startNotificationMonitoring() {
         Logger.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
-        GlobalScope.launch {
+        scope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
                 val toRemove = mutableListOf<PendingNotification>()

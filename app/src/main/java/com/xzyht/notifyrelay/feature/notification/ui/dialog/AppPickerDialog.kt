@@ -42,10 +42,10 @@ fun AppPickerDialog(
     val pm = context.packageManager
     val coroutineScope = rememberCoroutineScope()
 
-    var showSystemApps by rememberSaveable(key = "showSystemApps") { mutableStateOf(true) }
-    var appSearchQuery by rememberSaveable(key = "appSearchQuery") { mutableStateOf("") }
+    var showSystemApps by rememberSaveable { mutableStateOf(true) }
+    var appSearchQuery by rememberSaveable { mutableStateOf("") }
 
-    val showDialog = rememberSaveable(key = "showDialog") { mutableStateOf(visible) }
+    val showDialog = rememberSaveable { mutableStateOf(visible) }
 
     // 监听 AppRepository 的状态
     val isLoading by AppRepository.isLoading.collectAsState()

@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.device.service
+package com.xzyht.notifyrelay.feature.device.service
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -85,7 +85,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
                 } else true
                 if (canReadBt) {
-                    val btName = android.bluetooth.BluetoothAdapter.getDefaultAdapter()?.name
+                    val bluetoothManager = context.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
+                    val btName = bluetoothManager.adapter?.name
                     if (!btName.isNullOrEmpty()) return sanitizeDisplayName(btName)
                 }
             } catch (_: Exception) {}
