@@ -1,9 +1,8 @@
-package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
@@ -89,7 +88,7 @@ object MessageSender {
                                 val key = "$deviceUuid|$featureId"
                                 siForceFullNext.add(key)
                                 synchronized(siPendingAcks) { siPendingAcks[deviceUuid]?.remove(featureId) }
-                                if (BuildConfig.DEBUG) Log.w("超级岛", "ACK超时：标记下次全量 device=$deviceUuid, feature=$featureId")
+                                Logger.w("超级岛", "ACK超时：标记下次全量 device=$deviceUuid, feature=$featureId")
                             }
                         }
                     }
@@ -166,7 +165,7 @@ object MessageSender {
             try {
                 val auth = task.deviceManager.authenticatedDevices[task.device.uuid]
                 if (auth == null || !auth.isAccepted) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证，跳过发送: ${task.device.displayName}")
+                    Logger.d(TAG, "设备未认证，跳过发送: ${task.device.displayName}")
                     return
                 }
 
@@ -174,12 +173,12 @@ object MessageSender {
                 com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
                 try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
-                if (BuildConfig.DEBUG) Log.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
+                Logger.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
 
                 if (success) return
 
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "发送失败 (尝试 ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${task.device.displayName}, 错误: ${e.message}")
+                Logger.w(TAG, "发送失败 (尝试 ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${task.device.displayName}, 错误: ${e.message}")
 
                 if (attempt < MAX_RETRY_ATTEMPTS - 1) {
                     delay(RETRY_DELAY_MS * (attempt + 1)) // 递增延迟
@@ -188,7 +187,7 @@ object MessageSender {
         }
 
         if (!success) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送最终失败，放弃重试: ${task.device.displayName}")
+            Logger.e(TAG, "发送最终失败，放弃重试: ${task.device.displayName}")
         }
     }
 
@@ -202,18 +201,18 @@ object MessageSender {
             try {
                 val auth = task.deviceManager.authenticatedDevices[task.device.uuid]
                 if (auth == null || !auth.isAccepted) {
-                    if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 设备未认证，跳过发送: ${task.device.displayName}")
+                    Logger.d("超级岛", "超级岛: 设备未认证，跳过发送: ${task.device.displayName}")
                     return
                 }
 
                 com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
-                if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
+                Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
                 if (success) return
 
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 发送失败 (尝试 ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${task.device.displayName}, 错误: ${e.message}")
+                Logger.w("超级岛", "超级岛: 发送失败 (尝试 ${attempt + 1}/${MAX_RETRY_ATTEMPTS}): ${task.device.displayName}, 错误: ${e.message}")
 
                 if (attempt < MAX_RETRY_ATTEMPTS - 1) {
                     delay(RETRY_DELAY_MS * (attempt + 1)) // 递增延迟
@@ -222,7 +221,7 @@ object MessageSender {
         }
 
         if (!success) {
-            if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 发送最终失败，放弃重试: ${task.device.displayName}")
+            Logger.e("超级岛", "超级岛: 发送最终失败，放弃重试: ${task.device.displayName}")
         }
     }
 
@@ -233,14 +232,14 @@ object MessageSender {
         try {
             val auth = task.deviceManager.authenticatedDevices[task.device.uuid]
             if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 设备未认证，跳过发送: ${task.device.displayName}")
+                Logger.d("超级岛", "超级岛: 设备未认证，跳过发送: ${task.device.displayName}")
                 return
             }
 
             com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
-            if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
+            Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")
+            Logger.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")
         }
     }
 
@@ -257,7 +256,7 @@ object MessageSender {
             val sentAny = allDevices.isNotEmpty() && message.isNotBlank()
 
             if (!sentAny) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "没有可用的设备或消息为空")
+                Logger.w(TAG, "没有可用的设备或消息为空")
                 return
             }
 
@@ -277,22 +276,22 @@ object MessageSender {
                 // 检查最近是否已发送过相同消息，避免短时间内重复
                 val lastSent = sentKeys[dedupKey]
                 if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复聊天消息(短期内): ${device.displayName}")
+                    Logger.d(TAG, "跳过已发送的重复聊天消息(短期内): ${device.displayName}")
                     return@forEach
                 }
                 if (!pendingKeys.add(dedupKey)) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复聊天消息入队: ${device.displayName}")
+                    Logger.d(TAG, "跳过重复聊天消息入队: ${device.displayName}")
                     return@forEach
                 }
                 val task = SendTask(device, json, deviceManager, dedupKey = dedupKey)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
-                        if (BuildConfig.DEBUG) Log.d(TAG, "聊天消息已加入发送队列: ${device.displayName}, 消息: $message")
+                        Logger.d(TAG, "聊天消息已加入发送队列: ${device.displayName}, 消息: $message")
                     } catch (e: Exception) {
                         // 入队失败时及时移除去重键
                         pendingKeys.remove(dedupKey)
-                        if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${device.displayName}", e)
+                        Logger.e(TAG, "加入发送队列失败: ${device.displayName}", e)
                     }
                 }
             }
@@ -300,9 +299,9 @@ object MessageSender {
             // 记录到聊天历史
             ChatMemory.append(context, "发送: $message")
 
-            if (BuildConfig.DEBUG) Log.i(TAG, "聊天消息已加入队列，共发送到 ${allDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
+            Logger.i(TAG, "聊天消息已加入队列，共发送到 ${allDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送聊天消息失败", e)
+            Logger.e(TAG, "发送聊天消息失败", e)
         }
     }
 
@@ -330,7 +329,7 @@ object MessageSender {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
 
             if (authenticatedDevices.isEmpty()) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "没有已认证的设备")
+                Logger.w(TAG, "没有已认证的设备")
                 return
             }
 
@@ -354,29 +353,29 @@ object MessageSender {
                 // 检查是否正在等待发送或最近已发送过
                 val lastSent = sentKeys[dedupKey]
                 if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过已发送的重复通知(短期内): ${deviceInfo.displayName}")
+                    Logger.d(TAG, "跳过已发送的重复通知(短期内): ${deviceInfo.displayName}")
                     return@forEach
                 }
                 if (!pendingKeys.add(dedupKey)) {
-                    if (BuildConfig.DEBUG) Log.d(TAG, "跳过重复通知入队: ${deviceInfo.displayName}")
+                    Logger.d(TAG, "跳过重复通知入队: ${deviceInfo.displayName}")
                     return@forEach
                 }
                 val task = SendTask(deviceInfo, json, deviceManager, dedupKey = dedupKey)
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
-                        if (BuildConfig.DEBUG) Log.d(TAG, "通知已加入发送队列: ${deviceInfo.displayName}")
+                        Logger.d(TAG, "通知已加入发送队列: ${deviceInfo.displayName}")
                     } catch (e: Exception) {
                         // 入队失败时及时移除去重键
                         pendingKeys.remove(dedupKey)
-                        if (BuildConfig.DEBUG) Log.e(TAG, "加入发送队列失败: ${deviceInfo.displayName}", e)
+                        Logger.e(TAG, "加入发送队列失败: ${deviceInfo.displayName}", e)
                     }
                 }
             }
 
-            if (BuildConfig.DEBUG) Log.i(TAG, "通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
+            Logger.i(TAG, "通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送通知消息失败", e)
+            Logger.e(TAG, "发送通知消息失败", e)
         }
     }
 
@@ -398,7 +397,7 @@ object MessageSender {
         try {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
             if (authenticatedDevices.isEmpty()) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "没有已认证的设备")
+                Logger.w(TAG, "没有已认证的设备")
                 return
             }
 
@@ -490,14 +489,14 @@ object MessageSender {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         superIslandSendChannel.send(task)
-                        if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 数据已加入超级岛发送队列：${deviceInfo.displayName}")
+                        Logger.d("超级岛", "超级岛: 数据已加入超级岛发送队列：${deviceInfo.displayName}")
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 加入超级岛发送队列失败：${deviceInfo.displayName}", e)
+                        Logger.e("超级岛", "超级岛: 加入超级岛发送队列失败：${deviceInfo.displayName}", e)
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 发送超级岛数据失败", e)
+            Logger.e("超级岛", "超级岛: 发送超级岛数据失败", e)
         }
     }
 
@@ -535,14 +534,14 @@ object MessageSender {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         superIslandSendChannel.send(task)
-                        if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 终止数据已加入发送队列：${deviceInfo.displayName}")
+                        Logger.d("超级岛", "超级岛: 终止数据已加入发送队列：${deviceInfo.displayName}")
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 终止数据入队失败：${deviceInfo.displayName}", e)
+                        Logger.e("超级岛", "超级岛: 终止数据入队失败：${deviceInfo.displayName}", e)
                     }
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("超级岛", "超级岛: 发送终止事件失败", e)
+            Logger.e("超级岛", "超级岛: 发送终止事件失败", e)
         }
     }
 
@@ -593,9 +592,9 @@ object MessageSender {
                 notificationManager.cancel(notifyId)
             }, 5000)
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "高优先级悬浮通知已发送: $title")
+            Logger.d(TAG, "高优先级悬浮通知已发送: $title")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送高优先级通知失败", e)
+            Logger.e(TAG, "发送高优先级通知失败", e)
         }
     }
 
@@ -632,7 +631,7 @@ object MessageSender {
 
             authenticatedDevices
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "获取已认证设备列表失败", e)
+            Logger.e(TAG, "获取已认证设备列表失败", e)
             emptyList()
         }
     }
@@ -655,11 +654,11 @@ object MessageSender {
                 synchronized(siPendingAcks) { siPendingAcks[deviceUuid]?.remove(featureId) }
                 val key = "$deviceUuid|$featureId"
                 siForceFullNext.remove(key)
-                if (BuildConfig.DEBUG) Log.d("超级岛", "ACK匹配成功：device=$deviceUuid, feature=$featureId")
+                Logger.d("超级岛", "ACK匹配成功：device=$deviceUuid, feature=$featureId")
             } else {
                 val key = "$deviceUuid|$featureId"
                 siForceFullNext.add(key)
-                if (BuildConfig.DEBUG) Log.w("超级岛", "ACK哈希不匹配或无待确认：标记下次全量 device=$deviceUuid, feature=$featureId, ackHash=$hash")
+                Logger.w("超级岛", "ACK哈希不匹配或无待确认：标记下次全量 device=$deviceUuid, feature=$featureId, ackHash=$hash")
             }
         } catch (_: Exception) {}
     }

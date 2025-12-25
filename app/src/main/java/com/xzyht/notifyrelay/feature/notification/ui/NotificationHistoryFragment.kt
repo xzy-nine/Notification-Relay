@@ -1,21 +1,54 @@
-package com.xzyht.notifyrelay.feature.notification.ui
+﻿package com.xzyht.notifyrelay.feature.notification.ui
 
 // ========================= 基础组件导入区 =========================
 // Android 基础组件
-import android.os.Bundle
-import android.util.Log
 // Compose 核心布局与手势相关
+// Compose 状态与UI基础
+// AndroidX 碎片管理
+
+// ========================= 业务模块导入区 =========================
+// 项目构建配置
+// 数据仓库层
+// 全局状态管理
+// 数据模型
+
+// ========================= 第三方UI库导入区 =========================
+// MIUI X 跨平台UI组件
+
+// ========================= 工具函数/常量 =========================
+import android.os.Bundle
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-// Compose 状态与UI基础
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,35 +58,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
-// AndroidX 碎片管理
 import androidx.fragment.app.Fragment
-
-// ========================= 业务模块导入区 =========================
-// 项目构建配置
 import com.xzyht.notifyrelay.BuildConfig
-// 数据仓库层
 import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
-// 全局状态管理
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
-// 数据模型
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
-
-// ========================= 第三方UI库导入区 =========================
-// MIUI X 跨平台UI组件
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
+import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Delete
-import top.yukonga.miuix.kmp.basic.CardDefaults
-
-// ========================= 工具函数/常量 =========================
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.math.roundToInt
 
 
@@ -69,7 +96,7 @@ object ToastDebounce {
 fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(
         onClick = {
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮被点击")
+            Logger.d("NotifyRelay", "轮胎: 删除按钮被点击")
             onClick()
         },
         modifier = modifier.fillMaxHeight().width(80.dp),
@@ -334,7 +361,7 @@ fun NotificationHistoryScreen() {
             // 主动刷新 StateFlow
             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "清除历史异常", e)
+            Logger.e("NotifyRelay", "清除历史异常", e)
             android.widget.Toast.makeText(
                 context,
                 "清除失败: ${e.message}",
@@ -370,7 +397,7 @@ fun NotificationHistoryScreen() {
                     }
                     LaunchedEffect(anchoredDraggableState.currentValue) {
                         if (anchoredDraggableState.currentValue == DragValue.End) {
-                            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
+                            Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
                         }
                     }
                     val offset = when {
@@ -529,7 +556,7 @@ fun NotificationHistoryScreen() {
                                                 }
                                                 LaunchedEffect(anchoredDraggableState.currentValue) {
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {
-                                                        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
+                                                        Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
                                                     }
                                                 }
                                                 val offset = when {
@@ -564,7 +591,7 @@ fun NotificationHistoryScreen() {
                                                         DeleteButton(
                                                             onClick = {
                                                                 NotificationRepository.currentDevice = selectedDevice
-                                                                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
+                                                                Logger.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
                                                                 NotificationRepository.removeNotification(record.key, context)
                                                                 NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                                             },
@@ -591,7 +618,7 @@ fun NotificationHistoryScreen() {
                             DeleteButton(
                                 onClick = {
                                     NotificationRepository.currentDevice = selectedDevice
-                                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
+                                    Logger.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
                                     try {
                                         if (list.size == 1) {
                                             NotificationRepository.removeNotification(list[0].key, context)
@@ -601,7 +628,7 @@ fun NotificationHistoryScreen() {
                                             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                         }
                                     } catch (e: Exception) {
-                                        if (BuildConfig.DEBUG) Log.e("NotifyRelay", "删除失败", e)
+                                        Logger.e("NotifyRelay", "删除失败", e)
                                     }
                                 },
                                 modifier = Modifier.align(Alignment.CenterEnd).width(deleteWidth).fillMaxHeight()
@@ -632,7 +659,7 @@ fun NotificationHistoryScreen() {
                         // 清除按钮 - 始终显示
                         Button(
                             onClick = {
-                                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "清除按钮点击事件触发")
+                                Logger.d("NotifyRelay", "清除按钮点击事件触发")
                                 clearHistory()
                             },
                             colors = ButtonDefaults.buttonColorsPrimary(),
@@ -648,27 +675,25 @@ fun NotificationHistoryScreen() {
                         }
                         
                         // 垂直分割线
-                        if (BuildConfig.DEBUG) {
-                            VerticalDivider(
-                                thickness = 1.dp,
-                                modifier = Modifier.height(30.dp)
-                            )
-                        }
+                        VerticalDivider(
+                            thickness = 1.dp,
+                            modifier = Modifier.height(30.dp)
+                        )
                         
                         // 引导按钮 - 仅在DEBUG模式下显示
                         if (BuildConfig.DEBUG) {
                             Button(
                                 onClick = {
-                                    Log.d("NotifyRelay", "引导按钮点击事件触发")
+                                    Logger.d("NotifyRelay", "引导按钮点击事件触发")
                                     try {
                                         // 跳转引导页面
                                         val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
                                         intent.putExtra("fromInternal", true)
                                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                         context.startActivity(intent)
-                                        Log.d("NotifyRelay", "引导跳转成功")
+                                        Logger.d("NotifyRelay", "引导跳转成功")
                                     } catch (e: Exception) {
-                                        Log.e("NotifyRelay", "引导跳转失败", e)
+                                        Logger.e("NotifyRelay", "引导跳转失败", e)
                                         android.widget.Toast.makeText(
                                             context,
                                             "跳转失败: ${e.message}",

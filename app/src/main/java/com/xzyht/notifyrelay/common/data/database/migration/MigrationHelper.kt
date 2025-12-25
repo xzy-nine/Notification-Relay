@@ -1,7 +1,6 @@
 package com.xzyht.notifyrelay.common.data.database.migration
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.xzyht.notifyrelay.common.data.PersistenceManager
@@ -9,12 +8,9 @@ import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
-import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity as OldNotificationRecordEntity
+import com.xzyht.notifyrelay.core.util.Logger
 import org.json.JSONArray
-import org.json.JSONObject
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
-import java.io.File
+import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity as OldNotificationRecordEntity
 
 /**
  * 迁移帮助类
@@ -27,24 +23,20 @@ object MigrationHelper {
      * 迁移应用配置
      */
     suspend fun migrateAppConfig(context: Context, appConfigDao: com.xzyht.notifyrelay.common.data.database.dao.AppConfigDao) {
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "开始迁移应用配置")
+        run {
+            Logger.d("MigrationHelper", "开始迁移应用配置")
         }
         
         val configs = mutableListOf<AppConfigEntity>()
         
         // 迁移逻辑已经简化，因为StorageManager现在直接使用Room数据库
         // 我们只需要确保迁移标记被正确设置
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "应用配置迁移已简化，因为StorageManager现在直接使用Room数据库")
-        }
+        Logger.d("MigrationHelper", "应用配置迁移已简化，因为StorageManager现在直接使用Room数据库")
         
         // 插入到数据库
         if (configs.isNotEmpty()) {
             appConfigDao.insertAll(configs)
-            if (BuildConfig.DEBUG) {
-                Log.d("MigrationHelper", "迁移应用配置完成，共${configs.size}条")
-            }
+            Logger.d("MigrationHelper", "迁移应用配置完成，共${configs.size}条")
         }
     }
     
@@ -52,8 +44,8 @@ object MigrationHelper {
      * 迁移设备信息
      */
     suspend fun migrateDevices(context: Context, deviceDao: com.xzyht.notifyrelay.common.data.database.dao.DeviceDao) {
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "开始迁移设备信息")
+        {
+            Logger.d("MigrationHelper", "开始迁移设备信息")
         }
         
         // 从SharedPreferences读取设备数据
@@ -76,8 +68,8 @@ object MigrationHelper {
                     )
                 )
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) {
-                    Log.e("MigrationHelper", "迁移设备信息失败: ${e.message}", e)
+                {
+                    Logger.e("MigrationHelper", "迁移设备信息失败: ${e.message}", e)
                 }
             }
         }
@@ -85,9 +77,7 @@ object MigrationHelper {
         // 插入到数据库
         if (deviceEntities.isNotEmpty()) {
             deviceDao.insertAll(deviceEntities)
-            if (BuildConfig.DEBUG) {
-                Log.d("MigrationHelper", "迁移设备信息完成，共${deviceEntities.size}条")
-            }
+            Logger.d("MigrationHelper", "迁移设备信息完成，共${deviceEntities.size}条")
         }
     }
     
@@ -99,9 +89,7 @@ object MigrationHelper {
         notificationRecordDao: com.xzyht.notifyrelay.common.data.database.dao.NotificationRecordDao,
         deviceDao: com.xzyht.notifyrelay.common.data.database.dao.DeviceDao
     ) {
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "开始迁移通知记录")
-        }
+        Logger.d("MigrationHelper", "开始迁移通知记录")
         
         // 获取所有通知文件
         val files = PersistenceManager.getAllNotificationFiles(context)
@@ -171,12 +159,12 @@ object MigrationHelper {
                     )
                 }
                 
-                if (BuildConfig.DEBUG) {
-                    Log.d("MigrationHelper", "迁移文件 $fileName 完成，共${oldRecords.size}条通知")
+                {
+                    Logger.d("MigrationHelper", "迁移文件 $fileName 完成，共${oldRecords.size}条通知")
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) {
-                    Log.e("MigrationHelper", "迁移文件 ${file.name} 失败: ${e.message}", e)
+                {
+                    Logger.e("MigrationHelper", "迁移文件 ${file.name} 失败: ${e.message}", e)
                 }
             }
         }
@@ -191,8 +179,8 @@ object MigrationHelper {
                 notificationRecordDao.insertAll(batch)
             }
             
-            if (BuildConfig.DEBUG) {
-                Log.d("MigrationHelper", "迁移通知记录完成，共${notificationEntities.size}条")
+            {
+                Logger.d("MigrationHelper", "迁移通知记录完成，共${notificationEntities.size}条")
             }
         }
     }
@@ -204,8 +192,8 @@ object MigrationHelper {
         context: Context,
         superIslandHistoryDao: com.xzyht.notifyrelay.common.data.database.dao.SuperIslandHistoryDao
     ) {
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "开始迁移超级岛历史记录")
+        {
+            Logger.d("MigrationHelper", "开始迁移超级岛历史记录")
         }
         
         try {
@@ -236,14 +224,10 @@ object MigrationHelper {
             // 插入到数据库
             if (entities.isNotEmpty()) {
                 superIslandHistoryDao.insertAll(entities)
-                if (BuildConfig.DEBUG) {
-                    Log.d("MigrationHelper", "迁移超级岛历史记录完成，共${entities.size}条")
-                }
+                Logger.d("MigrationHelper", "迁移超级岛历史记录完成，共${entities.size}条")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e("MigrationHelper", "迁移超级岛历史记录失败: ${e.message}", e)
-            }
+            Logger.e("MigrationHelper", "迁移超级岛历史记录失败: ${e.message}", e)
         }
     }
     
@@ -251,26 +235,21 @@ object MigrationHelper {
      * 清理旧的存储文件
      */
     fun cleanupLegacyStorage(context: Context) {
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "开始清理旧存储文件")
-        }
+        Logger.d("MigrationHelper", "开始清理旧存储文件")
         
         // 删除通知记录JSON文件
         val files = PersistenceManager.getAllNotificationFiles(context)
         for (file in files) {
             if (file.delete()) {
-                if (BuildConfig.DEBUG) {
-                    Log.d("MigrationHelper", "删除旧通知文件 ${file.name}")
+                {
+                    Logger.d("MigrationHelper", "删除旧通知文件 ${file.name}")
                 }
             }
         }
         
         // 标记迁移完成
         StorageManager.putBoolean(context, "migration_completed", true)
-        
-        if (BuildConfig.DEBUG) {
-            Log.d("MigrationHelper", "清理旧存储文件完成")
-        }
+        Logger.d("MigrationHelper", "清理旧存储文件完成")
     }
     
     /**

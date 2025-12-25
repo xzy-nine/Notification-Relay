@@ -1,9 +1,8 @@
-package com.xzyht.notifyrelay.common.data
+﻿package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
-import com.xzyht.notifyrelay.BuildConfig
-import android.util.Log
 import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
+import com.xzyht.notifyrelay.core.util.Logger
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -47,7 +46,7 @@ object StorageManager {
                 repository.getConfig(prefixedKey, default)
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取字符串失败，键: $key", e)
+            Logger.w("StorageManager", "获取字符串失败，键: $key", e)
             default
         }
     }
@@ -68,7 +67,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, value)
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入字符串失败，键: $key", e)
+            Logger.w("StorageManager", "写入字符串失败，键: $key", e)
         }
     }
 
@@ -89,7 +88,7 @@ object StorageManager {
                 repository.getConfig(prefixedKey, default.toString()).toBoolean()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取布尔值失败，键: $key", e)
+            Logger.w("StorageManager", "获取布尔值失败，键: $key", e)
             default
         }
     }
@@ -110,7 +109,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, value.toString())
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入布尔值失败，键: $key", e)
+            Logger.w("StorageManager", "写入布尔值失败，键: $key", e)
         }
     }
 
@@ -131,7 +130,7 @@ object StorageManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入布尔值失败", e)
+            Logger.w("StorageManager", "批量写入布尔值失败", e)
         }
     }
 
@@ -152,7 +151,7 @@ object StorageManager {
                 repository.getConfig(prefixedKey, default.toString()).toInt()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取整数失败，键: $key", e)
+            Logger.w("StorageManager", "获取整数失败，键: $key", e)
             default
         }
     }
@@ -173,7 +172,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, value.toString())
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入整数失败，键: $key", e)
+            Logger.w("StorageManager", "写入整数失败，键: $key", e)
         }
     }
 
@@ -194,7 +193,7 @@ object StorageManager {
                 repository.getConfig(prefixedKey, default.toString()).toLong()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取长整数失败，键: $key", e)
+            Logger.w("StorageManager", "获取长整数失败，键: $key", e)
             default
         }
     }
@@ -215,7 +214,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, value.toString())
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入长整数失败，键: $key", e)
+            Logger.w("StorageManager", "写入长整数失败，键: $key", e)
         }
     }
 
@@ -236,7 +235,7 @@ object StorageManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入字符串失败", e)
+            Logger.w("StorageManager", "批量写入字符串失败", e)
         }
     }
 
@@ -257,7 +256,7 @@ object StorageManager {
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入整数失败", e)
+            Logger.w("StorageManager", "批量写入整数失败", e)
         }
     }
 
@@ -281,7 +280,7 @@ object StorageManager {
             val type = com.google.gson.reflect.TypeToken.getParameterized(Set::class.java, String::class.java).type
             gson.fromJson(json, type) ?: default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取字符串集合失败，键: $key", e)
+            Logger.w("StorageManager", "获取字符串集合失败，键: $key", e)
             default
         }
     }
@@ -304,7 +303,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, json)
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入字符串集合失败，键: $key", e)
+            Logger.w("StorageManager", "写入字符串集合失败，键: $key", e)
         }
     }
 
@@ -324,7 +323,7 @@ object StorageManager {
                 repository.setConfig(prefixedKey, "")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "移除键失败: $key", e)
+            Logger.w("StorageManager", "移除键失败: $key", e)
         }
     }
 
@@ -337,9 +336,9 @@ object StorageManager {
     fun clear(context: Context, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
             // 目前不支持清空整个集合，因为Room中没有批量删除的方法
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "clear方法目前不支持，因为Room中没有批量删除的方法")
+            Logger.w("StorageManager", "clear方法目前不支持，因为Room中没有批量删除的方法")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "清空偏好失败", e)
+            Logger.w("StorageManager", "清空偏好失败", e)
         }
     }
 
@@ -358,7 +357,7 @@ object StorageManager {
         try {
             // 使用 fromVersion 参数以避免编译时的未使用参数警告，并记录调用意图
             val _from = fromVersion // 显式读取参数，确保不会被诊断为未使用
-            if (BuildConfig.DEBUG) Log.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
+            Logger.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
             
             val repository = DatabaseRepository.getInstance(context)
             val currentVersion = runBlocking {
@@ -367,7 +366,7 @@ object StorageManager {
 
             if (currentVersion < toVersion) {
                 // 执行数据迁移逻辑
-                if (BuildConfig.DEBUG) Log.i("StorageManager", "正在迁移数据: 从 v$currentVersion 到 v$toVersion")
+                Logger.i("StorageManager", "正在迁移数据: 从 v$currentVersion 到 v$toVersion")
 
                 // 示例迁移：重命名键
                 if (currentVersion < 1) {
@@ -383,10 +382,10 @@ object StorageManager {
                 runBlocking {
                     repository.setConfig("general_data_version", toVersion.toString())
                 }
-                if (BuildConfig.DEBUG) Log.i("StorageManager", "数据迁移完成")
+                Logger.i("StorageManager", "数据迁移完成")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("StorageManager", "数据迁移失败", e)
+            Logger.e("StorageManager", "数据迁移失败", e)
         }
     }
 

@@ -11,9 +11,9 @@ import android.util.Base64
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import android.provider.Settings
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.core.util.Logger
 import org.json.JSONObject
 
 /**
@@ -44,7 +44,7 @@ object SuperIslandManager {
             val res = method.invoke(null, "persist.sys.feature.island", defaultValue) as? Boolean
             res ?: defaultValue
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 系统支持性检查失败: ${e.message}")
+            Logger.w("超级岛", "超级岛: 系统支持性检查失败: ${e.message}")
             defaultValue
         }
     }
@@ -56,7 +56,7 @@ object SuperIslandManager {
         return try {
             Settings.System.getInt(context.contentResolver, "notification_focus_protocol", 0)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 获取聚焦协议版本失败: ${e.message}")
+            Logger.w("超级岛", "超级岛: 获取聚焦协议版本失败: ${e.message}")
             0
         }
     }
@@ -72,7 +72,7 @@ object SuperIslandManager {
             val bundle = context.contentResolver.call(uri, "canShowFocus", null, extras)
             bundle?.getBoolean("canShowFocus", false) ?: false
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 查询应用聚焦权限失败: ${e.message}")
+            Logger.w("超级岛", "超级岛: 查询应用聚焦权限失败: ${e.message}")
             false
         }
     }
@@ -151,7 +151,7 @@ object SuperIslandManager {
                     // 保留 param_v2 原始字符串以便发送
                     rawExtras["param_v2_raw"] = pv.toString()
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 解析 miui.focus.param 失败: ${e.message}")
+                    Logger.w("超级岛", "超级岛: 解析 miui.focus.param 失败: ${e.message}")
                 }
             }
 
@@ -281,10 +281,10 @@ object SuperIslandManager {
                     val appIconBitmap = DataUrlUtils.drawableToBitmap(appIconDrawable)
                     val dataUrl = DataUrlUtils.bitmapToDataUri(appIconBitmap)
                     picMap[appIconKey] = dataUrl
-                    if (BuildConfig.DEBUG) Log.d("超级岛", "超级岛: 注入应用图标到 picMap => $appIconKey")
+                    Logger.d("超级岛", "超级岛: 注入应用图标到 picMap => $appIconKey")
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 注入应用图标失败: ${e.message}")
+                Logger.w("超级岛", "超级岛: 注入应用图标失败: ${e.message}")
             }
 
             // data URL / bitmap helpers moved to DataUrlUtils
@@ -299,13 +299,11 @@ object SuperIslandManager {
                 appName = pm.getApplicationLabel(ai).toString()
             } catch (_: Exception) {}
 
-            if (BuildConfig.DEBUG) Log.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
-            if (BuildConfig.DEBUG) {
-                try {
-                    val sample = picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
-                    Log.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
-                } catch (_: Exception) {}
-            }
+            Logger.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
+            try {
+                val sample = picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
+                Logger.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
+            } catch (_: Exception) {}
 
             return SuperIslandData(
                 sourcePackage = pkg,
@@ -317,7 +315,7 @@ object SuperIslandManager {
                 picMap = picMap.toMap()
             )
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 提取超级岛数据时发生错误: ${e.message}")
+            Logger.w("超级岛", "超级岛: 提取超级岛数据时发生错误: ${e.message}")
             return null
         }
     }

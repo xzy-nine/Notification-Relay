@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import coil.ImageLoader
 import coil.request.ImageRequest
@@ -90,7 +89,7 @@ object DataUrlUtils {
 
             val comma = candidate.indexOf(',')
             if (comma <= 0) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "不是有效的 data URL：未找到分隔符 ','，候选长度=${candidate.length}")
+                Logger.w(TAG, "不是有效的 data URL：未找到分隔符 ','，候选长度=${candidate.length}")
                 return null
             }
             val meta = candidate.substring(5, comma)
@@ -112,13 +111,13 @@ object DataUrlUtils {
                         cleaned = withoutEq + "=".repeat(pad)
                     } catch (_: Exception) {}
 
-                    if (BuildConfig.DEBUG) {
+                    {
                         val preview = if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
-                        Log.d(TAG, "尝试解码 base64，meta=$meta, cleanedLen=${cleaned.length}, preview=$preview")
+                        Logger.d(TAG, "尝试解码 base64，meta=$meta, cleanedLen=${cleaned.length}, preview=$preview")
                     }
                     val bytes = tryDecodeBase64Variants(cleaned)
                     if (bytes == null) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "base64 解码失败：无法解出有效字节数组 (meta=$meta)")
+                        Logger.e(TAG, "base64 解码失败：无法解出有效字节数组 (meta=$meta)")
                         return null
                     }
 
@@ -134,7 +133,7 @@ object DataUrlUtils {
                         bmp = BitmapFactory.decodeStream(`is`, null, optsStream)
                         if (bmp != null) return ensureCpuBitmap(bmp)
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "通过 InputStream 解码 Bitmap 失败：${e.message}", e)
+                        Logger.e(TAG, "通过 InputStream 解码 Bitmap 失败：${e.message}", e)
                     }
 
                     try {
@@ -143,7 +142,7 @@ object DataUrlUtils {
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, optsRGB)
                         if (bmp != null) return ensureCpuBitmap(bmp)
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "使用 RGB_565 解码失败：${e.message}", e)
+                        Logger.e(TAG, "使用 RGB_565 解码失败：${e.message}", e)
                     }
 
                     // Last resort: sampled decode
@@ -168,11 +167,11 @@ object DataUrlUtils {
                         bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
                         return if (bmp != null) ensureCpuBitmap(bmp) else null
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "采样解码（最后兜底）失败：${e.message}", e)
+                        Logger.e(TAG, "采样解码（最后兜底）失败：${e.message}", e)
                         return null
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e(TAG, "处理 base64 数据时发生异常：${e.message}", e)
+                    Logger.e(TAG, "处理 base64 数据时发生异常：${e.message}", e)
                     return null
                 }
             }

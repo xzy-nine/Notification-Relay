@@ -1,7 +1,6 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import java.io.BufferedReader
@@ -42,13 +41,13 @@ object HandshakeSender {
             writer.write("HANDSHAKE:${manager.uuid}:${manager.localPublicKey}\n")
             writer.flush()
             val resp = reader.readLine()
-            if (BuildConfig.DEBUG) Log.d(TAG, "handshake resp=$resp, target=${target.uuid}@${target.ip}:${target.port}")
+            Logger.d(TAG, "handshake resp=$resp, target=${target.uuid}@${target.ip}:${target.port}")
             try { writer.close() } catch (_: Exception) {}
             try { reader.close() } catch (_: Exception) {}
             try { socket.close() } catch (_: Exception) {}
             resp
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "handshake failed: ${e.message}")
+            Logger.d(TAG, "handshake failed: ${e.message}")
             null
         }
     }
@@ -69,7 +68,7 @@ object HeartbeatSender {
             try { socket.close() } catch (_: Exception) {}
             true
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "heartbeat failed to ${target.uuid}@${target.ip}:${target.port} - ${e.message}")
+            Logger.d(TAG, "heartbeat failed to ${target.uuid}@${target.ip}:${target.port} - ${e.message}")
             false
         }
     }
@@ -90,7 +89,7 @@ object DiscoveryBroadcaster {
             val packet = DatagramPacket(buf, buf.size, group, 23334)
             socket.send(packet)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "broadcast failed to $targetIp: ${e.message}")
+            Logger.d(TAG, "broadcast failed to $targetIp: ${e.message}")
         } finally {
             try { socket?.close() } catch (_: Exception) {}
         }

@@ -1,9 +1,8 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
 import android.content.Context
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.EncryptionManager
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil
@@ -156,7 +155,7 @@ object ServerLineRouter {
                 client.close()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "handleHandshake error: ${e.message}")
+            Logger.e(TAG, "handleHandshake error: ${e.message}")
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
         }
@@ -181,7 +180,7 @@ object ServerLineRouter {
                 val remoteUuid = parts[1]
                 // 仅已在认证表中的设备才接受心跳
                 val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(remoteUuid) }
-                if (BuildConfig.DEBUG) Log.d(TAG, "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${deviceManager.authenticatedDevices.keys}")
+                Logger.d(TAG, "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${deviceManager.authenticatedDevices.keys}")
                 if (isAuthed) {
                     val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
                     // 1. 用最新 IP 更新设备缓存（端口只在其它渠道更新）
@@ -212,19 +211,19 @@ object ServerLineRouter {
                     if (remoteUuid != deviceManager.uuid && !deviceManager.heartbeatJobsInternal.containsKey(remoteUuid)) {
                         val info = deviceManager.getDeviceInfoInternal(remoteUuid)
                         if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
-                            if (BuildConfig.DEBUG) Log.d(TAG, "收到HEARTBEAT后自动反向connectToDevice: $info")
+                            Logger.d(TAG, "收到HEARTBEAT后自动反向connectToDevice: $info")
                             deviceManager.connectToDevice(info)
                         }
                     }
                 } else {
                     // 未认证设备发来的心跳仅记录日志，不做任何状态变更
-                    if (BuildConfig.DEBUG) Log.w(TAG, "收到HEARTBEAT但未认证: remoteUuid=$remoteUuid, authedKeys=${deviceManager.authenticatedDevices.keys}")
+                    Logger.w(TAG, "收到HEARTBEAT但未认证: remoteUuid=$remoteUuid, authedKeys=${deviceManager.authenticatedDevices.keys}")
                 }
             } else {
-                if (BuildConfig.DEBUG) Log.w(TAG, "收到HEARTBEAT格式异常: $line")
+                Logger.w(TAG, "收到HEARTBEAT格式异常: $line")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "handleHeartbeat error: ${e.message}")
+            Logger.e(TAG, "handleHeartbeat error: ${e.message}")
         } finally {
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
@@ -297,14 +296,14 @@ object ServerLineRouter {
                                 // 同步更新全局设备名缓存，以便 UI 显示
                                 DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                                 deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
-                                if (BuildConfig.DEBUG) Log.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
+                                Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
                             }
                         }
                     }
                 }
             } catch (_: Exception) {
             }
-            if (BuildConfig.DEBUG) Log.d(TAG, "未知请求: $line")
+            Logger.d(TAG, "未知请求: $line")
         } finally {
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}

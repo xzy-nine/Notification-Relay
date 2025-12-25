@@ -1,17 +1,10 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
 import android.content.Context
-import android.util.Base64
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.repository.AppRepository
 import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -93,9 +86,9 @@ object AppListSyncManager {
             }.toString()
 
             sendAppListResponse(deviceManager, sourceDevice, resp)
-            if (BuildConfig.DEBUG) Log.d(TAG, "已响应应用列表：${sourceDevice.displayName}，共${appArray.length()}项")
+            Logger.d(TAG, "已响应应用列表：${sourceDevice.displayName}，共${appArray.length()}项")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "处理应用列表请求失败", e)
+            Logger.e(TAG, "处理应用列表请求失败", e)
         }
     }
 
@@ -117,11 +110,11 @@ object AppListSyncManager {
             val json = JSONObject(responseData)
             if (json.optString("type") != "APP_LIST_RESPONSE") return
             val total = json.optInt("total", -1)
-            if (BuildConfig.DEBUG) Log.d(TAG, "收到应用列表响应，共 $total 项")
+            Logger.d(TAG, "收到应用列表响应，共 $total 项")
             // 如需缓存到本地，可在此扩展，例如：
             // StorageManager.putString(context, "remote_app_list_cache", json.toString())
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "处理应用列表响应失败", e)
+            Logger.e(TAG, "处理应用列表响应失败", e)
         }
     }
 }

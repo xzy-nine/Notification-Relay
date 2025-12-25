@@ -1,10 +1,8 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
 import android.content.Context
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 
 /**
  * 统一协议路由器
@@ -44,14 +42,14 @@ object ProtocolRouter {
 
         val auth = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices[remoteUuid] }
         if (auth == null || !auth.isAccepted) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "未认证或未接受的设备，丢弃: uuid=$remoteUuid, header=$header")
+            Logger.d(TAG, "未认证或未接受的设备，丢弃: uuid=$remoteUuid, header=$header")
             return true
         }
 
         // 解密
         val decrypted = try { deviceManager.decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
         if (decrypted == null) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "解密失败: uuid=$remoteUuid, header=$header")
+            Logger.d(TAG, "解密失败: uuid=$remoteUuid, header=$header")
             return true
         }
 
@@ -97,12 +95,12 @@ object ProtocolRouter {
                 }
                 else -> {
                     // 其他未识别的 DATA_* 报文：当前版本不支持，直接忽略（方便后向兼容）
-                    if (BuildConfig.DEBUG) Log.d(TAG, "未知DATA通道: $header")
+                    Logger.d(TAG, "未知DATA通道: $header")
                     true
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "路由处理异常: header=$header, uuid=$remoteUuid", e)
+            Logger.e(TAG, "路由处理异常: header=$header, uuid=$remoteUuid", e)
             true
         }
     }

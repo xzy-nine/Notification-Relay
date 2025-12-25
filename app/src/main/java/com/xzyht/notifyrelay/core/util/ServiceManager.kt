@@ -1,10 +1,9 @@
-package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
 import android.content.Intent
 import android.content.ComponentName
 import android.app.ActivityManager
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 
 /**
@@ -34,7 +33,7 @@ object ServiceManager {
             context.startService(restartIntent)
             true
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("ServiceManager", "启动通知监听服务失败", e)
+            Logger.e("ServiceManager", "启动通知监听服务失败", e)
             false
         }
     }
@@ -53,7 +52,7 @@ object ServiceManager {
             val running = am.getRunningServices(Int.MAX_VALUE)
             running.any { it.service.className == serviceClassName }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("ServiceManager", "检查服务运行状态时发生异常", e)
+            Logger.e("ServiceManager", "检查服务运行状态时发生异常", e)
             false
         }
     }
@@ -90,7 +89,7 @@ object ServiceManager {
                 serviceStarted = true
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("ServiceManager", "启动所有服务时发生异常", e)
+            Logger.e("ServiceManager", "启动所有服务时发生异常", e)
             if (errorMessage == null) {
                 errorMessage = AUTO_START_ERROR_MESSAGE
             }

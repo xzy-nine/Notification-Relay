@@ -1,10 +1,9 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import kotlinx.coroutines.CoroutineScope
@@ -164,10 +163,10 @@ class ConnectionDiscoveryManager(
                         capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true ||
                         capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) == true
 
-                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络可用，类型: ${if (isLanNetwork) "局域网/WLAN直连" else "非局域网"}")
+                Logger.d("死神-NotifyRelay", "网络可用，类型: ${if (isLanNetwork) "局域网/WLAN直连" else "非局域网"}")
 
                 if (isLanNetwork && !wasLanNetwork) {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "检测到从非局域网切换到局域网/WLAN直连，主动重新连接设备")
+                    Logger.d("死神-NotifyRelay", "检测到从非局域网切换到局域网/WLAN直连，主动重新连接设备")
                     updateLocalIpAndRestartDiscovery()
                 } else {
                     updateLocalIpAndRestartDiscovery()
@@ -177,7 +176,7 @@ class ConnectionDiscoveryManager(
             }
 
             override fun onLost(network: android.net.Network) {
-                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络丢失")
+                Logger.d("死神-NotifyRelay", "网络丢失")
                 wasLanNetwork = false
             }
 
@@ -187,7 +186,7 @@ class ConnectionDiscoveryManager(
                         networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P)
 
                 if (isLanNetwork && !wasLanNetwork) {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络能力变化，检测到切换到局域网/WLAN直连，主动重新连接设备")
+                    Logger.d("死神-NotifyRelay", "网络能力变化，检测到切换到局域网/WLAN直连，主动重新连接设备")
                     updateLocalIpAndRestartDiscovery()
                 }
 
@@ -203,7 +202,7 @@ class ConnectionDiscoveryManager(
         synchronized(deviceManager.deviceInfoCacheInternal) {
             deviceManager.deviceInfoCacheInternal[deviceManager.uuid] = DeviceInfo(deviceManager.uuid, displayName, newIp, deviceManager.listenPort)
         }
-        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "本地IP更新为: $newIp")
+        Logger.d("死神-NotifyRelay", "本地IP更新为: $newIp")
         stopDiscovery()
         startDiscovery()
 
@@ -212,7 +211,7 @@ class ConnectionDiscoveryManager(
             scope.launch {
                 delay(1000)
                 val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络恢复，主动连接 ${authed.size} 个已认证设备")
+                Logger.d("死神-NotifyRelay", "网络恢复，主动连接 ${authed.size} 个已认证设备")
                 for ((deviceUuid, auth) in authed) {
                     if (deviceUuid == deviceManager.uuid) continue
                     if (deviceManager.heartbeatedDevicesInternal.contains(deviceUuid)) continue
@@ -222,14 +221,14 @@ class ConnectionDiscoveryManager(
                     val port = info?.port ?: auth.lastPort ?: deviceManager.listenPort
 
                     if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "网络恢复后主动connectToDevice: $deviceUuid, $ip:$port")
+                        Logger.d("死神-NotifyRelay", "网络恢复后主动connectToDevice: $deviceUuid, $ip:$port")
                         deviceManager.connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "已认证设备", ip, port))
                         delay(500)
                     }
                 }
 
                 if (deviceManager.isWifiDirectNetworkInternal()) {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连模式，启动额外重连逻辑")
+                    Logger.d("死神-NotifyRelay", "WLAN直连模式，启动额外重连逻辑")
                     delay(2000)
                     for ((deviceUuid, auth) in authed) {
                         if (deviceUuid == deviceManager.uuid) continue
@@ -238,7 +237,7 @@ class ConnectionDiscoveryManager(
                         val port = info?.port ?: auth.lastPort ?: deviceManager.listenPort
 
                         if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连额外重连尝试: $deviceUuid, $ip:$port")
+                            Logger.d("死神-NotifyRelay", "WLAN直连额外重连尝试: $deviceUuid, $ip:$port")
                             deviceManager.connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "WLAN直连设备", ip, port))
                             delay(1000)
                         }
@@ -262,7 +261,7 @@ class ConnectionDiscoveryManager(
 
     fun startDiscovery() {
         if (deviceManager.isWifiDirectNetworkInternal()) {
-            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "检测到WLAN直连模式，启动WLAN直连发现")
+            Logger.d("死神-NotifyRelay", "检测到WLAN直连模式，启动WLAN直连发现")
             startWifiDirectDiscovery(deviceManager.localDisplayNameInternal())
             deviceManager.startServerInternal()
             return
@@ -277,9 +276,9 @@ class ConnectionDiscoveryManager(
                             DiscoveryBroadcaster.sendBroadcast(deviceManager, displayName, "255.255.255.255")
                             Thread.sleep(2000)
                         }
-                        if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP广播线程已关闭")
+                        Logger.i("卢西奥-死神-NotifyRelay", "UDP广播线程已关闭")
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "UDP广播异常: ${e.message}")
+                        Logger.e("卢西奥-死神-NotifyRelay", "UDP广播异常: ${e.message}")
                         e.printStackTrace()
                     }
                 }
@@ -311,14 +310,14 @@ class ConnectionDiscoveryManager(
                                     if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
                                         val device = DeviceInfo(uuid, displayName, ip, port)
                                         deviceManager.deviceLastSeenInternal[uuid] = System.currentTimeMillis()
-                                        if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceManager.deviceLastSeenInternal[uuid]}")
+                                        Logger.i("卢西奥-死神-NotifyRelay", "收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceManager.deviceLastSeenInternal[uuid]}")
                                         synchronized(deviceManager.deviceInfoCacheInternal) {
                                             deviceManager.deviceInfoCacheInternal[uuid] = device
                                         }
                                         com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
                                         val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(uuid) }
                                         if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(uuid)) {
-                                            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
+                                            Logger.d("死神-NotifyRelay", "已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
                                             deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
                                         }
                                         scope.launch { deviceManager.updateDeviceListInternal() }
@@ -326,12 +325,12 @@ class ConnectionDiscoveryManager(
                                 }
                             }
                         }
-                        if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP监听线程已关闭")
+                        Logger.i("卢西奥-死神-NotifyRelay", "UDP监听线程已关闭")
                     } catch (e: Exception) {
                         if (socket != null && socket.isClosed) {
-                            if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "UDP监听线程正常关闭")
+                            Logger.i("卢西奥-死神-NotifyRelay", "UDP监听线程正常关闭")
                         } else {
-                            if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "UDP监听异常: ${e.message}")
+                            Logger.e("卢西奥-死神-NotifyRelay", "UDP监听异常: ${e.message}")
                             e.printStackTrace()
                         }
                     } finally {
@@ -355,7 +354,7 @@ class ConnectionDiscoveryManager(
                     val ip = info?.ip
                     val port = info?.port ?: deviceManager.listenPort
                     if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "UDP关闭时自动connectToDevice: $uuid, $ip")
+                        Logger.d("死神-NotifyRelay", "UDP关闭时自动connectToDevice: $uuid, $ip")
                         deviceManager.connectToDevice(DeviceInfo(uuid, info.displayName, ip, port))
                     }
                 }
@@ -394,7 +393,7 @@ class ConnectionDiscoveryManager(
                 promptCount++
                 delay(manualDiscoveryInterval)
                 if (promptCount % 10 == 0) {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "手动发现持续运行中，promptCount=$promptCount")
+                    Logger.d("死神-NotifyRelay", "手动发现持续运行中，promptCount=$promptCount")
                 }
             }
         }
@@ -404,7 +403,7 @@ class ConnectionDiscoveryManager(
         scope.launch {
             val ips = getWifiDirectIpRangeInternal()
             val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连发现：扫描${ips.size}个IP，认证设备数量：${authed.size}")
+            Logger.d("死神-NotifyRelay", "WLAN直连发现：扫描${ips.size}个IP，认证设备数量：${authed.size}")
 
             for ((uuid, auth) in authed) {
                 if (uuid == deviceManager.uuid) continue
@@ -412,7 +411,7 @@ class ConnectionDiscoveryManager(
                 val ip = auth.lastIp
                 val port = auth.lastPort ?: deviceManager.listenPort
                 if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连：尝试连接已认证设备 $uuid at $ip:$port")
+                    Logger.d("死神-NotifyRelay", "WLAN直连：尝试连接已认证设备 $uuid at $ip:$port")
                     deviceManager.connectToDevice(DeviceInfo(uuid, auth.displayName ?: "WLAN直连设备", ip, port))
                     delay(500)
                 }
@@ -427,7 +426,7 @@ class ConnectionDiscoveryManager(
                 }
             }
 
-            if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连发现完成")
+            Logger.d("死神-NotifyRelay", "WLAN直连发现完成")
         }
         
         // 在WLAN直连模式下也启动监听线程，确保能接收其他设备的广播消息
@@ -456,14 +455,14 @@ class ConnectionDiscoveryManager(
                                 if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
                                     val device = DeviceInfo(uuid, displayName, ip, port)
                                     deviceManager.deviceLastSeenInternal[uuid] = System.currentTimeMillis()
-                                    if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceManager.deviceLastSeenInternal[uuid]}")
+                                    Logger.i("卢西奥-死神-NotifyRelay", "WLAN直连收到UDP，已重置 deviceLastSeen[$uuid] = ${deviceManager.deviceLastSeenInternal[uuid]}")
                                     synchronized(deviceManager.deviceInfoCacheInternal) {
                                         deviceManager.deviceInfoCacheInternal[uuid] = device
                                     }
                                     com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
                                     val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(uuid) }
                                     if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(uuid)) {
-                                        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "WLAN直连已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
+                                        Logger.d("死神-NotifyRelay", "WLAN直连已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
                                         deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
                                     }
                                     scope.launch { deviceManager.updateDeviceListInternal() }
@@ -471,12 +470,12 @@ class ConnectionDiscoveryManager(
                             }
                         }
                     }
-                    if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程已关闭")
+                    Logger.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程已关闭")
                 } catch (e: Exception) {
                     if (socket != null && socket.isClosed) {
-                        if (BuildConfig.DEBUG) Log.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程正常关闭")
+                        Logger.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程正常关闭")
                     } else {
-                        if (BuildConfig.DEBUG) Log.e("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听异常: ${e.message}")
+                        Logger.e("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听异常: ${e.message}")
                         e.printStackTrace()
                     }
                 } finally {

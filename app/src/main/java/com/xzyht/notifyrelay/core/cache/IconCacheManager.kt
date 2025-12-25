@@ -1,11 +1,10 @@
-package com.xzyht.notifyrelay.core.cache
+﻿package com.xzyht.notifyrelay.core.cache
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
 import com.jakewharton.disklrucache.DiskLruCache
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -34,9 +33,9 @@ object IconCacheManager {
         try {
             val maxSize = MAX_CACHE_SIZE_MB * 1024 * 1024
             diskCache = DiskLruCache.open(cacheDir, CACHE_VERSION, VALUE_COUNT, maxSize)
-            if (BuildConfig.DEBUG) Log.d(TAG, "DiskLruCache 初始化，path=${cacheDir.absolutePath}")
+            Logger.d(TAG, "DiskLruCache 初始化，path=${cacheDir.absolutePath}")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "初始化 DiskLruCache 失败", e)
+            Logger.e(TAG, "初始化 DiskLruCache 失败", e)
             diskCache = null
         }
     }
@@ -59,7 +58,7 @@ object IconCacheManager {
                         cache.flush()
                         // 更新文件最后修改时间
                         updateMetadata(packageName, System.currentTimeMillis())
-                        if (BuildConfig.DEBUG) Log.d(TAG, "图标已缓存 (DiskLruCache): $packageName")
+                        Logger.d(TAG, "图标已缓存 (DiskLruCache): $packageName")
                         return@withContext true
                     } catch (e: Exception) {
                         try { editor.abort() } catch (_: Exception) {}
@@ -70,11 +69,11 @@ object IconCacheManager {
                     val file = File(cacheDir, "$key.png")
                     FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
                     updateMetadata(packageName, System.currentTimeMillis())
-                    if (BuildConfig.DEBUG) Log.d(TAG, "图标已缓存 (fallback): $packageName")
+                    Logger.d(TAG, "图标已缓存 (fallback): $packageName")
                     return@withContext true
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "保存图标失败: $packageName", e)
+                Logger.e(TAG, "保存图标失败: $packageName", e)
                 return@withContext false
             }
         }
@@ -108,7 +107,7 @@ object IconCacheManager {
                 if (bmp != null) updateMetadata(packageName, System.currentTimeMillis())
                 return@withContext bmp
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "加载图标失败: $packageName", e)
+                Logger.e(TAG, "加载图标失败: $packageName", e)
                 return@withContext null
             }
         }
@@ -133,10 +132,10 @@ object IconCacheManager {
                 val f = File(cacheDir, "$key.png")
                 val deleted = if (f.exists()) f.delete() else true
                 removeMetadata(packageName)
-                if (BuildConfig.DEBUG) Log.d(TAG, "已从缓存移除图标: $packageName")
+                Logger.d(TAG, "已从缓存移除图标: $packageName")
                 deleted
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "移除图标失败: $packageName", e)
+                Logger.e(TAG, "移除图标失败: $packageName", e)
                 false
             }
         }
@@ -148,10 +147,10 @@ object IconCacheManager {
                 try { diskCache?.delete() } catch (_: Exception) {}
                 // recreate directory
                 cacheDir.listFiles()?.forEach { it.delete() }
-                if (BuildConfig.DEBUG) Log.d(TAG, "已清空所有图标缓存")
+                Logger.d(TAG, "已清空所有图标缓存")
                 true
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "清空缓存失败", e)
+                Logger.e(TAG, "清空缓存失败", e)
                 false
             }
         }
@@ -184,9 +183,9 @@ object IconCacheManager {
                         if (f.delete()) total -= len
                     }
                 }
-                if (BuildConfig.DEBUG) Log.d(TAG, "过期缓存清理完成")
+                Logger.d(TAG, "过期缓存清理完成")
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e(TAG, "清理过期缓存失败", e)
+                Logger.e(TAG, "清理过期缓存失败", e)
             }
         }
     }
@@ -225,7 +224,7 @@ object IconCacheManager {
                 } else null
             }.toMap()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "读取元数据失败", e)
+            Logger.e(TAG, "读取元数据失败", e)
             emptyMap()
         }
     }
@@ -234,7 +233,7 @@ object IconCacheManager {
         try {
             getMetadataFile().writeText(metadata.entries.joinToString("\n") { "${it.key}:${it.value}" })
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "保存元数据失败", e)
+            Logger.e(TAG, "保存元数据失败", e)
         }
     }
 

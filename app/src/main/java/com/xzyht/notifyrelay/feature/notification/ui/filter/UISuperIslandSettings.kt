@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.ui.filter
+﻿package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -28,41 +28,44 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
-
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import kotlin.math.max
-import kotlin.math.roundToInt
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import top.yukonga.miuix.kmp.basic.*
+import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.icon.MiuixIcons
 import java.util.Date
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
 private const val SUPER_ISLAND_DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
@@ -677,7 +680,7 @@ private fun copyEntryToClipboard(context: android.content.Context, content: Stri
         android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
         if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-            android.util.Log.e("NotifyRelay", "复制超级岛原始消息失败", e)
+            Logger.e("NotifyRelay", "复制超级岛原始消息失败", e)
         }
         android.widget.Toast.makeText(context, "复制失败", android.widget.Toast.LENGTH_SHORT).show()
     }

@@ -1,10 +1,10 @@
-package com.xzyht.notifyrelay.common.data.database
+﻿package com.xzyht.notifyrelay.common.data.database
 
 import android.content.Context
 import androidx.room.Database
-import androidx.room.migration.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import com.xzyht.notifyrelay.common.data.database.dao.AppConfigDao
 import com.xzyht.notifyrelay.common.data.database.dao.DeviceDao
 import com.xzyht.notifyrelay.common.data.database.dao.NotificationRecordDao
@@ -13,6 +13,7 @@ import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
+import com.xzyht.notifyrelay.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -167,7 +168,7 @@ abstract class AppDatabase : RoomDatabase() {
                 com.xzyht.notifyrelay.common.data.database.migration.MigrationHelper.cleanupLegacyStorage(context)
             } catch (e: Exception) {
                 if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                    android.util.Log.e("AppDatabase", "迁移失败: ${e.message}", e)
+                   Logger.e("AppDatabase", "迁移失败: ${e.message}", e)
                 }
             }
         }

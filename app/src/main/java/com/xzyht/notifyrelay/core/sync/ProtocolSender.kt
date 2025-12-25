@@ -1,7 +1,6 @@
-package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.core.sync
 
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +34,7 @@ object ProtocolSender {
         try {
             val auth = deviceManager.authenticatedDevices[target.uuid]
             if (auth == null || !auth.isAccepted) {
-                if (BuildConfig.DEBUG) Log.d(TAG, "设备未认证或未接受：${target.displayName}")
+                Logger.d(TAG, "设备未认证或未接受：${target.displayName}")
                 return
             }
 
@@ -50,17 +49,17 @@ object ProtocolSender {
                             val payload = "$header:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encrypted}"
                             writer.write(payload + "\n")
                             writer.flush()
-                            if (BuildConfig.DEBUG) Log.d(TAG, "已发送 $header -> ${target.displayName}")
+                            Logger.d(TAG, "已发送 $header -> ${target.displayName}")
                         } finally {
                             try { socket.close() } catch (_: Exception) {}
                         }
                     }
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "发送失败 $header -> ${target.displayName}", e)
+                    Logger.w(TAG, "发送失败 $header -> ${target.displayName}", e)
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "发送异常: $header", e)
+            Logger.e(TAG, "发送异常: $header", e)
         }
     }
 }

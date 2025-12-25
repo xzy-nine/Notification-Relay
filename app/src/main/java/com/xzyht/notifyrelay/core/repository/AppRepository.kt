@@ -1,12 +1,12 @@
-package com.xzyht.notifyrelay.core.repository
+﻿package com.xzyht.notifyrelay.core.repository
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.cache.IconCacheManager
+import com.xzyht.notifyrelay.core.repository.AppRepository.loadApps
 import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.core.util.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,7 +53,7 @@ object AppRepository {
      */
     suspend fun loadApps(context: Context) {
         if (isLoaded && cachedApps != null) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "使用缓存的应用列表")
+            Logger.d(TAG, "使用缓存的应用列表")
             _apps.value = cachedApps!!
             return
         }
@@ -63,12 +63,12 @@ object AppRepository {
             // 初始化图标缓存管理器
             IconCacheManager.init(context)
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "开始加载应用列表")
+            Logger.d(TAG, "开始加载应用列表")
             val apps = AppListHelper.getInstalledApplications(context).sortedBy { appInfo ->
                 try {
                     context.packageManager.getApplicationLabel(appInfo).toString()
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "获取应用标签失败，使用包名: ${appInfo.packageName}", e)
+                    Logger.w(TAG, "获取应用标签失败，使用包名: ${appInfo.packageName}", e)
                     appInfo.packageName
                 }
             }
@@ -80,9 +80,9 @@ object AppRepository {
             // 同时加载应用图标
             loadAppIcons(context, apps)
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
+            Logger.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "应用列表加载失败", e)
+            Logger.e(TAG, "应用列表加载失败", e)
             cachedApps = emptyList()
             isLoaded = true
             _apps.value = emptyList()
@@ -126,7 +126,7 @@ object AppRepository {
                     val matchesPackage = app.packageName.contains(query, ignoreCase = true)
                     matchesLabel || matchesPackage
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
+                    Logger.w(TAG, "搜索时获取应用标签失败: ${app.packageName}", e)
                     app.packageName.contains(query, ignoreCase = true)
                 }
         }
@@ -222,12 +222,12 @@ object AppRepository {
      */
     private suspend fun loadAppIcons(context: Context, apps: List<ApplicationInfo>) {
         if (iconsLoaded) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "使用缓存的应用图标")
+            Logger.d(TAG, "使用缓存的应用图标")
             return
         }
 
             try {
-                if (BuildConfig.DEBUG) Log.d(TAG, "开始加载应用图标")
+                Logger.d(TAG, "开始加载应用图标")
             val pm = context.packageManager
             val newIcons = mutableMapOf<String, android.graphics.Bitmap?>()
 
@@ -263,7 +263,7 @@ object AppRepository {
 
                     newIcons[packageName] = iconBitmap
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "获取应用图标失败: ${appInfo.packageName}", e)
+                    Logger.w(TAG, "获取应用图标失败: ${appInfo.packageName}", e)
                     newIcons[appInfo.packageName] = null
                 }
             }
@@ -272,9 +272,9 @@ object AppRepository {
             cachedIcons.putAll(newIcons)
             iconsLoaded = true
 
-            if (BuildConfig.DEBUG) Log.d(TAG, "应用图标加载成功，共 ${newIcons.size} 个图标")
+            Logger.d(TAG, "应用图标加载成功，共 ${newIcons.size} 个图标")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e(TAG, "应用图标加载失败", e)
+            Logger.e(TAG, "应用图标加载失败", e)
         }
     }
 
@@ -399,7 +399,7 @@ object AppRepository {
             }
         }
 
-        if (BuildConfig.DEBUG) Log.d(TAG, "缓存外部应用图标: $packageName")
+        Logger.d(TAG, "缓存外部应用图标: $packageName")
     }
 
     /**
@@ -415,7 +415,7 @@ object AppRepository {
             IconCacheManager.removeIcon(packageName)
         }
 
-        if (BuildConfig.DEBUG) Log.d(TAG, "移除外部应用图标缓存: $packageName")
+        Logger.d(TAG, "移除外部应用图标缓存: $packageName")
     }
 
     /**

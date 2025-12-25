@@ -1,10 +1,9 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
+﻿package com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleOwner
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.parseBigIslandArea
 import org.json.JSONObject
 
@@ -39,7 +38,7 @@ suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, pic
 // 解析param_v2总容器，根据不同字段选择对应的子组件解析
 fun parseParamV2(jsonString: String): ParamV2? {
     return try {
-        if (BuildConfig.DEBUG) Log.d("超级岛", "开始解析param_v2: ${jsonString.take(200)}...")
+        Logger.d("超级岛", "开始解析param_v2: ${jsonString.take(200)}...")
         val json = JSONObject(jsonString)
         val business = json.optString("business", "").takeIf { it.isNotBlank() }
         
@@ -60,62 +59,62 @@ fun parseParamV2(jsonString: String): ParamV2? {
         try {
             anim = json.optJSONObject("animTextInfo")?.let { parseAnimTextInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析animTextInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析animTextInfo失败: ${e.message}")
         }
         
         try {
             highlight = json.optJSONObject("highlightInfo")?.let { parseHighlightInfo(it) }
                 ?: parseHighlightFromIconText(json)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析highlightInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析highlightInfo失败: ${e.message}")
         }
         
         try {
             baseInfo = json.optJSONObject("baseInfo")?.let { parseBaseInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析baseInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析baseInfo失败: ${e.message}")
         }
         
         try {
             chatInfo = json.optJSONObject("chatInfo")?.let { parseChatInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析chatInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析chatInfo失败: ${e.message}")
         }
         
         try {
             picInfo = json.optJSONObject("picInfo")?.let { parsePicInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析picInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析picInfo失败: ${e.message}")
         }
         
         try {
             progressInfo = json.optJSONObject("progressInfo")?.let { parseProgressInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析progressInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析progressInfo失败: ${e.message}")
         }
         
         try {
             multiProgressInfo = json.optJSONObject("multiProgressInfo")?.let { parseMultiProgressInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析multiProgressInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析multiProgressInfo失败: ${e.message}")
         }
         
         try {
             actions = json.optJSONArray("actions")?.let { parseActions(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析actions失败: ${e.message}")
+            Logger.w("超级岛", "解析actions失败: ${e.message}")
         }
         
         try {
             hintInfo = json.optJSONObject("hintInfo")?.let { parseHintInfo(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析hintInfo失败: ${e.message}")
+            Logger.w("超级岛", "解析hintInfo失败: ${e.message}")
         }
         
         try {
             textButton = json.optJSONObject("textButton")?.let { parseTextButton(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析textButton失败: ${e.message}")
+            Logger.w("超级岛", "解析textButton失败: ${e.message}")
         }
         
         try {
@@ -123,7 +122,7 @@ fun parseParamV2(jsonString: String): ParamV2? {
                 ?: json.optJSONObject("paramIsland")
                 ?: json.optJSONObject("islandParam"))?.let { parseParamIsland(it) }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("超级岛", "解析paramIsland失败: ${e.message}")
+            Logger.w("超级岛", "解析paramIsland失败: ${e.message}")
         }
         
         val paramV2 = ParamV2(
@@ -141,12 +140,12 @@ fun parseParamV2(jsonString: String): ParamV2? {
             paramIsland = paramIsland
         )
         
-        if (BuildConfig.DEBUG) Log.d("超级岛", "解析param_v2成功: business=$business, baseInfo=${paramV2.baseInfo != null}")
+        Logger.d("超级岛", "解析param_v2成功: business=$business, baseInfo=${paramV2.baseInfo != null}")
         paramV2
     } catch (e: Exception) {
-        if (BuildConfig.DEBUG) {
-            Log.w("超级岛", "解析param_v2失败: ${e.message}")
-            Log.w("超级岛", "失败的JSON: ${jsonString.take(300)}...")
+        {
+            Logger.w("超级岛", "解析param_v2失败: ${e.message}")
+            Logger.w("超级岛", "失败的JSON: ${jsonString.take(300)}...")
             e.printStackTrace()
         }
         null

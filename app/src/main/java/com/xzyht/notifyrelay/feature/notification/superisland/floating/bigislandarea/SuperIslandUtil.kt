@@ -1,11 +1,10 @@
-package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea
+﻿package com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 
 fun parseColor(colorString: String?): Int? {
@@ -21,7 +20,7 @@ suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitma
         val resolved = SuperIslandImageStore.resolve(context, url) ?: url
         ImageLoader.loadBitmapSuspend(context, resolved, timeoutMs)
     } catch (e: Exception) {
-        if (BuildConfig.DEBUG) Log.w("超级岛", "超级岛: 下载图片失败: ${e.message}")
+        Logger.w("超级岛", "超级岛: 下载图片失败: ${e.message}")
         null
     }
 }

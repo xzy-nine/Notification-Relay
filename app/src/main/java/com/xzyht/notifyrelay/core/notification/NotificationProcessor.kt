@@ -1,8 +1,7 @@
 package com.xzyht.notifyrelay.core.notification
 
 import android.content.Context
-import android.util.Log
-import com.xzyht.notifyrelay.BuildConfig
+
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
@@ -262,20 +261,20 @@ object NotificationProcessor {
         decrypted: String,
         remoteUuid: String?
     ) {
-        if (BuildConfig.DEBUG) Log.d(TAG, "准备调用远程过滤器")
+        Logger.d(TAG, "准备调用远程过滤器")
 
         val result = com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter(decrypted, context)
-        if (BuildConfig.DEBUG) Log.d(TAG, "remoteNotificationFilter result: $result")
+        Logger.d(TAG, "remoteNotificationFilter result: $result")
         try {
             if (!result.mappedPkg.isNullOrEmpty() && result.mappedPkg.startsWith("superisland:")) {
-                if (BuildConfig.DEBUG) Log.i("超级岛", "remoteNotificationFilter 判定为超级岛: mappedPkg=${result.mappedPkg}, needsDelay=${result.needsDelay}, title=${result.title}")
+                Logger.i("超级岛", "remoteNotificationFilter 判定为超级岛: mappedPkg=${result.mappedPkg}, needsDelay=${result.needsDelay}, title=${result.title}")
             }
         } catch (_: Exception) {}
 
         if (result.shouldShow) {
             val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
             val localIsLocked = keyguardManager.isKeyguardLocked
-            if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏分支检查: shouldShow=${result.shouldShow}, needsDelay=${result.needsDelay}, localIsLocked=${localIsLocked}, 标题:${result.title}")
+            Logger.d("智能去重", "锁屏分支检查: shouldShow=${result.shouldShow}, needsDelay=${result.needsDelay}, localIsLocked=${localIsLocked}, 标题:${result.title}")
 
             if (result.needsDelay && localIsLocked) {
                 handleLockedScreenDelayed(context, scope, result)
@@ -298,7 +297,7 @@ object NotificationProcessor {
                             )
                         }
                     } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "图标同步检查失败", e)
+                        Logger.e(TAG, "图标同步检查失败", e)
                     }
                 }
             }
@@ -317,7 +316,7 @@ object NotificationProcessor {
         scope: CoroutineScope,
         result: com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.FilterResult
     ) {
-        if (BuildConfig.DEBUG) Log.d("智能去重", "本机锁屏：延迟复刻，等待监控期后再检查重复再复刻 - 标题:${result.title}")
+        Logger.d("智能去重", "本机锁屏：延迟复刻，等待监控期后再检查重复再复刻 - 标题:${result.title}")
         try {
             if (com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.enableDeduplication) {
                 com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPlaceholder(result.title, result.text, result.mappedPkg, 15_000L)
@@ -327,7 +326,7 @@ object NotificationProcessor {
         scope.launch {
             try {
                 val waitMs = 15_000L
-                if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻等待 ${waitMs}ms - 标题:${result.title}")
+                Logger.d("智能去重", "锁屏延迟复刻等待 ${waitMs}ms - 标题:${result.title}")
                 delay(waitMs)
 
                 val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
@@ -351,23 +350,23 @@ object NotificationProcessor {
                     } catch (e: Exception) { true }
 
                     if (!placeholderStillExists) {
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：占位已被取消，跳过复刻 - 标题:${result.title}")
+                        Logger.d("智能去重", "锁屏延迟复刻：占位已被取消，跳过复刻 - 标题:${result.title}")
                     } else {
-                        if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：超期无重复，进行复刻 - 标题:${result.title}")
+                        Logger.d("智能去重", "锁屏延迟复刻：超期无重复，进行复刻 - 标题:${result.title}")
                         try {
                             com.xzyht.notifyrelay.feature.device.repository.replicateNotification(context, result, null, startMonitoring = false)
                         } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻执行复刻时发生错误", e)
+                            Logger.e("智能去重", "锁屏延迟复刻执行复刻时发生错误", e)
                         } finally {
                             try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
                         }
                     }
                 } else {
                     try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
-                    if (BuildConfig.DEBUG) Log.d("智能去重", "锁屏延迟复刻：发现重复，跳过复刻 - 标题:${result.title}")
+                    Logger.d("智能去重", "锁屏延迟复刻：发现重复，跳过复刻 - 标题:${result.title}")
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e("智能去重", "锁屏延迟复刻异常", e)
+                Logger.e("智能去重", "锁屏延迟复刻异常", e)
                 try { com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.removePlaceholderMatching(result.title, result.text, result.mappedPkg) } catch (_: Exception) {}
             }
         }

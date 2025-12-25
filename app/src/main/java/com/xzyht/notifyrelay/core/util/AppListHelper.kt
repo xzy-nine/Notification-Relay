@@ -1,7 +1,6 @@
-package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.core.util
 
 import android.content.Context
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 
 object AppListHelper {
@@ -23,8 +22,8 @@ object AppListHelper {
                 !isSystemApp && !isUpdatedSystemApp && !isSelf
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e("AppListHelper", "获取已安装应用列表失败: ${e.message}", e)
+            {
+                Logger.e("AppListHelper", "获取已安装应用列表失败: ${e.message}", e)
             }
             emptyList()
         }
@@ -41,13 +40,13 @@ object AppListHelper {
             val pm = context.packageManager
             val apps = pm.getInstalledApplications(0)
             val result = apps.size > 2 // 简单的检查，至少有几个应用
-            if (BuildConfig.DEBUG) {
-                Log.d("AppListHelper", "canQueryApps 检查结果: 应用数量=${apps.size}, 可查询=$result")
+            {
+                Logger.d("AppListHelper", "canQueryApps 检查结果: 应用数量=${apps.size}, 可查询=$result")
             }
             result
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.e("AppListHelper", "检查是否可查询应用列表失败: ${e.message}", e)
+            {
+                Logger.e("AppListHelper", "检查是否可查询应用列表失败: ${e.message}", e)
             }
             false
         }
@@ -66,8 +65,8 @@ object AppListHelper {
             val appInfo = pm.getApplicationInfo(packageName, 0)
             pm.getApplicationLabel(appInfo).toString()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w("AppListHelper", "获取应用名失败, 包名=$packageName, 错误=${e.message}", e)
+            {
+                Logger.w("AppListHelper", "获取应用名失败, 包名=$packageName, 错误=${e.message}", e)
             }
             packageName // 如果获取失败，返回包名
         }

@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.main
+﻿package com.xzyht.notifyrelay.feature.main
 
 import android.content.Intent
 import android.content.res.Configuration
@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -46,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
-import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.core.util.ServiceManager
 import com.xzyht.notifyrelay.core.util.SystemBarUtils
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
@@ -85,7 +84,7 @@ class MainActivity : FragmentActivity() {
 
         // 使用 PermissionHelper 检查权限
         if (!PermissionHelper.checkAllPermissions(this)) {
-            if (BuildConfig.DEBUG) Log.w("NotifyRelay", "必要权限未授权，跳转引导页")
+            Logger.w("NotifyRelay", "必要权限未授权，跳转引导页")
             val intent = Intent(this, GuideActivity::class.java)
             intent.putExtra("from", "MainActivity")
             startActivity(intent)
