@@ -47,7 +47,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaMan
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
+
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,7 +77,7 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
-    var renderWithCompose by remember { mutableStateOf(StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)) }
+
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
     val groups = remember(history) {
@@ -111,21 +111,6 @@ fun UISuperIslandSettings() {
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 渲染切换开关 - 使用普通Switch组件
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Compose渲染",
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Switch(
-                                checked = renderWithCompose,
-                                onCheckedChange = {
-                                    renderWithCompose = it
-                                    StorageManager.putBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, it)
-                                }
-                            )
-                        }
-                        
                         // 测试按钮
                         Button(
                             onClick = {
