@@ -155,8 +155,8 @@ object BackendLocalFilter {
     }
 
     fun removeFilterEntry(context: Context, keyword: String, packageName: String) {
-    // 内置条目不可删除（包括内置文本关键词和默认包名）
-    if ((packageName.isBlank() && builtinFilterEntries.any { it.keyword == keyword && it.keyword.isNotBlank() }) || (keyword.isBlank() && builtinFilterEntries.any { it.packageName == packageName && it.packageName.isNotBlank() })) return
+        // 内置条目不可删除（包括内置文本关键词和默认包名）
+        if ((packageName.isBlank() && builtinFilterEntries.any { it.keyword == keyword && it.keyword.isNotBlank() }) || (keyword.isBlank() && builtinFilterEntries.any { it.packageName == packageName && it.packageName.isNotBlank() })) return
         val entries = StorageManager.getStringSet(context, KEY_FILTER_ENTRIES, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         val ser = serialize(FilterEntry(keyword, packageName))
         entries.remove(ser)

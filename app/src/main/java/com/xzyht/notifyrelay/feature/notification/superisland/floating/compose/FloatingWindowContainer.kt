@@ -67,7 +67,7 @@ fun FloatingWindowContainer(
             // 使用key函数确保Compose能正确识别不同的条目，特别是当条目内容更新时
             key(entry.key) {
                 // 创建一个无交互源，用于移除点击效果
-                val interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 
                 Box(
                     modifier = Modifier

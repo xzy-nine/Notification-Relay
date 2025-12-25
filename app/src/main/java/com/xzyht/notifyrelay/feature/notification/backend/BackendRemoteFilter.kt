@@ -393,7 +393,7 @@ object BackendRemoteFilter {
                 context = context
             ))
         }
-    if (BuildConfig.DEBUG) Log.d("智能去重", "添加待监控通知 - 进入可撤回期(15s) 包名:$packageName, 标题:$title, 通知ID:$notifyId")
+        if (BuildConfig.DEBUG) Log.d("智能去重", "添加待监控通知 - 进入可撤回期(15s) 包名:$packageName, 标题:$title, 通知ID:$notifyId")
         // 启动监控协程
         startNotificationMonitoring()
     }
@@ -415,7 +415,7 @@ object BackendRemoteFilter {
      * 启动通知监控协程
      */
     private fun startNotificationMonitoring() {
-    if (BuildConfig.DEBUG) Log.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
+        if (BuildConfig.DEBUG) Log.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
         GlobalScope.launch {
             while (true) {
                 val now = System.currentTimeMillis()

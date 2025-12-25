@@ -105,7 +105,7 @@ object AppRepository {
         context: Context
     ): List<ApplicationInfo> {
         val allApps = _apps.value
-    if (allApps.isEmpty()) return emptyList()
+        if (allApps.isEmpty()) return emptyList()
 
         // 区分用户应用和系统应用
         val userApps = allApps.filter { app ->
