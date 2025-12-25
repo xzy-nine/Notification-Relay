@@ -70,7 +70,8 @@ suspend fun replicateNotification(
                 } else {
                     pkg
                 }
-                FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap)
+                val isLocked = json.optBoolean("isLocked", false)
+                FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap, json.optString("appName"), isLocked)
                 val historyEntry = SuperIslandHistoryEntry(
                     id = System.currentTimeMillis(),
                     originalPackage = originalPackage.takeIf { it.isNotEmpty() },

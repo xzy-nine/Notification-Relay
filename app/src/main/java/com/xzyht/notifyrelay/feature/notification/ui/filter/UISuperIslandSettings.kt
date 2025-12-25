@@ -713,7 +713,8 @@ private fun triggerFloatingReplica(context: Context, entry: SuperIslandHistoryEn
         title = title,
         text = entry.text,
         paramV2Raw = entry.paramV2Raw,
-        picMap = entry.picMap.takeIf { it.isNotEmpty() }
+        picMap = entry.picMap.takeIf { it.isNotEmpty() },
+        isLocked = false
     )
 }
 

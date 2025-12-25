@@ -203,7 +203,7 @@ object NotificationProcessor {
                     val mPics = merged.pics
                     
                     try {
-                        FloatingReplicaManager.showFloating(context, sourceKey, finalTitle, finalText, mParam2, mPics, appName)
+                        FloatingReplicaManager.showFloating(context, sourceKey, finalTitle, finalText, mParam2, mPics, appName, isLocked)
                     } catch (e: Exception) {
                         Logger.w("超级岛", "差异复刻悬浮窗失败: ${e.message}")
                     }

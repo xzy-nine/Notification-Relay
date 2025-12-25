@@ -90,7 +90,8 @@ object FloatingReplicaManager {
         text: String?,
         paramV2Raw: String? = null,
         picMap: Map<String, String>? = null,
-        appName: String? = null
+        appName: String? = null,
+        isLocked: Boolean = false
     ) {
         try {
             // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
@@ -130,12 +131,13 @@ object FloatingReplicaManager {
                     val entryKey = sourceId
                     
                     // 更新Compose浮窗管理器的条目
+                    // 锁屏状态下不自动展开，非锁屏状态保持原有逻辑
                     floatingWindowManager.addOrUpdateEntry(
                         key = entryKey,
                         paramV2 = paramV2,
                         paramV2Raw = paramV2Raw,
                         picMap = internedPicMap,
-                        isExpanded = !summaryOnly,
+                        isExpanded = if (isLocked) false else !summaryOnly,
                         summaryOnly = summaryOnly,
                         business = paramV2?.business,
                         title = title,

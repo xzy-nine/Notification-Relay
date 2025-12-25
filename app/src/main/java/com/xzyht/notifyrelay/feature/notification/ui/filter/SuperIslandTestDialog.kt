@@ -232,7 +232,8 @@ private fun testBaseInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "base_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -289,7 +290,8 @@ private fun testChatInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "profile_pic" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -345,7 +347,8 @@ private fun testAnimTextInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "anim_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -402,7 +405,8 @@ private fun testHighlightInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "highlight_pic" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -451,7 +455,8 @@ private fun testPicInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "test_pic" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -501,7 +506,8 @@ private fun testHintInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "hint_pic" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -551,7 +557,8 @@ private fun testTextButton(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "button_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -611,7 +618,8 @@ private fun testProgressInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "progress_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -677,7 +685,8 @@ private fun testMultiProgressInfo(context: Context) {
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
             "multi_progress_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -757,7 +766,8 @@ private fun testMultiProgressWithIcons(context: Context) {
             "middle_unselected_pic" to createBlackBlockDataUrl(),
             "end_pic" to createBlackBlockDataUrl(),
             "end_unselected_pic" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
@@ -854,7 +864,8 @@ private fun testCircularProgressInfo(context: Context) {
             "miui.focus.pic_cancel" to createBlackBlockDataUrl(),
             "miui.focus.pic_cancelDark" to createBlackBlockDataUrl(),
             "miui.focus.pic_app_icon" to createBlackBlockDataUrl()
-        )
+        ),
+        isLocked = false
     )
 }
 
