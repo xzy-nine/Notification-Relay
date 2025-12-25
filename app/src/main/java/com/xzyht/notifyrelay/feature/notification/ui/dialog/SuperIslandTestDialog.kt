@@ -1,23 +1,26 @@
-package com.xzyht.notifyrelay.feature.notification.ui.filter
+package com.xzyht.notifyrelay.feature.notification.ui.dialog
 
 import android.content.Context
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.extra.SuperDialog
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 超级岛测试对话框，用于测试不同分支下的效果
  */
 @Composable
 fun SuperIslandTestDialog(
-    show: androidx.compose.runtime.MutableState<Boolean>,
+    show: MutableState<Boolean>,
     context: Context
 ) {
     MiuixTheme {
@@ -29,7 +32,7 @@ fun SuperIslandTestDialog(
             enableWindowDim = true
         ) {
             LazyColumn(
-                modifier = Modifier
+                modifier = Modifier.Companion
                     .fillMaxWidth()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -40,127 +43,127 @@ fun SuperIslandTestDialog(
                         onClick = {
                             testBaseInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试基础文本组件 (baseInfo)")
                     }
                 }
-                
+
                 item {
                     // IM图文组件
                     Button(
                         onClick = {
                             testChatInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试IM图文组件 (chatInfo)")
                     }
                 }
-                
+
                 item {
                     // 动画文本组件
                     Button(
                         onClick = {
                             testAnimTextInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试动画文本组件 (animTextInfo)")
                     }
                 }
-                
+
                 item {
                     // 强调图文组件
                     Button(
                         onClick = {
                             testHighlightInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试强调图文组件 (highlightInfo)")
                     }
                 }
-                
+
                 item {
                     // 识别图形组件
                     Button(
                         onClick = {
                             testPicInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试识别图形组件 (picInfo)")
                     }
                 }
-                
+
                 item {
                     // 提示组件
                     Button(
                         onClick = {
                             testHintInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试提示组件 (hintInfo)")
                     }
                 }
-                
+
                 item {
                     // 文本按钮组件
                     Button(
                         onClick = {
                             testTextButton(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试文本按钮组件 (textButton)")
                     }
                 }
-                
+
                 item {
                     // 线性进度组件
                     Button(
                         onClick = {
                             testProgressInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试线性进度组件 (progressInfo)")
                     }
                 }
-                
+
                 item {
                     // 多节点进度组件
                     Button(
                         onClick = {
                             testMultiProgressInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试多节点进度组件 (multiProgressInfo)")
                     }
                 }
-                
+
                 item {
                     // 带有图标的多节点进度组件
                     Button(
                         onClick = {
                             testMultiProgressWithIcons(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试带图标多节点进度组件")
                     }
                 }
-                
+
                 item {
                     // 圆形进度组件
                     Button(
                         onClick = {
                             testCircularProgressInfo(context)
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.Companion.fillMaxWidth()
                     ) {
                         Text("测试圆形进度组件 (circular)")
                     }
@@ -215,7 +218,7 @@ private fun testBaseInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_base_info",
@@ -273,7 +276,7 @@ private fun testChatInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_chat_info",
@@ -330,7 +333,7 @@ private fun testAnimTextInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_anim_text_info",
@@ -388,7 +391,7 @@ private fun testHighlightInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_highlight_info",
@@ -438,7 +441,7 @@ private fun testPicInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_pic_info",
@@ -489,7 +492,7 @@ private fun testHintInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_hint_info",
@@ -540,7 +543,7 @@ private fun testTextButton(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_text_button",
@@ -601,7 +604,7 @@ private fun testProgressInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_progress_info",
@@ -668,7 +671,7 @@ private fun testMultiProgressInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_multi_progress_info",
@@ -744,7 +747,7 @@ private fun testMultiProgressWithIcons(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_multi_progress_with_icons",
@@ -843,7 +846,7 @@ private fun testCircularProgressInfo(context: Context) {
             }
         }
     """
-    
+
     FloatingReplicaManager.showFloating(
         context = context,
         sourceId = "test_circular_progress_info",
