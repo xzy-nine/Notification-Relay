@@ -19,11 +19,11 @@ import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
 import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.core.FloatingComposeContainer
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.core.FloatingWindowManager
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.core.LifecycleManager
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.model.ParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.model.parseParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.LifecycleManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
