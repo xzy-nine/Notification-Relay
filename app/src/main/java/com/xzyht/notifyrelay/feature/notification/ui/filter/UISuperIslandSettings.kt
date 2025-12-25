@@ -81,6 +81,7 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
+    var useComposeSummary by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COMPOSE_SUMMARY_KEY, false)) }
 
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
@@ -149,16 +150,28 @@ fun UISuperIslandSettings() {
                         Spacer(modifier = Modifier.height(0.dp))
 
                         SuperSwitch(
-                            title = "复制图片详细信息",
-                            summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
-                            checked = includeImageDataOnCopy,
-                            onCheckedChange = {
-                                includeImageDataOnCopy = it
-                                StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
-                            }
-                        )
+                title = "复制图片详细信息",
+                summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
+                checked = includeImageDataOnCopy,
+                onCheckedChange = {
+                    includeImageDataOnCopy = it
+                    StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
+                }
+            )
 
-                        Spacer(modifier = Modifier.height(0.dp))
+            Spacer(modifier = Modifier.height(0.dp))
+
+            SuperSwitch(
+                title = "使用Compose渲染摘要态",
+                summary = "切换摘要态通知的渲染方式，Compose版本与View版本对比",
+                checked = useComposeSummary,
+                onCheckedChange = {
+                    useComposeSummary = it
+                    StorageManager.putBoolean(context, SUPER_ISLAND_COMPOSE_SUMMARY_KEY, it)
+                }
+            )
+
+            Spacer(modifier = Modifier.height(0.dp))
 
                         if (groups.isEmpty()) {
                             Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
@@ -709,6 +722,7 @@ private fun triggerFloatingReplica(context: Context, entry: SuperIslandHistoryEn
 
 private const val SUPER_ISLAND_KEY = "superisland_enabled"
 private const val SUPER_ISLAND_COPY_IMAGE_DATA_KEY = "superisland_copy_image_data"
+private const val SUPER_ISLAND_COMPOSE_SUMMARY_KEY = "superisland_compose_summary"
 
 private fun sanitizeImageContent(source: String, includeImageDataOnCopy: Boolean): String {
     if (includeImageDataOnCopy) return source
