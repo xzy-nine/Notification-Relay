@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.core.sync
+package com.xzyht.notifyrelay.core.sync
 
 import android.content.Context
 import com.xzyht.notifyrelay.core.util.AppListHelper

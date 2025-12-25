@@ -1,24 +1,16 @@
 package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import android.content.Context
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
 
 /**
  * 超级岛测试对话框，用于测试不同分支下的效果
