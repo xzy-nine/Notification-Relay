@@ -2,6 +2,7 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsl
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +47,29 @@ fun BigIslandCollapsedCompose(
         Color(0xCC000000.toInt()) // 半透明黑
     }
     
-    // 胶囊容器
+    // 解析A区和B区组件
+    var aComp = parseAComponent(bigIsland)
+    var bComp = parseBComponent(bigIsland)
+    
+    // 如果A区组件为空，创建一个默认的AImageText1对象来显示兜底应用图标
+    if (aComp == null) {
+        aComp = AImageText1(picKey = null)
+    }
+    
+    // 如果 B 为空且存在兜底文本，则用兜底文本填充 B
+    val bIsEmptyInitial = (bComp is BEmpty)
+    if (bIsEmptyInitial) {
+        val titleOrNull = fallbackTitle?.takeIf { it.isNotBlank() }
+        val contentOrNull = fallbackContent?.takeIf { it.isNotBlank() }
+        if (titleOrNull != null || contentOrNull != null) {
+            bComp = BTextInfo(
+                title = titleOrNull ?: contentOrNull.orEmpty(),
+                content = if (titleOrNull != null) contentOrNull else null
+            )
+        }
+    }
+    
+    // 主布局：保证长侧显示完全，加宽侧与链接处的空隙宽度
     Box(
         modifier = Modifier
             .shadow(elevation = 6.dp, shape = roundedShape)
@@ -61,43 +84,15 @@ fun BigIslandCollapsedCompose(
             )
             .clip(roundedShape)
             .padding(horizontal = 10.dp, vertical = 6.dp)
+            .wrapContentWidth()
     ) {
-        // 解析A区和B区组件
-        var aComp = parseAComponent(bigIsland)
-        var bComp = parseBComponent(bigIsland)
-        
-        // 如果A区组件为空，创建一个默认的AImageText1对象来显示兜底应用图标
-        if (aComp == null) {
-            aComp = AImageText1(picKey = null)
-        }
-        
-        // 如果 B 为空且存在兜底文本，则用兜底文本填充 B
-        val bIsEmptyInitial = (bComp is BEmpty)
-        if (bIsEmptyInitial) {
-            val titleOrNull = fallbackTitle?.takeIf { it.isNotBlank() }
-            val contentOrNull = fallbackContent?.takeIf { it.isNotBlank() }
-            if (titleOrNull != null || contentOrNull != null) {
-                bComp = BTextInfo(
-                    title = titleOrNull ?: contentOrNull.orEmpty(),
-                    content = if (titleOrNull != null) contentOrNull else null
-                )
-            }
-        }
-        
-        // 主布局：A区 + 弹性占位 + B区
+        // 主布局：使用Row实现保证长侧显示完全，加宽侧与链接处的空隙宽度
         Row(
             modifier = Modifier.wrapContentWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
         ) {
-            val aExists = true
-            val bIsEmpty = bComp is BEmpty
-            
-            // 左侧胶囊头（若 A 不存在）
-            if (!aExists) {
-                Spacer(modifier = Modifier.width(12.dp))
-            }
-            
-            // 左侧包裹（A 左对齐）
+            // 左侧：A区内容，保证显示完全
             Box(
                 modifier = Modifier.wrapContentWidth(),
                 contentAlignment = Alignment.CenterStart
@@ -105,20 +100,19 @@ fun BigIslandCollapsedCompose(
                 ACompose(aComp, picMap)
             }
             
-            // 中间弹性占位（将右侧内容推向右边界）
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // 右侧包裹（B 右对齐）
-            if (!bIsEmpty) {
+            // 只有当B区存在内容时，才显示中间间距和B区
+            if (bComp !is BEmpty) {
+                // 动态中间间距：根据两侧内容宽度调整
+                val dynamicSpacing = 48.dp // 加宽侧与链接处的空隙宽度
+                Spacer(modifier = Modifier.width(dynamicSpacing))
+                
+                // 右侧：B区内容，保证显示完全
                 Box(
                     modifier = Modifier.wrapContentWidth(),
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     BCompose(bComp, picMap)
                 }
-            } else {
-                // 右侧胶囊头（若 B 为空）
-                Spacer(modifier = Modifier.width(12.dp))
             }
         }
     }

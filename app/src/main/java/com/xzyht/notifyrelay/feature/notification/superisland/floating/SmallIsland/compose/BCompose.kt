@@ -49,7 +49,7 @@ fun BCompose(
                     narrow = bComp.narrowFont,
                     highlight = bComp.showHighlightColor,
                     monospace = false,
-                    maxWidth = 140.dp
+                    maxWidth = 160.dp
                 )
             }
             

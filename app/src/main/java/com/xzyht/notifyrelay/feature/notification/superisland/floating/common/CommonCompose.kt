@@ -91,7 +91,7 @@ fun CommonTextBlockCompose(
     titleFontSize: TextUnit = 14.sp,
     contentColor: Color = Color(0xCCFFFFFF),
     contentFontSize: TextUnit = 12.sp,
-    maxWidth: Dp = 140.dp
+    maxWidth: Dp = 160.dp // 适当增加最大宽度，确保内容完整显示
 ) {
     Column(
         modifier = Modifier

@@ -101,7 +101,8 @@ fun FloatingWindowContainer(
                             // 测量条目实际高度并更新
                             val measuredHeight = it.size.height
                             onUpdateEntryHeight?.invoke(entry.key, measuredHeight)
-                        }
+                        },
+                    contentAlignment = Alignment.Center // 确保内容居中对齐
                 ) {
                     // 简化动画，避免闪烁
                     val expandedEnterTransition = slideInVertically {
