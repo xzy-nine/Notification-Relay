@@ -125,6 +125,12 @@ fun parseParamV2(jsonString: String): ParamV2? {
             Logger.w("超级岛", "解析paramIsland失败: ${e.message}")
         }
         
+        // 如果multiProgressInfo为空，但progressInfo包含节点资源，则转换为multiProgressInfo
+        val finalMultiProgressInfo = multiProgressInfo ?: run {
+            val title = baseInfo?.title?.takeIf { it.isNotBlank() }
+            progressInfo?.toMultiProgressInfo(title)
+        }
+
         val paramV2 = ParamV2(
             business = business,
             baseInfo = baseInfo,
@@ -133,7 +139,7 @@ fun parseParamV2(jsonString: String): ParamV2? {
             animTextInfo = anim,
             picInfo = picInfo,
             progressInfo = progressInfo,
-            multiProgressInfo = multiProgressInfo,
+            multiProgressInfo = finalMultiProgressInfo,
             actions = actions,
             hintInfo = hintInfo,
             textButton = textButton,
