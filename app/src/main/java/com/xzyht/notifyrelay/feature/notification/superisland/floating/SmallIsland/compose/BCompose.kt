@@ -180,7 +180,8 @@ fun BCompose(
                 // 进度环 + 图标
                 val size = 20.dp
                 Box(
-                    modifier = Modifier.size(size)
+                    modifier = Modifier.size(size),
+                    contentAlignment = Alignment.Center // 确保内部元素居中
                 ) {
                     // 实现圆形进度环
                     CircularProgressCompose(
@@ -188,7 +189,8 @@ fun BCompose(
                         colorReach = Color(parseColorSafe(bComp.colorReach, 0xFF3482FF.toInt())),
                         colorUnReach = Color(parseColorSafe(bComp.colorUnReach, 0x33333333.toInt())),
                         strokeWidth = 2.5.dp,
-                        isClockwise = !bComp.isCCW
+                        isClockwise = !bComp.isCCW,
+                        size = size
                     )
                     
                     // 中心图标

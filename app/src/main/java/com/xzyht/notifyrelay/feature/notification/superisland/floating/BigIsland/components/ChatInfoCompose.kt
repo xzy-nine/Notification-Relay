@@ -23,11 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CircularProgressCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
-
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 /**
  * 聊天信息Compose组件
@@ -65,35 +63,19 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
             // 添加8dp的margin
             Spacer(modifier = Modifier.width(8.dp))
 
-            // 创建圆形进度条 - 使用Miuix的CircularProgressIndicator
+            // 创建圆形进度条 - 使用common目录下的通用组件
             val progressColor = SuperIslandImageUtil.parseColor(progressInfo.colorProgress) ?: 0xFF3482FF.toInt()
             val trackColor = SuperIslandImageUtil.parseColor(progressInfo.colorProgressEnd)
                 ?: ((progressColor and 0x00FFFFFF) or (0x33 shl 24))
 
-            // 使用Animatable实现平滑进度动画
-            val animatedProgress = remember {
-                Animatable(progressInfo.progress.toFloat() / 100f)
-            }
-
-            // 当progress变化时，使用动画平滑过渡
-            LaunchedEffect(progressInfo.progress) {
-                animatedProgress.animateTo(
-                    targetValue = progressInfo.progress.toFloat() / 100f,
-                    animationSpec = tween(
-                        durationMillis = 420, // 动画时长
-                        easing = LinearEasing
-                    )
-                )
-            }
-
-            CircularProgressIndicator(
-                progress = animatedProgress.value,
-                size = 48.dp,
+            // 使用通用的CircularProgressCompose组件（内部已处理动画）
+            CircularProgressCompose(
+                progress = progressInfo.progress,
+                colorReach = Color(progressColor),
+                colorUnReach = Color(trackColor),
                 strokeWidth = 3.5.dp,
-                colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                    foregroundColor = Color(progressColor),
-                    backgroundColor = Color(trackColor)
-                )
+                isClockwise = true,
+                size = 48.dp
             )
         }
 

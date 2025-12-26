@@ -2,17 +2,13 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.common
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -23,6 +19,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
+import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 /**
  * 通用图片加载组件
@@ -161,6 +159,7 @@ fun CommonTextBlockCompose(
 
 /**
  * 圆形进度环的Compose实现
+ * 使用Miuix的CircularProgressIndicator实现
  */
 @Composable
 fun CircularProgressCompose(
@@ -168,48 +167,18 @@ fun CircularProgressCompose(
     colorReach: Color,
     colorUnReach: Color,
     strokeWidth: Dp,
-    isClockwise: Boolean
+    isClockwise: Boolean,
+    size: Dp = 20.dp
 ) {
-    val animatedProgress = animateFloatAsState(
-        targetValue = progress.coerceIn(0, 100).toFloat() / 100f,
-        animationSpec = tween(durationMillis = 420),
-        label = "progress"
+    CircularProgressIndicator(
+        progress = progress.coerceIn(0, 100).toFloat() / 100f,
+        size = size,
+        strokeWidth = strokeWidth,
+        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+            foregroundColor = colorReach,
+            backgroundColor = colorUnReach
+        )
     )
-    
-    val strokeWidthPx = with(LocalDensity.current) {
-        strokeWidth.toPx()
-    }
-    
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val canvasSize = size
-        val centerX = canvasSize.width / 2f
-        val centerY = canvasSize.height / 2f
-        val radius = minOf(canvasSize.width, canvasSize.height) / 2f - strokeWidthPx / 2f
-        
-        // 绘制背景圆环
-        drawCircle(
-            color = colorUnReach,
-            radius = radius,
-            center = androidx.compose.ui.geometry.Offset(centerX, centerY),
-            style = Stroke(width = strokeWidthPx)
-        )
-        
-        // 绘制进度圆环
-        val startAngle = -90f
-        val sweepAngle = if (isClockwise) animatedProgress.value * 360f else -animatedProgress.value * 360f
-        drawArc(
-            color = colorReach,
-            startAngle = startAngle,
-            sweepAngle = sweepAngle,
-            useCenter = false,
-            topLeft = androidx.compose.ui.geometry.Offset(centerX - radius, centerY - radius),
-            size = Size(radius * 2, radius * 2),
-            style = Stroke(
-                width = strokeWidthPx,
-                cap = StrokeCap.Round
-            )
-        )
-    }
 }
 
 /**

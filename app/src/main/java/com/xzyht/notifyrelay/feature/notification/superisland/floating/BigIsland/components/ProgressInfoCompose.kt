@@ -3,13 +3,14 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIslan
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ProgressInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 /**
  * 进度信息Compose组件
@@ -22,10 +23,12 @@ fun ProgressInfoCompose(
     
     LinearProgressIndicator(
         progress = progressInfo.progress.toFloat() / 100f,
-        color = progressColor,
         modifier = Modifier
             .fillMaxWidth()
             .height(4.dp)
-            .padding(top = 4.dp)
+            .padding(top = 4.dp),
+        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+            foregroundColor = progressColor
+        )
     )
 }
