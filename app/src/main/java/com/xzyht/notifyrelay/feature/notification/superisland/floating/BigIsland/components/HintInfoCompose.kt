@@ -1,9 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -11,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.HintInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 
 
@@ -22,20 +21,13 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.Su
 fun HintInfoCompose(hintInfo: HintInfo, picMap: Map<String, String>? = null) {
     Column(modifier = Modifier.padding(16.dp)) {
         // 图标：使用统一的图片加载工具
-        val iconUrl = hintInfo.picContent?.let { key ->
-            picMap?.get(key)
-        }
-
-        if (!iconUrl.isNullOrEmpty()) {
-            val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl)
-            painter?.let {
-                Image(
-                    painter = it,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-        }
+        CommonImageCompose(
+            picKey = hintInfo.picContent,
+            picMap = picMap,
+            size = 40.dp,
+            isFocusIcon = false,
+            contentDescription = null
+        )
         
         // 标题
         hintInfo.title?.let {

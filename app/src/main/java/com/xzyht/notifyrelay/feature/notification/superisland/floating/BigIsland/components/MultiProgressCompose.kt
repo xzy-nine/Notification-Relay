@@ -1,6 +1,5 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -20,11 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MultiProgressInfo
 
@@ -123,32 +122,29 @@ fun MultiProgressCompose(
                         else -> multiProgressInfo.picMiddleUnselected ?: multiProgressInfo.picForwardBox
                     }
                     
-                    // 直接将 iconKey 和 picMap 传递给 rememberSuperIslandImagePainter，让它处理 URL 解析和 ref: URL 处理
-                    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(
-                        url = null,
-                        picMap = picMap,
-                        iconKey = baseIconKey
-                    )
-                    
                     Box(
                         modifier = Modifier
                             .size(NODE_SIZE_DP.dp)
                             .alpha(nodeAlpha),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (painter != null) {
-                            Image(
-                                painter = painter,
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .size(NODE_SIZE_DP.dp)
+                        // 先尝试加载图片
+                        val hasIcon = !baseIconKey.isNullOrEmpty()
+                        if (hasIcon) {
+                            CommonImageCompose(
+                                picKey = baseIconKey,
+                                picMap = picMap,
+                                size = NODE_SIZE_DP.dp,
+                                isFocusIcon = false,
+                                contentDescription = null
                             )
-                        } else {
-                            // 图标加载失败时的 fallback
+                        }
+                        
+                        // 如果没有图片或图片加载失败，显示默认的圆形指示器
+                        if (baseIconKey.isNullOrEmpty()) {
                             Box(
                                 modifier = Modifier
-                                    .size(NODE_SIZE_DP.dp)
+                                    .size(NODE_SIZE_DP.dp / 2)
                                     .background(
                                         color = if (isCompleted) primaryColor else primaryColor.copy(alpha = 0.3f),
                                         shape = CircleShape
@@ -171,11 +167,6 @@ fun MultiProgressCompose(
                 val pointerKey = multiProgressInfo.picForward ?: multiProgressInfo.picForwardBox
                 
                 // 使用统一的图片加载逻辑，处理ref: URL和picMap查找
-                val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(
-                    url = null,
-                    picMap = picMap,
-                    iconKey = pointerKey
-                )
                 val pointerSize = (PROGRESS_BAR_HEIGHT_DP * 4 + POINTER_SIZE_EXTRA_DP).dp
                 val density = LocalDensity.current
                 // 计算位置统一使用 px，再转换为 dp，避免 px/dp 混用导致的偏移误差
@@ -198,17 +189,20 @@ fun MultiProgressCompose(
                     // 指针层级最高，确保覆盖节点
                     .zIndex(11f)
                 ) {
-                    // 总是显示指示点，无论painter是否为null
-                    if (painter != null) {
-                        Image(
-                            painter = painter,
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(pointerSize)
+                    // 先尝试加载指针图片
+                    val hasPointerIcon = !pointerKey.isNullOrEmpty()
+                    if (hasPointerIcon) {
+                        CommonImageCompose(
+                            picKey = pointerKey,
+                            picMap = picMap,
+                            size = pointerSize,
+                            isFocusIcon = false,
+                            contentDescription = null
                         )
-                    } else {
-                        // 图片加载失败或picForward为null时，显示默认的指示点
+                    }
+                    
+                    // 如果没有指针图片或图片加载失败，显示默认的指示点
+                    if (pointerKey.isNullOrEmpty()) {
                         Box(
                             modifier = Modifier
                                 .size(pointerSize)

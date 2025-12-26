@@ -632,13 +632,19 @@ private fun testMultiProgressInfo(context: Context) {
                 "title": "正在排水",
                 "progress": 60,
                 "color": "#00FF00",
-                "points": 3
+                "points": 3,
+                "picForward": "forward_pic",
+                "picForwardBox": "box_pic",
+                "picMiddle": "middle_pic",
+                "picMiddleUnselected": "middle_unselected_pic",
+                "picEnd": "end_pic",
+                "picEndUnselected": "end_unselected_pic"
             },
             "param_island": {
                 "smallIslandArea": {
                     "primaryText": "多节点进度测试",
                     "secondaryText": "正在排水",
-                    "iconKey": "multi_progress_icon",
+                    "iconKey": "forward_pic",
                     "progressInfo": {
                         "progress": 60,
                         "colorProgress": "#00FF00",
@@ -650,7 +656,7 @@ private fun testMultiProgressInfo(context: Context) {
                         "type": 1,
                         "picInfo": {
                             "type": 1,
-                            "pic": "multi_progress_icon"
+                            "pic": "forward_pic"
                         },
                         "textInfo": {
                             "title": "多节点进度",
@@ -679,7 +685,12 @@ private fun testMultiProgressInfo(context: Context) {
         text = "这是一个多节点进度组件的展开态测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
-            "multi_progress_icon" to createBlackBlockDataUrl()
+            "forward_pic" to createBlackBlockDataUrl(),
+            "box_pic" to createBlackBlockDataUrl(),
+            "middle_pic" to createBlackBlockDataUrl(),
+            "middle_unselected_pic" to createBlackBlockDataUrl(),
+            "end_pic" to createBlackBlockDataUrl(),
+            "end_unselected_pic" to createBlackBlockDataUrl()
         ),
         isLocked = false
     )

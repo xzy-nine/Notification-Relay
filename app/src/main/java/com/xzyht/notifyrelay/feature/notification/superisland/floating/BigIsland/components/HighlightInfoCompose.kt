@@ -19,11 +19,11 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.formatTimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.HighlightInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.formatTimerInfo
-
 import kotlinx.coroutines.delay
 
 /**
@@ -36,11 +36,7 @@ fun HighlightInfoCompose(
 ) {
     val density = LocalConfiguration.current.densityDpi / 160f
     val iconKey = selectIconKey(highlightInfo)
-    
-    // 使用统一的图片加载工具获取painter
-    val iconUrl = picMap?.get(iconKey)
-    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl)
-    val hasLeadingIcon = painter != null
+    val hasIcon = !iconKey.isNullOrEmpty()
     
     Row(
         modifier = Modifier
@@ -49,22 +45,24 @@ fun HighlightInfoCompose(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 图标
-        painter?.let {
+        if (hasIcon) {
             val iconSize = if (highlightInfo.iconOnly) (48 * density).dp else (40 * density).dp
-            Image(
-                painter = it,
-                contentDescription = null,
-                modifier = Modifier.size(iconSize)
+            CommonImageCompose(
+                picKey = iconKey,
+                picMap = picMap,
+                size = iconSize,
+                isFocusIcon = false,
+                contentDescription = null
             )
         }
-
+        
         // 文本容器
         val textLayoutParams = if (highlightInfo.iconOnly) {
             Modifier.wrapContentWidth()
         } else {
             Modifier.weight(1f)
         }
-        val textContainerModifier = textLayoutParams.let { if (hasLeadingIcon) it.padding(start = 8.dp) else it }
+        val textContainerModifier = textLayoutParams.let { if (hasIcon) it.padding(start = 8.dp) else it }
 
         Column(modifier = textContainerModifier) {
             val timerLabel = highlightInfo.timerInfo?.let { info ->
