@@ -2,175 +2,65 @@ package com.xzyht.notifyrelay.feature.notification.ui.dialog
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+// 全局变量，用于保存递增循环的进度值
+private var progressCounter = 0
+
 /**
- * 超级岛测试对话框，用于测试不同分支下的效果
+ * 获取进度值
+ * @param isVariableProgress 是否使用可变进度值
+ * @param fixedValue 固定进度值
+ * @return 生成的进度值
  */
-@Composable
-fun SuperIslandTestDialog(
-    show: MutableState<Boolean>,
-    context: Context
-) {
-    MiuixTheme {
-        SuperDialog(
-            title = "超级岛测试",
-            summary = "点击下方按钮测试不同分支下的超级岛效果",
-            show = show,
-            onDismissRequest = { show.value = false },
-            enableWindowDim = true
-        ) {
-            LazyColumn(
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item {
-                    // 基础文本组件
-                    Button(
-                        onClick = {
-                            testBaseInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试基础文本组件 (baseInfo)")
-                    }
-                }
-
-                item {
-                    // IM图文组件
-                    Button(
-                        onClick = {
-                            testChatInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试IM图文组件 (chatInfo)")
-                    }
-                }
-
-                item {
-                    // 动画文本组件
-                    Button(
-                        onClick = {
-                            testAnimTextInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试动画文本组件 (animTextInfo)")
-                    }
-                }
-
-                item {
-                    // 强调图文组件
-                    Button(
-                        onClick = {
-                            testHighlightInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试强调图文组件 (highlightInfo)")
-                    }
-                }
-
-                item {
-                    // 识别图形组件
-                    Button(
-                        onClick = {
-                            testPicInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试识别图形组件 (picInfo)")
-                    }
-                }
-
-                item {
-                    // 提示组件
-                    Button(
-                        onClick = {
-                            testHintInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试提示组件 (hintInfo)")
-                    }
-                }
-
-                item {
-                    // 文本按钮组件
-                    Button(
-                        onClick = {
-                            testTextButton(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试文本按钮组件 (textButton)")
-                    }
-                }
-
-                item {
-                    // 线性进度组件
-                    Button(
-                        onClick = {
-                            testProgressInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试线性进度组件 (progressInfo)")
-                    }
-                }
-
-                item {
-                    // 多节点进度组件
-                    Button(
-                        onClick = {
-                            testMultiProgressInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试多节点进度组件 (multiProgressInfo)")
-                    }
-                }
-
-                item {
-                    // 带有图标的多节点进度组件
-                    Button(
-                        onClick = {
-                            testMultiProgressWithIcons(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试带图标多节点进度组件")
-                    }
-                }
-
-                item {
-                    // 圆形进度组件
-                    Button(
-                        onClick = {
-                            testCircularProgressInfo(context)
-                        },
-                        modifier = Modifier.Companion.fillMaxWidth()
-                    ) {
-                        Text("测试圆形进度组件 (circular)")
-                    }
-                }
-            }
+private fun getProgress(isVariableProgress: Boolean, fixedValue: Int): Int {
+    return if (isVariableProgress) {
+        // 以10为单位递增循环进度值，用于测试动画效果
+        val currentProgress = progressCounter
+        // 每次递增10，达到100时重置为0
+        progressCounter = if (currentProgress >= 100) {
+            0
+        } else {
+            currentProgress + 10
         }
+        currentProgress
+    } else {
+        // 固定进度值，用于测试静态效果
+        fixedValue
     }
+}
+
+/**
+ * 创建一个黑色块的data URL，用于测试图片显示
+ */
+private fun createBlackBlockDataUrl(): String {
+    // 100x100黑色块的base64编码
+    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+}
+
+/**
+ * 创建一个应用图标data URL，用于测试图片显示
+ */
+private fun appimgDataUrl(): String {
+    // 使用简单的黑色块替代被截断的base64图标
+    return createBlackBlockDataUrl()
 }
 
 /**
@@ -560,7 +450,10 @@ private fun testTextButton(context: Context) {
 /**
  * 测试线性进度组件
  */
-private fun testProgressInfo(context: Context) {
+private fun testProgressInfo(context: Context, isVariableProgress: Boolean) {
+    // 获取进度值
+    val progress = getProgress(isVariableProgress, 75)
+    
     val paramV2Raw = """
         {
             "baseInfo": {
@@ -568,17 +461,17 @@ private fun testProgressInfo(context: Context) {
                 "content": "这是一个线性进度组件的展开态测试示例"
             },
             "progressInfo": {
-                "progress": 40,
+                "progress": $progress,
                 "colorProgress": "#FF8514",
                 "colorProgressEnd": "#FF8514"
             },
             "param_island": {
                 "smallIslandArea": {
                     "primaryText": "线性进度测试",
-                    "secondaryText": "40% 完成",
+                    "secondaryText": "$progress% 完成",
                     "iconKey": "progress_icon",
                     "progressInfo": {
-                        "progress": 40,
+                        "progress": $progress,
                         "colorProgress": "#FF8514",
                         "colorProgressEnd": "#FF8514"
                     }
@@ -592,11 +485,11 @@ private fun testProgressInfo(context: Context) {
                         },
                         "textInfo": {
                             "title": "线性进度",
-                            "content": "40%"
+                            "content": "$progress%"
                         }
                     },
                     "sameWidthDigitInfo": {
-                        "digit": "40",
+                        "digit": "$progress",
                         "content": "进度",
                         "showHighlightColor": true
                     }
@@ -621,7 +514,10 @@ private fun testProgressInfo(context: Context) {
 /**
  * 测试多节点进度组件
  */
-private fun testMultiProgressInfo(context: Context) {
+private fun testMultiProgressInfo(context: Context, isVariableProgress: Boolean) {
+    // 获取进度值
+    val progress = getProgress(isVariableProgress, 60)
+    
     val paramV2Raw = """
         {
             "baseInfo": {
@@ -630,7 +526,7 @@ private fun testMultiProgressInfo(context: Context) {
             },
             "multiProgressInfo": {
                 "title": "正在排水",
-                "progress": 60,
+                "progress": $progress,
                 "color": "#00FF00",
                 "points": 3,
                 "picForward": "forward_pic",
@@ -646,7 +542,7 @@ private fun testMultiProgressInfo(context: Context) {
                     "secondaryText": "正在排水",
                     "iconKey": "forward_pic",
                     "progressInfo": {
-                        "progress": 60,
+                        "progress": $progress,
                         "colorProgress": "#00FF00",
                         "colorProgressEnd": "#00FF00"
                     }
@@ -660,7 +556,7 @@ private fun testMultiProgressInfo(context: Context) {
                         },
                         "textInfo": {
                             "title": "多节点进度",
-                            "content": "60%"
+                            "content": "$progress%"
                         }
                     },
                     "sameWidthDigitInfo": {
@@ -699,63 +595,81 @@ private fun testMultiProgressInfo(context: Context) {
 /**
  * 测试带有图标的多节点进度组件
  */
-private fun testMultiProgressWithIcons(context: Context) {
+private fun testMultiProgressWithIcons(context: Context, isVariableProgress: Boolean) {
+    // 获取进度值
+    val progress = getProgress(isVariableProgress, 75)
+    
+    // 根据进度值动态生成配送状态文本
+    val deliveryStatus = when {
+        progress <= 50 -> "骑士正在取餐"
+        else -> "骑士正在配送"
+    }
+    
     val paramV2Raw = """
         {
             "baseInfo": {
-                "title": "带图标多节点进度测试",
-                "content": "这是一个带有图标的多节点进度组件测试示例"
-            },
-            "multiProgressInfo": {
-                "title": "配送中",
-                "progress": 50,
-                "color": "#3482FF",
-                "points": 4,
-                "picForward": "forward_pic",
-                "picForwardBox": "box_pic",
-                "picMiddle": "middle_pic",
-                "picMiddleUnselected": "middle_unselected_pic",
-                "picEnd": "end_pic",
-                "picEndUnselected": "end_unselected_pic"
+                "showDivider": true,
+                "title": "预计\u003cfont color\u003d\u0027#0FAD50\u0027\u003e19:31\u003c/font\u003e送达",
+                "type": 2,
+                "colorSubTitle": "#FF6200",
+                "content": "$deliveryStatus",
+                "subContent": "商家名aaaa"
             },
             "param_island": {
-                "smallIslandArea": {
-                    "primaryText": "带图标多节点进度测试",
-                    "secondaryText": "配送中 50%",
-                    "iconKey": "forward_pic",
-                    "progressInfo": {
-                        "progress": 50,
-                        "colorProgress": "#3482FF",
-                        "colorProgressEnd": "#3482FF"
-                    }
-                },
+                "highlightColor": "#FF6200",
+                "islandProperty": 1,
                 "bigIslandArea": {
                     "imageTextInfoLeft": {
-                        "type": 1,
+                        "textInfo": {
+                            "showHighlightColor": false,
+                            "title": "$deliveryStatus"
+                        },
                         "picInfo": {
-                            "type": 1,
-                            "pic": "forward_pic"
+                            "pic": "miui.focus.pic_app_icon",
+                            "type": 1
                         },
-                        "textInfo": {
-                            "title": "带图标进度",
-                            "content": "50%"
-                        }
+                        "type": 1
                     },
-                    "progressTextInfo": {
-                        "textInfo": {
-                            "title": "配送中",
-                            "content": "50%"
-                        },
-                        "progressInfo": {
-                            "progress": 50,
-                            "colorReach": "#3482FF",
-                            "colorUnReach": "#33FFFFFF",
-                            "isCCW": false
-                        },
-                        "picKey": "forward_pic"
+                    "textInfo": {
+                        "showHighlightColor": true,
+                        "title": "19:31",
+                        "content": "送达"
+                    }
+                },
+                "smallIslandArea": {
+                    "picInfo": {
+                        "pic": "miui.focus.pic_app_icon",
+                        "type": 1
                     }
                 }
-            }
+            },
+            "aodPic": "miui.focus.pic_app_icon",
+            "business": "food_delivery",
+            "picInfo": {
+                "pic": "miui.focus.pic_app_icon",
+                "type": 1
+            },
+            "orderId": "8043310281561250264",
+            "enableFloat": false,
+            "sequence": 1766745828259,
+            "protocol": 1,
+            "filterWhenNoPermission": true,
+            "reopen": "close",
+            "aodTitle": "19:31送达",
+            "updatable": true,
+            "progressInfo": {
+                "picEnd": "miui.focus.pic_end",
+                "picEndUnselected": "miui.focus.pic_end_unselected",
+                "colorProgressEnd": "#FF6200",
+                "picForward": "miui.focus.pic_forward",
+                "picForwardWait": "miui.focus.pic_forward_wait",
+                "picForwardBox": "miui.focus.pic_forward_box",
+                "progress": $progress,
+                "colorProgress": "#FF6200",
+                "picMiddleUnselected": "miui.focus.pic_middel_unselected",
+                "picMiddle": "miui.focus.pic_middle"
+            },
+            "islandFirstFloat": false
         }
     """
 
@@ -766,12 +680,14 @@ private fun testMultiProgressWithIcons(context: Context) {
         text = "这是一个带有图标的多节点进度组件测试示例",
         paramV2Raw = paramV2Raw,
         picMap = mapOf(
-            "forward_pic" to appimgDataUrl(),
-            "box_pic" to createBlackBlockDataUrl(),
-            "middle_pic" to createBlackBlockDataUrl(),
-            "middle_unselected_pic" to createBlackBlockDataUrl(),
-            "end_pic" to createBlackBlockDataUrl(),
-            "end_unselected_pic" to createBlackBlockDataUrl()
+            "miui.focus.pic_forward" to "https://gw.alicdn.com/imgextra/i4/O1CN01RBCiIV26Q2ysJNney_!!6000000007655-2-tps-180-141.png",
+            "miui.focus.pic_middle" to "https://gw.alicdn.com/imgextra/i4/O1CN01gVYsU51zTz4jBuPxN_!!6000000006716-2-tps-120-188.png",
+            "miui.focus.pic_middel_unselected" to "https://gw.alicdn.com/imgextra/i3/O1CN011JQ8qv1QXdgUdtx6j_!!6000000001986-2-tps-132-194.png",
+            "miui.focus.pic_end_unselected" to "https://gw.alicdn.com/imgextra/i2/O1CN013MEAhj1Q3PXgmGojQ_!!6000000001920-2-tps-120-191.png",
+            "miui.focus.pic_end" to "https://gw.alicdn.com/imgextra/i2/O1CN01BtZfit1PrxdrYJaSH_!!6000000001895-2-tps-122-190.png",
+            "miui.focus.pic_forward_wait" to "https://gw.alicdn.com/imgextra/i3/O1CN012aWbML1PqaSChXHK7_!!6000000001892-2-tps-180-141.png",
+            "miui.focus.pic_forward_box" to "https://gw.alicdn.com/imgextra/i1/O1CN01LLnS7n1xM50ZBmNL7_!!6000000006428-2-tps-180-141.png",
+            "miui.focus.pic_app_icon" to appimgDataUrl(),
         ),
         isLocked = false
     )
@@ -780,7 +696,10 @@ private fun testMultiProgressWithIcons(context: Context) {
 /**
  * 测试圆形进度组件（基于真实小米互传数据）
  */
-private fun testCircularProgressInfo(context: Context) {
+private fun testCircularProgressInfo(context: Context, isVariableProgress: Boolean) {
+    // 获取进度值
+    val progress = getProgress(isVariableProgress, 56)
+    
     val paramV2Raw = """
         {
             "protocol": 1,
@@ -791,8 +710,8 @@ private fun testCircularProgressInfo(context: Context) {
             "updatable": true,
             "reopen": "reopen",
             "filterWhenNoPermission": false,
-            "ticker": "56%",
-            "aodTitle": "56%",
+            "ticker": "$progress%",
+            "aodTitle": "$progress%",
             "chatInfo": {
                 "picProfile": "miui.focus.pic_thumbnail",
                 "picProfileDark": "miui.focus.pic_thumbnail",
@@ -802,7 +721,7 @@ private fun testCircularProgressInfo(context: Context) {
             "actions": [
                 {
                     "progressInfo": {
-                        "progress": 56,
+                        "progress": $progress,
                         "colorProgress": "#3482FF",
                         "colorProgressDark": "#3482FF",
                         "colorProgressEnd": "#1A000000",
@@ -830,7 +749,7 @@ private fun testCircularProgressInfo(context: Context) {
                             "pic": "miui.focus.pic_thumbnail"
                         },
                         "progressInfo": {
-                            "progress": 56,
+                            "progress": $progress,
                             "colorReach": "#3482FF",
                             "colorUnReach": "#33FFFFFF",
                             "isCCW": true
@@ -847,7 +766,7 @@ private fun testCircularProgressInfo(context: Context) {
                     },
                     "progressTextInfo": {
                         "progressInfo": {
-                            "progress": 56,
+                            "progress": $progress,
                             "colorReach": "#3482FF",
                             "colorUnReach": "#33FFFFFF",
                             "isCCW": true
@@ -876,17 +795,174 @@ private fun testCircularProgressInfo(context: Context) {
 }
 
 /**
- * 创建一个黑色块的data URL，用于测试图片显示
+ * 超级岛测试对话框，用于测试不同分支下的效果
  */
-private fun createBlackBlockDataUrl(): String {
-    // 100x100黑色块的base64编码
-    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-}
+@Composable
+fun SuperIslandTestDialog(
+    show: MutableState<Boolean>,
+    context: Context
+) {
+    // 进度可变开关状态
+    var isVariableProgress by remember { mutableStateOf(false) }
+    
+    MiuixTheme {
+        SuperDialog(
+            title = "超级岛测试",
+            summary = "点击下方按钮测试不同分支下的超级岛效果",
+            show = show,
+            onDismissRequest = { show.value = false },
+            enableWindowDim = true
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                // 进度可变开关
+                SuperSwitch(
+                    title = "测试设置",
+                    summary = if (isVariableProgress) "进度可变 (测试动画效果)" else "进度固定 (测试静态效果)",
+                    checked = isVariableProgress,
+                    onCheckedChange = { isVariableProgress = it },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                )
+                
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                item {
+                    // 基础文本组件
+                    Button(
+                        onClick = {
+                            testBaseInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试基础文本组件 (baseInfo)")
+                    }
+                }
 
-/**
- * 创建一个应用图标data URL，用于测试图片显示
- */
-private fun appimgDataUrl(): String {
-    // 应用图标的base64编码
-    return "data:image/png;base64,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"
-}
+                item {
+                    // IM图文组件
+                    Button(
+                        onClick = {
+                            testChatInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试IM图文组件 (chatInfo)")
+                    }
+                }
+
+                item {
+                    // 动画文本组件
+                    Button(
+                        onClick = {
+                            testAnimTextInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试动画文本组件 (animTextInfo)")
+                    }
+                }
+
+                item {
+                    // 强调图文组件
+                    Button(
+                        onClick = {
+                            testHighlightInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试强调图文组件 (highlightInfo)")
+                    }
+                }
+
+                item {
+                    // 识别图形组件
+                    Button(
+                        onClick = {
+                            testPicInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试识别图形组件 (picInfo)")
+                    }
+                }
+
+                item {
+                    // 提示组件
+                    Button(
+                        onClick = {
+                            testHintInfo(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试提示组件 (hintInfo)")
+                    }
+                }
+
+                item {
+                    // 文本按钮组件
+                    Button(
+                        onClick = {
+                            testTextButton(context)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试文本按钮组件 (textButton)")
+                    }
+                }
+
+                item {
+                    // 线性进度组件
+                    Button(
+                        onClick = {
+                            testProgressInfo(context, isVariableProgress)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试线性进度组件 (progressInfo)")
+                    }
+                }
+
+                item {
+                    // 多节点进度组件
+                    Button(
+                        onClick = {
+                            testMultiProgressInfo(context, isVariableProgress)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试多节点进度组件 (multiProgressInfo)")
+                    }
+                }
+
+                item {
+                    // 带有图标的多节点进度组件
+                    Button(
+                        onClick = {
+                            testMultiProgressWithIcons(context, isVariableProgress)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试带图标多节点进度组件")
+                    }
+                }
+
+                item {
+                    // 圆形进度组件
+                    Button(
+                        onClick = {
+                            testCircularProgressInfo(context, isVariableProgress)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("测试圆形进度组件 (circular)")
+                    }
+                }
+            }
+        }
+    }
+}}
