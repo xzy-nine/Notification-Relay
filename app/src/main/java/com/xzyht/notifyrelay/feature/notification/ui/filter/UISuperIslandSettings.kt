@@ -309,11 +309,13 @@ private fun SuperIslandHistorySummaryRow(
                     triggerFloatingReplica(context, entry)
                 },
                 onLongClick = {
-                    coroutineScope.launch {
+                    coroutineScope.launch(Dispatchers.IO) {
                         val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
                         val final = full ?: entry
                         val text = buildEntryCopyText(final, includeImageDataOnCopy)
-                        copyEntryToClipboard(context, text)
+                        withContext(Dispatchers.Main) {
+                            copyEntryToClipboard(context, text)
+                        }
                     }
                 }
             )
