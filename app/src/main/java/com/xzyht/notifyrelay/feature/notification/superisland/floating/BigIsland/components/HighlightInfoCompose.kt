@@ -77,14 +77,12 @@ fun HighlightInfoCompose(
             ).firstOrNull { it.isNotBlank() }
                 ?: timerLabel
                 ?: if (highlightInfo.iconOnly) null else "高亮信息"
-            val primaryText = primaryTextRaw?.let { SuperIslandImageUtil.unescapeHtml(it) }
-
-            primaryText?.let { text ->
+            primaryTextRaw?.let {
                 val primaryColor = SuperIslandImageUtil.parseColor(highlightInfo.colorTitle)
                     ?: SuperIslandImageUtil.parseColor(highlightInfo.colorContent)
                     ?: 0xFFFFFFFF.toInt()
                 Text(
-                    text = text,
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                     color = Color(primaryColor),
                     fontSize = 15.sp,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -94,14 +92,14 @@ fun HighlightInfoCompose(
             // 状态文本（如“进行中”）
             val statusText = highlightInfo.timerInfo
                 ?.let { resolveStatusText(highlightInfo) }
-                ?.takeIf { it.isNotBlank() && it != primaryText }
-                ?: timerLabel?.takeIf { it.isNotBlank() && it != primaryText }
+                ?.takeIf { it.isNotBlank() && it != primaryTextRaw }
+                ?: timerLabel?.takeIf { it.isNotBlank() && it != primaryTextRaw }
             statusText?.let { status ->
                 val statusColor = SuperIslandImageUtil.parseColor(highlightInfo.colorSubContent)
                     ?: SuperIslandImageUtil.parseColor(highlightInfo.colorContent)
                     ?: 0xFFDDDDDD.toInt()
                 Text(
-                    text = SuperIslandImageUtil.unescapeHtml(status),
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(status),
                     color = Color(statusColor),
                     fontSize = 12.sp
                 )
@@ -109,11 +107,10 @@ fun HighlightInfoCompose(
 
             // 内容文本
             highlightInfo.content
-                ?.takeIf { it.isNotBlank() && it != primaryText }
+                ?.takeIf { it.isNotBlank() && it != primaryTextRaw }
                 ?.let { content ->
-                    val display = SuperIslandImageUtil.unescapeHtml(content)
                     Text(
-                        text = display,
+                        text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(content),
                         color = Color(SuperIslandImageUtil.parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -122,11 +119,10 @@ fun HighlightInfoCompose(
 
             // 子内容文本
             highlightInfo.subContent
-                ?.takeIf { it.isNotBlank() && it != primaryText }
+                ?.takeIf { it.isNotBlank() && it != primaryTextRaw }
                 ?.let { sub ->
-                    val display = SuperIslandImageUtil.unescapeHtml(sub)
                     Text(
-                        text = display,
+                        text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(sub),
                         color = Color(SuperIslandImageUtil.parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt()),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -206,7 +202,7 @@ private fun selectIconKey(highlightInfo: HighlightInfo): String? {
 
 
 
-// 与 View 版相同的状态文本推导逻辑
+// 状态文本推导逻辑
 private fun resolveStatusText(highlightInfo: HighlightInfo): String? {
     val preferred = listOfNotNull(
         highlightInfo.title,

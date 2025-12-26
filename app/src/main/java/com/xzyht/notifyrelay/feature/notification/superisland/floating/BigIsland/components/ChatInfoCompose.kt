@@ -83,7 +83,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
         Column(modifier = Modifier.weight(1f)) {
             chatInfo.title?.let {
                 Text(
-                    text = SuperIslandImageUtil.unescapeHtml(it),
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                     color = Color(SuperIslandImageUtil.parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Normal,
@@ -93,7 +93,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
 
             chatInfo.content?.let {
                 Text(
-                    text = SuperIslandImageUtil.unescapeHtml(it),
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                     color = Color(SuperIslandImageUtil.parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp)

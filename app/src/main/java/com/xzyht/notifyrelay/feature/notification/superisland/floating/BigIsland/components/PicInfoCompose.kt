@@ -42,7 +42,7 @@ fun PicInfoCompose(picInfo: PicInfo, picMap: Map<String, String>?) {
         picInfo.title?.let {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = SuperIslandImageUtil.unescapeHtml(it),
+                text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                 color = Color(SuperIslandImageUtil.parseColor(picInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp
             )

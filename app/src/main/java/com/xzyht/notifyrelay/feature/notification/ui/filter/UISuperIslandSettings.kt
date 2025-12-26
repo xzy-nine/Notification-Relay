@@ -298,7 +298,7 @@ private fun SuperIslandHistorySummaryRow(
         ?: entry.originalPackage?.takeIf { it.isNotBlank() }
         ?: "超级岛事件"
 
-    val displayTitle = titleText.let { SuperIslandImageUtil.unescapeHtml(it) }
+    val displayTitle = titleText.let { SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -385,7 +385,7 @@ private fun SuperIslandHistoryEntryCard(
             ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
             ?: entry.originalPackage?.takeIf { it.isNotBlank() }
             ?: "超级岛事件"
-        val displayTitle = titleText.let { SuperIslandImageUtil.unescapeHtml(it) }
+        val displayTitle = titleText.let { SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it) }
         Text(displayTitle, style = textStyles.body1, color = colorScheme.onSurface)
 
         val detailText = entry.text

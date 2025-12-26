@@ -102,7 +102,7 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
             majorText?.let { text ->
                 val isTimeLike = text.matches(Regex("[0-9: ]{2,}"))
                 Text(
-                    text = SuperIslandImageUtil.unescapeHtml(text),
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(text),
                     fontSize = 15.sp,
                     color = Color(majorColor),
                     maxLines = 1,
@@ -119,7 +119,7 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
             } ?: 0xFFDDDDDD.toInt()
             secondaryText?.let { text ->
                 Text(
-                    text = SuperIslandImageUtil.unescapeHtml(text),
+                    text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(text),
                     fontSize = 12.sp,
                     color = Color(secondaryColor),
                     maxLines = 1

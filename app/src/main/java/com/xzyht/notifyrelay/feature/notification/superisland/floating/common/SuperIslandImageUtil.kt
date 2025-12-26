@@ -166,6 +166,80 @@ object SuperIslandImageUtil {
     }
 
     /**
+     * 解析简单HTML标签，将其转换为AnnotatedString
+     */
+    fun parseSimpleHtmlToAnnotatedString(html: String): androidx.compose.ui.text.AnnotatedString {
+        val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+        val unescapedHtml = unescapeHtml(html)
+        
+        // 简单的HTML解析，只处理font标签的color属性
+        var index = 0
+        while (index < unescapedHtml.length) {
+            val tagStart = unescapedHtml.indexOf('<', index)
+            if (tagStart == -1) {
+                // 没有更多标签，添加剩余文本
+                builder.append(unescapedHtml.substring(index))
+                break
+            }
+            
+            // 添加标签前的文本
+            if (tagStart > index) {
+                builder.append(unescapedHtml.substring(index, tagStart))
+            }
+            
+            // 查找标签结束位置
+            val tagEnd = unescapedHtml.indexOf('>', tagStart)
+            if (tagEnd == -1) {
+                // 标签未结束，将整个标签作为文本处理
+                builder.append(unescapedHtml.substring(tagStart))
+                break
+            }
+            
+            val tag = unescapedHtml.substring(tagStart + 1, tagEnd)
+            
+            if (tag.startsWith("/")) {
+                // 结束标签，移除当前样式
+                val endTagName = tag.substring(1).trim()
+                if (endTagName.equals("font", ignoreCase = true)) {
+                    // 结束font标签，重置颜色
+                    builder.pop()
+                }
+                // 移动到标签结束位置之后
+                index = tagEnd + 1
+            } else {
+                // 开始标签，处理样式
+                if (tag.startsWith("font", ignoreCase = true)) {
+                    // 处理font标签的color属性
+                    val colorMatch = Regex("color=['\"](#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})['\"]").find(tag)
+                    colorMatch?.let { matchResult ->
+                        val colorValue = matchResult.groupValues[1]
+                        val colorInt = parseColor(colorValue) ?: 0xFFFFFFFF.toInt()
+                        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(colorInt)))
+                    }
+                }
+                
+                // 移动到标签结束位置之后
+                index = tagEnd + 1
+                
+                // 查找下一个标签（可能是结束标签）
+                val nextTagStart = unescapedHtml.indexOf('<', index)
+                if (nextTagStart != -1) {
+                    // 添加开始标签和结束标签之间的文本
+                    builder.append(unescapedHtml.substring(index, nextTagStart))
+                    // 移动到下一个标签开始位置
+                    index = nextTagStart
+                } else {
+                    // 没有更多标签，添加剩余文本
+                    builder.append(unescapedHtml.substring(index))
+                    break
+                }
+            }
+        }
+        
+        return builder.toAnnotatedString()
+    }
+
+    /**
      * 安全截断文本
      */
     fun truncateText(text: String, maxLength: Int, suffix: String = "..."): String {

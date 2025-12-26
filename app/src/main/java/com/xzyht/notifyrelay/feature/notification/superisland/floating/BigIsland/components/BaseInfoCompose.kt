@@ -30,7 +30,7 @@ fun BaseInfoCompose(
         // 主要文本1：关键信息
         baseInfo.title?.let {
             Text(
-                text = SuperIslandImageUtil.unescapeHtml(it),
+                text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                 color = Color(SuperIslandImageUtil.parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
@@ -43,8 +43,20 @@ fun BaseInfoCompose(
         // 次要文本1：前置描述
         baseInfo.content?.let {
             Text(
-                text = SuperIslandImageUtil.unescapeHtml(it),
+                text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
                 color = Color(SuperIslandImageUtil.parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // 次要文本2
+        baseInfo.subContent?.let {
+            Text(
+                text = SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it),
+                color = Color(SuperIslandImageUtil.parseColor(baseInfo.colorSubTitle) ?: 0xFFDDDDDD.toInt()),
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
