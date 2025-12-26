@@ -177,7 +177,7 @@ fun AppPickerDialog(
                                     }
                                 }
 
-                                if (appSearchQuery.isNotBlank() && filteredApps.none { app: ApplicationInfo -> app.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]"))) {
+                                if (appSearchQuery.isNotBlank() && filteredApps.none { app: ApplicationInfo -> app.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
                                     item {
                                         Column(
                                             modifier = Modifier
