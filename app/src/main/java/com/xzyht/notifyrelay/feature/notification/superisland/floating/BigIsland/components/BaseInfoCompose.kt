@@ -16,7 +16,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.un
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.BaseInfo
 
 /**
- * BaseInfo的Compose实现，与传统View功能一致
+ * BaseInfo的Compose实现
  */
 @Composable
 fun BaseInfoCompose(
@@ -34,7 +34,7 @@ fun BaseInfoCompose(
                 text = unescapeHtml(it),
                 color = Color(parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Normal, // 与传统View一致，不使用Bold
+                fontWeight = FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()

@@ -14,7 +14,6 @@ import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandI
 
 /**
  * 统一的Compose图片加载工具，封装了现有ImageLoader和DataUrlUtils的功能
- * 确保Compose渲染和View渲染使用完全相同的图片加载逻辑
  */
 @Composable
 fun rememberSuperIslandImagePainter(

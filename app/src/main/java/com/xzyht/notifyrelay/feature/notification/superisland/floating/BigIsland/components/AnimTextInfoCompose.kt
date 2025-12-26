@@ -29,7 +29,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.re
 import kotlinx.coroutines.delay
 
 /**
- * 动画文本信息Compose组件，与传统View功能一致
+ * 动画文本信息Compose组件
  */
 @Composable
 fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>? = null) {
@@ -45,7 +45,7 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
         // 获取上下文
         val context = LocalContext.current
 
-        // 完全复用View渲染的图标选择和解析逻辑
+        // 复用图标选择和解析逻辑
         val iconKey = if (preferDark) (animTextInfo.icon.srcDark
             ?: animTextInfo.icon.src) else animTextInfo.icon.src
 
@@ -77,7 +77,7 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
         }
 
         Column(modifier = textColumnModifier) {
-            // View 路径等价逻辑：
+            // 等价逻辑：
             // major = title ?: formattedTimer；若 major 是时间串则用等宽字体；
             // secondary = content ?: (title!=null && formattedTimer!=null ? formattedTimer : null)
 

@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model
+package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model
 
 import android.content.Context
 import androidx.compose.ui.platform.ComposeView
@@ -31,8 +31,7 @@ data class ParamV2(
 // 构建Compose UI视图的函数
 suspend fun buildComposeViewFromTemplate(context: Context, paramV2: ParamV2, picMap: Map<String, String>?, business: String? = null, lifecycleOwner: LifecycleOwner? = null): ComposeTemplateViewResult {
     return ComposeTemplateViewResult(
-        view = buildComposeViewFromParam(context, paramV2, picMap, business, lifecycleOwner),
-        progressBinding = null
+        view = buildComposeViewFromParam(context, paramV2, picMap, business, lifecycleOwner)
     )
 }
 
@@ -193,6 +192,5 @@ private fun parseHighlightFromIconText(root: JSONObject): HighlightInfo? {
 
 // 支持ComposeView的视图结果类
 data class ComposeTemplateViewResult(
-    val view: ComposeView,
-    val progressBinding: CircularProgressBinding? = null
+    val view: ComposeView
 )

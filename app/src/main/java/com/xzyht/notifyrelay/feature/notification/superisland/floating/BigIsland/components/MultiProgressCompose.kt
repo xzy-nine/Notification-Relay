@@ -32,12 +32,12 @@ import kotlin.math.max
 
 private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF
 private const val DEFAULT_NODE_COUNT = 3
-private const val NODE_SIZE_DP = 55 // 与传统View保持一致
-private const val PROGRESS_BAR_HEIGHT_DP = 8 // 与传统View保持一致
+private const val NODE_SIZE_DP = 55
+private const val PROGRESS_BAR_HEIGHT_DP = 8
 private const val POINTER_SIZE_EXTRA_DP = 15 // 指针额外大小
 
 /**
- * 多进度条Compose组件，与传统View实现功能一致
+ * 多进度条Compose组件
  */
 @Composable
 fun MultiProgressCompose(
@@ -115,7 +115,7 @@ fun MultiProgressCompose(
                     // 针对 food_delivery 业务，第一个节点需要透明
                     val nodeAlpha = if (isFirst && business == "food_delivery") 0f else 1f
                     
-                    // 根据节点状态选择不同的图标，与View实现保持一致
+                    // 根据节点状态选择不同的图标
                     val baseIconKey = when {
                         isLast && isCompleted -> multiProgressInfo.picEnd ?: multiProgressInfo.picMiddle
                         isLast -> multiProgressInfo.picEndUnselected ?: multiProgressInfo.picMiddleUnselected
@@ -145,7 +145,7 @@ fun MultiProgressCompose(
                                     .size(NODE_SIZE_DP.dp)
                             )
                         } else {
-                            // 图标加载失败时的 fallback，与View实现保持一致
+                            // 图标加载失败时的 fallback
                             Box(
                                 modifier = Modifier
                                     .size(NODE_SIZE_DP.dp)
@@ -157,7 +157,7 @@ fun MultiProgressCompose(
                         }
                     }
                     
-                    // 添加等距间距，与View版本保持一致
+                    // 添加等距间距
                     if (index < nodeCount - 1) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
@@ -166,7 +166,7 @@ fun MultiProgressCompose(
 
             // 进度指针（仅在进度在1-99时显示）
             if (progressValue in 1..99) {
-                // 与View版本保持一致，直接使用picForward作为进度指示点图片
+                // 直接使用picForward作为进度指示点图片
                 // 当picForward为null时，使用picForwardBox作为备选
                 val pointerKey = multiProgressInfo.picForward ?: multiProgressInfo.picForwardBox
                 

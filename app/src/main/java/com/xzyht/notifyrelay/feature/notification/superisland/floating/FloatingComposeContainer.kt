@@ -32,24 +32,49 @@ class FloatingComposeContainer @JvmOverloads constructor(
     // 生命周期所有者
     var lifecycleOwner: LifecycleOwner? = null
 
-    // 内部LifecycleOwner实现，用于浮窗环境
-    private val internalLifecycleOwner = object : LifecycleOwner, SavedStateRegistryOwner {
+    // 内部LifecycleOwner实现，用于浮窗环境（非匿名对象，暴露生命周期控制方法）
+    private inner class FloatingWindowLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
+        // 生命周期注册表
         private val lifecycleRegistry = LifecycleRegistry(this)
-        private val savedStateController = SavedStateRegistryController.Companion.create(this)
+        // 状态保存控制器
+        private val savedStateController = SavedStateRegistryController.create(this)
 
         init {
             // 初始化SavedStateRegistry
             savedStateController.performAttach()
-            savedStateController.performRestore(null)
-            // 设置初始生命周期状态为RESUMED
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            // 传入空Bundle（若有保存的状态，需从浮窗的保存数据中获取真实Bundle）
+            savedStateController.performRestore(android.os.Bundle())
+            // 初始化生命周期到RESUMED状态
+            dispatchLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            dispatchLifecycleEvent(Lifecycle.Event.ON_START)
+            dispatchLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        }
+
+        // 对外暴露：分发生命周期事件（支持动态更新状态）
+        fun dispatchLifecycleEvent(event: Lifecycle.Event) {
+            lifecycleRegistry.handleLifecycleEvent(event)
+            // 若为ON_DESTROY，同步销毁SavedStateRegistry
+            if (event == Lifecycle.Event.ON_DESTROY) {
+                savedStateController.performSave(android.os.Bundle())
+            }
+        }
+
+        // 对外暴露：保存当前状态（可在浮窗退后台时调用）
+        fun saveState(outState: android.os.Bundle) {
+            savedStateController.performSave(outState)
+        }
+
+        // 对外暴露：恢复状态（可在浮窗重建时调用）
+        fun restoreState(savedState: android.os.Bundle) {
+            savedStateController.performRestore(savedState)
         }
 
         override val lifecycle: Lifecycle get() = lifecycleRegistry
         override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
     }
+
+    // 浮窗生命周期所有者实例
+    private val internalLifecycleOwner = FloatingWindowLifecycleOwner()
 
     // 拖动相关变量
     private var isDragging = false
@@ -92,6 +117,12 @@ class FloatingComposeContainer @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        
+        // 分发销毁生命周期事件
+        internalLifecycleOwner.dispatchLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        internalLifecycleOwner.dispatchLifecycleEvent(Lifecycle.Event.ON_STOP)
+        internalLifecycleOwner.dispatchLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        
         try {
             // 清理LifecycleOwner和SavedStateRegistryOwner
             val viewTreeLifecycleOwnerClass = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")

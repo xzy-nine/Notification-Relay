@@ -31,7 +31,7 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
 /**
- * 聊天信息Compose组件，与传统View功能一致
+ * 聊天信息Compose组件
  */
 @Composable
 fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
@@ -40,7 +40,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(8.dp), // 与传统View一致
+            .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 头像
@@ -63,7 +63,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
         val progressInfo = actionWithProgress?.progressInfo ?: paramV2.progressInfo
 
         if (progressInfo != null) {
-            // 与View渲染一致，添加8dp的margin
+            // 添加8dp的margin
             Spacer(modifier = Modifier.width(8.dp))
 
             // 创建圆形进度条 - 使用Miuix的CircularProgressIndicator
@@ -81,7 +81,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
                 animatedProgress.animateTo(
                     targetValue = progressInfo.progress.toFloat() / 100f,
                     animationSpec = tween(
-                        durationMillis = 420, // 与View渲染保持一致的动画时长
+                        durationMillis = 420, // 动画时长
                         easing = LinearEasing
                     )
                 )
@@ -104,9 +104,9 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
                 Text(
                     text = unescapeHtml(it),
                     color = Color(parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
-                    fontSize = 14.sp, // 与传统View一致
-                    fontWeight = FontWeight.Normal, // 与传统View一致
-                    modifier = Modifier.padding(start = 8.dp) // 与传统View一致
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
 
@@ -114,8 +114,8 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
                 Text(
                     text = unescapeHtml(it),
                     color = Color(parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
-                    fontSize = 12.sp, // 与传统View一致
-                    modifier = Modifier.padding(start = 8.dp) // 与传统View一致
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
             }
         }

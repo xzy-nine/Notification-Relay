@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.builder.SuperIslandComposeRoot
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose
@@ -35,10 +34,11 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.MultiProgressCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.PicInfoCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ProgressCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.SummaryAndroidView
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.TextButtonCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.ParamIslandCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.compose.BigIslandCollapsedCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import org.json.JSONObject
 
 /**
@@ -277,14 +277,12 @@ fun FloatingWindowContainer(
                         }
 
                         // 直接显示摘要态内容，不添加额外的Box包装，避免方形背景
-                        // 将isOverlapping参数传递给SummaryAndroidView，让其内部处理背景色
-                        SummaryAndroidView(
-                            bigIslandJson = bigIslandJson,
+                        BigIslandCollapsedCompose(
+                            bigIsland = bigIslandJson,
                             picMap = entry.picMap,
                             fallbackTitle = fallbackTitle,
                             fallbackContent = fallbackContent,
-                            isOverlapping = entry.isOverlapping,
-                            modifier = Modifier.Companion.padding(8.dp)
+                            isOverlapping = entry.isOverlapping
                         )
                     }
                     // 闭合Box组件

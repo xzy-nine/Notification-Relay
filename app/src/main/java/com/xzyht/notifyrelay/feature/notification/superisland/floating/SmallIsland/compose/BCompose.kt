@@ -75,7 +75,7 @@ fun BCompose(
             }
             
             is BImageText4 -> {
-                // 图标 - 仅创建占位，不实际加载图片，与View版本保持一致
+                // 图标 - 仅创建占位，不实际加载图片
                 CommonImagePlaceholder(
                     show = !bComp.pic.isNullOrBlank(),
                     size = 18.dp
@@ -92,9 +92,9 @@ fun BCompose(
                 )
             }
             is BImageText6 -> {
-                // 图标 - 与View版本保持一致，只加载data URL格式的图片
+                // 图标 - 只加载data URL格式的图片
                 val iconUrl = resolveIconUrl(picMap, bComp.picKey)
-                // 只处理data URL格式的图片，与View版本保持一致
+                // 只处理data URL格式的图片
                 if (iconUrl?.startsWith("data:", ignoreCase = true) == true) {
                     val painter = rememberSuperIslandImagePainter(iconUrl, picMap, bComp.picKey)
                     
@@ -154,7 +154,7 @@ fun BCompose(
                 
                 if (timer != null) {
                     LaunchedEffect(timer) {
-                        // 每秒更新一次时间，与View版本保持一致
+                        // 每秒更新一次时间
                         while (true) {
                             titleText = formatTimerInfo(timer)
                             kotlinx.coroutines.delay(1000L)

@@ -33,11 +33,11 @@ fun BigIslandCollapsedCompose(
     fallbackContent: String? = null,
     isOverlapping: Boolean = false
 ) {
-    // 使用真正的圆角形状，与View版本保持一致
+    // 使用真正的圆角形状
     val cornerRadius = 999.dp
     val roundedShape = RoundedCornerShape(cornerRadius)
     
-    // 根据重叠状态选择背景色，与View版本保持一致
+    // 根据重叠状态选择背景色
     val backgroundColor = if (isOverlapping) {
         Color(0xEEFF0000.toInt()) // 半透明红色
     } else {
