@@ -24,7 +24,7 @@ import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
 
 /**
  * 应用选择的弹窗

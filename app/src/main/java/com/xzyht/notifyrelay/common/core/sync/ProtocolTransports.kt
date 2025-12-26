@@ -1,6 +1,6 @@
-﻿package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.common.core.sync
 
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import java.io.BufferedReader

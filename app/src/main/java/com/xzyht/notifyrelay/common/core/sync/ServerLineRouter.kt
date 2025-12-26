@@ -1,8 +1,8 @@
-﻿package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
-import com.xzyht.notifyrelay.core.util.EncryptionManager
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil

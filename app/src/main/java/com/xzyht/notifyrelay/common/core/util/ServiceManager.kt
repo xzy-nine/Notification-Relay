@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.common.core.util
 
 import android.content.Context
 import android.content.Intent

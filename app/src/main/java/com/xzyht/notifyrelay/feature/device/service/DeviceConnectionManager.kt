@@ -13,10 +13,10 @@ import com.xzyht.notifyrelay.common.data.StorageManager
 import kotlinx.coroutines.delay
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
-import com.xzyht.notifyrelay.core.util.EncryptionManager
-import com.xzyht.notifyrelay.core.sync.ServerLineRouter
-import com.xzyht.notifyrelay.core.sync.ConnectionDiscoveryManager
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager
+import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
+import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 
 data class DeviceInfo(
@@ -254,7 +254,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val localPrivateKey: String
     internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
-    private val keepAlive = com.xzyht.notifyrelay.core.sync.ConnectionKeepAlive(this, coroutineScope)
+    private val keepAlive = com.xzyht.notifyrelay.common.core.sync.ConnectionKeepAlive(this, coroutineScope)
     private val discoveryManager = ConnectionDiscoveryManager(this, coroutineScope)
 
     // === 以下为提供给 ServerLineRouter 等内部组件使用的访问器（保持字段本身 private） ===
@@ -551,7 +551,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     Logger.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
-                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
+                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
             } catch (e: Exception) {
                 Logger.e("死神-NotifyRelay", "发送通知数据失败", e)
             }
@@ -563,7 +563,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      */
     fun requestRemoteAppList(device: DeviceInfo, scope: String = "user") {
         try {
-            com.xzyht.notifyrelay.core.sync.AppListSyncManager.requestAppListFromDevice(context, this, device, scope)
+            com.xzyht.notifyrelay.common.core.sync.AppListSyncManager.requestAppListFromDevice(context, this, device, scope)
         } catch (_: Exception) {}
     }
 
@@ -572,7 +572,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(60000) // 每分钟清理一次
-                com.xzyht.notifyrelay.core.sync.IconSyncManager.cleanupExpiredRequests()
+                com.xzyht.notifyrelay.common.core.sync.IconSyncManager.cleanupExpiredRequests()
             }
         }
     }
@@ -701,14 +701,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     // 设置加密类型（可通过UI调用）
-    fun setEncryptionType(type: com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType) {
-        com.xzyht.notifyrelay.core.util.EncryptionManager.setEncryptionType(type)
+    fun setEncryptionType(type: com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType) {
+        com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType(type)
         Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
     }
 
     // 获取当前加密类型
-    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType {
-        return com.xzyht.notifyrelay.core.util.EncryptionManager.getCurrentEncryptionType()
+    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType {
+        return com.xzyht.notifyrelay.common.core.util.EncryptionManager.getCurrentEncryptionType()
     }
 
     // 发送超级岛ACK（包含接收的hash），用于发送方确认
@@ -734,7 +734,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
             // 通过统一加密发送器发回对端
             val deviceInfo = DeviceInfo(remoteUuid, DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid), ip, port)
-            com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
         } catch (_: Exception) {
         }
     }

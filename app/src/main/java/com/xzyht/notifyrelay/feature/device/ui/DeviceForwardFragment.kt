@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.repository.AppRepository
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter

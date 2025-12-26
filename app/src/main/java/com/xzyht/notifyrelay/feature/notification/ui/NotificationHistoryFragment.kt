@@ -60,8 +60,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.repository.AppRepository
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
@@ -171,7 +172,7 @@ fun NotificationCard(
                     // 发送高优先级悬浮通知
                     val title = record.title ?: "(无标题)"
                     val text = record.text ?: "(无内容)"
-                    com.xzyht.notifyrelay.core.util.MessageSender.sendHighPriorityNotification(context, title, text)
+                    com.xzyht.notifyrelay.common.core.util.MessageSender.sendHighPriorityNotification(context, title, text)
                     intent!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }
@@ -687,7 +688,7 @@ fun NotificationHistoryScreen() {
                                     Logger.d("NotifyRelay", "引导按钮点击事件触发")
                                     try {
                                         // 跳转引导页面
-                                        val intent = android.content.Intent(context, com.xzyht.notifyrelay.feature.guide.GuideActivity::class.java)
+                                        val intent = android.content.Intent(context, GuideActivity::class.java)
                                         intent.putExtra("fromInternal", true)
                                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                         context.startActivity(intent)

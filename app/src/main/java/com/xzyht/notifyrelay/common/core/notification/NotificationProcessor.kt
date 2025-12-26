@@ -1,16 +1,15 @@
-package com.xzyht.notifyrelay.core.notification
+package com.xzyht.notifyrelay.common.core.notification
 
 import android.content.Context
-
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandRemoteStore
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandRemoteStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,7 +101,7 @@ object NotificationProcessor {
                     return
                 }
 
-                val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+                val installedPkgs = com.xzyht.notifyrelay.common.core.repository.AppRepository.getInstalledPackageNamesSync(context)
                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
                 try {
@@ -134,7 +133,7 @@ object NotificationProcessor {
         remoteUuid: String
     ): Boolean {
         return try {
-            val installedPkgs = com.xzyht.notifyrelay.core.repository.AppRepository.getInstalledPackageNamesSync(context)
+            val installedPkgs = com.xzyht.notifyrelay.common.core.repository.AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
             val isSuper = (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
@@ -289,7 +288,7 @@ object NotificationProcessor {
                     try {
                         val sourceDevice = manager.getDeviceInfoInternal(remoteUuid)
                         if (sourceDevice != null) {
-                            com.xzyht.notifyrelay.core.sync.IconSyncManager.checkAndSyncIcon(
+                            com.xzyht.notifyrelay.common.core.sync.IconSyncManager.checkAndSyncIcon(
                                 context,
                                 result.mappedPkg,
                                 manager,

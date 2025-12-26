@@ -4,7 +4,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -191,19 +192,20 @@ fun parseColorSafe(s: String?, default: Int): Int = try {
 }
 
 /**
- * 格式化BigIsland模型的计时信息
+ * 格式化计时器信息
+ * 修复了计时逻辑，确保暂停时显示正确进度，解决正计时快3s问题
  */
 fun formatTimerInfo(timer: com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo): String {
     val now = System.currentTimeMillis()
-    val timerWhen = timer.timerWhen // 计时起点时间戳（毫秒）
-    val timerSystemCurrent = timer.timerSystemCurrent // 服务器发送时的时间戳
-    val timerTotal = timer.timerTotal // 计时总进度
+    val timerType = timer.timerType
+    val timerWhen = timer.timerWhen // 正计时：开始时间；倒计时：结束时间
+    val timerSystemCurrent = timer.timerSystemCurrent // 计时状态变更时的系统时间
     
-    val displayValue: Long = when (timer.timerType) {
+    val displayValue: Long = when (timerType) {
         -2 -> { // 倒计时暂停
-            // 暂停状态：剩余时间 = 结束时间 - 发送时间，保持不变
-            val remainingAtSend = timerWhen - timerSystemCurrent
-            remainingAtSend.coerceAtLeast(0)
+            // 暂停状态：剩余时间 = 结束时间 - 状态变更时间
+            val remaining = timerWhen - timerSystemCurrent
+            remaining.coerceAtLeast(0)
         }
         -1 -> { // 倒计时进行中
             // 进行中状态：剩余时间 = 结束时间 - 当前时间
@@ -211,53 +213,9 @@ fun formatTimerInfo(timer: com.xzyht.notifyrelay.feature.notification.superislan
             remaining.coerceAtLeast(0)
         }
         2 -> { // 正计时暂停
-            // 暂停状态：已过时间 = 发送时间 - 开始时间，保持不变
-            val elapsedAtSend = timerSystemCurrent - timerWhen
-            elapsedAtSend.coerceAtLeast(0)
-        }
-        1 -> { // 正计时进行中
-            // 进行中状态：已过时间 = 当前时间 - 开始时间
-            val elapsed = now - timerWhen
+            // 暂停状态：已过时间 = 状态变更时间 - 开始时间
+            val elapsed = timerSystemCurrent - timerWhen
             elapsed.coerceAtLeast(0)
-        }
-        else -> 0
-    }
-    
-    val seconds = (displayValue / 1000).toInt()
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    
-    return if (hours > 0) {
-        String.format("%02d:%02d:%02d", hours, minutes % 60, seconds % 60)
-    } else {
-        String.format("%02d:%02d", minutes % 60, seconds % 60)
-    }
-}
-
-/**
- * 格式化SmallIsland模型的计时信息
- */
-fun formatTimerInfo(timer: com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.right.TimerInfo): String {
-    val now = System.currentTimeMillis()
-    val timerWhen = timer.timerWhen ?: now // 计时起点时间戳（毫秒）
-    val timerSystemCurrent = timer.timerSystemCurrent ?: now // 服务器发送时的时间戳
-    val timerTotal = timer.timerTotal ?: 0 // 计时总进度
-    
-    val displayValue: Long = when (timer.timerType) {
-        -2 -> { // 倒计时暂停
-            // 暂停状态：剩余时间 = 结束时间 - 发送时间，保持不变
-            val remainingAtSend = timerWhen - timerSystemCurrent
-            remainingAtSend.coerceAtLeast(0)
-        }
-        -1 -> { // 倒计时进行中
-            // 进行中状态：剩余时间 = 结束时间 - 当前时间
-            val remaining = timerWhen - now
-            remaining.coerceAtLeast(0)
-        }
-        2 -> { // 正计时暂停
-            // 暂停状态：已过时间 = 发送时间 - 开始时间，保持不变
-            val elapsedAtSend = timerSystemCurrent - timerWhen
-            elapsedAtSend.coerceAtLeast(0)
         }
         1 -> { // 正计时进行中
             // 进行中状态：已过时间 = 当前时间 - 开始时间
@@ -290,5 +248,42 @@ fun formatDuration(ms: Long): String {
         String.format("%02d:%02d:%02d", hours, minutes % 60, seconds % 60)
     } else {
         String.format("%02d:%02d", minutes % 60, seconds % 60)
+    }
+}
+
+/**
+ * 超级岛根布局组件
+ * 提供统一的卡片样式和布局结构
+ */
+@Composable
+fun SuperIslandComposeRoot(
+    content: @Composable () -> Unit,
+    isOverlapping: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isOverlapping) {
+                    // 重叠时显示红色背景
+                    Color.Red.copy(alpha = 0.92f)
+                } else {
+                    // 正常时显示黑色背景
+                    Color.Black.copy(alpha = 0.92f)
+                }
+            ),
+            elevation = CardDefaults.cardElevation(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                content()
+            }
+        }
     }
 }

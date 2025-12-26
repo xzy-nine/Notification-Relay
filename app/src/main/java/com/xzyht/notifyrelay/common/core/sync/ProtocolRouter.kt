@@ -1,7 +1,7 @@
-﻿package com.xzyht.notifyrelay.core.sync
+﻿package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 
 /**
@@ -58,11 +58,11 @@ object ProtocolRouter {
             when (header) {
                 // DATA / DATA_JSON：远程通知主通道（含超级岛、去重与复刻等完整处理），入口统一交给 NotificationProcessor
                 "DATA", "DATA_JSON" -> {
-                    com.xzyht.notifyrelay.core.notification.NotificationProcessor.process(
+                    com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.process(
                         context,
                         deviceManager,
                         deviceManager.coroutineScopeInternal,
-                        com.xzyht.notifyrelay.core.notification.NotificationProcessor.NotificationInput(
+                        com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.NotificationInput(
                             rawData = decrypted,
                             sharedSecret = auth.sharedSecret,
                             remoteUuid = remoteUuid

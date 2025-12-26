@@ -1,12 +1,12 @@
-﻿package com.xzyht.notifyrelay.core.repository
+﻿package com.xzyht.notifyrelay.common.core.repository
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
-import com.xzyht.notifyrelay.core.cache.IconCacheManager
-import com.xzyht.notifyrelay.core.repository.AppRepository.loadApps
-import com.xzyht.notifyrelay.core.util.AppListHelper
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.cache.IconCacheManager
+import com.xzyht.notifyrelay.common.core.repository.AppRepository.loadApps
+import com.xzyht.notifyrelay.common.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.util.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -448,7 +448,7 @@ object AppRepository {
      *
      * @return [IconCacheManager.CacheStats] 包含缓存大小、条目数、命中率等统计信息。
      */
-    fun getCacheStats(): com.xzyht.notifyrelay.core.cache.IconCacheManager.CacheStats {
+    fun getCacheStats(): IconCacheManager.CacheStats {
         return IconCacheManager.getCacheStats()
     }
 

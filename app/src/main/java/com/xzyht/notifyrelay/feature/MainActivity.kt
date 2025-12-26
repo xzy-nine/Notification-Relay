@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.main
+﻿package com.xzyht.notifyrelay.feature
 
 import android.content.Intent
 import android.content.res.Configuration
@@ -46,16 +46,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import com.xzyht.notifyrelay.common.PermissionHelper
-import com.xzyht.notifyrelay.core.util.Logger
-import com.xzyht.notifyrelay.core.util.ServiceManager
-import com.xzyht.notifyrelay.core.util.SystemBarUtils
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.ServiceManager
+import com.xzyht.notifyrelay.common.core.util.SystemBarUtils
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment
 import com.xzyht.notifyrelay.feature.device.ui.DeviceListFragment
-import com.xzyht.notifyrelay.feature.guide.GuideActivity
 import com.xzyht.notifyrelay.feature.notification.ui.NotificationHistoryFragment
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
@@ -163,12 +164,12 @@ class MainActivity : FragmentActivity() {
         }
 
         // 在后台线程初始化 NotificationRepository 和启动服务
-        kotlinx.coroutines.GlobalScope.launch {
+        GlobalScope.launch {
             // 启动时加载本地历史通知
             NotificationRepository.init(this@MainActivity)
             
             // 预加载应用列表，避免在UI线程中同步加载
-            com.xzyht.notifyrelay.core.repository.AppRepository.loadApps(this@MainActivity)
+            AppRepository.loadApps(this@MainActivity)
             
             // 使用 ServiceManager 启动服务
             val result = ServiceManager.startAllServices(this@MainActivity)

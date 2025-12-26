@@ -99,10 +99,10 @@ fun parseBComponent(bigIsland: JSONObject?): BComponent {
             val typeExists = to.has("timerType")
             if (!typeExists) null else {
                 val timerType = to.optInt("timerType")
-                val timerWhen = if (to.has("timerWhen")) to.optLong("timerWhen") else null
-                val timerTotal = if (to.has("timerTotal")) to.optLong("timerTotal") else null
-                val timerSystemCurrent = if (to.has("timerSystemCurrent")) to.optLong("timerSystemCurrent") else null
-                TimerInfo(
+                val timerWhen = to.optLong("timerWhen", 0)
+                val timerTotal = to.optLong("timerTotal", 0)
+                val timerSystemCurrent = to.optLong("timerSystemCurrent", 0)
+                com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo(
                     timerType = timerType,
                     timerWhen = timerWhen,
                     timerTotal = timerTotal,

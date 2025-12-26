@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.core.util
+﻿package com.xzyht.notifyrelay.common.core.util
 
 import android.content.Context
 import android.net.Uri
@@ -169,7 +169,7 @@ object MessageSender {
                 }
 
                 // 使用统一发送器
-                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
                 try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
                 Logger.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
@@ -204,7 +204,7 @@ object MessageSender {
                     return
                 }
 
-                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
                 Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
@@ -235,7 +235,7 @@ object MessageSender {
                 return
             }
 
-            com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
             Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
             Logger.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")

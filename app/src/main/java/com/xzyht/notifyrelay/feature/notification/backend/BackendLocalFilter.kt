@@ -6,7 +6,7 @@ import android.content.Context
 import android.service.notification.StatusBarNotification
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 
 /**

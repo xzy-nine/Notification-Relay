@@ -6,7 +6,7 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandManager
@@ -40,7 +40,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (pair != null) {
                     val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
                     val (superPkg, featureId) = pair
-                    com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandEnd(
+                    com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandEnd(
                         applicationContext,
                         superPkg,
                         try { applicationContext.packageName } catch (_: Exception) { null },
@@ -211,7 +211,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         val featureId = oldId ?: computedId
                         // 初次出现时登记；后续保持不变
                         try { if (oldId == null) superIslandFeatureByKey[sbnInstanceId] = superPkg to featureId } catch (_: Exception) {}
-                        com.xzyht.notifyrelay.core.util.MessageSender.sendSuperIslandData(
+                        com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandData(
                             applicationContext,
                             superPkg,
                             superData.appName ?: "超级岛",
@@ -306,7 +306,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             }
 
             // 使用整合的消息发送工具
-            com.xzyht.notifyrelay.core.util.MessageSender.sendNotificationMessage(
+            com.xzyht.notifyrelay.common.core.util.MessageSender.sendNotificationMessage(
                 applicationContext,
                 sbn.packageName,
                 appName,

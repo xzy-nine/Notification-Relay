@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.core.util
+package com.xzyht.notifyrelay.common.core.util
 
 import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig

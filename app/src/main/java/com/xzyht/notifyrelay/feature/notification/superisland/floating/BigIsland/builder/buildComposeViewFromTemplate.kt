@@ -4,11 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,39 +17,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.xzyht.notifyrelay.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ChatInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.HighlightInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.HintInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.MultiProgressCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.ParamIslandCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.PicInfoCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ProgressCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.TextButtonCompose
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.*
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.ParamIslandCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ParseResult
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandComposeRoot
 import org.json.JSONObject
-
-/**
- * 解析结果密封类
- */
-private sealed class ParseResult {
-    data class Success(val paramV2: ParamV2) : ParseResult()
-    data class Error(val title: String, val content: String) : ParseResult()
-}
 
 /**
  * 解析paramV2，返回解析结果
  */
-private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
+private fun parseParamV2WithResult(paramV2Raw: String): ParseResult<ParamV2> {
     return try {
-        val paramV2 =
-            parseParamV2(
-                paramV2Raw
-            )
+        val paramV2 = parseParamV2(paramV2Raw)
         if (paramV2 != null) {
             ParseResult.Success(paramV2)
         } else {
@@ -82,42 +60,6 @@ private fun parseParamV2WithResult(paramV2Raw: String): ParseResult {
             title = "超级岛通知",
             content = ""
         )
-    }
-}
-
-/**
- * 超级岛Compose根组件
- */
-@Composable
-fun SuperIslandComposeRoot(
-    content: @Composable () -> Unit,
-    isOverlapping: Boolean = false
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-    ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isOverlapping) {
-                    // 重叠时显示红色背景
-                    Color.Red.copy(alpha = 0.92f)
-                } else {
-                    // 正常时显示黑色背景
-                    Color.Black.copy(alpha = 0.92f)
-                }
-            ),
-            elevation = CardDefaults.cardElevation(6.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(8.dp)
-            ) {
-                content()
-            }
-        }
     }
 }
 
@@ -240,7 +182,7 @@ fun buildComposeViewFromRawParam(
                     // 解析paramV2，在Composable函数之外处理异常
                     when (val parseResult = parseParamV2WithResult(paramV2Raw)) {
                         is ParseResult.Success -> {
-                            val paramV2 = parseResult.paramV2
+                            val paramV2 = parseResult.data
                             // 根据paramV2的不同类型显示不同的Compose组件
                             when {
                                 paramV2.baseInfo != null -> {

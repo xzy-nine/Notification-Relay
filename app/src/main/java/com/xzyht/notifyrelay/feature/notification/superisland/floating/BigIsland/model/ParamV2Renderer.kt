@@ -3,7 +3,7 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIslan
 import android.content.Context
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.LifecycleOwner
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.core.parseBigIslandArea
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.builder.buildComposeViewFromParam
 import org.json.JSONObject

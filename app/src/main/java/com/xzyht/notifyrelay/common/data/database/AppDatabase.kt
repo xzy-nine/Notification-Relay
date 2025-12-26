@@ -13,7 +13,7 @@ import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

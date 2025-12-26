@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import top.yukonga.miuix.kmp.basic.Button
@@ -136,7 +136,7 @@ fun UIChatTest(
                 )
                 Button(
                     onClick = {
-                        com.xzyht.notifyrelay.core.util.MessageSender.sendChatMessage(
+                        com.xzyht.notifyrelay.common.core.util.MessageSender.sendChatMessage(
                             context,
                             chatInput,
                             deviceManager
@@ -144,8 +144,8 @@ fun UIChatTest(
                         chatHistoryState.value = ChatMemory.getChatHistory(context)
                         chatInput = ""
                     },
-                    enabled = com.xzyht.notifyrelay.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
-                            com.xzyht.notifyrelay.core.util.MessageSender.isValidMessage(chatInput),
+                    enabled = com.xzyht.notifyrelay.common.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
+                            com.xzyht.notifyrelay.common.core.util.MessageSender.isValidMessage(chatInput),
                     modifier = Modifier.align(Alignment.CenterVertically)
                 ) {
                     Text("发送")

@@ -25,12 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.collections.forEach
 
 /**
  * 将 DeviceForwardFragment 中原有的远程过滤内联实现移动到这里：

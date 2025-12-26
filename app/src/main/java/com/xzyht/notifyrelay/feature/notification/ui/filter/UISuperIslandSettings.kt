@@ -41,15 +41,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import com.xzyht.notifyrelay.common.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
-import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
-
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.SuperIslandTestDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -680,9 +679,7 @@ private fun copyEntryToClipboard(context: android.content.Context, content: Stri
         clipboard.setPrimaryClip(clip)
         android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-            Logger.e("NotifyRelay", "复制超级岛原始消息失败", e)
-        }
+        Logger.e("NotifyRelay", "复制超级岛原始消息失败", e)
         android.widget.Toast.makeText(context, "复制失败", android.widget.Toast.LENGTH_SHORT).show()
     }
 }

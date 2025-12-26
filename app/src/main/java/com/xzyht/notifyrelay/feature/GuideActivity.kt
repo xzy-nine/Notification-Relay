@@ -1,16 +1,41 @@
-package com.xzyht.notifyrelay.feature.guide
+package com.xzyht.notifyrelay.feature
 
+import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,16 +43,23 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.main.MainActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.util.SystemBarUtils
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,26 +73,26 @@ class GuideActivity : ComponentActivity() {
             return
         }
     // 沉浸式虚拟键，内容延伸到手势提示线区域
-    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
     // 统一用 WindowCompat 控制系统栏外观，避免废弃API
-    androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+    WindowCompat.setDecorFitsSystemWindows(window, false)
     // 颜色设置放到 Compose SideEffect 里统一管理
 
         setContent {
-            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-            val colors = if (isDarkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
+            val isDarkTheme = isSystemInDarkTheme()
+            val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
             MiuixTheme(colors = colors) {
                 val colorScheme = MiuixTheme.colorScheme
                 // 统一在 Composable 作用域设置 window decor
                 SideEffect {
                     val win = this@GuideActivity.window
-                    val controller = androidx.core.view.WindowCompat.getInsetsController(win, win.decorView)
+                    val controller = WindowCompat.getInsetsController(win, win.decorView)
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     val barColor = colorScheme.background.toArgb()
-                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setStatusBarColor(win, barColor, false)
-                    com.xzyht.notifyrelay.core.util.SystemBarUtils.setNavigationBarColor(win, barColor, false)
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    SystemBarUtils.setStatusBarColor(win, barColor, false)
+                    SystemBarUtils.setNavigationBarColor(win, barColor, false)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         win.isNavigationBarContrastEnforced = false
                     }
                 }
@@ -109,12 +141,12 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasBackgroundUnlimited by remember { mutableStateOf(false) }
     // Toast工具
     fun showToast(msg: String) {
-        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
     }
 
     // 权限检测方法（使用 PermissionHelper 和 AppListHelper）
     fun refreshPermissions() {
-        val enabledListeners = android.provider.Settings.Secure.getString(
+        val enabledListeners = Settings.Secure.getString(
             context.contentResolver,
             "enabled_notification_listeners"
         )
@@ -124,8 +156,8 @@ fun GuideScreen(onContinue: () -> Unit) {
         hasUsage = PermissionHelper.isUsageStatsEnabled(context)
 
         // 使用 PermissionHelper 检查通知发送权限
-        hasPost = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        hasPost = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else true
 
         // 使用 AppListHelper 检查应用列表权限
@@ -136,7 +168,7 @@ fun GuideScreen(onContinue: () -> Unit) {
 
         // 检查开发者选项-停用屏幕共享保护
         hasDevScreenShareProtectOff = try {
-            val value = android.provider.Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
+            val value = Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
             value == 1
         } catch (_: Exception) { false }
 
@@ -209,7 +241,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         },
                         modifier = Modifier.padding(vertical = 0.dp)
                     )
-                    top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "应用列表权限",
             summary = if (canQueryApps) "已授权" else "用于发现本机已安装应用，辅助通知跳转",
@@ -218,15 +250,15 @@ fun GuideScreen(onContinue: () -> Unit) {
                     checked = canQueryApps,
                     onCheckedChange = {
                         try {
-                            val isMiuiOrPengpai = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
+                            val isMiuiOrPengpai = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
                                 try {
                                     val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
                                     permissionInfo != null && permissionInfo.packageName == "com.lbe.security.miui"
                                 } catch (_: Exception) { false }
                             if (isMiuiOrPengpai) {
-                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                if (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
                                     (context as? Activity)?.let { act ->
-                                        androidx.core.app.ActivityCompat.requestPermissions(
+                                        ActivityCompat.requestPermissions(
                                             act,
                                             arrayOf("com.android.permission.GET_INSTALLED_APPS"),
                                             999
@@ -241,13 +273,13 @@ fun GuideScreen(onContinue: () -> Unit) {
                             } else {
                                 showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                                intent.data = Uri.parse("package:" + context.packageName)
                                 context.startActivity(intent)
                             }
                         } catch (_: Exception) {
                             showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            intent.data = android.net.Uri.parse("package:" + context.packageName)
+                            intent.data = Uri.parse("package:" + context.packageName)
                             context.startActivity(intent)
                         }
                     },
@@ -257,12 +289,12 @@ fun GuideScreen(onContinue: () -> Unit) {
             onClick = {
                 showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                intent.data = Uri.parse("package:" + context.packageName)
                 context.startActivity(intent)
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "通知发送权限 (Android 13+)",
             summary = if (hasPost) "已授权" else "用于发送本地通知，部分功能需开启",
@@ -271,9 +303,9 @@ fun GuideScreen(onContinue: () -> Unit) {
                     checked = hasPost,
                     onCheckedChange = {
                         showToast("请求通知发送权限")
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             (context as? Activity)?.requestPermissions(
-                                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100
+                                arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
                             )
                         } else {
                             showToast("请在系统设置中开启通知权限")
@@ -284,9 +316,9 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             onClick = {
                 showToast("请求通知发送权限")
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     (context as? Activity)?.requestPermissions(
-                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100
+                        arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
                     )
                 } else {
                     showToast("请在系统设置中开启通知权限")
@@ -294,11 +326,11 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "蓝牙连接权限 (可选)",
             summary = if (hasBluetoothConnect) "已授权" else "用于优化设备发现速度，显示真实设备名",
-            summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
+            summaryColor = BasicComponentColors(
                 color = Color(0xFF888888),
                 disabledColor = Color(0xFFCCCCCC)
             ),
@@ -306,9 +338,9 @@ fun GuideScreen(onContinue: () -> Unit) {
                 Switch(
                     checked = hasBluetoothConnect,
                     onCheckedChange = {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             (context as? Activity)?.requestPermissions(
-                                arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT), 1001
+                                arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1001
                             )
                             showToast("开启后可优化设备发现速度，并以设备实际名称而非型号作为设备名")
                         } else {
@@ -321,11 +353,11 @@ fun GuideScreen(onContinue: () -> Unit) {
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "后台无限制权限 (可选)",
             summary = if (hasBackgroundUnlimited) "已设置" else "用于确保应用在后台正常运行，防止被系统杀死",
-            summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
+            summaryColor = BasicComponentColors(
                 color = Color(0xFF888888),
                 disabledColor = Color(0xFFCCCCCC)
             ),
@@ -335,8 +367,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                     onCheckedChange = { checked ->
                         if (checked) {
                             showToast("跳转到电池优化设置，请将应用设为无限制")
-                            val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                            intent.data = android.net.Uri.parse("package:" + context.packageName)
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:" + context.packageName)
                             context.startActivity(intent)
                         } else {
                             hasBackgroundUnlimited = false
@@ -347,18 +379,18 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             onClick = {
                 showToast("跳转到电池优化设置，请将应用设为无限制")
-                val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                intent.data = Uri.parse("package:" + context.packageName)
                 context.startActivity(intent)
             },
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "悬浮窗权限 (可选)",
             summary = if (hasFloatNotification) "已授权：允许在其他应用上层显示悬浮窗" else "用于支持超级岛/悬浮岛复刻，提升通知交互体验",
-            summaryColor = top.yukonga.miuix.kmp.basic.BasicComponentColors(
+            summaryColor = BasicComponentColors(
                 color = Color(0xFF888888),
                 disabledColor = Color(0xFFCCCCCC)
             ),
@@ -381,7 +413,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                                     PermissionHelper.requestOverlayPermission(act)
                                 } ?: run {
                                     val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                    intent.data = android.net.Uri.parse("package:${context.packageName}")
+                                    intent.data = Uri.parse("package:${context.packageName}")
                                     context.startActivity(intent)
                                 }
                             } catch (e: Exception) {
@@ -399,7 +431,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
         )
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "敏感通知访问权限 (Android 15+，可选)",
             summary = "未授权时部分通知内容只能获取到'已隐藏敏感通知',因此应用予以隐藏，建议开启以完整接收通知。如无法跳转可复制下方 adb 命令授权。",
@@ -433,8 +465,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                 Button(
                     onClick = {
                         val adbCmd = "adb shell appops set ${context.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow"
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("adb", adbCmd)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("adb", adbCmd)
                         clipboard.setPrimaryClip(clip)
                         showToast("已复制adb命令到剪贴板")
                     },
@@ -445,7 +477,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                 }
             }
         }
-        top.yukonga.miuix.kmp.basic.HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "自启动权限",
             summary = if (hasSelfStart) "已启用" else "必须启用，否则监听服务无法启动",
@@ -456,7 +488,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                         if (checked) {
                             showToast("请在应用详情页启用自启动权限")
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            intent.data = android.net.Uri.parse("package:" + context.packageName)
+                            intent.data = Uri.parse("package:" + context.packageName)
                             context.startActivity(intent)
                         } else {
                             hasSelfStart = false
@@ -468,32 +500,32 @@ fun GuideScreen(onContinue: () -> Unit) {
             onClick = {
                 showToast("请在应用详情页启用自启动权限")
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.data = android.net.Uri.parse("package:" + context.packageName)
+                intent.data = Uri.parse("package:" + context.packageName)
                 context.startActivity(intent)
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
-        top.yukonga.miuix.kmp.basic.Button(onClick = {
-            if (permissionsGranted) {
-                onContinue()
-            } else {
-                val missing = buildList {
-                    if (!hasNotification) add("获取通知访问权限")
-                    if (!canQueryApps) add("获取应用列表权限")
-                    if (!hasPost) add("获取通知发送权限")
-                    if (!hasSelfStart) add("启用自启动权限")
-                }.joinToString(", ")
-                if (missing.isNotEmpty()) {
-                    showToast("请先授权: $missing")
-                }
-            }
-        }) {
-            top.yukonga.miuix.kmp.basic.Text(
-                if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
-                style = MiuixTheme.textStyles.button
-            )
-        }
+                    Button(onClick = {
+                        if (permissionsGranted) {
+                            onContinue()
+                        } else {
+                            val missing = buildList {
+                                if (!hasNotification) add("获取通知访问权限")
+                                if (!canQueryApps) add("获取应用列表权限")
+                                if (!hasPost) add("获取通知发送权限")
+                                if (!hasSelfStart) add("启用自启动权限")
+                            }.joinToString(", ")
+                            if (missing.isNotEmpty()) {
+                                showToast("请先授权: $missing")
+                            }
+                        }
+                    }) {
+                        Text(
+                            if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
+                            style = MiuixTheme.textStyles.button
+                        )
+                    }
             }
         }
     }

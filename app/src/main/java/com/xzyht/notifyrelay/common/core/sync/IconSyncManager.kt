@@ -1,10 +1,10 @@
-package com.xzyht.notifyrelay.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
-import com.xzyht.notifyrelay.core.repository.AppRepository
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import kotlinx.coroutines.CoroutineScope

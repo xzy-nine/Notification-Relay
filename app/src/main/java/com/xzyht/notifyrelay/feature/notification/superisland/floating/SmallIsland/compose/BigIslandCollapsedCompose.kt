@@ -2,7 +2,12 @@ package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsl
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,9 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.AImageText1
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.parseAComponent
@@ -87,7 +89,7 @@ fun BigIslandCollapsedCompose(
             modifier = Modifier.wrapContentWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val aExists = aComp != null
+            val aExists = true
             val bIsEmpty = bComp is BEmpty
             
             // 左侧胶囊头（若 A 不存在）

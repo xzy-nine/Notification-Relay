@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.core.util
+package com.xzyht.notifyrelay.common.core.util
 
 import android.util.Base64
 import java.security.KeyFactory

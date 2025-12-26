@@ -76,13 +76,6 @@ data class BFixedWidthDigitInfo(
  * - timerType 必传
  * - timerWhen / timerTotal / timerSystemCurrent 可选
  */
-data class TimerInfo(
-    val timerType: Int,
-    val timerWhen: Long? = null,
-    val timerTotal: Long? = null,
-    val timerSystemCurrent: Long? = null
-)
-
 /**
  * 等宽数字文本组件（sameWidthDigitInfo）
  * - digit 与 timer 二选一，至少一项存在（digit 兼容旧字段名 text）
@@ -91,7 +84,7 @@ data class TimerInfo(
  */
 data class BSameWidthDigitInfo(
     val digit: String? = null,
-    val timer: TimerInfo? = null,
+    val timer: com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo? = null,
     val content: String? = null,
     val showHighlightColor: Boolean = false
 ) : BComponent { override val kind: String = "sameWidthDigitInfo" }

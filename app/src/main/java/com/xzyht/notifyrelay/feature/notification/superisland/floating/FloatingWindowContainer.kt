@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.builder.SuperIslandComposeRoot
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandComposeRoot
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose

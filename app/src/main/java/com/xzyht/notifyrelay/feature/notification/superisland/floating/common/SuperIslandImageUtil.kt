@@ -14,8 +14,8 @@ import coil.ImageLoader as CoilImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 
 /**
@@ -158,6 +158,50 @@ object SuperIslandImageUtil {
             .replace("\\u0027", "'")
             .replace("\\u0022", "\"")
             .replace("\\u0026", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
+            .replace("&amp;", "&")
+    }
+
+    /**
+     * 安全截断文本
+     */
+    fun truncateText(text: String, maxLength: Int, suffix: String = "..."): String {
+        return if (text.length <= maxLength) {
+            text
+        } else {
+            text.substring(0, maxLength - suffix.length) + suffix
+        }
+    }
+
+    /**
+     * 格式化数字，添加千分位分隔符
+     */
+    fun formatNumber(number: Long): String {
+        return "%,d".format(number)
+    }
+
+    /**
+     * 安全解析字符串为整数
+     */
+    fun safeParseInt(value: String?, default: Int = 0): Int {
+        return value?.toIntOrNull() ?: default
+    }
+
+    /**
+     * 安全解析字符串为长整数
+     */
+    fun safeParseLong(value: String?, default: Long = 0L): Long {
+        return value?.toLongOrNull() ?: default
+    }
+
+    /**
+     * 安全解析字符串为布尔值
+     */
+    fun safeParseBoolean(value: String?, default: Boolean = false): Boolean {
+        return value?.toBooleanStrictOrNull() ?: default
     }
 
     /**
