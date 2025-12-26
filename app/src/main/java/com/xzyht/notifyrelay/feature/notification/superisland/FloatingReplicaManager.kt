@@ -265,6 +265,8 @@ object FloatingReplicaManager {
         showCloseOverlay()
         // 记录容器正在拖动
         isContainerDragging = true
+        // 立即更新一次重叠状态，确保初始状态正确
+        updateEntriesOverlappingStatus()
     }
 
     /**
@@ -300,9 +302,6 @@ object FloatingReplicaManager {
             // 计算容器宽度
             val containerWidth = (FIXED_WIDTH_DP * density).toInt()
 
-            // 计算单个条目高度（估算）
-            val estimatedEntryHeight = 150f * density
-
             // 检查关闭区是否已经初始化（非默认值）
             if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
                 // 如果关闭区位置没有初始化，直接返回
@@ -318,11 +317,18 @@ object FloatingReplicaManager {
             }
 
             // 遍历所有条目，检查每个条目是否与关闭区重叠
+            var currentY = containerY
             for ((index, entry) in entries.withIndex()) {
-                // 计算当前条目的位置（假设条目是垂直排列的，最新的在底部）
-                val entryTop = containerY + (index * estimatedEntryHeight).toInt()
-                val entryBottom = entryTop + estimatedEntryHeight.toInt()
+                // 使用条目实际高度，如果高度为0（未测量）则使用默认值
+                val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
+                
+                // 计算当前条目的位置（垂直排列，最新的在底部）
+                val entryTop = currentY
+                val entryBottom = entryTop + currentHeight
                 val entryCenterX = containerX + containerWidth / 2
+                
+                // 更新当前Y坐标，为下一个条目做准备
+                currentY += currentHeight
 
                 // 检查条目是否与关闭区重叠
                 val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom
@@ -375,9 +381,6 @@ object FloatingReplicaManager {
             // 计算容器宽度
             val containerWidth = (FIXED_WIDTH_DP * density).toInt()
 
-            // 计算单个条目高度（估算）
-            val estimatedEntryHeight = 150f * density
-
             // 添加调试日志，便于检查关闭区和容器位置
             Logger.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
             Logger.i(TAG, "超级岛: 容器位置 - X: $containerX, Y: $containerY, Width: $containerWidth")
@@ -389,11 +392,18 @@ object FloatingReplicaManager {
             }
 
             // 遍历所有条目，检查每个条目是否与关闭区重叠
+            var currentY = containerY
             for ((index, entry) in entries.withIndex()) {
-                // 计算当前条目的位置（假设条目是垂直排列的，最新的在底部）
-                val entryTop = containerY + (index * estimatedEntryHeight).toInt()
-                val entryBottom = entryTop + estimatedEntryHeight.toInt()
+                // 使用条目实际高度，如果高度为0（未测量）则使用默认值
+                val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
+                
+                // 计算当前条目的位置（垂直排列，最新的在底部）
+                val entryTop = currentY
+                val entryBottom = entryTop + currentHeight
                 val entryCenterX = containerX + containerWidth / 2
+                
+                // 更新当前Y坐标，为下一个条目做准备
+                currentY += currentHeight
 
                 // 检查条目是否与关闭区重叠
                 val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom

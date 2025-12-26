@@ -218,6 +218,9 @@ class FloatingComposeContainer @JvmOverloads constructor(
 
     // 容器拖动中回调，用于实时检测重叠
     var onContainerDragging: (() -> Unit)? = null
+    
+    // 更新条目高度的回调
+    var onUpdateEntryHeight: ((String, Int) -> Unit)? = null
 
     @Composable
     override fun Content() {
@@ -228,7 +231,10 @@ class FloatingComposeContainer @JvmOverloads constructor(
                 FloatingWindowContainer(
                     entries = floatingWindowManager.entriesList,
                     onEntryClick = { key -> onEntryClick?.invoke(key) },
-                    lifecycleOwner = currentLifecycleOwner
+                    lifecycleOwner = currentLifecycleOwner,
+                    onUpdateEntryHeight = { key, height -> 
+                        floatingWindowManager.updateEntryHeight(key, height)
+                    }
                 )
             }
 

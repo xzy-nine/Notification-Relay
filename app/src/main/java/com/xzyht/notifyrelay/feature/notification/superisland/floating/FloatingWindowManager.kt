@@ -58,7 +58,7 @@ class FloatingWindowManager {
         text: String? = null,
         appName: String? = null
     ) {
-        // 保留原有条目的isExpanded和isOverlapping状态，其他属性使用新传入的值
+        // 保留原有条目的isExpanded、isOverlapping和height状态，其他属性使用新传入的值
         // 如果是摘要态，强制设为非展开状态
         val existingEntry = entriesMap[key]?.entry
         val finalIsExpanded = if (summaryOnly) {
@@ -72,10 +72,13 @@ class FloatingWindowManager {
             isExpanded
         }
 
-        // 保留原有条目的重叠状态
-        val finalIsOverlapping = existingEntry?.isOverlapping ?: false
+        // 重叠状态不应该被保留，应该始终重新计算
+        val finalIsOverlapping = false
+        
+        // 保留原有条目的高度信息
+        val finalHeight = existingEntry?.height ?: 0
 
-        // 创建新的FloatingEntry，确保所有属性都使用新传入的值，除了isExpanded和isOverlapping状态
+        // 创建新的FloatingEntry，确保所有属性都使用新传入的值，除了isExpanded状态
         val entry = FloatingEntry(
             key = key,
             paramV2 = paramV2,
@@ -87,7 +90,8 @@ class FloatingWindowManager {
             title = title,
             text = text,
             appName = appName,
-            isOverlapping = finalIsOverlapping
+            isOverlapping = finalIsOverlapping,
+            height = finalHeight
         )
 
         // 取消之前的任务
@@ -307,6 +311,29 @@ class FloatingWindowManager {
         entriesMap.clear()
         entriesMap.putAll(updatedEntriesMap)
         updateEntriesList()
+    }
+    
+    /**
+     * 更新条目的实际高度
+     */
+    fun updateEntryHeight(key: String, height: Int) {
+        val entryWithTimestamp = entriesMap[key]
+        if (entryWithTimestamp != null) {
+            val currentEntry = entryWithTimestamp.entry
+            
+            // 如果高度没有变化，直接返回
+            if (currentEntry.height == height) {
+                return
+            }
+            
+            val updatedEntry = currentEntry.copy(height = height)
+            val updatedWithTimestamp = entryWithTimestamp.copy(
+                entry = updatedEntry,
+                timestamp = System.currentTimeMillis()
+            )
+            entriesMap[key] = updatedWithTimestamp
+            updateEntriesList()
+        }
     }
 
 

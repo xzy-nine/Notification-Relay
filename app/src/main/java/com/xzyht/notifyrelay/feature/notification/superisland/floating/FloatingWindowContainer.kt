@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -56,7 +57,8 @@ data class FloatingEntry(
     val title: String? = null,
     val text: String? = null,
     val appName: String? = null,
-    val isOverlapping: Boolean = false
+    val isOverlapping: Boolean = false,
+    val height: Int = 0 // 实际高度，由Compose组件测量后设置
 )
 
 /**
@@ -67,7 +69,8 @@ fun FloatingWindowContainer(
     entries: List<FloatingEntry>,
     onEntryClick: (String) -> Unit,
     lifecycleOwner: LifecycleOwner?,
-    modifier: Modifier = Modifier.Companion
+    modifier: Modifier = Modifier.Companion,
+    onUpdateEntryHeight: ((String, Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -94,6 +97,11 @@ fun FloatingWindowContainer(
                             indication = null, // 移除默认点击效果
                             onClick = { onEntryClick(entry.key) }
                         )
+                        .onGloballyPositioned {
+                            // 测量条目实际高度并更新
+                            val measuredHeight = it.size.height
+                            onUpdateEntryHeight?.invoke(entry.key, measuredHeight)
+                        }
                 ) {
                     // 简化动画，避免闪烁
                     val expandedEnterTransition = slideInVertically {
