@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.ui.filter
+package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -81,7 +81,6 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
-    var useComposeSummary by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COMPOSE_SUMMARY_KEY, false)) }
 
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
@@ -156,18 +155,6 @@ fun UISuperIslandSettings() {
                 onCheckedChange = {
                     includeImageDataOnCopy = it
                     StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(0.dp))
-
-            SuperSwitch(
-                title = "使用Compose渲染摘要态",
-                summary = "切换摘要态通知的渲染方式，Compose版本与View版本对比",
-                checked = useComposeSummary,
-                onCheckedChange = {
-                    useComposeSummary = it
-                    StorageManager.putBoolean(context, SUPER_ISLAND_COMPOSE_SUMMARY_KEY, it)
                 }
             )
 
@@ -722,7 +709,6 @@ private fun triggerFloatingReplica(context: Context, entry: SuperIslandHistoryEn
 
 private const val SUPER_ISLAND_KEY = "superisland_enabled"
 private const val SUPER_ISLAND_COPY_IMAGE_DATA_KEY = "superisland_copy_image_data"
-private const val SUPER_ISLAND_COMPOSE_SUMMARY_KEY = "superisland_compose_summary"
 
 private fun sanitizeImageContent(source: String, includeImageDataOnCopy: Boolean): String {
     if (includeImageDataOnCopy) return source
