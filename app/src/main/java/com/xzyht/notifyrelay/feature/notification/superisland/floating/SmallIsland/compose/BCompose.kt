@@ -96,7 +96,7 @@ fun BCompose(
                 val iconUrl = resolveIconUrl(picMap, bComp.picKey)
                 // 只处理data URL格式的图片
                 if (iconUrl?.startsWith("data:", ignoreCase = true) == true) {
-                    val painter = rememberSuperIslandImagePainter(iconUrl, picMap, bComp.picKey)
+                    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl, picMap, bComp.picKey)
                     
                     if (painter != null) {
                         Image(
@@ -194,7 +194,7 @@ fun BCompose(
                     // 中心图标
                     bComp.picKey?.let { picKey ->
                         val iconUrl = resolveIconUrl(picMap, picKey)
-                        val painter = rememberSuperIslandImagePainter(iconUrl, picMap, picKey)
+                        val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl, picMap, picKey)
                         
                         if (painter != null) {
                             Image(

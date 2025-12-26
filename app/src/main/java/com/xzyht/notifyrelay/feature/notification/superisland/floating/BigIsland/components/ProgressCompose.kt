@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ProgressInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 
 /**
  * Progress组件的Compose实现，与传统View功能一致
@@ -19,7 +19,7 @@ fun ProgressCompose(
     picMap: Map<String, String>?
 ) {
     // 与传统View保持一致，只设置进度条颜色，不设置轨道颜色
-    val progressColor = Color(parseColor(progressInfo.colorProgress) ?: 0xFF00FF00.toInt())
+    val progressColor = Color(SuperIslandImageUtil.parseColor(progressInfo.colorProgress) ?: 0xFF00FF00.toInt())
     
     LinearProgressIndicator(
         progress = progressInfo.progress.toFloat() / 100f,

@@ -16,7 +16,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.xzyht.notifyrelay.R
 import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer
@@ -733,7 +733,7 @@ object FloatingReplicaManager {
 
     private suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitmap? {
         return try {
-            ImageLoader.loadBitmapSuspend(context, url, timeoutMs)
+            SuperIslandImageUtil.loadBitmapSuspend(context, url, timeoutMs)
         } catch (e: Exception) {
             Logger.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             null

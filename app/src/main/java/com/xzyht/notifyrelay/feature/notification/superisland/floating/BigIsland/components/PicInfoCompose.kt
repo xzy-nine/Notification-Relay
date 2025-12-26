@@ -14,10 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.PicInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
+
 
 /**
  * 图片信息Compose组件
@@ -35,7 +34,7 @@ fun PicInfoCompose(picInfo: PicInfo, picMap: Map<String, String>?) {
         if (!picKey.isNullOrEmpty()) {
             val picUrl = picMap?.get(picKey)
             if (!picUrl.isNullOrEmpty()) {
-                val painter = rememberSuperIslandImagePainter(picUrl)
+                val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(picUrl)
                 painter?.let {
                     Image(
                         painter = it,
@@ -51,8 +50,8 @@ fun PicInfoCompose(picInfo: PicInfo, picMap: Map<String, String>?) {
         picInfo.title?.let {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = unescapeHtml(it),
-                color = Color(parseColor(picInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
+                text = SuperIslandImageUtil.unescapeHtml(it),
+                color = Color(SuperIslandImageUtil.parseColor(picInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp
             )
         }

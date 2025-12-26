@@ -18,12 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.AnimTextInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.formatTimerInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.resolveFallbackIconUrl
+
 
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.resolveIconUrl
 import kotlinx.coroutines.delay
@@ -54,12 +52,12 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
 
         // 2. 如果失败，尝试 picMap 中以 "miui.focus.pic_" 开头的第二个 key
         if (finalIconUrl.isNullOrEmpty() && picMap != null) {
-            finalIconUrl = resolveFallbackIconUrl(picMap)
+            finalIconUrl = SuperIslandImageUtil.resolveFallbackIconUrl(picMap)
         }
 
         // 显示图标，使用统一的图片加载工具
         if (!finalIconUrl.isNullOrEmpty()) {
-            val painter = rememberSuperIslandImagePainter(finalIconUrl)
+            val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(finalIconUrl)
             painter?.let {
                 Image(
                     painter = it,
@@ -98,13 +96,13 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
 
             val majorText = animTextInfo.title ?: timerState.value
             val majorColor = when {
-                preferDark -> parseColor(animTextInfo.colorTitleDark)
-                else -> parseColor(animTextInfo.colorTitle)
+                preferDark -> SuperIslandImageUtil.parseColor(animTextInfo.colorTitleDark)
+                else -> SuperIslandImageUtil.parseColor(animTextInfo.colorTitle)
             } ?: 0xFFFFFFFF.toInt()
             majorText?.let { text ->
                 val isTimeLike = text.matches(Regex("[0-9: ]{2,}"))
                 Text(
-                    text = unescapeHtml(text),
+                    text = SuperIslandImageUtil.unescapeHtml(text),
                     fontSize = 15.sp,
                     color = Color(majorColor),
                     maxLines = 1,
@@ -116,12 +114,12 @@ fun AnimTextInfoCompose(animTextInfo: AnimTextInfo, picMap: Map<String, String>?
                 if (!animTextInfo.title.isNullOrBlank() && timerState.value != null) timerState.value else null
             }
             val secondaryColor = when {
-                preferDark -> parseColor(animTextInfo.colorContentDark)
-                else -> parseColor(animTextInfo.colorContent)
+                preferDark -> SuperIslandImageUtil.parseColor(animTextInfo.colorContentDark)
+                else -> SuperIslandImageUtil.parseColor(animTextInfo.colorContent)
             } ?: 0xFFDDDDDD.toInt()
             secondaryText?.let { text ->
                 Text(
-                    text = unescapeHtml(text),
+                    text = SuperIslandImageUtil.unescapeHtml(text),
                     fontSize = 12.sp,
                     color = Color(secondaryColor),
                     maxLines = 1

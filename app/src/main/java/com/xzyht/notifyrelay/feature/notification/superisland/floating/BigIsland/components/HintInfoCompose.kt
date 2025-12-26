@@ -11,7 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.HintInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+
 
 
 /**
@@ -26,7 +27,7 @@ fun HintInfoCompose(hintInfo: HintInfo, picMap: Map<String, String>? = null) {
         }
 
         if (!iconUrl.isNullOrEmpty()) {
-            val painter = rememberSuperIslandImagePainter(iconUrl)
+            val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl)
             painter?.let {
                 Image(
                     painter = it,

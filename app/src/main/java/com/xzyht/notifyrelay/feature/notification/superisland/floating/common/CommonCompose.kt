@@ -48,7 +48,7 @@ fun CommonImageCompose(
         resolveIconUrl(picMap, picKey)
     }
     
-    val painter = rememberSuperIslandImagePainter(iconUrl, picMap)
+    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl, picMap)
     
     if (painter != null) {
         Image(

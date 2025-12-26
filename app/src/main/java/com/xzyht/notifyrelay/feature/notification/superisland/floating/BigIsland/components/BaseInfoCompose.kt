@@ -11,8 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.BaseInfo
 
 /**
@@ -31,8 +30,8 @@ fun BaseInfoCompose(
         // 主要文本1：关键信息
         baseInfo.title?.let {
             Text(
-                text = unescapeHtml(it),
-                color = Color(parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
+                text = SuperIslandImageUtil.unescapeHtml(it),
+                color = Color(SuperIslandImageUtil.parseColor(baseInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
                 maxLines = 1,
@@ -44,8 +43,8 @@ fun BaseInfoCompose(
         // 次要文本1：前置描述
         baseInfo.content?.let {
             Text(
-                text = unescapeHtml(it),
-                color = Color(parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
+                text = SuperIslandImageUtil.unescapeHtml(it),
+                color = Color(SuperIslandImageUtil.parseColor(baseInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

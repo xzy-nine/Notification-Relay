@@ -43,13 +43,13 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
 import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.ImageLoader
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.SuperIslandTestDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -299,7 +299,7 @@ private fun SuperIslandHistorySummaryRow(
         ?: entry.originalPackage?.takeIf { it.isNotBlank() }
         ?: "超级岛事件"
 
-    val displayTitle = titleText.let { unescapeHtml(it) }
+    val displayTitle = titleText.let { SuperIslandImageUtil.unescapeHtml(it) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -384,7 +384,7 @@ private fun SuperIslandHistoryEntryCard(
             ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
             ?: entry.originalPackage?.takeIf { it.isNotBlank() }
             ?: "超级岛事件"
-        val displayTitle = titleText.let { unescapeHtml(it) }
+        val displayTitle = titleText.let { SuperIslandImageUtil.unescapeHtml(it) }
         Text(displayTitle, style = textStyles.body1, color = colorScheme.onSurface)
 
         val detailText = entry.text
@@ -541,7 +541,7 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
 
 private suspend fun downloadBitmap(context: Context, urlString: String, timeoutMs: Int = 5_000): Bitmap? {
     return try {
-        ImageLoader.loadBitmapSuspend(context, urlString, timeoutMs)
+        SuperIslandImageUtil.loadBitmapSuspend(context, urlString, timeoutMs)
     } catch (_: Exception) { null }
 }
 

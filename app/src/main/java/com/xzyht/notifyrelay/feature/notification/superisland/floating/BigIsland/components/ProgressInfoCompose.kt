@@ -9,7 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ProgressInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 
 /**
  * 进度信息Compose组件
@@ -18,7 +18,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.pa
 fun ProgressInfoCompose(
     progressInfo: ProgressInfo
 ) {
-    val progressColor = parseColor(progressInfo.colorProgress)?.let { Color(it) } ?: Color(0xFF00FF00)
+    val progressColor = SuperIslandImageUtil.parseColor(progressInfo.colorProgress)?.let { Color(it) } ?: Color(0xFF00FF00)
     
     LinearProgressIndicator(
         progress = progressInfo.progress.toFloat() / 100f,

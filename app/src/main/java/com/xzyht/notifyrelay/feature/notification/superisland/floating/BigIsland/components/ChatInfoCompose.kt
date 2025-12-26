@@ -23,10 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
+
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
@@ -46,7 +45,7 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
         // 头像
         val avatarUrl = chatInfo.picProfile?.let { picMap?.get(it) }
         if (!avatarUrl.isNullOrEmpty()) {
-            val painter = rememberSuperIslandImagePainter(avatarUrl)
+            val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(avatarUrl)
             painter?.let {
                 Image(
                     painter = it,
@@ -67,8 +66,8 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
             Spacer(modifier = Modifier.width(8.dp))
 
             // 创建圆形进度条 - 使用Miuix的CircularProgressIndicator
-            val progressColor = parseColor(progressInfo.colorProgress) ?: 0xFF3482FF.toInt()
-            val trackColor = parseColor(progressInfo.colorProgressEnd)
+            val progressColor = SuperIslandImageUtil.parseColor(progressInfo.colorProgress) ?: 0xFF3482FF.toInt()
+            val trackColor = SuperIslandImageUtil.parseColor(progressInfo.colorProgressEnd)
                 ?: ((progressColor and 0x00FFFFFF) or (0x33 shl 24))
 
             // 使用Animatable实现平滑进度动画
@@ -102,8 +101,8 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
         Column(modifier = Modifier.weight(1f)) {
             chatInfo.title?.let {
                 Text(
-                    text = unescapeHtml(it),
-                    color = Color(parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
+                    text = SuperIslandImageUtil.unescapeHtml(it),
+                    color = Color(SuperIslandImageUtil.parseColor(chatInfo.colorTitle) ?: 0xFFFFFFFF.toInt()),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Normal,
                     modifier = Modifier.padding(start = 8.dp)
@@ -112,8 +111,8 @@ fun ChatInfoCompose(paramV2: ParamV2, picMap: Map<String, String>?) {
 
             chatInfo.content?.let {
                 Text(
-                    text = unescapeHtml(it),
-                    color = Color(parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
+                    text = SuperIslandImageUtil.unescapeHtml(it),
+                    color = Color(SuperIslandImageUtil.parseColor(chatInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp)
                 )

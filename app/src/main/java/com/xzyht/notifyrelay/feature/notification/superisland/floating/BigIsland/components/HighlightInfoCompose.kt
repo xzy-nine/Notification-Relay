@@ -19,12 +19,11 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.HighlightInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.TimerInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.formatTimerInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
+
 import kotlinx.coroutines.delay
 
 /**
@@ -40,7 +39,7 @@ fun HighlightInfoCompose(
     
     // 使用统一的图片加载工具获取painter
     val iconUrl = picMap?.get(iconKey)
-    val painter = rememberSuperIslandImagePainter(iconUrl)
+    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(iconUrl)
     val hasLeadingIcon = painter != null
     
     Row(
@@ -80,11 +79,11 @@ fun HighlightInfoCompose(
             ).firstOrNull { it.isNotBlank() }
                 ?: timerLabel
                 ?: if (highlightInfo.iconOnly) null else "高亮信息"
-            val primaryText = primaryTextRaw?.let { unescapeHtml(it) }
+            val primaryText = primaryTextRaw?.let { SuperIslandImageUtil.unescapeHtml(it) }
 
             primaryText?.let { text ->
-                val primaryColor = parseColor(highlightInfo.colorTitle)
-                    ?: parseColor(highlightInfo.colorContent)
+                val primaryColor = SuperIslandImageUtil.parseColor(highlightInfo.colorTitle)
+                    ?: SuperIslandImageUtil.parseColor(highlightInfo.colorContent)
                     ?: 0xFFFFFFFF.toInt()
                 Text(
                     text = text,
@@ -100,11 +99,11 @@ fun HighlightInfoCompose(
                 ?.takeIf { it.isNotBlank() && it != primaryText }
                 ?: timerLabel?.takeIf { it.isNotBlank() && it != primaryText }
             statusText?.let { status ->
-                val statusColor = parseColor(highlightInfo.colorSubContent)
-                    ?: parseColor(highlightInfo.colorContent)
+                val statusColor = SuperIslandImageUtil.parseColor(highlightInfo.colorSubContent)
+                    ?: SuperIslandImageUtil.parseColor(highlightInfo.colorContent)
                     ?: 0xFFDDDDDD.toInt()
                 Text(
-                    text = unescapeHtml(status),
+                    text = SuperIslandImageUtil.unescapeHtml(status),
                     color = Color(statusColor),
                     fontSize = 12.sp
                 )
@@ -114,10 +113,10 @@ fun HighlightInfoCompose(
             highlightInfo.content
                 ?.takeIf { it.isNotBlank() && it != primaryText }
                 ?.let { content ->
-                    val display = unescapeHtml(content)
+                    val display = SuperIslandImageUtil.unescapeHtml(content)
                     Text(
                         text = display,
-                        color = Color(parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
+                        color = Color(SuperIslandImageUtil.parseColor(highlightInfo.colorContent) ?: 0xFFDDDDDD.toInt()),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
@@ -127,10 +126,10 @@ fun HighlightInfoCompose(
             highlightInfo.subContent
                 ?.takeIf { it.isNotBlank() && it != primaryText }
                 ?.let { sub ->
-                    val display = unescapeHtml(sub)
+                    val display = SuperIslandImageUtil.unescapeHtml(sub)
                     Text(
                         text = display,
-                        color = Color(parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt()),
+                        color = Color(SuperIslandImageUtil.parseColor(highlightInfo.colorSubContent) ?: 0xFF9EA3FF.toInt()),
                         fontSize = 12.sp,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
@@ -140,7 +139,7 @@ fun HighlightInfoCompose(
             highlightInfo.timerInfo
                 ?.takeIf { !highlightInfo.iconOnly }
                 ?.let { timerInfo ->
-                    val timerColor = parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt()
+                    val timerColor = SuperIslandImageUtil.parseColor(highlightInfo.colorTitle) ?: 0xFFFFFFFF.toInt()
                     TimerText(timerInfo, timerColor)
                 }
         }
@@ -153,13 +152,13 @@ fun HighlightInfoCompose(
             ) {
                 // 左侧图片
                 val leftImageUrl = picMap?.get(highlightInfo.bigImageLeft) ?: picMap?.get(iconKey)
-                val leftPainter = leftImageUrl?.let { rememberSuperIslandImagePainter(it) }
+                val leftPainter = leftImageUrl?.let { SuperIslandImageUtil.rememberSuperIslandImagePainter(it) }
                 leftPainter?.let { BigAreaImage(it, density) }
 
                 // 右侧图片
                 val rightImageUrl = picMap?.get(highlightInfo.bigImageRight) 
                     ?: if (leftPainter == null) picMap?.get(iconKey) else null
-                val rightPainter = rightImageUrl?.let { rememberSuperIslandImagePainter(it) }
+                val rightPainter = rightImageUrl?.let { SuperIslandImageUtil.rememberSuperIslandImagePainter(it) }
                 rightPainter?.let { BigAreaImage(it, density, showLeftMargin = true) }
             }
         }

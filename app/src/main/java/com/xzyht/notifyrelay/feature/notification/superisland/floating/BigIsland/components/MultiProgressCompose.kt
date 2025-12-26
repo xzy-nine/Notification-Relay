@@ -25,9 +25,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.parseColor
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MultiProgressInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.rememberSuperIslandImagePainter
+
 import kotlin.math.max
 
 private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF
@@ -46,7 +46,7 @@ fun MultiProgressCompose(
     business: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val colorValue: Int = parseColor(multiProgressInfo.color) ?: DEFAULT_PRIMARY_COLOR.toInt()
+    val colorValue: Int = SuperIslandImageUtil.parseColor(multiProgressInfo.color) ?: DEFAULT_PRIMARY_COLOR.toInt()
     val primaryColor = Color(colorValue)
     val requestedPoints = multiProgressInfo.points ?: DEFAULT_NODE_COUNT
     val nodeCount = maxOf(2, requestedPoints)
@@ -124,7 +124,7 @@ fun MultiProgressCompose(
                     }
                     
                     // 直接将 iconKey 和 picMap 传递给 rememberSuperIslandImagePainter，让它处理 URL 解析和 ref: URL 处理
-                    val painter = rememberSuperIslandImagePainter(
+                    val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(
                         url = null,
                         picMap = picMap,
                         iconKey = baseIconKey
@@ -171,7 +171,7 @@ fun MultiProgressCompose(
                 val pointerKey = multiProgressInfo.picForward ?: multiProgressInfo.picForwardBox
                 
                 // 使用统一的图片加载逻辑，处理ref: URL和picMap查找
-                val painter = rememberSuperIslandImagePainter(
+                val painter = SuperIslandImageUtil.rememberSuperIslandImagePainter(
                     url = null,
                     picMap = picMap,
                     iconKey = pointerKey
