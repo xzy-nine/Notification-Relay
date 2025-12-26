@@ -41,7 +41,7 @@ object AppListHelper {
             val apps = pm.getInstalledApplications(0)
             val result = apps.size > 2 // 简单的检查，至少有几个应用
             {
-                Logger.d("AppListHelper", "canQueryApps 检查结果: 应用数量=${apps.size}, 可查询=$result")
+                //Logger.d("AppListHelper", "canQueryApps 检查结果: 应用数量=${apps.size}, 可查询=$result")
             }
             result
         } catch (e: Exception) {

@@ -535,7 +535,7 @@ object FloatingReplicaManager {
 
         try {
             wm.removeView(view)
-            Logger.d(TAG, "超级岛: 关闭层已隐藏")
+            //Logger.d(TAG, "超级岛: 关闭层已隐藏")
         } catch (e: Exception) {
             Logger.w(TAG, "超级岛: 隐藏关闭层失败: ${e.message}")
         } finally {

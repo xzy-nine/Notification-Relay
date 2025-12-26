@@ -180,7 +180,7 @@ object ServerLineRouter {
                 val remoteUuid = parts[1]
                 // 仅已在认证表中的设备才接受心跳
                 val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(remoteUuid) }
-                Logger.d(TAG, "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${deviceManager.authenticatedDevices.keys}")
+                //Logger.d(TAG, "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${deviceManager.authenticatedDevices.keys}")
                 if (isAuthed) {
                     val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
                     // 1. 用最新 IP 更新设备缓存（端口只在其它渠道更新）
@@ -211,7 +211,7 @@ object ServerLineRouter {
                     if (remoteUuid != deviceManager.uuid && !deviceManager.heartbeatJobsInternal.containsKey(remoteUuid)) {
                         val info = deviceManager.getDeviceInfoInternal(remoteUuid)
                         if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
-                            Logger.d(TAG, "收到HEARTBEAT后自动反向connectToDevice: $info")
+                            //Logger.d(TAG, "收到HEARTBEAT后自动反向connectToDevice: $info")
                             deviceManager.connectToDevice(info)
                         }
                     }
@@ -296,14 +296,14 @@ object ServerLineRouter {
                                 // 同步更新全局设备名缓存，以便 UI 显示
                                 DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
                                 deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
-                                Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
+                                //Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
                             }
                         }
                     }
                 }
             } catch (_: Exception) {
             }
-            Logger.d(TAG, "未知请求: $line")
+            //Logger.d(TAG, "未知请求: $line")
         } finally {
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}

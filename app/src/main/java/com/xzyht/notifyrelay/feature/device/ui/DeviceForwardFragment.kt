@@ -50,12 +50,12 @@ class DeviceForwardFragment : Fragment() {
                 android.content.Intent.ACTION_PACKAGE_ADDED -> {
                     // 应用安装时清除缓存，下次使用时会重新加载最新的应用列表和图标
                     AppRepository.clearCache()
-                    Logger.d("DeviceForwardFragment", "应用安装，清除缓存")
+                    //Logger.d("DeviceForwardFragment", "应用安装，清除缓存")
                 }
                 android.content.Intent.ACTION_PACKAGE_REMOVED -> {
                     // 应用卸载时清除缓存，下次使用时会重新加载最新的应用列表和图标
                     AppRepository.clearCache()
-                    Logger.d("DeviceForwardFragment", "应用卸载，清除缓存")
+                    //Logger.d("DeviceForwardFragment", "应用卸载，清除缓存")
                 }
             }
         }
@@ -104,7 +104,7 @@ class DeviceForwardFragment : Fragment() {
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
     ): android.view.View? {
-        Logger.d("NotifyRelay(狂鼠)", "onCreateView called")
+        //Logger.d("NotifyRelay(狂鼠)", "onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
                 MiuixTheme {
@@ -125,7 +125,7 @@ fun DeviceForwardScreen(
     // 手动发现提示相关状态
     val manualDiscoveryPrompt = remember { mutableStateOf<String?>(null) }
     val snackbarVisible = remember { mutableStateOf(false) }
-    Logger.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
+    //Logger.d("NotifyRelay(狂鼠)", "DeviceForwardScreen Composable launched")
     
     // 创建协程作用域用于Tab点击事件
     val coroutineScope = rememberCoroutineScope()
@@ -240,7 +240,7 @@ fun DeviceForwardScreen(
                     }
                     3 -> {
                         // 超级岛设置 Tab
-                        Logger.d("超级岛", "UI: 打开超级岛设置 Tab")
+                        //Logger.d("超级岛", "UI: 打开超级岛设置 Tab")
                         com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
                     }
                 }

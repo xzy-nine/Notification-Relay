@@ -279,7 +279,7 @@ object SuperIslandManager {
                     val appIconBitmap = DataUrlUtils.drawableToBitmap(appIconDrawable)
                     val dataUrl = DataUrlUtils.bitmapToDataUri(appIconBitmap)
                     picMap[appIconKey] = dataUrl
-                    Logger.d("超级岛", "超级岛: 注入应用图标到 picMap => $appIconKey")
+                    //Logger.d("超级岛", "超级岛: 注入应用图标到 picMap => $appIconKey")
                 }
             } catch (e: Exception) {
                 Logger.w("超级岛", "超级岛: 注入应用图标失败: ${e.message}")
@@ -300,7 +300,7 @@ object SuperIslandManager {
             Logger.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
             try {
                 val sample = picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
-                Logger.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
+                //Logger.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
             } catch (_: Exception) {}
 
             return SuperIslandData(

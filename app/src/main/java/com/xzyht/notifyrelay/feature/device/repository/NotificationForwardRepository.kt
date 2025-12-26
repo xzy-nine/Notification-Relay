@@ -27,7 +27,7 @@ suspend fun replicateNotification(
     startMonitoring: Boolean = true // 是否启动先发后撤回监控（锁屏延迟复刻时可关闭以节省性能）
 ) {
     try {
-    Logger.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
+    //Logger.d("NotifyRelay(狂鼠)", "[立即]准备复刻通知: title=${result.title} text=${result.text} mappedPkg=${result.mappedPkg}")
     val json = org.json.JSONObject(result.rawData)
     val originalPackage = json.optString("packageName")
     json.put("packageName", result.mappedPkg)
@@ -119,13 +119,13 @@ suspend fun replicateNotification(
                 val waitMaxMs = 2000L
                 val intervalMs = 100L
                 val start = System.currentTimeMillis()
-                Logger.d("NotifyRelay(狂鼠)", "未找到图标，等待最多 ${waitMaxMs}ms 以尝试获取外部图标: $pkg")
+                //Logger.d("NotifyRelay(狂鼠)", "未找到图标，等待最多 ${waitMaxMs}ms 以尝试获取外部图标: $pkg")
                 try {
                     while (System.currentTimeMillis() - start < waitMaxMs) {
                         // 尝试从外部缓存再次获取
                         appIcon = AppRepository.getExternalAppIcon(pkg)
                         if (appIcon != null) {
-                            Logger.d("NotifyRelay(狂鼠)", "等待期间获取到外部图标: $pkg")
+                            //Logger.d("NotifyRelay(狂鼠)", "等待期间获取到外部图标: $pkg")
                             break
                         }
                         delay(intervalMs)
@@ -157,9 +157,9 @@ suspend fun replicateNotification(
             }
 
             if (appIcon != null) {
-                Logger.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
+                //Logger.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")
             } else {
-                Logger.d("NotifyRelay(狂鼠)", "未能获取到应用图标（将使用系统默认图标回退）: $pkg")
+                //Logger.d("NotifyRelay(狂鼠)", "未能获取到应用图标（将使用系统默认图标回退）: $pkg")
             }
         } catch (e: Exception) {
             Logger.e("NotifyRelay(狂鼠)", "获取应用图标失败: $pkg", e)
@@ -179,7 +179,7 @@ suspend fun replicateNotification(
                     defaultIcon.draw(canvas)
                     appIcon = bitmap
                 }
-                Logger.d("NotifyRelay(狂鼠)", "使用默认应用图标作为回退")
+                //Logger.d("NotifyRelay(狂鼠)", "使用默认应用图标作为回退")
             } catch (fallbackException: Exception) {
                 Logger.e("NotifyRelay(狂鼠)", "获取默认图标也失败", fallbackException)
             }
@@ -214,7 +214,7 @@ suspend fun replicateNotification(
                 Logger.w("NotifyRelay(狂鼠)", "setBypassDnd not supported", e)
             }
             notificationManager.createNotificationChannel(channel)
-            Logger.d("NotifyRelay(狂鼠)", "已创建通知渠道: $channelId")
+            //Logger.d("NotifyRelay(狂鼠)", "已创建通知渠道: $channelId")
         }
         val builder = android.app.Notification.Builder(context, channelId)
             .setContentTitle("($appName)$title")
@@ -231,16 +231,16 @@ suspend fun replicateNotification(
         if (pendingIntent != null) {
             builder.setContentIntent(pendingIntent)
         }
-        Logger.d("智能去重", if (startMonitoring) "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId" else "发送通知（不启用监控） - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
+        //Logger.d("智能去重", if (startMonitoring) "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId" else "发送通知（不启用监控） - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
         com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addToDedupCache(title, text)
         notificationManager.notify(notifyId, builder.build())
-        Logger.d("智能去重", "通知已发送 - 通知ID:$notifyId")
+        //Logger.d("智能去重", "通知已发送 - 通知ID:$notifyId")
 
         // 添加到待监控队列，准备撤回机制（可按需关闭）
         if (startMonitoring) {
             com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.addPendingNotification(notifyId, title, text, pkg, context)
-            Logger.d("智能去重", "已添加到监控队列 - 通知ID:$notifyId, 将监控15秒内重复")
+            //Logger.d("智能去重", "已添加到监控队列 - 通知ID:$notifyId, 将监控15秒内重复")
         }
     } catch (e: Exception) {
         Logger.e("NotifyRelay(狂鼠)", "[立即]远程通知复刻失败", e)

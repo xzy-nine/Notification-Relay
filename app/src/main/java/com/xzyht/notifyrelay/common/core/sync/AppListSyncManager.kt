@@ -86,7 +86,7 @@ object AppListSyncManager {
             }.toString()
 
             sendAppListResponse(deviceManager, sourceDevice, resp)
-            Logger.d(TAG, "已响应应用列表：${sourceDevice.displayName}，共${appArray.length()}项")
+            //Logger.d(TAG, "已响应应用列表：${sourceDevice.displayName}，共${appArray.length()}项")
         } catch (e: Exception) {
             Logger.e(TAG, "处理应用列表请求失败", e)
         }
@@ -110,7 +110,7 @@ object AppListSyncManager {
             val json = JSONObject(responseData)
             if (json.optString("type") != "APP_LIST_RESPONSE") return
             val total = json.optInt("total", -1)
-            Logger.d(TAG, "收到应用列表响应，共 $total 项")
+            //Logger.d(TAG, "收到应用列表响应，共 $total 项")
             // 如需缓存到本地，可在此扩展，例如：
             // StorageManager.putString(context, "remote_app_list_cache", json.toString())
         } catch (e: Exception) {

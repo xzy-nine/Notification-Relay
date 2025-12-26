@@ -34,7 +34,7 @@ object ProtocolSender {
         try {
             val auth = deviceManager.authenticatedDevices[target.uuid]
             if (auth == null || !auth.isAccepted) {
-                Logger.d(TAG, "设备未认证或未接受：${target.displayName}")
+                //Logger.d(TAG, "设备未认证或未接受：${target.displayName}")
                 return
             }
 
@@ -49,7 +49,7 @@ object ProtocolSender {
                             val payload = "$header:${deviceManager.uuid}:${deviceManager.localPublicKey}:${encrypted}"
                             writer.write(payload + "\n")
                             writer.flush()
-                            Logger.d(TAG, "已发送 $header -> ${target.displayName}")
+                            //Logger.d(TAG, "已发送 $header -> ${target.displayName}")
                         } finally {
                             try { socket.close() } catch (_: Exception) {}
                         }

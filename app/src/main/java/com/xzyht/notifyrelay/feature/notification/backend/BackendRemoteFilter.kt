@@ -68,7 +68,7 @@ object BackendRemoteFilter {
                 try {
                     RemoteFilterConfig.load(context)
                     RemoteFilterConfig.isLoaded = true
-                    Logger.d("NotifyRelay(狂鼠)", "远程过滤配置加载成功")
+                    //Logger.d("NotifyRelay(狂鼠)", "远程过滤配置加载成功")
                 } catch (e: Exception) {
                     Logger.e("NotifyRelay(狂鼠)", "远程过滤配置加载失败", e)
                     return FilterResult(true, "", "", "", data) // 默认通过
@@ -83,20 +83,20 @@ object BackendRemoteFilter {
             val time = System.currentTimeMillis()
             val isLocked = json.optBoolean("isLocked", false)
 
-            Logger.d("NotifyRelay(狂鼠)智能去重", "收到远程通知 - 时间:$time, 包名:$pkg, 标题:$title, 内容:$text, 锁屏:$isLocked")
+            //Logger.d("NotifyRelay(狂鼠)智能去重", "收到远程通知 - 时间:$time, 包名:$pkg, 标题:$title, 内容:$text, 锁屏:$isLocked")
 
             val installedPkgs = AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
 
-            Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 开始过滤 pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=$text")
+            //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 开始过滤 pkg=$pkg, mappedPkg=$mappedPkg, title=$title, text=$text")
 
             // 对等模式过滤
             if (RemoteFilterConfig.filterMode == "peer" || RemoteFilterConfig.enablePeerMode) {
                 if (mappedPkg !in installedPkgs) {
-                    Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式过滤 - mappedPkg=$mappedPkg 不在本机已安装应用")
+                    //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式过滤 - mappedPkg=$mappedPkg 不在本机已安装应用")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
-                Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式通过 - mappedPkg=$mappedPkg 已安装")
+                //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 对等模式通过 - mappedPkg=$mappedPkg 已安装")
             }
 
             // 黑白名单过滤
@@ -106,24 +106,24 @@ object BackendRemoteFilter {
                     val keywordMatch = keyword.isNullOrBlank() || title.contains(keyword) || text.contains(keyword)
                     val totalMatch = pkgMatch && keywordMatch
                     if (totalMatch) {
-                        Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单匹配 - filterPkg=$filterPkg, keyword=$keyword, pkgMatch=$pkgMatch, keywordMatch=$keywordMatch")
+                        //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单匹配 - filterPkg=$filterPkg, keyword=$keyword, pkgMatch=$pkgMatch, keywordMatch=$keywordMatch")
                     }
                     totalMatch
                 }
                 if (RemoteFilterConfig.filterMode == "black" && match) {
-                    Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 命中黑名单 - filtered=$match mappedPkg=$mappedPkg title=$title text=$text")
+                    //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 命中黑名单 - filtered=$match mappedPkg=$mappedPkg title=$title text=$text")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
                 if (RemoteFilterConfig.filterMode == "white" && !match) {
-                    Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 未命中白名单 - mappedPkg=$mappedPkg title=$title text=$text")
+                    //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 未命中白名单 - mappedPkg=$mappedPkg title=$title text=$text")
                     return FilterResult(false, mappedPkg, title, text, data)
                 }
-                Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单过滤通过 - mode=${RemoteFilterConfig.filterMode}, match=$match")
+                //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 名单过滤通过 - mode=${RemoteFilterConfig.filterMode}, match=$match")
             }
 
             // 锁屏通知过滤
             if (RemoteFilterConfig.enableLockScreenOnly && !isLocked) {
-                Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤开启 - 非锁屏通知被过滤")
+                //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤开启 - 非锁屏通知被过滤")
                 return FilterResult(false, mappedPkg, title, text, data)
             }
 
@@ -145,14 +145,14 @@ object BackendRemoteFilter {
                 val shouldSkipDedup = RemoteFilterConfig.enablePackageGroupMapping && !pkgInGroups && (mappedPkg !in installedPkgs)
 
                 if (shouldSkipDedup) {
-                    Logger.d("智能去重", "跳过去重：包名不属于等价组且本机未安装映射包，包名=$pkg, mappedPkg=$mappedPkg")
+                    //Logger.d("智能去重", "跳过去重：包名不属于等价组且本机未安装映射包，包名=$pkg, mappedPkg=$mappedPkg")
                     // 跳过去重，继续走后续流程（如锁屏过滤和最终通过）
                 } else {
                     // 1. 快速缓存检查（10秒内）
                     synchronized(dedupCache) {
                         dedupCache.removeAll { now - it.third > 10_000 } // 清理过期缓存
                         val cacheDup = dedupCache.any { it.first == title && it.second == text }
-                        Logger.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
+                        //Logger.d("智能去重", "缓存检查 - 缓存大小:${dedupCache.size}, 是否重复:$cacheDup")
                         if (cacheDup) {
                             // 撤回匹配的待监控通知
                             synchronized(pendingNotifications) {
@@ -160,7 +160,7 @@ object BackendRemoteFilter {
                                 toCancel.forEach { cancelNotification(it.notifyId, context) }
                                 pendingNotifications.removeAll(toCancel)
                             }
-                            Logger.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
+                            //Logger.d("智能去重", "命中10秒缓存并撤回之前的通知 - 包名:$pkg, 标题:$title, 内容:$text")
                             return FilterResult(false, mappedPkg, title, text, data)
                         }
                     }
@@ -169,7 +169,7 @@ object BackendRemoteFilter {
                     try {
                         val isHistoryReliable = checkHistorySyncReliability(context)
                         if (!isHistoryReliable) {
-                            Logger.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
+                            //Logger.d("NotifyRelay(狂鼠)", "历史同步不可靠，强制刷新")
                             // Note: This line references a non-existent method, commenting out
                             // com.xzyht.notifyrelay.feature.device.model.NotificationRepository.notifyHistoryChanged("本机", context)
                         }
@@ -181,7 +181,7 @@ object BackendRemoteFilter {
 
                         // 如果内存中有重复，直接过滤
                         if (memoryDup) {
-                            Logger.d("智能去重", "命中内存历史重复")
+                            //Logger.d("智能去重", "命中内存历史重复")
                             return FilterResult(false, mappedPkg, title, text, data)
                         }
 
@@ -189,15 +189,15 @@ object BackendRemoteFilter {
                         // 但如果该远端通知接受到时本机锁屏，则避免先发送再撤回，改为不立即展示，
                         // 由上层在超期后再次检查并决定是否复刻（见 DeviceConnectionManager 的处理）。
                         if (isLocked) {
-                            Logger.d("NotifyRelay(狂鼠)", "本机锁屏：内存无重复，改为不立即展示，等待超期后再复刻")
+                            //Logger.d("NotifyRelay(狂鼠)", "本机锁屏：内存无重复，改为不立即展示，等待超期后再复刻")
                             return FilterResult(false, mappedPkg, title, text, data, needsDelay = false)
                         }
 
-                        Logger.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
+                        //Logger.d("NotifyRelay(狂鼠)", "无历史重复，标记延迟验证")
                         return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
 
                     } catch (e: Exception) {
-                        Logger.e("智能去重", "历史检查异常", e)
+                        //Logger.e("智能去重", "历史检查异常", e)
                         // 异常情况下默认延迟验证
                         return FilterResult(true, mappedPkg, title, text, data, needsDelay = true)
                     }
@@ -206,11 +206,11 @@ object BackendRemoteFilter {
 
             // 锁屏通知过滤
             if (RemoteFilterConfig.enableLockScreenOnly && !isLocked) {
-                Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤 - 非锁屏通知被过滤")
+                //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 锁屏过滤 - 非锁屏通知被过滤")
                 return FilterResult(false, mappedPkg, title, text, data)
             }
 
-            Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 直接通过 - mappedPkg=$mappedPkg title=$title text=$text")
+            //Logger.d("NotifyRelay(狂鼠)", "filterRemoteNotification: 直接通过 - mappedPkg=$mappedPkg title=$title text=$text")
             return FilterResult(true, mappedPkg, title, text, data)
 
         } catch (e: Exception) {
@@ -237,7 +237,7 @@ object BackendRemoteFilter {
                 if (finalMatch) {
                     hasDuplicate = true
                     {
-                        Logger.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(notification.time - now)}ms")
+                        //Logger.d("智能去重", "命中内存历史重复 - 标题:$title, 内容:$text, 时间差:${Math.abs(notification.time - now)}ms")
                     }
                 }
                 // 收集时间区间内的所有通知（用于调试）
@@ -249,7 +249,7 @@ object BackendRemoteFilter {
             }
         }
 
-        Logger.d("智能去重", "内存检查完成 - 历史数量:${localList.size}, 是否重复:$hasDuplicate")
+        //Logger.d("智能去重", "内存检查完成 - 历史数量:${localList.size}, 是否重复:$hasDuplicate")
 
         return hasDuplicate
     }
@@ -291,7 +291,7 @@ object BackendRemoteFilter {
         synchronized(pendingPlaceholders) {
             pendingPlaceholders.add(ph)
         }
-        Logger.d("智能去重", "添加延迟复刻占位 - 标题:$title, 包名:$packageName, ttl=${ttl}ms")
+        //Logger.d("智能去重", "添加延迟复刻占位 - 标题:$title, 包名:$packageName, ttl=${ttl}ms")
     }
 
     /**
@@ -304,7 +304,7 @@ object BackendRemoteFilter {
             val matches = pendingPlaceholders.filter { ph -> normalizeTitle(ph.title) == normalizedTitle && ph.text == pendingText && ph.packageName == packageName }
             if (matches.isNotEmpty()) {
                 pendingPlaceholders.removeAll(matches)
-                Logger.d("智能去重", "移除占位 - 标题:${title}, 包名:$packageName, 数量:${matches.size}")
+                //Logger.d("智能去重", "移除占位 - 标题:${title}, 包名:$packageName, 数量:${matches.size}")
                 return true
             }
         }
@@ -340,14 +340,14 @@ object BackendRemoteFilter {
                 normalizeTitle(ph.title) == normalizedPendingTitle && ph.text == pendingText && ph.packageName == packageName
             }
             if (placeholderMatches.isNotEmpty()) {
-                Logger.d("智能去重", "被动命中占位（阻止延迟复刻） - 标题:${title}, 内容:${text}, 匹配数量:${placeholderMatches.size}")
+                //Logger.d("智能去重", "被动命中占位（阻止延迟复刻） - 标题:${title}, 内容:${text}, 匹配数量:${placeholderMatches.size}")
             }
             // 移除命中的占位并将其写入去重缓存
             placeholderMatches.forEach { ph ->
                 try {
                     pendingPlaceholders.remove(ph)
                     addToDedupCache(ph.title, ph.text)
-                    Logger.d("智能去重", "占位已取消 - 标题:${ph.title}")
+                    //Logger.d("智能去重", "占位已取消 - 标题:${ph.title}")
                 } catch (e: Exception) {
                     Logger.e("智能去重", "取消占位失败 - 标题:${ph.title}", e)
                 }
@@ -360,12 +360,12 @@ object BackendRemoteFilter {
                 normalizeTitle(pending.title) == normalizedPendingTitle && pending.text == pendingText && pending.packageName == packageName
             }
             if (matches.isNotEmpty() && BuildConfig.DEBUG) {
-                Logger.d("智能去重", "被动命中待撤回通知 - 本机入队 标题:${title}, 内容:${text}, 匹配数量:${matches.size}")
+                //Logger.d("智能去重", "被动命中待撤回通知 - 本机入队 标题:${title}, 内容:${text}, 匹配数量:${matches.size}")
             }
             matches.forEach { matched ->
                 try {
                     cancelNotification(matched.notifyId, matched.context)
-                    Logger.d("智能去重", "被动撤回成功 - 通知ID:${matched.notifyId}, 标题:${matched.title}")
+                    //Logger.d("智能去重", "被动撤回成功 - 通知ID:${matched.notifyId}, 标题:${matched.title}")
                 } catch (e: Exception) {
                     Logger.e("智能去重", "被动撤回失败 - 通知ID:${matched.notifyId}", e)
                 }
@@ -397,7 +397,7 @@ object BackendRemoteFilter {
                 context = context
             ))
         }
-        Logger.d("智能去重", "添加待监控通知 - 进入可撤回期(15s) 包名:$packageName, 标题:$title, 通知ID:$notifyId")
+        //Logger.d("智能去重", "添加待监控通知 - 进入可撤回期(15s) 包名:$packageName, 标题:$title, 通知ID:$notifyId")
         // 启动监控协程
         startNotificationMonitoring()
     }
@@ -409,7 +409,7 @@ object BackendRemoteFilter {
         try {
             val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancel(notifyId)
-            Logger.d("智能去重", "已撤回通知 - 通知ID:$notifyId")
+            //Logger.d("智能去重", "已撤回通知 - 通知ID:$notifyId")
         } catch (e: Exception) {
             Logger.e("智能去重", "撤回通知失败 - 通知ID:$notifyId, 错误:${e.message}")
         }
@@ -419,7 +419,7 @@ object BackendRemoteFilter {
      * 启动通知监控协程
      */
     private fun startNotificationMonitoring() {
-        Logger.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
+        //Logger.d("智能去重", "启动通知监控协程（仅处理超时） - 当前待监控通知数量:${pendingNotifications.size}")
         scope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
@@ -429,7 +429,7 @@ object BackendRemoteFilter {
                         for (pending in pendingNotifications) {
                             // 仅处理监控超时逻辑：我们改为被动匹配（由本机历史入队触发匹配），减少频繁IO读取历史
                             if (now - pending.sendTime > 15_000) {
-                                Logger.d("智能去重", "监控超时移除 - 包名:${pending.packageName}, 标题:${pending.title}, 通知ID:${pending.notifyId}, 监控时长:${now - pending.sendTime}ms")
+                                //Logger.d("智能去重", "监控超时移除 - 包名:${pending.packageName}, 标题:${pending.title}, 通知ID:${pending.notifyId}, 监控时长:${now - pending.sendTime}ms")
                                 toRemove.add(pending)
                             }
                         }
@@ -440,7 +440,7 @@ object BackendRemoteFilter {
                     // 为超时移除的通知添加去重缓存
                     toRemove.filter { now - it.sendTime > 15_000 }.forEach { timedOut ->
                         addToDedupCache(timedOut.title, timedOut.text)
-                        Logger.d("智能去重", "超时通知添加到缓存 - 标题:${timedOut.title}, 内容:${timedOut.text}")
+                        //Logger.d("智能去重", "超时通知添加到缓存 - 标题:${timedOut.title}, 内容:${timedOut.text}")
                     }
                 }
 
@@ -451,11 +451,11 @@ object BackendRemoteFilter {
                     val before = pendingPlaceholders.size
                     pendingPlaceholders.removeAll { now2 - it.createTime > it.ttl }
                     val after = pendingPlaceholders.size
-                    if (BuildConfig.DEBUG && before != after) Logger.d("智能去重", "清理过期占位: removed=${before - after}")
+                    //Logger.d ("智能去重", "清理过期占位: removed=${before - after}")
                 }
 
                 if (pendingNotifications.isEmpty()) {
-                    Logger.d("智能去重", "监控协程结束 - 所有通知已处理完成")
+                    //Logger.d("智能去重", "监控协程结束 - 所有通知已处理完成")
                     break
                 }
             }
@@ -569,7 +569,7 @@ object RemoteFilterConfig {
             StorageManager.putBoolean(context, "enable_lock_screen_only", enableLockScreenOnly, StorageManager.PrefsType.FILTER)
             StorageManager.putStringSet(context, KEY_FILTER_LIST, filterList.map { it.first + (it.second?.let { k->"|"+k } ?: "") }.toSet(), StorageManager.PrefsType.FILTER)
 
-            Logger.d("RemoteFilterConfig", "Configuration saved successfully")
+            //Logger.d("RemoteFilterConfig", "Configuration saved successfully")
         } catch (e: Exception) {
             Logger.e("RemoteFilterConfig", "Failed to save configuration", e)
         }
@@ -593,12 +593,12 @@ object RemoteFilterConfig {
                 // 优先本机已安装且有效的包名，按组中顺序尝试
                 for (candidatePkg in group) {
                     if (candidatePkg in installedPkgs) {
-                        Logger.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 尝试包名 $candidatePkg")
+                        //Logger.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 尝试包名 $candidatePkg")
                         return candidatePkg
                     }
                 }
                 // 如果没有已安装的包名，则取第一个（用于显示原始包名）
-                Logger.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 无已安装包名，使用组第一个 ${group.first()}")
+                //Logger.d("NotifyRelay(狂鼠)", "mapToLocalPackage: 无已安装包名，使用组第一个 ${group.first()}")
                 return group.first()
             }
         }

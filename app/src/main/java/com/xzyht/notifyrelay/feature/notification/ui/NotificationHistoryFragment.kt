@@ -97,7 +97,7 @@ object ToastDebounce {
 fun DeleteButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(
         onClick = {
-            Logger.d("NotifyRelay", "轮胎: 删除按钮被点击")
+            //Logger.d("NotifyRelay", "轮胎: 删除按钮被点击")
             onClick()
         },
         modifier = modifier.fillMaxHeight().width(80.dp),
@@ -398,7 +398,7 @@ fun NotificationHistoryScreen() {
                     }
                     LaunchedEffect(anchoredDraggableState.currentValue) {
                         if (anchoredDraggableState.currentValue == DragValue.End) {
-                            Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
+                            //Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
                         }
                     }
                     val offset = when {
@@ -557,7 +557,7 @@ fun NotificationHistoryScreen() {
                                                 }
                                                 LaunchedEffect(anchoredDraggableState.currentValue) {
                                                     if (anchoredDraggableState.currentValue == DragValue.End) {
-                                                        Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
+                                                        //Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
                                                     }
                                                 }
                                                 val offset = when {
@@ -592,7 +592,7 @@ fun NotificationHistoryScreen() {
                                                         DeleteButton(
                                                             onClick = {
                                                                 NotificationRepository.currentDevice = selectedDevice
-                                                                Logger.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
+                                                                //Logger.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
                                                                 NotificationRepository.removeNotification(record.key, context)
                                                                 NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                                             },
@@ -619,7 +619,7 @@ fun NotificationHistoryScreen() {
                             DeleteButton(
                                 onClick = {
                                     NotificationRepository.currentDevice = selectedDevice
-                                    Logger.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
+                                    //Logger.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
                                     try {
                                         if (list.size == 1) {
                                             NotificationRepository.removeNotification(list[0].key, context)
@@ -660,7 +660,6 @@ fun NotificationHistoryScreen() {
                         // 清除按钮 - 始终显示
                         Button(
                             onClick = {
-                                Logger.d("NotifyRelay", "清除按钮点击事件触发")
                                 clearHistory()
                             },
                             colors = ButtonDefaults.buttonColorsPrimary(),
@@ -685,14 +684,12 @@ fun NotificationHistoryScreen() {
                         if (BuildConfig.DEBUG) {
                             Button(
                                 onClick = {
-                                    Logger.d("NotifyRelay", "引导按钮点击事件触发")
                                     try {
                                         // 跳转引导页面
                                         val intent = android.content.Intent(context, GuideActivity::class.java)
                                         intent.putExtra("fromInternal", true)
                                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                         context.startActivity(intent)
-                                        Logger.d("NotifyRelay", "引导跳转成功")
                                     } catch (e: Exception) {
                                         Logger.e("NotifyRelay", "引导跳转失败", e)
                                         android.widget.Toast.makeText(

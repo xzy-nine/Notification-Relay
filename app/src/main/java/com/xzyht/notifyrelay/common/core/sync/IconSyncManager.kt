@@ -44,13 +44,13 @@ object IconSyncManager {
     ) {
         val exist = AppRepository.getExternalAppIcon(packageName)
         if (exist != null) {
-            Logger.d(TAG, "图标已存在，跳过：$packageName")
+            //Logger.d(TAG, "图标已存在，跳过：$packageName")
             return
         }
         val now = System.currentTimeMillis()
         val last = pendingRequests[packageName]
         if (last != null && (now - last) < ICON_REQUEST_TIMEOUT) {
-            Logger.d(TAG, "单图标请求进行中，跳过：$packageName")
+            //Logger.d(TAG, "单图标请求进行中，跳过：$packageName")
             return
         }
         pendingRequests[packageName] = now
@@ -74,7 +74,7 @@ object IconSyncManager {
         deviceManager: DeviceConnectionManager,
         sourceDevice: DeviceInfo
     ) {
-        Logger.d(TAG, "批量请求图标：$packageNames")
+        //Logger.d(TAG, "批量请求图标：$packageNames")
         if (packageNames.isEmpty()) return
         val now = System.currentTimeMillis()
         val need = packageNames.filter { pkg ->
@@ -116,7 +116,7 @@ object IconSyncManager {
             put("time", System.currentTimeMillis())
         }.toString()
         ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_REQUEST", json, ICON_REQUEST_TIMEOUT)
-        Logger.d(TAG, "发送ICON_REQUEST(${packages.size}) -> ${sourceDevice.displayName}")
+        //Logger.d(TAG, "发送ICON_REQUEST(${packages.size}) -> ${sourceDevice.displayName}")
     }
 
     /**
@@ -150,7 +150,7 @@ object IconSyncManager {
                     resultArr.put(item)
                 }
                 if (resultArr.length() == 0) {
-                    Logger.d(TAG, "批量请求均无可用图标，忽略")
+                    //Logger.d(TAG, "批量请求均无可用图标，忽略")
                     return
                 }
                 val resp = JSONObject().apply {
@@ -159,11 +159,11 @@ object IconSyncManager {
                     put("time", System.currentTimeMillis())
                 }.toString()
                 ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_RESPONSE", resp, ICON_REQUEST_TIMEOUT)
-                Logger.d(TAG, "批量图标响应发送(${resultArr.length()}) -> ${sourceDevice.displayName}")
+                //Logger.d(TAG, "批量图标响应发送(${resultArr.length()}) -> ${sourceDevice.displayName}")
             } else if (single.isNotEmpty()) {
                 val icon = getLocalAppIcon(context, single)
                 if (icon == null) {
-                    Logger.d(TAG, "本地无图标：$single")
+                    //Logger.d(TAG, "本地无图标：$single")
                     return
                 }
                 val resp = JSONObject().apply {
@@ -173,7 +173,7 @@ object IconSyncManager {
                     put("time", System.currentTimeMillis())
                 }.toString()
                 ProtocolSender.sendEncrypted(deviceManager, sourceDevice, "DATA_ICON_RESPONSE", resp, ICON_REQUEST_TIMEOUT)
-                Logger.d(TAG, "单图标响应发送：$single -> ${sourceDevice.displayName}")
+                //Logger.d(TAG, "单图标响应发送：$single -> ${sourceDevice.displayName}")
             }
         } catch (e: Exception) {
             Logger.e(TAG, "处理ICON_REQUEST异常", e)
@@ -196,7 +196,7 @@ object IconSyncManager {
                     val base64 = item.optString("iconData")
                     cacheDecodedIcon(pkg, base64)
                 }
-                Logger.d(TAG, "批量图标接收完成：${iconsArray.length()}")
+                //Logger.d(TAG, "批量图标接收完成：${iconsArray.length()}")
                 return
             }
 
@@ -204,7 +204,7 @@ object IconSyncManager {
             val base64 = json.optString("iconData")
             if (pkg.isNotEmpty() && base64.isNotEmpty()) {
                 cacheDecodedIcon(pkg, base64)
-                Logger.d(TAG, "单图标接收：$pkg")
+                //Logger.d(TAG, "单图标接收：$pkg")
             }
         } catch (e: Exception) {
             Logger.e(TAG, "处理ICON_RESPONSE异常", e)
@@ -255,7 +255,7 @@ object IconSyncManager {
         val now = System.currentTimeMillis()
         pendingRequests.entries.removeIf { (pkg, t) ->
             val expired = (now - t) > ICON_REQUEST_TIMEOUT * 2
-            if (expired) Logger.d(TAG, "清理过期请求：$pkg")
+            //Logger.d(TAG, "清理过期请求：$pkg")
             expired
         }
     }

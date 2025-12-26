@@ -394,7 +394,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     private fun updateDeviceList() {
         val now = System.currentTimeMillis()
-        Logger.d("死神-NotifyRelay", "[updateDeviceList] invoked at $now")
+        //Logger.d("死神-NotifyRelay", "[updateDeviceList] invoked at $now")
     val authSnapshot = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
     val authed = authSnapshot.keys.toSet()
         val allUuids = (deviceLastSeen.keys + authed).toSet()
@@ -451,10 +451,10 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         if (oldMap != newMap || oldAuthOnlineCount != newAuthOnlineCount) {
             run {
                 try {
-                    Logger.d(
-                        "死神-NotifyRelay",
-                        "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount"
-                    )
+                    //Logger.d(
+                    //    "死神-NotifyRelay",
+                    //    "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount"
+                    //)
                 } catch (_: Exception) {
                 }
             }
@@ -514,7 +514,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             try {
                 if (rejectedDevices.contains(device.uuid)) {
-                    Logger.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
+                    //Logger.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
                     callback?.invoke(false, "已被对方拒绝")
                     return@launch
                 }
@@ -548,7 +548,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             try {
                 val auth = authenticatedDevices[device.uuid]
                 if (auth == null || !auth.isAccepted) {
-                    Logger.d("死神-NotifyRelay", "未认证设备，禁止发送")
+                    //Logger.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
                 com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
@@ -703,7 +703,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 设置加密类型（可通过UI调用）
     fun setEncryptionType(type: com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType) {
         com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType(type)
-        Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
+        //Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
     }
 
     // 获取当前加密类型

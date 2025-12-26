@@ -98,7 +98,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
         // 注册设备列表变化回调：立即刷新持久化通知（确保在主线程更新UI/通知）
         try {
-            Logger.d("黑影 NotifyRelay", "注册 onDeviceListChanged 回调到 connectionManager=$connectionManager")
+            //Logger.d("黑影 NotifyRelay", "注册 onDeviceListChanged 回调到 connectionManager=$connectionManager")
             val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
             connectionManager.onDeviceListChanged = {
                 try {
@@ -258,7 +258,6 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             if (lastProcessedTime != null) {
                 // 检查是否过期
                 if (currentTime - lastProcessedTime < CACHE_ENTRY_TTL) {
-                    Logger.v("黑影 NotifyRelay", "[NotifyListener] 跳过已处理通知: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
                     return
                 } else {
                     // 过期条目，移除
@@ -355,7 +354,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 delay(5000)
                 val actives = activeNotifications
                 if (actives != null) {
-                    Logger.v("黑影 NotifyRelay", "[NotifyListener] 定时拉取 activeNotifications.size=${actives.size}")
+                    
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
                         processNotification(sbn, true)
@@ -390,7 +389,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 } catch (_: Exception) {}
                 // 注销设备列表变化回调
                 try {
-                    Logger.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")
+                    //Logger.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")
                     connectionManager.onDeviceListChanged = null
                 } catch (e: Exception) {
                     Logger.w("黑影 NotifyRelay", "注销 onDeviceListChanged 失败: ${e.message}")
@@ -428,7 +427,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun getNotificationText(): String {
         // 使用 DeviceConnectionManager 提供的线程安全方法获取在线且已认证的设备数量
         val onlineDevices = try { connectionManager.getAuthenticatedOnlineCount() } catch (_: Exception) { 0 }
-        Logger.d("黑影 NotifyRelay", "getNotificationText: authenticatedOnlineCount=$onlineDevices")
+        //Logger.d("黑影 NotifyRelay", "getNotificationText: authenticatedOnlineCount=$onlineDevices")
 
         // 优先显示设备连接数，如果有设备连接
         if (onlineDevices > 0) {
@@ -452,7 +451,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun updateNotification() {
-        Logger.d("黑影 NotifyRelay", "updateNotification called")
+        //Logger.d("黑影 NotifyRelay", "updateNotification called")
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         // 根据是否有转发条件决定标题
         val canForward = getNotificationText().let { text ->
@@ -467,7 +466,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
         manager.notify(NOTIFY_ID, notification)
-        Logger.d("黑影 NotifyRelay", "notify posted: id=$NOTIFY_ID, text=${getNotificationText()}")
+        //Logger.d("黑影 NotifyRelay", "notify posted: id=$NOTIFY_ID, text=${getNotificationText()}")
     }
 
     // 保留通知历史，不做移除处理
@@ -476,7 +475,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         {
             val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
             val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
-            Logger.d("NotifyRelay", "$prefix sbnKey=${sbn.key}, pkg=${sbn.packageName}, id=${sbn.id}, title=$title, text=$text")
+            //Logger.d("NotifyRelay", "$prefix sbnKey=${sbn.key}, pkg=${sbn.packageName}, id=${sbn.id}, title=$title, text=$text")
         }
     }
 }

@@ -123,7 +123,7 @@ object NotificationRepository {
             // 同时更新内存列表，确保内存与当前设备同步
             notifications.clear()
             notifications.addAll(mapped)
-            Logger.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
+            //Logger.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
         } catch (e: Exception) {
             _notificationHistoryFlow.value = emptyList()
             notifications.clear()
@@ -237,7 +237,7 @@ object NotificationRepository {
                 if (com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.enableDeduplication) {
                     com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.onLocalNotificationEnqueued(title, text, packageName, time, context)
                 } else {
-                    Logger.d("NotifyRelay", "智能去重已关闭，跳过被动去重推送")
+                    //Logger.d("NotifyRelay", "智能去重已关闭，跳过被动去重推送")
                 }
             } catch (e: Exception) {
                 Logger.e("NotifyRelay", "调用 onLocalNotificationEnqueued 失败", e)
@@ -322,7 +322,7 @@ object NotificationRepository {
      */
     @Synchronized
     fun removeNotification(key: String, context: Context) {
-        Logger.d("NotifyRelay", "开始删除通知 key=$key")
+        //Logger.d("NotifyRelay", "开始删除通知 key=$key")
         val beforeSize = notifications.size
 
         // 查找要删除的通知，检查其设备类型
@@ -331,7 +331,7 @@ object NotificationRepository {
 
         notifications.removeAll { it.key == key }
         val afterSize = notifications.size
-        Logger.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
+        //Logger.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
         syncToCache(context)
 
         // 仅在本机设备时清理processedNotifications缓存

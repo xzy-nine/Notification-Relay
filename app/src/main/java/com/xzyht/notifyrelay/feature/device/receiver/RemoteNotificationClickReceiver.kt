@@ -7,7 +7,7 @@ import com.xzyht.notifyrelay.common.core.util.Logger
 
 class RemoteNotificationClickReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Logger.d("NotifyRelay(狂鼠)", "RemoteNotificationClickReceiver onReceive called")
+        //Logger.d("NotifyRelay(狂鼠)", "RemoteNotificationClickReceiver onReceive called")
         val notifyId = intent.getIntExtra("notifyId", 0)
         val pkg = intent.getStringExtra("pkg") ?: run {
             Logger.e("NotifyRelay(狂鼠)", "pkg is null in broadcast")

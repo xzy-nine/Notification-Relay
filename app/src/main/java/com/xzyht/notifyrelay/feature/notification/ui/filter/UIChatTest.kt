@@ -49,7 +49,7 @@ fun UIChatTest(
         }
         val notificationCallback: (String) -> Unit = remember {
             { data: String ->
-                Logger.d("NotifyRelay(狂鼠)", "UIChatTest onNotificationDataReceived: $data")
+                //Logger.d("NotifyRelay(狂鼠)", "UIChatTest onNotificationDataReceived: $data")
                 chatHistoryState.value = ChatMemory.getChatHistory(context)
             }
         }

@@ -357,7 +357,7 @@ object StorageManager {
         try {
             // 使用 fromVersion 参数以避免编译时的未使用参数警告，并记录调用意图
             val _from = fromVersion // 显式读取参数，确保不会被诊断为未使用
-            Logger.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
+            //Logger.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
             
             val repository = DatabaseRepository.getInstance(context)
             val currentVersion = runBlocking {

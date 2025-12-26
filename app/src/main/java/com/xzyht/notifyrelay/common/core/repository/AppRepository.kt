@@ -53,7 +53,7 @@ object AppRepository {
      */
     suspend fun loadApps(context: Context) {
         if (isLoaded && cachedApps != null) {
-            Logger.d(TAG, "使用缓存的应用列表")
+            //Logger.d(TAG, "使用缓存的应用列表")
             _apps.value = cachedApps!!
             return
         }
@@ -63,7 +63,7 @@ object AppRepository {
             // 初始化图标缓存管理器
             IconCacheManager.init(context)
 
-            Logger.d(TAG, "开始加载应用列表")
+            //Logger.d(TAG, "开始加载应用列表")
             val apps = AppListHelper.getInstalledApplications(context).sortedBy { appInfo ->
                 try {
                     context.packageManager.getApplicationLabel(appInfo).toString()
@@ -80,7 +80,7 @@ object AppRepository {
             // 同时加载应用图标
             loadAppIcons(context, apps)
 
-            Logger.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
+            //Logger.d(TAG, "应用列表加载成功，共 ${apps.size} 个应用")
         } catch (e: Exception) {
             Logger.e(TAG, "应用列表加载失败", e)
             cachedApps = emptyList()
@@ -222,12 +222,12 @@ object AppRepository {
      */
     private suspend fun loadAppIcons(context: Context, apps: List<ApplicationInfo>) {
         if (iconsLoaded) {
-            Logger.d(TAG, "使用缓存的应用图标")
+            //Logger.d(TAG, "使用缓存的应用图标")
             return
         }
 
             try {
-                Logger.d(TAG, "开始加载应用图标")
+                //Logger.d(TAG, "开始加载应用图标")
             val pm = context.packageManager
             val newIcons = mutableMapOf<String, android.graphics.Bitmap?>()
 
@@ -272,7 +272,7 @@ object AppRepository {
             cachedIcons.putAll(newIcons)
             iconsLoaded = true
 
-            Logger.d(TAG, "应用图标加载成功，共 ${newIcons.size} 个图标")
+            //Logger.d(TAG, "应用图标加载成功，共 ${newIcons.size} 个图标")
         } catch (e: Exception) {
             Logger.e(TAG, "应用图标加载失败", e)
         }
@@ -399,7 +399,7 @@ object AppRepository {
             }
         }
 
-        Logger.d(TAG, "缓存外部应用图标: $packageName")
+        //Logger.d(TAG, "缓存外部应用图标: $packageName")
     }
 
     /**
@@ -415,7 +415,7 @@ object AppRepository {
             IconCacheManager.removeIcon(packageName)
         }
 
-        Logger.d(TAG, "移除外部应用图标缓存: $packageName")
+        //Logger.d(TAG, "移除外部应用图标缓存: $packageName")
     }
 
     /**

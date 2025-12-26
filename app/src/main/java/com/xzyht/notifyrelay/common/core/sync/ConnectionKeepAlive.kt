@@ -47,7 +47,7 @@ class ConnectionKeepAlive(
     fun startHeartbeatToDevice(uuid: String, initialIp: String, initialPort: Int, sharedSecret: String) {
         heartbeatJobs[uuid]?.cancel()
         heartbeatedDevices.add(uuid)
-        Logger.d("死神-NotifyRelay", "[KeepAlive] startHeartbeatToDevice: uuid=$uuid, ip=$initialIp, port=$initialPort")
+        //Logger.d("死神-NotifyRelay", "[KeepAlive] startHeartbeatToDevice: uuid=$uuid, ip=$initialIp, port=$initialPort")
 
         val job = scope.launch {
             var failCount = 0
@@ -61,7 +61,7 @@ class ConnectionKeepAlive(
                     val target = DeviceInfo(uuid, "", targetIp, targetPort)
                     success = HeartbeatSender.sendHeartbeat(deviceManager, target)
                 } catch (e: Exception) {
-                    Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳发送失败: $uuid, ${e.message}")
+                    //Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳发送失败: $uuid, ${e.message}")
                 }
 
                 if (success) {
@@ -99,11 +99,11 @@ class ConnectionKeepAlive(
             val displayName = info?.displayName ?: auth?.displayName ?: "已认证设备"
             if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
                 for (attempt in 1..3) {
-                    Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳失败后重连尝试 $attempt/3: $uuid, $ip:$port")
+                    //Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳失败后重连尝试 $attempt/3: $uuid, $ip:$port")
                     deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
                     delay(2000)
                     if (heartbeatedDevices.contains(uuid)) {
-                        Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳失败后重连成功: $uuid")
+                        //Logger.d("死神-NotifyRelay", "[KeepAlive] 心跳失败后重连成功: $uuid")
                         return@launch
                     }
                 }
@@ -133,7 +133,7 @@ class ConnectionKeepAlive(
                 delay(30_000)
                 if (deviceManager.isWifiDirectNetworkInternal()) {
                     val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                    Logger.d("死神-NotifyRelay", "[KeepAlive] WLAN直连定期检查：${authed.size}个认证设备")
+                    //Logger.d("死神-NotifyRelay", "[KeepAlive] WLAN直连定期检查：${authed.size}个认证设备")
 
                     for ((deviceUuid, auth) in authed) {
                         if (deviceUuid == deviceManager.uuid) continue
@@ -143,7 +143,7 @@ class ConnectionKeepAlive(
                             val ip = info?.ip ?: auth.lastIp
                             val port = info?.port ?: auth.lastPort ?: deviceManager.listenPort
                             if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                                Logger.d("死神-NotifyRelay", "[KeepAlive] WLAN直连定期重连离线设备: $deviceUuid, $ip:$port")
+                                //Logger.d("死神-NotifyRelay", "[KeepAlive] WLAN直连定期重连离线设备: $deviceUuid, $ip:$port")
                                 deviceManager.connectToDevice(DeviceInfo(deviceUuid, auth.displayName ?: "WLAN直连设备", ip, port))
                                 delay(2000)
                             }
@@ -166,7 +166,7 @@ class ConnectionKeepAlive(
         for (retry in 0 until maxRetries) {
             try {
                 val resp = HandshakeSender.sendHandshake(deviceManager, device, 3000)
-                Logger.d("死神-NotifyRelay", "connectToDevice: handshake resp=$resp")
+                //Logger.d("死神-NotifyRelay", "connectToDevice: handshake resp=$resp")
 
                 if (resp != null && resp.startsWith("ACCEPT:")) {
                     val parts = resp.split(":")
@@ -188,7 +188,7 @@ class ConnectionKeepAlive(
                         synchronized(deviceManager.deviceInfoCacheInternal) {
                             deviceManager.deviceInfoCacheInternal[device.uuid] = device
                         }
-                        Logger.d("死神-NotifyRelay", "认证成功，启动心跳: uuid=${device.uuid}, ip=${device.ip}, port=${device.port}")
+                        //Logger.d("死神-NotifyRelay", "认证成功，启动心跳: uuid=${device.uuid}, ip=${device.ip}, port=${device.port}")
                         startHeartbeatToDevice(device.uuid, device.ip, device.port, sharedSecret)
                         deviceManager.deviceLastSeenInternal[device.uuid] = System.currentTimeMillis()
                         try {
@@ -201,30 +201,30 @@ class ConnectionKeepAlive(
                             val myInfo = deviceManager.getDeviceInfoInternal(deviceManager.uuid)
                             if (myInfo != null) {
                                 if (!heartbeatedDevices.contains(device.uuid)) {
-                                    Logger.d("死神-NotifyRelay", "认证成功后自动反向connectToDevice: myInfo=$myInfo, peer=${device.uuid}")
+                                    //Logger.d("死神-NotifyRelay", "认证成功后自动反向connectToDevice: myInfo=$myInfo, peer=${device.uuid}")
                                     deviceManager.connectToDevice(myInfo)
                                 } else {
-                                    Logger.d("死神-NotifyRelay", "对方已建立心跳，不再反向connectToDevice: peer=${device.uuid}")
+                                    //Logger.d("死神-NotifyRelay", "对方已建立心跳，不再反向connectToDevice: peer=${device.uuid}")
                                 }
                             } else {
-                                Logger.d("死神-NotifyRelay", "本机getDeviceInfo返回null，无法反向connectToDevice")
+                                //Logger.d("死神-NotifyRelay", "本机getDeviceInfo返回null，无法反向connectToDevice")
                             }
                         }
                         return Pair(true, null)
                     } else {
-                        Logger.d("死神-NotifyRelay", "认证响应格式错误: $resp")
+                        //Logger.d("死神-NotifyRelay", "认证响应格式错误: $resp")
                         return Pair(false, "认证响应格式错误")
                     }
                 } else if (resp != null && resp.startsWith("REJECT:")) {
-                    Logger.d("死神-NotifyRelay", "对方拒绝连接: uuid=${device.uuid}")
+                    //Logger.d("死神-NotifyRelay", "对方拒绝连接: uuid=${device.uuid}")
                     return Pair(false, "对方拒绝连接")
                 } else {
-                    Logger.d("死神-NotifyRelay", "认证失败: resp=$resp")
+                    //Logger.d("死神-NotifyRelay", "认证失败: resp=$resp")
                     return Pair(false, "认证失败")
                 }
             } catch (e: Exception) {
                 lastException = e
-                Logger.d("死神-NotifyRelay", "connectToDevice重试 $retry 失败: ${e.message}")
+                //Logger.d("死神-NotifyRelay", "connectToDevice重试 $retry 失败: ${e.message}")
                 if (retry < maxRetries - 1) {
                     delay(1000)
                 }

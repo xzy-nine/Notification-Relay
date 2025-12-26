@@ -42,14 +42,14 @@ object ProtocolRouter {
 
         val auth = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices[remoteUuid] }
         if (auth == null || !auth.isAccepted) {
-            Logger.d(TAG, "未认证或未接受的设备，丢弃: uuid=$remoteUuid, header=$header")
+            //Logger.d(TAG, "未认证或未接受的设备，丢弃: uuid=$remoteUuid, header=$header")
             return true
         }
 
         // 解密
         val decrypted = try { deviceManager.decryptData(payload, auth.sharedSecret) } catch (_: Exception) { null }
         if (decrypted == null) {
-            Logger.d(TAG, "解密失败: uuid=$remoteUuid, header=$header")
+            //Logger.d(TAG, "解密失败: uuid=$remoteUuid, header=$header")
             return true
         }
 
@@ -95,7 +95,7 @@ object ProtocolRouter {
                 }
                 else -> {
                     // 其他未识别的 DATA_* 报文：当前版本不支持，直接忽略（方便后向兼容）
-                    Logger.d(TAG, "未知DATA通道: $header")
+                    //Logger.d(TAG, "未知DATA通道: $header")
                     true
                 }
             }
