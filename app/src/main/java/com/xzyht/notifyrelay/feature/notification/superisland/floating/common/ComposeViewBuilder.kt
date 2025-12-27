@@ -1,8 +1,6 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.common
 
 import android.content.Context
-import android.view.MotionEvent
-import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy

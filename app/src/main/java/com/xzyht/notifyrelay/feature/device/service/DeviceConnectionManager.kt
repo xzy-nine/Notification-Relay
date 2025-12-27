@@ -1,7 +1,16 @@
 package com.xzyht.notifyrelay.feature.device.service
 
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
+import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -9,15 +18,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.util.UUID
-import com.xzyht.notifyrelay.common.data.StorageManager
-import kotlinx.coroutines.delay
-import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
-import com.xzyht.notifyrelay.common.core.util.EncryptionManager
-import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
-import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
-import com.xzyht.notifyrelay.common.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 
 data class DeviceInfo(
     val uuid: String,

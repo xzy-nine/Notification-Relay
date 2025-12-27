@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
-import com.xzyht.notifyrelay.BuildConfig
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult

@@ -1,6 +1,9 @@
 package com.xzyht.notifyrelay.common.core.util
 
 import android.util.Base64
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager.AESEncryption.generateSharedSecret
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager.AESEncryption.keyToString
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -12,6 +15,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
+
 /**
  * 统一加密管理器
  *

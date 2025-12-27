@@ -1,9 +1,9 @@
 package com.xzyht.notifyrelay.common
 
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
 import androidx.compose.runtime.Composable
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.theme.darkColorScheme
+import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 @Composable
 fun NotifyRelayTheme(

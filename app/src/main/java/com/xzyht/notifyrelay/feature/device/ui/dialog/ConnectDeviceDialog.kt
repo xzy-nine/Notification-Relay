@@ -1,12 +1,15 @@
 package com.xzyht.notifyrelay.feature.device.ui.dialog
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Modifier
+import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 
 /**
  * 连接设备弹窗

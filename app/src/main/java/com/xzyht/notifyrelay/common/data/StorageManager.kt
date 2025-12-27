@@ -1,8 +1,8 @@
 ﻿package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
-import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
 import kotlinx.coroutines.runBlocking
 
 /**

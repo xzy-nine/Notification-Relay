@@ -31,7 +31,6 @@ import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlin.collections.forEach
 
 /**
  * 将 DeviceForwardFragment 中原有的远程过滤内联实现移动到这里：

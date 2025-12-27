@@ -1,15 +1,16 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.compose
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonTextBlockCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.AComponent
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.AImageText1
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.left.AImageText5
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonTextBlockCompose
 
 /**
  * A区组件的Compose实现

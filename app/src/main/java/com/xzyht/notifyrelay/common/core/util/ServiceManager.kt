@@ -1,10 +1,9 @@
 ﻿package com.xzyht.notifyrelay.common.core.util
 
+import android.app.ActivityManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ComponentName
-import android.app.ActivityManager
-import com.xzyht.notifyrelay.BuildConfig
 
 /**
  * 服务管理工具类
