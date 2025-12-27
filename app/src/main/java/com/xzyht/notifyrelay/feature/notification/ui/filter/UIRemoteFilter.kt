@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -177,10 +178,19 @@ fun UIRemoteFilter() {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            // 只使用缓存的包名集合，避免同步加载
-                            val installedPkgs = remember(context) { AppRepository.getInstalledPackageNames(context) }
+                            // 监听AppRepository的状态，确保数据已加载
+                            val installedPkgs by remember { AppRepository.apps }.collectAsState()
+                            val installedPkgSet = installedPkgs.map { it.packageName }.toSet()
+                            
+                            // 确保应用列表已加载
+                            LaunchedEffect(Unit) {
+                                if (!AppRepository.isDataLoaded()) {
+                                    AppRepository.loadApps(context)
+                                }
+                            }
+                            
                             group.forEach { pkg ->
-                                val isInstalled = installedPkgs.contains(pkg)
+                                val isInstalled = installedPkgSet.contains(pkg)
                                 // 使用mutableStateOf保存图标状态，这样更新时会触发UI重新渲染
                                 var iconBitmap by remember { mutableStateOf(AppRepository.getAppIcon(pkg)) }
                                 
