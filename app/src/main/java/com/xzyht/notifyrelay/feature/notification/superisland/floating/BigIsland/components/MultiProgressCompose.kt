@@ -52,7 +52,6 @@ fun MultiProgressCompose(
     val segmentCount = nodeCount - 1
     val stageFloat = progressValue / 100f * segmentCount
     val pointerIndex = stageFloat.toInt().coerceIn(0, nodeCount - 1)
-    progressValue >= 100
 
     // 计算指针位置
     var containerWidth by remember { mutableStateOf(0f) }
