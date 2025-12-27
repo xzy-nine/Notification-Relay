@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
+import com.xzyht.notifyrelay.common.NotifyRelayTheme
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.common.SetupSystemBars
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
@@ -131,9 +132,8 @@ class MainActivity : FragmentActivity() {
         // 仅使用 Compose 管理主页面和通知历史页面，先显示UI再进行初始化
         setContent {
             val isDarkTheme = isSystemInDarkTheme()
-            // 自定义错误颜色常量
-            val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
-            MiuixTheme(colors = colors) {
+            // 使用统一的主题
+            NotifyRelayTheme(darkTheme = isDarkTheme) {
                 val colorScheme = MiuixTheme.colorScheme
                 // 设置系统栏外观
                 SetupSystemBars(isDarkTheme)

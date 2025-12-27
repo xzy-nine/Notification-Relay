@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.xzyht.notifyrelay.common.NotifyRelayTheme
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.common.SetupSystemBars
 import com.xzyht.notifyrelay.common.core.util.AppListHelper
@@ -54,11 +55,10 @@ import top.yukonga.miuix.kmp.basic.BasicComponentColors
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,16 +71,16 @@ class GuideActivity : ComponentActivity() {
             finish()
             return
         }
-    // 沉浸式虚拟键，内容延伸到手势提示线区域
-    window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-    // 统一用 WindowCompat 控制系统栏外观，避免废弃API
-    WindowCompat.setDecorFitsSystemWindows(window, false)
-    // 颜色设置放到 Compose SideEffect 里统一管理
+        // 沉浸式虚拟键，内容延伸到手势提示线区域
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        // 统一用 WindowCompat 控制系统栏外观，避免废弃API
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // 颜色设置放到 Compose SideEffect 里统一管理
 
         setContent {
             val isDarkTheme = isSystemInDarkTheme()
-            val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
-            MiuixTheme(colors = colors) {
+            // 使用统一的主题
+            NotifyRelayTheme(darkTheme = isDarkTheme) {
                 // 设置系统栏外观
                 SetupSystemBars(isDarkTheme)
                 GuideScreen(onContinue = {
@@ -91,15 +91,14 @@ class GuideActivity : ComponentActivity() {
                 })
             }
         }
+
     }
 
     override fun onResume() {
         super.onResume()
-        // 页面回到前台时刷新权限状态
-        // 通过 Compose 的全局事件通知 GuideScreen 刷新
+        // 当从系统设置页面返回时，刷新权限状态
         GuideScreen.refreshTrigger++
     }
-}
 
 object GuideScreen {
     // 用于触发刷新
@@ -139,9 +138,6 @@ fun GuideScreen(onContinue: () -> Unit) {
         )
         hasNotification = enabledListeners?.contains(context.packageName) == true
 
-        // 使用 PermissionHelper 检查使用情况权限
-        hasUsage = PermissionHelper.isUsageStatsEnabled(context)
-
         // 使用 PermissionHelper 检查通知发送权限
         hasPost = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -153,8 +149,6 @@ fun GuideScreen(onContinue: () -> Unit) {
         // 检查悬浮通知权限
         hasFloatNotification = PermissionHelper.checkOverlayPermission(context)
 
-        // 检查开发者选项-停用屏幕共享保护
-        hasDevScreenShareProtectOff = PermissionHelper.checkDevScreenShareProtectOff(context)
 
         // 使用 PermissionHelper 检查敏感通知权限
         hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
@@ -170,7 +164,6 @@ fun GuideScreen(onContinue: () -> Unit) {
 
         permissionsGranted = hasNotification && canQueryApps && hasPost && hasSelfStart
 
-        showCheck = permissionsGranted
     }
 
     LaunchedEffect(Unit) {
@@ -182,187 +175,162 @@ fun GuideScreen(onContinue: () -> Unit) {
         refreshPermissions()
     }
 
-    Box(
+    Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .navigationBarsPadding(),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(modifier = Modifier.padding(20.dp)) {
-            Column(
+        content = { paddingValues ->
+            Box(
                 modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
             ) {
+                Card() {
+                    Column(
+                        modifier = Modifier
+                            .padding(20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                 Text(
                     "欢迎使用通知转发应用",
                     style = MiuixTheme.textStyles.title2,
                     color = MiuixTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                // 权限状态列表（使用 Miuix BasicComponent 展示，紧凑分割线风格）
+                // 权限状态列表（使用 Miuix SuperSwitch 组件直接展示）
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val dividerColor = MiuixTheme.colorScheme.dividerLine
-                    BasicComponent(
+                    SuperSwitch(
                         title = "通知访问权限",
                         summary = if (hasNotification) "已授权" else "用于读取通知内容，实现转发功能",
-                        rightActions = {
-                            Switch(
-                                checked = hasNotification,
-                                onCheckedChange = {
-                                    showToast("跳转通知访问授权页面")
-                        IntentUtils.startActivity(context, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS, addNewTaskFlag = true)
-                                },
-                                enabled = true
-                            )
+                        checked = hasNotification,
+                        onCheckedChange = {
+                            showToast("跳转通知访问授权页面")
+                            IntentUtils.startActivity(context, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS, addNewTaskFlag = true)
                         },
                         onClick = {
-                    showToast("跳转通知访问授权页面")
-                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                    IntentUtils.startActivity(context, intent, true)
-                },
-                        modifier = Modifier.padding(vertical = 0.dp)
+                            showToast("跳转通知访问授权页面")
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            IntentUtils.startActivity(context, intent, true)
+                        },
+                        enabled = true
                     )
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
-        BasicComponent(
-            title = "应用列表权限",
-            summary = if (canQueryApps) "已授权" else "用于发现本机已安装应用，辅助通知跳转",
-            rightActions = {
-                Switch(
-                    checked = canQueryApps,
-                    onCheckedChange = {
-                        try {
-                            val isMiuiOrPengpai = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
-                                try {
-                                    val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
-                                    permissionInfo != null && permissionInfo.packageName == "com.lbe.security.miui"
-                                } catch (_: Exception) { false }
-                            if (isMiuiOrPengpai) {
-                                if (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
-                                    (context as? Activity)?.let { act ->
-                                        ActivityCompat.requestPermissions(
-                                            act,
-                                            arrayOf("com.android.permission.GET_INSTALLED_APPS"),
-                                            999
-                                        )
-                                        showToast("已请求应用列表权限，请在弹窗中允许")
-                                    } ?: run {
-                                        showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                    SuperSwitch(
+                        title = "应用列表权限",
+                        summary = if (canQueryApps) "已授权" else "用于发现本机已安装应用，辅助通知跳转",
+                        checked = canQueryApps,
+                        onCheckedChange = {
+                            try {
+                                val isMiuiOrPengpai = Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
+                                    try {
+                                        val permissionInfo = context.packageManager.getPermissionInfo("com.android.permission.GET_INSTALLED_APPS", 0)
+                                        permissionInfo != null && permissionInfo.packageName == "com.lbe.security.miui"
+                                    } catch (_: Exception) { false }
+                                if (isMiuiOrPengpai) {
+                                    if (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
+                                        (context as? Activity)?.let { act ->
+                                            ActivityCompat.requestPermissions(
+                                                act,
+                                                arrayOf("com.android.permission.GET_INSTALLED_APPS"),
+                                                999
+                                            )
+                                            showToast("已请求应用列表权限，请在弹窗中允许")
+                                        } ?: run {
+                                            showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                        }
+                                    } else {
+                                        showToast("已获得应用列表权限")
                                     }
                                 } else {
-                                    showToast("已获得应用列表权限")
-                                }
-                            } else {
-                                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                    showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                                     IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
+                                }
+                            } catch (_: Exception) {
+                                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                                IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
                             }
-                        } catch (_: Exception) {
+                        },
+                        onClick = {
                             showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
                             IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
-                        }
-                    },
-                    enabled = true
-                )
-            },
-            onClick = {
-                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
-            },
-            modifier = Modifier.padding(vertical = 0.dp)
-        )
-                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
-        BasicComponent(
-            title = "通知发送权限 (Android 13+)",
-            summary = if (hasPost) "已授权" else "用于发送本地通知，部分功能需开启",
-            rightActions = {
-                Switch(
-                    checked = hasPost,
-                    onCheckedChange = {
-                        showToast("请求通知发送权限")
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            (context as? Activity)?.requestPermissions(
-                                arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
-                            )
-                        } else {
-                            showToast("请在系统设置中开启通知权限")
-                        }
-                    },
-                    enabled = true
-                )
-            },
-            onClick = {
-                showToast("请求通知发送权限")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    (context as? Activity)?.requestPermissions(
-                        arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
+                        },
+                        enabled = true
                     )
-                } else {
-                    showToast("请在系统设置中开启通知权限")
-                }
-            },
-            modifier = Modifier.padding(vertical = 0.dp)
-        )
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
-        BasicComponent(
-            title = "蓝牙连接权限 (可选)",
-            summary = if (hasBluetoothConnect) "已授权" else "用于优化设备发现速度，显示真实设备名",
-            summaryColor = BasicComponentColors(
-                color = Color(0xFF888888),
-                disabledColor = Color(0xFFCCCCCC)
-            ),
-            rightActions = {
-                Switch(
-                    checked = hasBluetoothConnect,
-                    onCheckedChange = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            (context as? Activity)?.requestPermissions(
-                                arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1001
-                            )
-                            showToast("开启后可优化设备发现速度，并以设备实际名称而非型号作为设备名")
-                        } else {
-                            showToast("当前系统无需蓝牙连接权限")
-                        }
-                    },
-                    enabled = true
-                )
-            },
-            enabled = true,
-            modifier = Modifier.padding(vertical = 0.dp)
-        )
+                    SuperSwitch(
+                        title = "通知发送权限 (Android 13+)",
+                        summary = if (hasPost) "已授权" else "用于发送本地通知，部分功能需开启",
+                        checked = hasPost,
+                        onCheckedChange = {
+                            showToast("请求通知发送权限")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                (context as? Activity)?.requestPermissions(
+                                    arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
+                                )
+                            } else {
+                                showToast("请在系统设置中开启通知权限")
+                            }
+                        },
+                        onClick = {
+                            showToast("请求通知发送权限")
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                (context as? Activity)?.requestPermissions(
+                                    arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
+                                )
+                            } else {
+                                showToast("请在系统设置中开启通知权限")
+                            }
+                        },
+                        enabled = true
+                    )
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
-        BasicComponent(
-            title = "后台无限制权限 (可选)",
-            summary = if (hasBackgroundUnlimited) "已设置" else "用于确保应用在后台正常运行，防止被系统杀死",
-            summaryColor = BasicComponentColors(
-                color = Color(0xFF888888),
-                disabledColor = Color(0xFFCCCCCC)
-            ),
-            rightActions = {
-                Switch(
-                    checked = hasBackgroundUnlimited,
-                    onCheckedChange = { checked ->
-                        if (checked) {
+                    SuperSwitch(
+                        title = "蓝牙连接权限 (可选)",
+                        summary = if (hasBluetoothConnect) "已授权" else "用于优化设备发现速度，显示真实设备名",
+                        summaryColor = BasicComponentColors(
+                            color = Color(0xFF888888),
+                            disabledColor = Color(0xFFCCCCCC)
+                        ),
+                        checked = hasBluetoothConnect,
+                        onCheckedChange = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                (context as? Activity)?.requestPermissions(
+                                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1001
+                                )
+                                showToast("开启后可优化设备发现速度，并以设备实际名称而非型号作为设备名")
+                            } else {
+                                showToast("当前系统无需蓝牙连接权限")
+                            }
+                        },
+                        enabled = true
+                    )
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    SuperSwitch(
+                        title = "后台无限制权限 (可选)",
+                        summary = if (hasBackgroundUnlimited) "已设置" else "用于确保应用在后台正常运行，防止被系统杀死",
+                        summaryColor = BasicComponentColors(
+                            color = Color(0xFF888888),
+                            disabledColor = Color(0xFFCCCCCC)
+                        ),
+                        checked = hasBackgroundUnlimited,
+                        onCheckedChange = {
                             showToast("跳转到电池优化设置，请将应用设为无限制")
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                             intent.data = Uri.parse("package:${context.packageName}")
                             IntentUtils.startActivity(context, intent, true)
-                        } else {
-                            hasBackgroundUnlimited = false
-                        }
-                    },
-                    enabled = true
-                )
-            },
-            onClick = {
-                showToast("跳转到电池优化设置，请将应用设为无限制")
-                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                intent.data = Uri.parse("package:${context.packageName}")
-                IntentUtils.startActivity(context, intent, true)
-            },
-            enabled = true,
-            modifier = Modifier.padding(vertical = 0.dp)
-        )
+                        },
+                        onClick = {
+                            showToast("跳转到电池优化设置，请将应用设为无限制")
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:${context.packageName}")
+                            IntentUtils.startActivity(context, intent, true)
+                        },
+                        enabled = true
+                    )
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
         BasicComponent(
             title = "悬浮窗权限 (可选)",
@@ -455,30 +423,21 @@ fun GuideScreen(onContinue: () -> Unit) {
             }
         }
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
-        BasicComponent(
-            title = "自启动权限",
-            summary = if (hasSelfStart) "已启用" else "必须启用，否则监听服务无法启动",
-            rightActions = {
-                Switch(
-                    checked = hasSelfStart,
-                    onCheckedChange = { checked ->
-                        if (checked) {
+                    SuperSwitch(
+                        title = "自启动权限",
+                        summary = if (hasSelfStart) "已启用" else "必须启用，否则监听服务无法启动",
+                        checked = hasSelfStart,
+                        onCheckedChange = {
                             showToast("请在应用详情页启用自启动权限")
                             IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
-                        } else {
-                            hasSelfStart = false
-                        }
-                    },
-                    enabled = true
-                )
-            },
-            onClick = {
-                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
-            },
-            modifier = Modifier.padding(vertical = 0.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+                        },
+                        onClick = {
+                            showToast("请在应用详情页启用自启动权限")
+                            IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
+                        },
+                        enabled = true
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = {
                         if (permissionsGranted) {
                             onContinue()
@@ -497,14 +456,10 @@ fun GuideScreen(onContinue: () -> Unit) {
                         Text(
                             if (permissionsGranted) "进入应用" else "请先完成必要权限授权",
                             style = MiuixTheme.textStyles.button
-                        )
+                        ) }
                     }
-            }
+                 }
+             }
         }
-    }
-}
-}
-
-fun requestAllPermissions(activity: Activity) {
-    PermissionHelper.requestAllPermissions(activity)
-}
+    })
+} }
