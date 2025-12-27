@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.ui
+package com.xzyht.notifyrelay.feature.notification.ui
 
 
 import android.os.Bundle
@@ -71,6 +71,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlin.math.roundToInt
 
+
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+// 日期格式化工具（线程安全）
+private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
 
 enum class DragValue { Center, End }
 
@@ -197,7 +206,7 @@ fun NotificationCard(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(record.time)),
+            text = LocalDateTime.ofInstant(Instant.ofEpochMilli(record.time), ZoneId.systemDefault()).format(dateTimeFormatter),
             style = notificationTextStyles.body2.copy(color = cardColorScheme.onSurfaceSecondary)
         )
     }
@@ -463,10 +472,7 @@ fun NotificationHistoryScreen() {
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Text(
                                                 text = (latest?.time?.let {
-                                                    java.text.SimpleDateFormat(
-                                                        "yyyy-MM-dd HH:mm:ss",
-                                                        java.util.Locale.US
-                                                    ).format(java.util.Date(it))
+                                                    LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()).format(dateTimeFormatter)
                                                 } ?: ""),
                                                 style = textStyles.body2.copy(color = colorScheme.onSurfaceSecondary)
                                             )
