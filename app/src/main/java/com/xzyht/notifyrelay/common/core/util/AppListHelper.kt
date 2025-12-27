@@ -1,7 +1,6 @@
 ﻿package com.xzyht.notifyrelay.common.core.util
 
 import android.content.Context
-import com.xzyht.notifyrelay.BuildConfig
 
 object AppListHelper {
     /**

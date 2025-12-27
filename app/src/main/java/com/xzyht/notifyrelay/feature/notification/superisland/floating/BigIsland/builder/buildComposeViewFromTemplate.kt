@@ -18,7 +18,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xzyht.notifyrelay.common.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.*
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ChatInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.HighlightInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.HintInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.MultiProgressCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.PicInfoCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ProgressCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.TextButtonCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.ParamIslandCompose

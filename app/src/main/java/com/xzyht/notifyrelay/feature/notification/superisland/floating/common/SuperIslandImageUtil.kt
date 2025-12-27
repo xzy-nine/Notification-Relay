@@ -10,13 +10,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
-import coil.ImageLoader as CoilImageLoader
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.xzyht.notifyrelay.common.core.util.DataUrlUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
+import coil.ImageLoader as CoilImageLoader
 
 /**
  * 超级岛图片加载和处理工具类
@@ -63,8 +63,8 @@ object SuperIslandImageUtil {
         iconKey: String? = null
     ): Painter? {
         // 状态管理
-        val bitmapState = remember { mutableStateOf<Bitmap?>(null) }
-        val isLoading = remember { mutableStateOf(false) }
+        remember { mutableStateOf<Bitmap?>(null) }
+        remember { mutableStateOf(false) }
 
         // 如果提供了iconKey，先从picMap中获取url
         val resolvedUrl = remember(url, picMap, iconKey) {

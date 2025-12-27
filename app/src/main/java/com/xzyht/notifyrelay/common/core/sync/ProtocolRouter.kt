@@ -37,7 +37,7 @@ object ProtocolRouter {
 
         val header = parts[0]
         val remoteUuid = parts[1]
-        val remotePubKey = parts[2]
+        parts[2]
         val payload = parts[3]
 
         val auth = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices[remoteUuid] }

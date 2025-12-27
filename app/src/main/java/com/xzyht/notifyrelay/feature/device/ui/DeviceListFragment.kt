@@ -30,7 +30,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
-import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
@@ -55,7 +54,7 @@ object GlobalSelectedDeviceHolder {
     @Composable
     fun current(): State<DeviceInfo?> {
         // 这样可在任意Compose页面通过 GlobalSelectedDeviceHolder.current().value 响应式获取
-        val state = rememberUpdatedState(_selectedDevice)
+        rememberUpdatedState(_selectedDevice)
         // 由于mutableStateOf已全局可观察，直接返回即可
         return androidx.compose.runtime.remember { object : State<DeviceInfo?> {
             override val value: DeviceInfo? get() = _selectedDevice
@@ -74,7 +73,7 @@ class DeviceListFragment : Fragment() {
         inflater: android.view.LayoutInflater,
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
-    ): android.view.View? {
+    ): android.view.View {
         //Logger.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
@@ -210,7 +209,7 @@ fun DeviceListScreen() {
     }
 
     val buttonMinHeight = 44.dp // 更适合内容自适应，防止裁剪
-    val textScrollModifier = Modifier
+    Modifier
         .padding(horizontal = 2.dp, vertical = 4.dp)
 
     // 横竖屏都显示UDP发现开关
@@ -511,7 +510,7 @@ fun DeviceListScreen() {
 
     // 连接设备弹窗
     if (showConnectDialog && pendingConnectDevice != null) {
-        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        val activity = LocalContext.current as? android.app.Activity
         val showDialog = remember { mutableStateOf(true) }
         ConnectDeviceDialog(
             showDialog = showDialog,

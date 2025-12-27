@@ -3,7 +3,6 @@ package com.xzyht.notifyrelay.feature.notification.superisland.core
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
-import kotlin.collections.iterator
 
 /**
  * 超级岛差异化同步协议与工具。

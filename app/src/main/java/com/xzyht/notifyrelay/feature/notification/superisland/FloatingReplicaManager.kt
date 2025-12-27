@@ -16,14 +16,15 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.xzyht.notifyrelay.R
 import com.xzyht.notifyrelay.common.core.util.HapticFeedbackUtils
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.LifecycleManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.LifecycleManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -318,7 +319,7 @@ object FloatingReplicaManager {
 
             // 遍历所有条目，检查每个条目是否与关闭区重叠
             var currentY = containerY
-            for ((index, entry) in entries.withIndex()) {
+            for ((_, entry) in entries.withIndex()) {
                 // 使用条目实际高度，如果高度为0（未测量）则使用默认值
                 val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
                 
@@ -710,11 +711,9 @@ object FloatingReplicaManager {
 
     private fun requestOverlayPermission(context: Context) {
         try {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+            val intent = IntentUtils.createImplicitIntent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+            intent.data = Uri.parse("package:${context.packageName}")
+            IntentUtils.startActivity(context, intent, true)
         } catch (e: Exception) {
             Logger.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
         }

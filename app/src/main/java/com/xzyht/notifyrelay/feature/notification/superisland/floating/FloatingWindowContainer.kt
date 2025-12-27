@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LifecycleOwner
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandComposeRoot
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.ActionCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.AnimTextInfoCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.BaseInfoCompose
@@ -40,6 +39,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.param.ParamIslandCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.SmallIsland.compose.BigIslandCollapsedCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandComposeRoot
 import org.json.JSONObject
 
 /**
@@ -72,7 +72,7 @@ fun FloatingWindowContainer(
     modifier: Modifier = Modifier.Companion,
     onUpdateEntryHeight: ((String, Int) -> Unit)? = null
 ) {
-    val context = LocalContext.current
+    LocalContext.current
 
     // 当entries列表为空时，不渲染任何内容，避免拦截触摸事件
     if (entries.isEmpty()) {
@@ -90,7 +90,7 @@ fun FloatingWindowContainer(
                 val interactionSource = remember { MutableInteractionSource() }
 
                 Box(
-                    modifier = Modifier.Companion
+                    modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
                             interactionSource = interactionSource,
@@ -195,10 +195,10 @@ fun FloatingWindowContainer(
 
                                             else -> {
                                                 // 默认模板：未支持的模板类型
-                                                Box(modifier = Modifier.Companion.padding(16.dp)) {
+                                                Box(modifier = Modifier.padding(16.dp)) {
                                                     Text(
                                                         text = "未支持的模板",
-                                                        color = Color.Companion.White
+                                                        color = Color.White
                                                     )
                                                 }
                                             }
@@ -213,7 +213,7 @@ fun FloatingWindowContainer(
                                     }
                                 } else {
                                     // 兜底显示：当没有paramV2时，使用title和text作为fallback
-                                    Box(modifier = Modifier.Companion.padding(16.dp)) {
+                                    Box(modifier = Modifier.padding(16.dp)) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
@@ -229,15 +229,15 @@ fun FloatingWindowContainer(
                                             
                                             // 文本内容
                                             Column(
-                                                modifier = Modifier.Companion.padding(start = 8.dp)
+                                                modifier = Modifier.padding(start = 8.dp)
                                             ) {
                                                 if (!entry.title.isNullOrEmpty()) {
                                                     Text(
                                                         text = entry.title,
-                                                        color = Color.Companion.White,
+                                                        color = Color.White,
                                                         fontSize = 16.sp,
-                                                        fontWeight = FontWeight.Companion.Bold,
-                                                        modifier = Modifier.Companion.padding(bottom = 8.dp)
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(bottom = 8.dp)
                                                     )
                                                 }
                                                 if (!entry.text.isNullOrEmpty()) {

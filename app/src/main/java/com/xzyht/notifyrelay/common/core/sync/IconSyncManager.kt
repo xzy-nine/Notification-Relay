@@ -253,7 +253,7 @@ object IconSyncManager {
 
     fun cleanupExpiredRequests() {
         val now = System.currentTimeMillis()
-        pendingRequests.entries.removeIf { (pkg, t) ->
+        pendingRequests.entries.removeIf { (_, t) ->
             val expired = (now - t) > ICON_REQUEST_TIMEOUT * 2
             //Logger.d(TAG, "清理过期请求：$pkg")
             expired

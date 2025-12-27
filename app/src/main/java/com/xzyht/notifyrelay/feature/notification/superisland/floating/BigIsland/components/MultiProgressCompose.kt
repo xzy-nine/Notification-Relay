@@ -23,10 +23,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MultiProgressInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.CommonImageCompose
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MultiProgressInfo
-
 import kotlin.math.max
 
 private const val DEFAULT_PRIMARY_COLOR = 0xFF0ABAFF
@@ -53,11 +52,11 @@ fun MultiProgressCompose(
     val segmentCount = nodeCount - 1
     val stageFloat = progressValue / 100f * segmentCount
     val pointerIndex = stageFloat.toInt().coerceIn(0, nodeCount - 1)
-    val reachedEnd = progressValue >= 100
+    progressValue >= 100
 
     // 计算指针位置
     var containerWidth by remember { mutableStateOf(0f) }
-    val pointerPosition = containerWidth * (progressValue / 100f)
+    containerWidth * (progressValue / 100f)
     
     // 容器宽度变化时更新
     fun updateContainerWidth(width: Int) {

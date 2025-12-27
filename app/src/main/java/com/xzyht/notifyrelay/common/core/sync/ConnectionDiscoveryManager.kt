@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.common.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -41,8 +41,102 @@ class ConnectionDiscoveryManager(
     private var broadcastThread: Thread? = null
     private var listenThread: Thread? = null
     private var manualDiscoveryJob: kotlinx.coroutines.Job? = null
+    
+    // 添加内部变量控制线程运行状态，避免频繁访问deviceManager.udpDiscoveryEnabled
+    private var isDiscoveryRunning = false
 
     private val manualDiscoveryInterval = 2000L
+
+    /**
+     * 更新设备信息缓存并触发设备列表更新
+     */
+    private fun updateDeviceInfoCache(device: DeviceInfo) {
+        deviceManager.deviceLastSeenInternal[device.uuid] = System.currentTimeMillis()
+        
+        synchronized(deviceManager.deviceInfoCacheInternal) {
+            deviceManager.deviceInfoCacheInternal[device.uuid] = device
+        }
+        
+        com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(device.uuid, device.displayName)
+        scope.launch { deviceManager.updateDeviceListInternal() }
+    }
+    
+    /**
+     * 连接到已认证设备
+     */
+    private fun connectToAuthedDevice(device: DeviceInfo) {
+        val isAuthed = synchronized(deviceManager.authenticatedDevices) { 
+            deviceManager.authenticatedDevices.containsKey(device.uuid) 
+        }
+        if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(device.uuid)) {
+            deviceManager.connectToDevice(device)
+        }
+    }
+    
+    /**
+     * 提取UDP监听线程创建逻辑
+     */
+    private fun extractUdpListenThread(threadName: String) {
+        if (listenThread == null) {
+            listenThread = Thread {
+                var socket: java.net.DatagramSocket? = null
+                try {
+                    socket = java.net.DatagramSocket(23334)
+                    socket.soTimeout = 1000 // 设置超时，避免线程阻塞在receive()上
+                    val buf = ByteArray(256)
+                    
+                    while (isDiscoveryRunning || deviceManager.isWifiDirectNetworkInternal()) {
+                        try {
+                            val packet = java.net.DatagramPacket(buf, buf.size)
+                            socket.receive(packet)
+                            val msg = String(packet.data, 0, packet.length)
+                            val ip = packet.address.hostAddress
+                            if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
+                                val parts = msg.split(":")
+                                if (parts.size >= 4) {
+                                    val uuid = parts[1]
+                                    val rawDisplay = parts[2]
+                                    val displayName = try {
+                                        deviceManager.decodeDisplayNameFromTransportInternal(rawDisplay)
+                                    } catch (_: Exception) {
+                                        rawDisplay
+                                    }
+                                    val port = parts[3].toIntOrNull() ?: deviceManager.listenPort
+                                    if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
+                                        val device = DeviceInfo(uuid, displayName, ip, port)
+                                        updateDeviceInfoCache(device)
+                                        connectToAuthedDevice(device)
+                                    }
+                                }
+                            }
+                        } catch (e: java.net.SocketTimeoutException) {
+                            // 超时异常，继续循环检查条件
+                            continue
+                        }
+                    }
+                    Logger.i("卢西奥-死神-NotifyRelay", "$threadName 已关闭")
+                } catch (e: InterruptedException) {
+                    // 正常中断，退出线程
+                    Logger.i("卢西奥-死神-NotifyRelay", "$threadName 被中断")
+                } catch (e: Exception) {
+                    if (socket != null && socket.isClosed) {
+                        Logger.i("卢西奥-死神-NotifyRelay", "$threadName 正常关闭")
+                    } else {
+                        Logger.e("卢西奥-死神-NotifyRelay", "$threadName 异常: ${e.message}")
+                        e.printStackTrace()
+                    }
+                } finally {
+                    try {
+                        socket?.close()
+                    } catch (_: Exception) {
+                    }
+                    listenThread = null
+                }
+            }
+            listenThread?.isDaemon = true
+            listenThread?.start()
+        }
+    }
 
     enum class NetworkType {
         REGULAR,
@@ -248,6 +342,8 @@ class ConnectionDiscoveryManager(
     }
 
     fun stopDiscovery() {
+        isDiscoveryRunning = false
+        
         try {
             broadcastThread?.interrupt()
             broadcastThread = null
@@ -267,87 +363,46 @@ class ConnectionDiscoveryManager(
             return
         }
 
-        if (deviceManager.udpDiscoveryEnabled) {
+        val udpEnabled = deviceManager.udpDiscoveryEnabled
+        
+        // 如果UDP启用且发现未运行，则启动发现
+        if (udpEnabled && !isDiscoveryRunning) {
+            isDiscoveryRunning = true
+            
             if (broadcastThread == null) {
                 broadcastThread = Thread {
                     try {
                         val displayName = deviceManager.encodeDisplayNameForTransportInternal(deviceManager.localDisplayNameInternal())
-                        while (deviceManager.udpDiscoveryEnabled) {
+                        while (isDiscoveryRunning) {
                             DiscoveryBroadcaster.sendBroadcast(deviceManager, displayName, "255.255.255.255")
                             Thread.sleep(2000)
                         }
                         Logger.i("卢西奥-死神-NotifyRelay", "UDP广播线程已关闭")
+                    } catch (e: InterruptedException) {
+                        // 正常中断，退出线程
+                        Logger.i("卢西奥-死神-NotifyRelay", "UDP广播线程被中断")
                     } catch (e: Exception) {
                         Logger.e("卢西奥-死神-NotifyRelay", "UDP广播异常: ${e.message}")
                         e.printStackTrace()
+                    } finally {
+                        broadcastThread = null
                     }
                 }
                 broadcastThread?.isDaemon = true
                 broadcastThread?.start()
             }
-            if (listenThread == null) {
-                listenThread = Thread {
-                    var socket: java.net.DatagramSocket? = null
-                    try {
-                        socket = java.net.DatagramSocket(23334)
-                        val buf = ByteArray(256)
-                        while (deviceManager.udpDiscoveryEnabled) {
-                            val packet = java.net.DatagramPacket(buf, buf.size)
-                            socket.receive(packet)
-                            val msg = String(packet.data, 0, packet.length)
-                            val ip = packet.address.hostAddress
-                            if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
-                                val parts = msg.split(":")
-                                if (parts.size >= 4) {
-                                    val uuid = parts[1]
-                                    val rawDisplay = parts[2]
-                                    val displayName = try {
-                                        deviceManager.decodeDisplayNameFromTransportInternal(rawDisplay)
-                                    } catch (_: Exception) {
-                                        rawDisplay
-                                    }
-                                    val port = parts[3].toIntOrNull() ?: deviceManager.listenPort
-                                    if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
-                                        val device = DeviceInfo(uuid, displayName, ip, port)
-                                        deviceManager.deviceLastSeenInternal[uuid] = System.currentTimeMillis()
-
-                                        synchronized(deviceManager.deviceInfoCacheInternal) {
-                                            deviceManager.deviceInfoCacheInternal[uuid] = device
-                                        }
-                                        com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
-                                        val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(uuid) }
-                                        if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(uuid)) {
-                                            //Logger.d("死神-NotifyRelay", "已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
-                                            deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
-                                        }
-                                        scope.launch { deviceManager.updateDeviceListInternal() }
-                                    }
-                                }
-                            }
-                        }
-                        Logger.i("卢西奥-死神-NotifyRelay", "UDP监听线程已关闭")
-                    } catch (e: Exception) {
-                        if (socket != null && socket.isClosed) {
-                            Logger.i("卢西奥-死神-NotifyRelay", "UDP监听线程正常关闭")
-                        } else {
-                            Logger.e("卢西奥-死神-NotifyRelay", "UDP监听异常: ${e.message}")
-                            e.printStackTrace()
-                        }
-                    } finally {
-                        try {
-                            socket?.close()
-                        } catch (_: Exception) {
-                        }
-                    }
-                }
-                listenThread?.isDaemon = true
-                listenThread?.start()
-            }
+            
+            // 使用提取的方法创建监听线程
+            extractUdpListenThread("UDP监听线程")
             manualDiscoveryJob?.cancel()
-        } else {
+        } 
+        // 如果UDP禁用且发现正在运行，则停止发现
+        else if (!udpEnabled && isDiscoveryRunning) {
+            stopDiscovery()
+            
             scope.launch {
                 val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                for ((uuid, auth) in authed) {
+                for ((uuid, _) in authed) {
                     if (uuid == deviceManager.uuid) continue
                     if (deviceManager.heartbeatedDevicesInternal.contains(uuid)) continue
                     val info = deviceManager.getDeviceInfoInternal(uuid)
@@ -355,7 +410,7 @@ class ConnectionDiscoveryManager(
                     val port = info?.port ?: deviceManager.listenPort
                     if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
                         //Logger.d("死神-NotifyRelay", "UDP关闭时自动connectToDevice: $uuid, $ip")
-                        deviceManager.connectToDevice(DeviceInfo(uuid, info.displayName, ip, port))
+                        connectToAuthedDevice(DeviceInfo(uuid, info.displayName, ip, port))
                     }
                 }
             }
@@ -372,7 +427,7 @@ class ConnectionDiscoveryManager(
             val maxFail = 5
             while (true) {
                 val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                for ((uuid, auth) in authed) {
+                for ((uuid, _) in authed) {
                     if (uuid == deviceManager.uuid) continue
                     if (deviceManager.heartbeatedDevicesInternal.contains(uuid)) continue
                     if (failMap[uuid] != null && failMap[uuid]!! >= maxFail) continue
@@ -380,7 +435,9 @@ class ConnectionDiscoveryManager(
                     val ip = info?.ip
                     val port = info?.port ?: deviceManager.listenPort
                     if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
-                        deviceManager.connectToDevice(DeviceInfo(uuid, info.displayName, ip, port)) { success, _ ->
+                        val device = DeviceInfo(uuid, info.displayName, ip, port)
+                        connectToAuthedDevice(device)
+                        deviceManager.connectToDevice(device) { success, _ ->
                             if (success) {
                                 failMap.remove(uuid)
                             } else {
@@ -430,63 +487,6 @@ class ConnectionDiscoveryManager(
         }
         
         // 在WLAN直连模式下也启动监听线程，确保能接收其他设备的广播消息
-        if (listenThread == null) {
-            listenThread = Thread {
-                var socket: java.net.DatagramSocket? = null
-                try {
-                    socket = java.net.DatagramSocket(23334)
-                    val buf = ByteArray(256)
-                    while (deviceManager.udpDiscoveryEnabled || deviceManager.isWifiDirectNetworkInternal()) {
-                        val packet = java.net.DatagramPacket(buf, buf.size)
-                        socket.receive(packet)
-                        val msg = String(packet.data, 0, packet.length)
-                        val ip = packet.address.hostAddress
-                        if (msg.startsWith("NOTIFYRELAY_DISCOVER:")) {
-                            val parts = msg.split(":")
-                            if (parts.size >= 4) {
-                                val uuid = parts[1]
-                                val rawDisplay = parts[2]
-                                val displayName = try {
-                                    deviceManager.decodeDisplayNameFromTransportInternal(rawDisplay)
-                                } catch (_: Exception) {
-                                    rawDisplay
-                                }
-                                val port = parts[3].toIntOrNull() ?: deviceManager.listenPort
-                                if (!uuid.isNullOrEmpty() && uuid != deviceManager.uuid && !ip.isNullOrEmpty()) {
-                                    val device = DeviceInfo(uuid, displayName, ip, port)
-                                    deviceManager.deviceLastSeenInternal[uuid] = System.currentTimeMillis()
-
-                                    synchronized(deviceManager.deviceInfoCacheInternal) {
-                                        deviceManager.deviceInfoCacheInternal[uuid] = device
-                                    }
-                                    com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(uuid, displayName)
-                                    val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(uuid) }
-                                    if (isAuthed && !deviceManager.heartbeatedDevicesInternal.contains(uuid)) {
-                                        //Logger.d("死神-NotifyRelay", "WLAN直连已认证设备收到UDP，自动尝试connectToDevice: $uuid, $ip")
-                                        deviceManager.connectToDevice(DeviceInfo(uuid, displayName, ip, port))
-                                    }
-                                    scope.launch { deviceManager.updateDeviceListInternal() }
-                                }
-                            }
-                        }
-                    }
-                    Logger.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程已关闭")
-                } catch (e: Exception) {
-                    if (socket != null && socket.isClosed) {
-                        Logger.i("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听线程正常关闭")
-                    } else {
-                        Logger.e("卢西奥-死神-NotifyRelay", "WLAN直连UDP监听异常: ${e.message}")
-                        e.printStackTrace()
-                    }
-                } finally {
-                    try {
-                        socket?.close()
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-            listenThread?.isDaemon = true
-            listenThread?.start()
-        }
+        extractUdpListenThread("WLAN直连UDP监听线程")
     }
 }

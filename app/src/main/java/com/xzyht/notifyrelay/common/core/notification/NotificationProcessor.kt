@@ -328,7 +328,7 @@ object NotificationProcessor {
                 //Logger.d("智能去重", "锁屏延迟复刻等待 ${waitMs}ms - 标题:${result.title}")
                 delay(waitMs)
 
-                val localList = com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getNotificationsByDevice("本机")
+                val localList = NotificationRepository.getNotificationsByDevice("本机")
                 fun normalizeTitleLocal(t: String?): String {
                     if (t == null) return ""
                     val prefixPattern = Regex("^\\([^)]+\\)")

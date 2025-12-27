@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.data.database.dao.AppConfigDao
 import com.xzyht.notifyrelay.common.data.database.dao.DeviceDao
 import com.xzyht.notifyrelay.common.data.database.dao.NotificationRecordDao
@@ -13,9 +14,6 @@ import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
-import com.xzyht.notifyrelay.common.core.util.Logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
@@ -57,7 +55,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_NAME
                 )
-                .addCallback(object : RoomDatabase.Callback() {
+                .addCallback(object : Callback() {
                     override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                         super.onCreate(db)
                         // 数据库创建后执行迁移逻辑

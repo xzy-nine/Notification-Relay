@@ -1,7 +1,16 @@
 package com.xzyht.notifyrelay.feature.device.service
 
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
+import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -9,15 +18,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.util.UUID
-import com.xzyht.notifyrelay.common.data.StorageManager
-import kotlinx.coroutines.delay
-import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
-import com.xzyht.notifyrelay.common.core.util.EncryptionManager
-import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
-import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
-import com.xzyht.notifyrelay.common.core.util.Logger
-import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 
 data class DeviceInfo(
     val uuid: String,
@@ -188,7 +188,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 
                 // 获取当前数据库中的所有设备
                 val currentDevices = repository.getDevices()
-                val currentDeviceUuids = currentDevices.map { it.uuid }.toSet()
+                currentDevices.map { it.uuid }.toSet()
                 
                 // 要保存的设备UUID列表
                 val deviceUuidsToSave = deviceEntities.map { it.uuid }.toSet()
@@ -243,14 +243,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      */
     val devices: StateFlow<Map<String, Pair<DeviceInfo, Boolean>>> = _devices
     internal val uuid: String
-        get() = field
+
     // 认证设备表，key为uuid
     internal val authenticatedDevices = mutableMapOf<String, AuthInfo>()
     // 被拒绝设备表
     private val rejectedDevices = mutableSetOf<String>()
     // 本地密钥对（简单字符串模拟，实际应用可用RSA/ECDH等）
     internal val localPublicKey: String
-        get() = field
     private val localPrivateKey: String
     internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -335,11 +334,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val deviceLastSeen = mutableMapOf<String, Long>()
     // 心跳定时任务
     private val heartbeatJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-    // UI全局开关：是否启用UDP发现
+    // UI全局开关：是否启用UDP发现，使用内存缓存避免频繁数据库访问
+    private var _udpDiscoveryEnabled: Boolean? = null
     var udpDiscoveryEnabled: Boolean
-        get() = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
+        get() {
+            if (_udpDiscoveryEnabled == null) {
+                _udpDiscoveryEnabled = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
+            }
+            return _udpDiscoveryEnabled!!
+        }
         set(value) {
-            StorageManager.putBoolean(context, "udp_discovery_enabled", value)
+            if (_udpDiscoveryEnabled != value) {
+                _udpDiscoveryEnabled = value
+                StorageManager.putBoolean(context, "udp_discovery_enabled", value)
+            }
         }
 
     init {
@@ -571,7 +579,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 启动图标同步过期请求清理协程
         coroutineScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(60000) // 每分钟清理一次
+                delay(60000) // 每分钟清理一次
                 com.xzyht.notifyrelay.common.core.sync.IconSyncManager.cleanupExpiredRequests()
             }
         }
@@ -701,14 +709,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     // 设置加密类型（可通过UI调用）
-    fun setEncryptionType(type: com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType) {
-        com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType(type)
+    fun setEncryptionType(type: EncryptionManager.EncryptionType) {
+        EncryptionManager.setEncryptionType(type)
         //Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
     }
 
     // 获取当前加密类型
-    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType {
-        return com.xzyht.notifyrelay.common.core.util.EncryptionManager.getCurrentEncryptionType()
+    fun getCurrentEncryptionType(): EncryptionManager.EncryptionType {
+        return EncryptionManager.getCurrentEncryptionType()
     }
 
     // 发送超级岛ACK（包含接收的hash），用于发送方确认

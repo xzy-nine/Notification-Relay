@@ -5,9 +5,9 @@ import androidx.compose.runtime.MutableState
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
 import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import kotlinx.coroutines.delay
 
 // 延迟去重缓存（10秒内）
@@ -167,7 +167,7 @@ suspend fun replicateNotification(
             try {
                 val pm = context.packageManager
                 // 尝试获取系统默认的应用图标
-                val defaultIcon = pm.getDefaultActivityIcon()
+                val defaultIcon = pm.defaultActivityIcon
                 if (defaultIcon is android.graphics.drawable.BitmapDrawable) {
                     appIcon = defaultIcon.bitmap
                 } else {
@@ -197,7 +197,7 @@ suspend fun replicateNotification(
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or (if (android.os.Build.VERSION.SDK_INT >= 23) android.app.PendingIntent.FLAG_IMMUTABLE else 0)
             )
         } else null
-        val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         val channelId = "notifyrelay_remote"
         if (notificationManager.getNotificationChannel(channelId) == null) {
             val channel = android.app.NotificationChannel(channelId, "远程通知", android.app.NotificationManager.IMPORTANCE_HIGH)

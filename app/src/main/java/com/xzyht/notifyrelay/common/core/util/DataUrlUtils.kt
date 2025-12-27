@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
-import com.xzyht.notifyrelay.BuildConfig
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -112,7 +111,7 @@ object DataUrlUtils {
                     } catch (_: Exception) {}
 
                     {
-                        val preview = if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
+                        if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
                         //Logger.d(TAG, "尝试解码 base64，meta=$meta, cleanedLen=${cleaned.length}, preview=$preview")
                     }
                     val bytes = tryDecodeBase64Variants(cleaned)

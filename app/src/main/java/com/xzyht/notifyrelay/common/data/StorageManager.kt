@@ -1,8 +1,8 @@
-﻿package com.xzyht.notifyrelay.common.data
+package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
-import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -45,6 +45,12 @@ object StorageManager {
             runBlocking {
                 repository.getConfig(prefixedKey, default)
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取字符串时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
             Logger.w("StorageManager", "获取字符串失败，键: $key", e)
             default
@@ -66,6 +72,11 @@ object StorageManager {
             runBlocking {
                 repository.setConfig(prefixedKey, value)
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入字符串时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "写入字符串失败，键: $key", e)
         }
@@ -87,6 +98,12 @@ object StorageManager {
             runBlocking {
                 repository.getConfig(prefixedKey, default.toString()).toBoolean()
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取布尔值时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
             Logger.w("StorageManager", "获取布尔值失败，键: $key", e)
             default
@@ -129,6 +146,11 @@ object StorageManager {
                     repository.setConfig(prefixedKey, value.toString())
                 }
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入布尔值时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "批量写入布尔值失败", e)
         }
@@ -150,6 +172,12 @@ object StorageManager {
             runBlocking {
                 repository.getConfig(prefixedKey, default.toString()).toInt()
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
             Logger.w("StorageManager", "获取整数失败，键: $key", e)
             default
@@ -171,6 +199,11 @@ object StorageManager {
             runBlocking {
                 repository.setConfig(prefixedKey, value.toString())
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "写入整数失败，键: $key", e)
         }
@@ -192,6 +225,12 @@ object StorageManager {
             runBlocking {
                 repository.getConfig(prefixedKey, default.toString()).toLong()
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取长整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
             Logger.w("StorageManager", "获取长整数失败，键: $key", e)
             default
@@ -213,6 +252,11 @@ object StorageManager {
             runBlocking {
                 repository.setConfig(prefixedKey, value.toString())
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入长整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "写入长整数失败，键: $key", e)
         }
@@ -234,6 +278,11 @@ object StorageManager {
                     repository.setConfig(prefixedKey, value)
                 }
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入字符串时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "批量写入字符串失败", e)
         }
@@ -255,6 +304,11 @@ object StorageManager {
                     repository.setConfig(prefixedKey, value.toString())
                 }
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入整数时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "批量写入整数失败", e)
         }
@@ -279,6 +333,12 @@ object StorageManager {
             val gson = com.google.gson.Gson()
             val type = com.google.gson.reflect.TypeToken.getParameterized(Set::class.java, String::class.java).type
             gson.fromJson(json, type) ?: default
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取字符串集合时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
             Logger.w("StorageManager", "获取字符串集合失败，键: $key", e)
             default
@@ -302,6 +362,11 @@ object StorageManager {
             runBlocking {
                 repository.setConfig(prefixedKey, json)
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入字符串集合时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "写入字符串集合失败，键: $key", e)
         }
@@ -322,6 +387,11 @@ object StorageManager {
             runBlocking {
                 repository.setConfig(prefixedKey, "")
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "移除键时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.w("StorageManager", "移除键失败: $key", e)
         }
@@ -356,7 +426,7 @@ object StorageManager {
     fun migrateData(context: Context, fromVersion: Int, toVersion: Int) {
         try {
             // 使用 fromVersion 参数以避免编译时的未使用参数警告，并记录调用意图
-            val _from = fromVersion // 显式读取参数，确保不会被诊断为未使用
+            fromVersion // 显式读取参数，确保不会被诊断为未使用
             //Logger.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
             
             val repository = DatabaseRepository.getInstance(context)
@@ -384,6 +454,11 @@ object StorageManager {
                 }
                 Logger.i("StorageManager", "数据迁移完成")
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.e("StorageManager", "数据迁移时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
             Logger.e("StorageManager", "数据迁移失败", e)
         }
