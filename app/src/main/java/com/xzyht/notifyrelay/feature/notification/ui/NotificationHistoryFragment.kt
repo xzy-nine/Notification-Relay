@@ -1,21 +1,6 @@
 ﻿package com.xzyht.notifyrelay.feature.notification.ui
 
-// ========================= 基础组件导入区 =========================
-// Android 基础组件
-// Compose 核心布局与手势相关
-// Compose 状态与UI基础
-// AndroidX 碎片管理
 
-// ========================= 业务模块导入区 =========================
-// 项目构建配置
-// 数据仓库层
-// 全局状态管理
-// 数据模型
-
-// ========================= 第三方UI库导入区 =========================
-// MIUI X 跨平台UI组件
-
-// ========================= 工具函数/常量 =========================
 import android.os.Bundle
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -61,7 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
@@ -154,16 +141,16 @@ fun NotificationCard(
                     if (intent != null) {
                         canOpen = true
                     } else {
-                        val now = System.currentTimeMillis()
-                        if (now - ToastDebounce.lastToastTime > ToastDebounce.DEBOUNCE_MILLIS) {
-                            android.widget.Toast.makeText(context, "无法打开应用：$mappedPkg", android.widget.Toast.LENGTH_SHORT).show()
-                            ToastDebounce.lastToastTime = now
-                        }
-                    }
+                                val now = System.currentTimeMillis()
+                                if (now - ToastDebounce.lastToastTime > ToastDebounce.DEBOUNCE_MILLIS) {
+                                    ToastUtils.showShortToast(context, "无法打开应用：$mappedPkg")
+                                    ToastDebounce.lastToastTime = now
+                                }
+                            }
                 } catch (e: Exception) {
                     val now = System.currentTimeMillis()
                     if (now - ToastDebounce.lastToastTime > ToastDebounce.DEBOUNCE_MILLIS) {
-                        android.widget.Toast.makeText(context, "启动失败：${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        ToastUtils.showShortToast(context, "启动失败：${e.message}")
                         ToastDebounce.lastToastTime = now
                     }
                 }
@@ -362,13 +349,12 @@ fun NotificationHistoryScreen() {
             // 主动刷新 StateFlow
             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
         } catch (e: Exception) {
-            Logger.e("NotifyRelay", "清除历史异常", e)
-            android.widget.Toast.makeText(
-                context,
-                "清除失败: ${e.message}",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-        }
+                Logger.e("NotifyRelay", "清除历史异常", e)
+                ToastUtils.showShortToast(
+                    context,
+                    "清除失败: ${e.message}"
+                )
+            }
     }
     val density = LocalDensity.current
     val deleteWidthPx = with(density) { 80.dp.toPx() }
@@ -686,17 +672,15 @@ fun NotificationHistoryScreen() {
                                 onClick = {
                                     try {
                                         // 跳转引导页面
-                                        val intent = android.content.Intent(context, GuideActivity::class.java)
+                                        val intent = IntentUtils.createIntent(context, GuideActivity::class.java)
                                         intent.putExtra("fromInternal", true)
-                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        context.startActivity(intent)
+                                        IntentUtils.startActivity(context, intent, true)
                                     } catch (e: Exception) {
                                         Logger.e("NotifyRelay", "引导跳转失败", e)
-                                        android.widget.Toast.makeText(
+                                        ToastUtils.showShortToast(
                                             context,
-                                            "跳转失败: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
+                                            "跳转失败: ${e.message}"
+                                        )
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColorsPrimary(),

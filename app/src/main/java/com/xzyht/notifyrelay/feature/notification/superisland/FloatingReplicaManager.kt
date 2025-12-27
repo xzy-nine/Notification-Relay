@@ -16,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.xzyht.notifyrelay.R
 import com.xzyht.notifyrelay.common.core.util.HapticFeedbackUtils
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
@@ -710,11 +711,9 @@ object FloatingReplicaManager {
 
     private fun requestOverlayPermission(context: Context) {
         try {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                data = Uri.parse("package:${context.packageName}")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+            val intent = IntentUtils.createImplicitIntent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+            intent.data = Uri.parse("package:${context.packageName}")
+            IntentUtils.startActivity(context, intent, true)
         } catch (e: Exception) {
             Logger.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
         }

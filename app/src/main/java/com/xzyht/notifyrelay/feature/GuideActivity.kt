@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -31,7 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,8 +44,10 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.xzyht.notifyrelay.common.PermissionHelper
+import com.xzyht.notifyrelay.common.SetupSystemBars
 import com.xzyht.notifyrelay.common.core.util.AppListHelper
-import com.xzyht.notifyrelay.common.core.util.SystemBarUtils
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
+import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.common.data.StorageManager
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.BasicComponentColors
@@ -82,20 +81,8 @@ class GuideActivity : ComponentActivity() {
             val isDarkTheme = isSystemInDarkTheme()
             val colors = if (isDarkTheme) darkColorScheme() else lightColorScheme()
             MiuixTheme(colors = colors) {
-                val colorScheme = MiuixTheme.colorScheme
-                // 统一在 Composable 作用域设置 window decor
-                SideEffect {
-                    val win = this@GuideActivity.window
-                    val controller = WindowCompat.getInsetsController(win, win.decorView)
-                    controller.isAppearanceLightNavigationBars = !isDarkTheme
-                    controller.isAppearanceLightStatusBars = !isDarkTheme
-                    val barColor = colorScheme.background.toArgb()
-                    SystemBarUtils.setStatusBarColor(win, barColor, false)
-                    SystemBarUtils.setNavigationBarColor(win, barColor, false)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        win.isNavigationBarContrastEnforced = false
-                    }
-                }
+                // 设置系统栏外观
+                SetupSystemBars(isDarkTheme)
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
                     StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false, StorageManager.PrefsType.GENERAL)
@@ -141,7 +128,7 @@ fun GuideScreen(onContinue: () -> Unit) {
     var hasBackgroundUnlimited by remember { mutableStateOf(false) }
     // Toast工具
     fun showToast(msg: String) {
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        ToastUtils.showShortToast(context, msg)
     }
 
     // 权限检测方法（使用 PermissionHelper 和 AppListHelper）
@@ -167,10 +154,7 @@ fun GuideScreen(onContinue: () -> Unit) {
         hasFloatNotification = PermissionHelper.checkOverlayPermission(context)
 
         // 检查开发者选项-停用屏幕共享保护
-        hasDevScreenShareProtectOff = try {
-            val value = Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
-            value == 1
-        } catch (_: Exception) { false }
+        hasDevScreenShareProtectOff = PermissionHelper.checkDevScreenShareProtectOff(context)
 
         // 使用 PermissionHelper 检查敏感通知权限
         hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
@@ -228,17 +212,16 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 checked = hasNotification,
                                 onCheckedChange = {
                                     showToast("跳转通知访问授权页面")
-                                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                    context.startActivity(intent)
+                        IntentUtils.startActivity(context, Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS, addNewTaskFlag = true)
                                 },
                                 enabled = true
                             )
                         },
                         onClick = {
-                            showToast("跳转通知访问授权页面")
-                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                            context.startActivity(intent)
-                        },
+                    showToast("跳转通知访问授权页面")
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                    IntentUtils.startActivity(context, intent, true)
+                },
                         modifier = Modifier.padding(vertical = 0.dp)
                     )
                     HorizontalDivider(color = dividerColor, thickness = 1.dp)
@@ -272,15 +255,11 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 }
                             } else {
                                 showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                                intent.data = Uri.parse("package:" + context.packageName)
-                                context.startActivity(intent)
+                                    IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
                             }
                         } catch (_: Exception) {
                             showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            intent.data = Uri.parse("package:" + context.packageName)
-                            context.startActivity(intent)
+                            IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
                         }
                     },
                     enabled = true
@@ -288,9 +267,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             },
             onClick = {
                 showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.data = Uri.parse("package:" + context.packageName)
-                context.startActivity(intent)
+                IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
@@ -368,8 +345,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                         if (checked) {
                             showToast("跳转到电池优化设置，请将应用设为无限制")
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                            intent.data = Uri.parse("package:" + context.packageName)
-                            context.startActivity(intent)
+                            intent.data = Uri.parse("package:${context.packageName}")
+                            IntentUtils.startActivity(context, intent, true)
                         } else {
                             hasBackgroundUnlimited = false
                         }
@@ -380,8 +357,8 @@ fun GuideScreen(onContinue: () -> Unit) {
             onClick = {
                 showToast("跳转到电池优化设置，请将应用设为无限制")
                 val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                intent.data = Uri.parse("package:" + context.packageName)
-                context.startActivity(intent)
+                intent.data = Uri.parse("package:${context.packageName}")
+                IntentUtils.startActivity(context, intent, true)
             },
             enabled = true,
             modifier = Modifier.padding(vertical = 0.dp)
@@ -414,7 +391,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                                 } ?: run {
                                     val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
                                     intent.data = Uri.parse("package:${context.packageName}")
-                                    context.startActivity(intent)
+                                    IntentUtils.startActivity(context, intent, true)
                                 }
                             } catch (e: Exception) {
                                 showToast("无法跳转悬浮窗设置，请手动在系统设置中允许悬浮窗权限")
@@ -455,7 +432,7 @@ fun GuideScreen(onContinue: () -> Unit) {
             ) {
                 Button(
                     onClick = {
-                        PermissionHelper.requestSensitiveNotificationPermission(context as Activity)
+                        IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
                     },
                     modifier = Modifier
                         .defaultMinSize(minWidth = 96.dp, minHeight = 32.dp)
@@ -487,9 +464,7 @@ fun GuideScreen(onContinue: () -> Unit) {
                     onCheckedChange = { checked ->
                         if (checked) {
                             showToast("请在应用详情页启用自启动权限")
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            intent.data = Uri.parse("package:" + context.packageName)
-                            context.startActivity(intent)
+                            IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
                         } else {
                             hasSelfStart = false
                         }
@@ -498,10 +473,8 @@ fun GuideScreen(onContinue: () -> Unit) {
                 )
             },
             onClick = {
-                showToast("请在应用详情页启用自启动权限")
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.data = Uri.parse("package:" + context.packageName)
-                context.startActivity(intent)
+                showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
+                IntentUtils.startActivity(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null), true)
             },
             modifier = Modifier.padding(vertical = 0.dp)
         )
