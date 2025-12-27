@@ -55,8 +55,6 @@ fun MultiProgressCompose(
 
     // 计算指针位置
     var containerWidth by remember { mutableStateOf(0f) }
-    containerWidth * (progressValue / 100f)
-    
     // 容器宽度变化时更新
     fun updateContainerWidth(width: Int) {
         if (width > 0) {
