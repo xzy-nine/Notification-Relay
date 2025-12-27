@@ -178,7 +178,7 @@ fun UIRemoteFilter() {
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             // 只使用缓存的包名集合，避免同步加载
-                            val installedPkgs = remember { AppRepository.getInstalledPackageNames(context) }
+                            val installedPkgs = remember(context) { AppRepository.getInstalledPackageNames(context) }
                             group.forEach { pkg ->
                                 val isInstalled = installedPkgs.contains(pkg)
                                 // 使用mutableStateOf保存图标状态，这样更新时会触发UI重新渲染
