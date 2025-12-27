@@ -63,8 +63,8 @@ object SuperIslandImageUtil {
         iconKey: String? = null
     ): Painter? {
         // 状态管理
-        val bitmapState = remember { mutableStateOf<Bitmap?>(null) }
-        val isLoading = remember { mutableStateOf(false) }
+        remember { mutableStateOf<Bitmap?>(null) }
+        remember { mutableStateOf(false) }
 
         // 如果提供了iconKey，先从picMap中获取url
         val resolvedUrl = remember(url, picMap, iconKey) {

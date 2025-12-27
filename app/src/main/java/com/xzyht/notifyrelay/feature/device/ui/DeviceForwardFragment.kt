@@ -78,7 +78,7 @@ class DeviceForwardFragment : Fragment() {
         StorageManager.putStringSet(requireContext(), KEY_AUTHED_UUIDS, uuids, StorageManager.PrefsType.DEVICE)
     }
 
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // 注册应用安装/卸载监听器
         val filter = android.content.IntentFilter().apply {
@@ -99,7 +99,7 @@ class DeviceForwardFragment : Fragment() {
         inflater: android.view.LayoutInflater,
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
-    ): android.view.View? {
+    ): android.view.View {
         //Logger.d("NotifyRelay(狂鼠)", "onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {

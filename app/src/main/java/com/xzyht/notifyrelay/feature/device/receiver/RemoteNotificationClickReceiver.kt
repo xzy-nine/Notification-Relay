@@ -13,9 +13,9 @@ class RemoteNotificationClickReceiver : BroadcastReceiver() {
             Logger.e("NotifyRelay(狂鼠)", "pkg is null in broadcast")
             return
         }
-        val title = intent.getStringExtra("title") ?: ""
-        val text = intent.getStringExtra("text") ?: ""
-        val key = intent.getStringExtra("key") ?: (System.currentTimeMillis().toString() + pkg)
+        intent.getStringExtra("title") ?: ""
+        intent.getStringExtra("text") ?: ""
+        intent.getStringExtra("key") ?: (System.currentTimeMillis().toString() + pkg)
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancel(notifyId)
         // 跳转应用

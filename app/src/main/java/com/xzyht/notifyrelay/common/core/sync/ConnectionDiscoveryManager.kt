@@ -347,7 +347,7 @@ class ConnectionDiscoveryManager(
         } else {
             scope.launch {
                 val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                for ((uuid, auth) in authed) {
+                for ((uuid, _) in authed) {
                     if (uuid == deviceManager.uuid) continue
                     if (deviceManager.heartbeatedDevicesInternal.contains(uuid)) continue
                     val info = deviceManager.getDeviceInfoInternal(uuid)
@@ -372,7 +372,7 @@ class ConnectionDiscoveryManager(
             val maxFail = 5
             while (true) {
                 val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                for ((uuid, auth) in authed) {
+                for ((uuid, _) in authed) {
                     if (uuid == deviceManager.uuid) continue
                     if (deviceManager.heartbeatedDevicesInternal.contains(uuid)) continue
                     if (failMap[uuid] != null && failMap[uuid]!! >= maxFail) continue

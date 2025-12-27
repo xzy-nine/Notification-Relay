@@ -2,6 +2,7 @@ package com.xzyht.notifyrelay.feature.notification.superisland.history
 
 import android.content.Context
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
 import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
@@ -33,6 +34,7 @@ data class SuperIslandHistoryEntry(
 object SuperIslandHistory {
     private const val MAX_ENTRIES = 600
     private val gson = Gson()
+    private val stringStringMapType = object : TypeToken<Map<String, String>>() {}.type
 
     private val historyFlow = MutableStateFlow<List<SuperIslandHistoryEntry>>(emptyList())
     private val lock = Any()
@@ -47,7 +49,7 @@ object SuperIslandHistory {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     // 从Room数据库加载所有历史记录（只加载摘要，不包含rawPayload）
-                    val repository = DatabaseRepository.Companion.getInstance(context)
+                    val repository = DatabaseRepository.getInstance(context)
                     val allEntities = repository.getSuperIslandHistory()
 
                     // 转换为SuperIslandHistoryEntry
@@ -61,7 +63,7 @@ object SuperIslandHistory {
                             title = entity.title,
                             text = entity.text,
                             paramV2Raw = entity.paramV2Raw,
-                            picMap = gson.fromJson(entity.picMap, Map::class.java) as Map<String, String>,
+                            picMap = gson.fromJson(entity.picMap, stringStringMapType),
                             rawPayload = null, // 初始加载时不加载rawPayload，按需加载
                             featureId = entity.featureId // 包含特征ID
                         )
@@ -156,7 +158,7 @@ object SuperIslandHistory {
      * 注意：这个方法会重新加载所有历史记录，可能会影响性能
      */
     suspend fun getAllHistory(context: Context): List<SuperIslandHistoryEntry> {
-        val repository = DatabaseRepository.Companion.getInstance(context)
+        val repository = DatabaseRepository.getInstance(context)
         val entities = repository.getSuperIslandHistory()
         return entities.map { entity ->
             SuperIslandHistoryEntry(
@@ -168,7 +170,7 @@ object SuperIslandHistory {
                 title = entity.title,
                 text = entity.text,
                 paramV2Raw = entity.paramV2Raw,
-                picMap = gson.fromJson(entity.picMap, Map::class.java) as Map<String, String>,
+                picMap = gson.fromJson(entity.picMap, stringStringMapType),
                 rawPayload = null,
                 featureId = entity.featureId
             )
@@ -179,7 +181,7 @@ object SuperIslandHistory {
      * 按需加载某条记录的完整内容（包含 rawPayload），用于打开详情时调用。
      */
     suspend fun loadEntryDetail(context: Context, id: Long): SuperIslandHistoryEntry? {
-        val repo = DatabaseRepository.Companion.getInstance(context)
+        val repo = DatabaseRepository.getInstance(context)
         val entity = try {
             repo.getSuperIslandHistoryById(id)
         } catch (_: Exception) {
@@ -195,7 +197,7 @@ object SuperIslandHistory {
                 title = e.title,
                 text = e.text,
                 paramV2Raw = e.paramV2Raw,
-                picMap = gson.fromJson(e.picMap, Map::class.java) as Map<String, String>,
+                picMap = gson.fromJson(e.picMap, stringStringMapType),
                 rawPayload = e.rawPayload,
                 featureId = e.featureId // 包含特征ID
             )
@@ -233,7 +235,7 @@ object SuperIslandHistory {
         // 保存到数据库：只去重真正相同的内容，保留相同特征ID但内容不同的记录
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.Companion.getInstance(context)
+                val repository = DatabaseRepository.getInstance(context)
                 val entity = SuperIslandHistoryEntity(
                     id = sanitizedEntry.id,
                     sourceDeviceUuid = sanitizedEntry.sourceDeviceUuid,
@@ -280,7 +282,7 @@ object SuperIslandHistory {
         // 清空Room数据库
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.Companion.getInstance(context)
+                val repository = DatabaseRepository.getInstance(context)
                 repository.clearSuperIslandHistory()
             } catch (_: Exception) {}
         }
@@ -297,7 +299,7 @@ object SuperIslandHistory {
         // 清空Room数据库
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val repository = DatabaseRepository.Companion.getInstance(context)
+                val repository = DatabaseRepository.getInstance(context)
                 repository.clearSuperIslandHistory()
             } catch (_: Exception) {}
         }

@@ -299,7 +299,7 @@ object SuperIslandManager {
 
             Logger.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
             try {
-                val sample = picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
+                picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
                 //Logger.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
             } catch (_: Exception) {}
 

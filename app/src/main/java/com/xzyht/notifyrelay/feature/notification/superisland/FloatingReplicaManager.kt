@@ -318,7 +318,7 @@ object FloatingReplicaManager {
 
             // 遍历所有条目，检查每个条目是否与关闭区重叠
             var currentY = containerY
-            for ((index, entry) in entries.withIndex()) {
+            for ((_, entry) in entries.withIndex()) {
                 // 使用条目实际高度，如果高度为0（未测量）则使用默认值
                 val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
                 

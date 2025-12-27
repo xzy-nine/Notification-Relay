@@ -43,14 +43,14 @@ class NotificationRecordStore(private val context: Context) {
     
     internal fun readAll(device: String): MutableList<NotificationRecordEntity> {
         val deviceUuid = if (device == "local") "本机" else device
-        return kotlinx.coroutines.runBlocking {
+        return runBlocking {
             repository.getNotificationsByDevice(deviceUuid)
         }.map { convertFromRoomEntity(it) }.toMutableList()
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
         val deviceUuid = if (device == "local") "本机" else device
-        kotlinx.coroutines.runBlocking {
+        runBlocking {
             val roomEntities = list.map { convertToRoomEntity(it, deviceUuid) }
             repository.saveNotifications(roomEntities)
         }
@@ -266,7 +266,7 @@ object NotificationRepository {
     // 扫描数据库中的设备，自动识别所有设备
     fun scanDeviceList(context: Context) {
         // 从Room数据库中获取所有已认证设备
-        val allDevicesFromDb = kotlinx.coroutines.runBlocking {
+        val allDevicesFromDb = runBlocking {
             com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context).getDevices()
         }
         
@@ -296,7 +296,7 @@ object NotificationRepository {
     fun init(context: Context) {
         try {
             scanDeviceList(context)
-            val store = NotifyRelayStoreProvider.getInstance(context)
+            NotifyRelayStoreProvider.getInstance(context)
             // 主动加载本地历史到内存，保证判重有效
             val store2 = NotifyRelayStoreProvider.getInstance(context)
             val localList = store2.readAll("本机").map {
@@ -323,14 +323,14 @@ object NotificationRepository {
     @Synchronized
     fun removeNotification(key: String, context: Context) {
         //Logger.d("NotifyRelay", "开始删除通知 key=$key")
-        val beforeSize = notifications.size
+        notifications.size
 
         // 查找要删除的通知，检查其设备类型
         val notificationToRemove = notifications.find { it.key == key }
         val isLocalDevice = notificationToRemove?.device == "本机"
 
         notifications.removeAll { it.key == key }
-        val afterSize = notifications.size
+        notifications.size
         //Logger.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
         syncToCache(context)
 
@@ -349,7 +349,7 @@ object NotificationRepository {
     fun removeNotificationsByPackage(packageName: String, context: Context) {
         // 收集要清除的通知key，用于清理缓存
         val notificationsToRemove = notifications.filter { it.packageName == packageName }
-        val keysToClear = notificationsToRemove.map { it.key }.toSet()
+        notificationsToRemove.map { it.key }.toSet()
 
         // 检查是否有本机设备的通知
         val hasLocalNotifications = notificationsToRemove.any { it.device == "本机" }

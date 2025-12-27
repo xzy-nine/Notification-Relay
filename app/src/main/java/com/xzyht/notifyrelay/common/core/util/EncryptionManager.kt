@@ -150,14 +150,14 @@ object EncryptionManager {
         private fun hkdfExtract(salt: ByteArray?, ikm: ByteArray): ByteArray {
             val mac = javax.crypto.Mac.getInstance("HmacSHA256")
             val realSalt = salt ?: ByteArray(32) { 0.toByte() }
-            val keySpec = javax.crypto.spec.SecretKeySpec(realSalt, "HmacSHA256")
+            val keySpec = SecretKeySpec(realSalt, "HmacSHA256")
             mac.init(keySpec)
             return mac.doFinal(ikm)
         }
 
         private fun hkdfExpand(prk: ByteArray, info: ByteArray, len: Int): ByteArray {
             val mac = javax.crypto.Mac.getInstance("HmacSHA256")
-            val keySpec = javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256")
+            val keySpec = SecretKeySpec(prk, "HmacSHA256")
             mac.init(keySpec)
             val hashLen = 32
             val n = (len + hashLen - 1) / hashLen
@@ -453,7 +453,7 @@ object EncryptionManager {
      * @return Base64 编码的密钥字符串（无换行）
      */
     fun aesKeyToString(key: SecretKey): String {
-        return AESEncryption.keyToString(key)
+        return keyToString(key)
     }
 
 

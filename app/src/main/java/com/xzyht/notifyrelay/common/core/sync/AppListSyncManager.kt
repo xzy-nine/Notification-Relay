@@ -35,7 +35,7 @@ object AppListSyncManager {
         targetDevice: DeviceInfo,
         scope: String = "user"
     ) {
-        val contextHash = context.hashCode()
+        context.hashCode()
         val req = JSONObject().apply {
             put("type", "APP_LIST_REQUEST")
             put("scope", scope)
@@ -106,10 +106,10 @@ object AppListSyncManager {
      */
     fun handleAppListResponse(responseData: String, context: Context) {
         try {
-            val contextHash = context.hashCode()
+            context.hashCode()
             val json = JSONObject(responseData)
             if (json.optString("type") != "APP_LIST_RESPONSE") return
-            val total = json.optInt("total", -1)
+            json.optInt("total", -1)
             //Logger.d(TAG, "收到应用列表响应，共 $total 项")
             // 如需缓存到本地，可在此扩展，例如：
             // StorageManager.putString(context, "remote_app_list_cache", json.toString())

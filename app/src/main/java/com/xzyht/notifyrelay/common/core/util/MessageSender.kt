@@ -45,7 +45,7 @@ object MessageSender {
     private val pendingKeys = ConcurrentHashMap.newKeySet<String>()
     // 已发送记录（带 TTL），防止短时间内重复发送已成功发送的通知
     private const val SENT_KEY_TTL_MS = 60_000L // 60秒内视为已发送，避免重复
-    private val sentKeys = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val sentKeys = ConcurrentHashMap<String, Long>()
 
     // 超级岛：为实现“首次全量，后续差异”，需要跟踪每个设备下每个feature的上次完整状态
     private val siLastStatePerDevice = mutableMapOf<String, MutableMap<String, SuperIslandProtocol.State>>()
@@ -53,7 +53,7 @@ object MessageSender {
     private const val SI_ACK_TIMEOUT_MS = 4_000L
     private data class PendingAck(val hash: String, val ts: Long)
     private val siPendingAcks = mutableMapOf<String, MutableMap<String, PendingAck>>() // deviceUuid -> featureId -> pending
-    private val siForceFullNext = java.util.concurrent.ConcurrentHashMap.newKeySet<String>() // key: deviceUuid|featureId
+    private val siForceFullNext = ConcurrentHashMap.newKeySet<String>() // key: deviceUuid|featureId
 
     init {
         // 启动队列处理协程
@@ -552,7 +552,7 @@ object MessageSender {
      */
     fun sendHighPriorityNotification(context: Context, title: String?, text: String?) {
         try {
-            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             val channelId = "notifyrelay_temp"
 
             // 创建通知渠道（如果不存在）
@@ -615,7 +615,7 @@ object MessageSender {
 
             val authenticatedDevices = mutableListOf<DeviceInfo>()
 
-            authedMap?.forEach { (uuid, auth) ->
+            authedMap?.forEach { (uuid, _) ->
                 val uuidStr = uuid as String
                 if (uuidStr == myUuid) return@forEach
 

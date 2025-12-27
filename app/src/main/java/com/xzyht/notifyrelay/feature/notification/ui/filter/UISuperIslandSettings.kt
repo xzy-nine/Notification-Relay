@@ -670,13 +670,13 @@ private fun buildEntryCopyText(
     }.trim()
 }
 
-private fun copyEntryToClipboard(context: android.content.Context, content: String) {
+private fun copyEntryToClipboard(context: Context, content: String) {
     if (content.isBlank()) {
         android.widget.Toast.makeText(context, "当前条目无可复制内容", android.widget.Toast.LENGTH_SHORT).show()
         return
     }
     try {
-        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = android.content.ClipData.newPlainText("super_island_entry", content)
         clipboard.setPrimaryClip(clip)
         android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()

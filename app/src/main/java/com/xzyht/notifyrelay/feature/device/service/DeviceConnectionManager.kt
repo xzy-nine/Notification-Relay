@@ -188,7 +188,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 
                 // 获取当前数据库中的所有设备
                 val currentDevices = repository.getDevices()
-                val currentDeviceUuids = currentDevices.map { it.uuid }.toSet()
+                currentDevices.map { it.uuid }.toSet()
                 
                 // 要保存的设备UUID列表
                 val deviceUuidsToSave = deviceEntities.map { it.uuid }.toSet()
@@ -243,14 +243,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      */
     val devices: StateFlow<Map<String, Pair<DeviceInfo, Boolean>>> = _devices
     internal val uuid: String
-        get() = field
+
     // 认证设备表，key为uuid
     internal val authenticatedDevices = mutableMapOf<String, AuthInfo>()
     // 被拒绝设备表
     private val rejectedDevices = mutableSetOf<String>()
     // 本地密钥对（简单字符串模拟，实际应用可用RSA/ECDH等）
     internal val localPublicKey: String
-        get() = field
     private val localPrivateKey: String
     internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -571,7 +570,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 启动图标同步过期请求清理协程
         coroutineScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(60000) // 每分钟清理一次
+                delay(60000) // 每分钟清理一次
                 com.xzyht.notifyrelay.common.core.sync.IconSyncManager.cleanupExpiredRequests()
             }
         }
@@ -701,14 +700,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
 
     // 设置加密类型（可通过UI调用）
-    fun setEncryptionType(type: com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType) {
-        com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType(type)
+    fun setEncryptionType(type: EncryptionManager.EncryptionType) {
+        EncryptionManager.setEncryptionType(type)
         //Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
     }
 
     // 获取当前加密类型
-    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType {
-        return com.xzyht.notifyrelay.common.core.util.EncryptionManager.getCurrentEncryptionType()
+    fun getCurrentEncryptionType(): EncryptionManager.EncryptionType {
+        return EncryptionManager.getCurrentEncryptionType()
     }
 
     // 发送超级岛ACK（包含接收的hash），用于发送方确认

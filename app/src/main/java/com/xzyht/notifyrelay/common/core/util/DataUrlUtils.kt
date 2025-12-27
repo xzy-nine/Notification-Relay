@@ -111,7 +111,7 @@ object DataUrlUtils {
                     } catch (_: Exception) {}
 
                     {
-                        val preview = if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
+                        if (cleaned.length > 64) cleaned.substring(0, 64) + "..." else cleaned
                         //Logger.d(TAG, "尝试解码 base64，meta=$meta, cleanedLen=${cleaned.length}, preview=$preview")
                     }
                     val bytes = tryDecodeBase64Variants(cleaned)

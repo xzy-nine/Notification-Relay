@@ -65,7 +65,8 @@ fun UILocalFilter(
         val coroutineScope = rememberCoroutineScope()
         val pm = context.packageManager
         val defaultAppIconBitmap = remember {
-            val drawable = try { pm.getDefaultActivityIcon() } catch (_: Exception) { null }
+            val drawable = try { pm.defaultActivityIcon
+            } catch (_: Exception) { null }
             if (drawable is android.graphics.drawable.BitmapDrawable) {
                 drawable.bitmap.asImageBitmap()
             } else {

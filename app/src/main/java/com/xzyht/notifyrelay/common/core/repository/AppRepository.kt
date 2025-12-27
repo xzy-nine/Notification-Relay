@@ -229,7 +229,7 @@ object AppRepository {
             try {
                 //Logger.d(TAG, "开始加载应用图标")
             val pm = context.packageManager
-            val newIcons = mutableMapOf<String, android.graphics.Bitmap?>()
+            val newIcons = mutableMapOf<String, Bitmap?>()
 
             apps.forEach { appInfo ->
                 try {
@@ -247,7 +247,7 @@ object AppRepository {
                                 // 将其他类型的drawable转换为bitmap
                                 val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 96
                                 val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 96
-                                val createdBitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                                val createdBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                                 val canvas = android.graphics.Canvas(createdBitmap)
                                 drawable.setBounds(0, 0, width, height)
                                 drawable.draw(canvas)
@@ -287,7 +287,7 @@ object AppRepository {
      * @param packageName 目标应用的包名（非空）。
      * @return 若内存缓存中存在则返回 Bitmap，否则返回 null（不进行阻塞加载）。
      */
-    fun getAppIcon(packageName: String): android.graphics.Bitmap? {
+    fun getAppIcon(packageName: String): Bitmap? {
         // 首先检查内存缓存
         var iconBitmap = cachedIcons[packageName]
         if (iconBitmap != null) {
@@ -311,7 +311,7 @@ object AppRepository {
      * @param packageName 目标应用的包名（非空）。
      * @return 应用图标的 Bitmap；若不存在则返回 null。
      */
-    suspend fun getAppIconAsync(context: Context, packageName: String): android.graphics.Bitmap? {
+    suspend fun getAppIconAsync(context: Context, packageName: String): Bitmap? {
         if (!isLoaded) {
             loadApps(context)
         }
@@ -341,7 +341,7 @@ object AppRepository {
      * @param packageName 目标应用的包名（非空）。
      * @return 应用图标的 Bitmap；若不存在则返回 null。
      */
-    fun getAppIconSync(context: Context, packageName: String): android.graphics.Bitmap? {
+    fun getAppIconSync(context: Context, packageName: String): Bitmap? {
         if (!isLoaded || cachedApps == null) {
             // 同步加载，使用runBlocking
             kotlinx.coroutines.runBlocking {
@@ -379,7 +379,7 @@ object AppRepository {
      *
      * @return 包名 -> Bitmap 的映射拷贝，Bitmap 可能为 null 表示缓存占位或失败。
      */
-    fun getAllCachedIcons(): Map<String, android.graphics.Bitmap?> {
+    fun getAllCachedIcons(): Map<String, Bitmap?> {
         return cachedIcons.toMap()
     }
 
@@ -389,7 +389,7 @@ object AppRepository {
      * @param packageName 外部应用的包名（用于作为键）。
      * @param icon 要缓存的 Bitmap，若为 null 则只在内存中移除对应条目。
      */
-    fun cacheExternalAppIcon(packageName: String, icon: android.graphics.Bitmap?) {
+    fun cacheExternalAppIcon(packageName: String, icon: Bitmap?) {
         cachedIcons[packageName] = icon
 
         // 同时保存到持久化缓存
@@ -424,7 +424,7 @@ object AppRepository {
      * @param packageName 目标应用包名。
      * @return 若存在则返回 Bitmap，否则返回 null。
      */
-    fun getExternalAppIcon(packageName: String): android.graphics.Bitmap? {
+    fun getExternalAppIcon(packageName: String): Bitmap? {
         // 首先检查内存缓存
         var iconBitmap = cachedIcons[packageName]
         if (iconBitmap != null) {

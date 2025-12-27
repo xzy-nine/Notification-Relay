@@ -46,8 +46,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         try { applicationContext.packageName } catch (_: Exception) { null },
                         System.currentTimeMillis(),
                         try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
-                        try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
-                        try { com.xzyht.notifyrelay.feature.device.model.NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
+                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
+                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
                         deviceManager,
                         featureIdOverride = featureId
                     )
@@ -120,7 +120,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
 
         // 监听网络状态变化，更新通知
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: android.net.Network) {
                 updateNotification()
@@ -375,7 +375,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         Logger.i("黑影 NotifyRelay", "[NotifyListener] onDestroy called")
         super.onDestroy()
         foregroundJob?.cancel()
-        stopForeground(android.app.Service.STOP_FOREGROUND_REMOVE)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         // 停止设备连接
         try {
             if (this::connectionManager.isInitialized) {
@@ -398,7 +398,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         } catch (_: Exception) {}
         // 注销网络监听器
         try {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             networkCallback?.let { connectivityManager.unregisterNetworkCallback(it) }
             networkCallback = null
         } catch (_: Exception) {}
@@ -410,7 +410,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             "通知转发后台服务",
             NotificationManager.IMPORTANCE_HIGH
         )
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
         val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
@@ -435,7 +435,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
 
         // 没有设备连接时，显示网络状态
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         val network = connectivityManager.activeNetwork
         val capabilities = connectivityManager.getNetworkCapabilities(network)
         val isWifi = capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
@@ -452,7 +452,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     private fun updateNotification() {
         //Logger.d("黑影 NotifyRelay", "updateNotification called")
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         // 根据是否有转发条件决定标题
         val canForward = getNotificationText().let { text ->
             !text.contains("无设备在线") && !text.contains("非局域网连接")
@@ -473,8 +473,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     private fun logSbnDetail(prefix: String, sbn: StatusBarNotification) {
         {
-            val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
-            val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+            NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
+            NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
             //Logger.d("NotifyRelay", "$prefix sbnKey=${sbn.key}, pkg=${sbn.packageName}, id=${sbn.id}, title=$title, text=$text")
         }
     }

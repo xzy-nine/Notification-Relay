@@ -80,7 +80,7 @@ object BackendRemoteFilter {
             var pkg = json.optString("packageName")
             val title = json.optString("title")
             val text = json.optString("text")
-            val time = System.currentTimeMillis()
+            System.currentTimeMillis()
             val isLocked = json.optBoolean("isLocked", false)
 
             //Logger.d("NotifyRelay(狂鼠)智能去重", "收到远程通知 - 时间:$time, 包名:$pkg, 标题:$title, 内容:$text, 锁屏:$isLocked")
@@ -407,7 +407,7 @@ object BackendRemoteFilter {
      */
     private fun cancelNotification(notifyId: Int, context: Context) {
         try {
-            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancel(notifyId)
             //Logger.d("智能去重", "已撤回通知 - 通知ID:$notifyId")
         } catch (e: Exception) {
@@ -448,9 +448,9 @@ object BackendRemoteFilter {
                 // 清理过期占位，避免内存泄露
                 val now2 = System.currentTimeMillis()
                 synchronized(pendingPlaceholders) {
-                    val before = pendingPlaceholders.size
+                    pendingPlaceholders.size
                     pendingPlaceholders.removeAll { now2 - it.createTime > it.ttl }
-                    val after = pendingPlaceholders.size
+                    pendingPlaceholders.size
                     //Logger.d ("智能去重", "清理过期占位: removed=${before - after}")
                 }
 

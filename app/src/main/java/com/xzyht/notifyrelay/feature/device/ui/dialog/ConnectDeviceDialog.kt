@@ -23,8 +23,8 @@ fun ConnectDeviceDialog(
 ) {
     if (device == null) return
 
-    val colorScheme = MiuixTheme.colorScheme
-    val textStyles = MiuixTheme.textStyles
+    MiuixTheme.colorScheme
+    MiuixTheme.textStyles
 
     SuperDialog(
         show = showDialog,
