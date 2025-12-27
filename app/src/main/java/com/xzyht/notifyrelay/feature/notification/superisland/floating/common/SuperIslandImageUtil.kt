@@ -62,10 +62,6 @@ object SuperIslandImageUtil {
         picMap: Map<String, String>? = null,
         iconKey: String? = null
     ): Painter? {
-        // 状态管理
-        remember { mutableStateOf<Bitmap?>(null) }
-        remember { mutableStateOf(false) }
-
         // 如果提供了iconKey，先从picMap中获取url
         val resolvedUrl = remember(url, picMap, iconKey) {
             if (!iconKey.isNullOrEmpty() && picMap != null) {
