@@ -334,11 +334,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val deviceLastSeen = mutableMapOf<String, Long>()
     // 心跳定时任务
     private val heartbeatJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
-    // UI全局开关：是否启用UDP发现
+    // UI全局开关：是否启用UDP发现，使用内存缓存避免频繁数据库访问
+    private var _udpDiscoveryEnabled: Boolean? = null
     var udpDiscoveryEnabled: Boolean
-        get() = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
+        get() {
+            if (_udpDiscoveryEnabled == null) {
+                _udpDiscoveryEnabled = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
+            }
+            return _udpDiscoveryEnabled!!
+        }
         set(value) {
-            StorageManager.putBoolean(context, "udp_discovery_enabled", value)
+            if (_udpDiscoveryEnabled != value) {
+                _udpDiscoveryEnabled = value
+                StorageManager.putBoolean(context, "udp_discovery_enabled", value)
+            }
         }
 
     init {
