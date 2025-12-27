@@ -7,26 +7,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.io.OutputStreamWriter
 import java.net.ServerSocket
-import java.net.Socket
 import java.util.UUID
 import com.xzyht.notifyrelay.common.data.StorageManager
 import kotlinx.coroutines.delay
-import android.util.Log
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
-import com.xzyht.notifyrelay.core.util.EncryptionManager
-import com.xzyht.notifyrelay.core.sync.ServerLineRouter
-import com.xzyht.notifyrelay.core.sync.DiscoveryBroadcaster
-import com.xzyht.notifyrelay.core.sync.HandshakeSender
-import com.xzyht.notifyrelay.core.sync.HeartbeatSender
-import com.xzyht.notifyrelay.core.sync.ConnectionDiscoveryManager
-import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.feature.device.repository.remoteNotificationFilter
-import com.xzyht.notifyrelay.feature.device.repository.replicateNotification
-import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandProtocol
+import com.xzyht.notifyrelay.common.core.util.EncryptionManager
+import com.xzyht.notifyrelay.common.core.sync.ServerLineRouter
+import com.xzyht.notifyrelay.common.core.sync.ConnectionDiscoveryManager
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 
 data class DeviceInfo(
     val uuid: String,
@@ -85,7 +76,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     ContextCompat.checkSelfPermission(context, android.Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
                 } else true
                 if (canReadBt) {
-                    val btName = android.bluetooth.BluetoothAdapter.getDefaultAdapter()?.name
+                    val bluetoothManager = context.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as android.bluetooth.BluetoothManager
+                    val btName = bluetoothManager.adapter?.name
                     if (!btName.isNullOrEmpty()) return sanitizeDisplayName(btName)
                 }
             } catch (_: Exception) {}
@@ -262,7 +254,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     private val localPrivateKey: String
     internal val listenPort: Int = 23333
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
-    private val keepAlive = com.xzyht.notifyrelay.core.sync.ConnectionKeepAlive(this, coroutineScope)
+    private val keepAlive = com.xzyht.notifyrelay.common.core.sync.ConnectionKeepAlive(this, coroutineScope)
     private val discoveryManager = ConnectionDiscoveryManager(this, coroutineScope)
 
     // === 以下为提供给 ServerLineRouter 等内部组件使用的访问器（保持字段本身 private） ===
@@ -394,7 +386,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 try {
                     updateDeviceList()
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.e("死神-NotifyRelay", "startOfflineDeviceCleaner定时器异常: ${e.message}")
+                    Logger.e("死神-NotifyRelay", "startOfflineDeviceCleaner定时器异常: ${e.message}")
                 }
             }
         }
@@ -402,7 +394,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
     private fun updateDeviceList() {
         val now = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "[updateDeviceList] invoked at $now")
+        //Logger.d("死神-NotifyRelay", "[updateDeviceList] invoked at $now")
     val authSnapshot = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
     val authed = authSnapshot.keys.toSet()
         val allUuids = (deviceLastSeen.keys + authed).toSet()
@@ -420,7 +412,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             // 检查时钟回拨
             var safeLastSeen = lastSeen
             if (lastSeen != null && now < lastSeen) {
-                if (BuildConfig.DEBUG) Log.w("死神-NotifyRelay", "检测到时钟回拨: now=$now, lastSeen=$lastSeen, uuid=$uuid，强制重置lastSeen=now")
+                Logger.w("死神-NotifyRelay", "检测到时钟回拨: now=$now, lastSeen=$lastSeen, uuid=$uuid，强制重置lastSeen=now")
                 deviceLastSeen[uuid] = now
                 safeLastSeen = now
             }
@@ -431,7 +423,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val info = getDeviceInfo(uuid) ?: DeviceInfo(uuid, auth.displayName ?: "已认证设备", "", listenPort)
                 val oldOnline = oldMap[uuid]?.second
                 if (oldOnline != null && oldOnline != isOnline) {
-                    if (BuildConfig.DEBUG) Log.i("天使-死神-NotifyRelay", "[updateDeviceList] 已认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
+                    Logger.i("天使-死神-NotifyRelay", "[updateDeviceList] 已认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
                 }
                 newMap[uuid] = info to isOnline
             } else {
@@ -440,7 +432,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val info = getDeviceInfo(uuid)
                 val oldOnline = oldMap[uuid]?.second
                 if (oldOnline != null && oldOnline != isOnline) {
-                    if (BuildConfig.DEBUG) Log.i("死神-NotifyRelay", "[updateDeviceList] 未认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
+                    Logger.i("死神-NotifyRelay", "[updateDeviceList] 未认证设备状态变化: uuid=$uuid, isOnline=$isOnline, lastSeen=$safeLastSeen, diff=$diff")
                 }
                 if (isOnline) {
                     if (info != null) newMap[uuid] = info to true
@@ -457,14 +449,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
         // 仅在设备列表或认证在线数量发生实际变化时触发回调，避免频繁刷新
         if (oldMap != newMap || oldAuthOnlineCount != newAuthOnlineCount) {
-            if (BuildConfig.DEBUG) {
-                try { android.util.Log.d("死神-NotifyRelay", "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount") } catch (_: Exception) {}
+            run {
+                try {
+                    //Logger.d(
+                    //    "死神-NotifyRelay",
+                    //    "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount"
+                    //)
+                } catch (_: Exception) {
+                }
             }
             _devices.value = newMap
             try {
                 onDeviceListChanged?.invoke()
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "onDeviceListChanged callback failed: ${e.message}")
+                Logger.w("死神-NotifyRelay", "onDeviceListChanged callback failed: ${e.message}")
             }
         } else {
             _devices.value = newMap
@@ -516,7 +514,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             try {
                 if (rejectedDevices.contains(device.uuid)) {
-                    if (BuildConfig.DEBUG) android.util.Log.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
+                    //Logger.d("死神-NotifyRelay", "connectToDevice: 已被对方拒绝 uuid=${device.uuid}")
                     callback?.invoke(false, "已被对方拒绝")
                     return@launch
                 }
@@ -526,7 +524,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 val result = keepAlive.performDeviceConnectionWithRetry(device, maxRetries)
                 callback?.invoke(result.first, result.second)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) android.util.Log.e("死神-NotifyRelay", "connectToDevice异常: ${e.message}")
+                Logger.e("死神-NotifyRelay", "connectToDevice异常: ${e.message}")
                 e.printStackTrace()
                 callback?.invoke(false, e.message)
             }
@@ -550,12 +548,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             try {
                 val auth = authenticatedDevices[device.uuid]
                 if (auth == null || !auth.isAccepted) {
-                    if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "未认证设备，禁止发送")
+                    //Logger.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
-                com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
+                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e("死神-NotifyRelay", "发送通知数据失败", e)
+                Logger.e("死神-NotifyRelay", "发送通知数据失败", e)
             }
         }
     }
@@ -565,7 +563,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      */
     fun requestRemoteAppList(device: DeviceInfo, scope: String = "user") {
         try {
-            com.xzyht.notifyrelay.core.sync.AppListSyncManager.requestAppListFromDevice(context, this, device, scope)
+            com.xzyht.notifyrelay.common.core.sync.AppListSyncManager.requestAppListFromDevice(context, this, device, scope)
         } catch (_: Exception) {}
     }
 
@@ -574,7 +572,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         coroutineScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(60000) // 每分钟清理一次
-                com.xzyht.notifyrelay.core.sync.IconSyncManager.cleanupExpiredRequests()
+                com.xzyht.notifyrelay.common.core.sync.IconSyncManager.cleanupExpiredRequests()
             }
         }
     }
@@ -697,20 +695,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
             return existed
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) android.util.Log.w("死神-NotifyRelay", "removeAuthenticatedDevice failed: ${e.message}")
+            Logger.w("死神-NotifyRelay", "removeAuthenticatedDevice failed: ${e.message}")
             return false
         }
     }
 
     // 设置加密类型（可通过UI调用）
-    fun setEncryptionType(type: com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType) {
-        com.xzyht.notifyrelay.core.util.EncryptionManager.setEncryptionType(type)
-        if (BuildConfig.DEBUG) Log.d("死神-NotifyRelay", "加密类型已设置为: $type")
+    fun setEncryptionType(type: com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType) {
+        com.xzyht.notifyrelay.common.core.util.EncryptionManager.setEncryptionType(type)
+        //Logger.d("死神-NotifyRelay", "加密类型已设置为: $type")
     }
 
     // 获取当前加密类型
-    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.core.util.EncryptionManager.EncryptionType {
-        return com.xzyht.notifyrelay.core.util.EncryptionManager.getCurrentEncryptionType()
+    fun getCurrentEncryptionType(): com.xzyht.notifyrelay.common.core.util.EncryptionManager.EncryptionType {
+        return com.xzyht.notifyrelay.common.core.util.EncryptionManager.getCurrentEncryptionType()
     }
 
     // 发送超级岛ACK（包含接收的hash），用于发送方确认
@@ -736,7 +734,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
             // 通过统一加密发送器发回对端
             val deviceInfo = DeviceInfo(remoteUuid, DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid), ip, port)
-            com.xzyht.notifyrelay.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
         } catch (_: Exception) {
         }
     }

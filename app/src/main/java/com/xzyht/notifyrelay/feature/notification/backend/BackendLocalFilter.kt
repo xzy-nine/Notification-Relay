@@ -1,12 +1,12 @@
-package com.xzyht.notifyrelay.feature.notification.backend
+﻿package com.xzyht.notifyrelay.feature.notification.backend
 
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.data.StorageManager
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 
 /**
@@ -155,8 +155,8 @@ object BackendLocalFilter {
     }
 
     fun removeFilterEntry(context: Context, keyword: String, packageName: String) {
-    // 内置条目不可删除（包括内置文本关键词和默认包名）
-    if ((packageName.isBlank() && builtinFilterEntries.any { it.keyword == keyword && it.keyword.isNotBlank() }) || (keyword.isBlank() && builtinFilterEntries.any { it.packageName == packageName && it.packageName.isNotBlank() })) return
+        // 内置条目不可删除（包括内置文本关键词和默认包名）
+        if ((packageName.isBlank() && builtinFilterEntries.any { it.keyword == keyword && it.keyword.isNotBlank() }) || (keyword.isBlank() && builtinFilterEntries.any { it.packageName == packageName && it.packageName.isNotBlank() })) return
         val entries = StorageManager.getStringSet(context, KEY_FILTER_ENTRIES, emptySet(), StorageManager.PrefsType.FILTER).toMutableSet()
         val ser = serialize(FilterEntry(keyword, packageName))
         entries.remove(ser)
@@ -218,7 +218,7 @@ object BackendLocalFilter {
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
         // 日志辅助排查过滤内容 - 只在非定时检查时输出，避免刷屏
         if (BuildConfig.DEBUG && !isFromPeriodicCheck) {
-            Log.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
+            Logger.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
         }
 
         // 过滤媒体通知（不存储，避免蓝牙歌词等标题频繁变化）

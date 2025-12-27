@@ -143,14 +143,49 @@ class DatabaseRepository(private val database: AppDatabase) {
     // 超级岛历史记录相关方法
     
     /**
-     * 获取所有超级岛历史记录
+     * 获取所有超级岛历史记录（摘要）——不加载 rawPayload，避免占用大量内存
+     * 包含所有记录，不进行去重，用于调试
      */
     suspend fun getSuperIslandHistory(): List<SuperIslandHistoryEntity> {
-        return superIslandHistoryDao.getAllHistory()
+        // 使用只读取小字段的摘要查询，然后构造实体（rawPayload 设为 null）
+        val summaries = superIslandHistoryDao.getAllHistorySummary()
+        return summaries.map { s ->
+            SuperIslandHistoryEntity(
+                id = s.id,
+                sourceDeviceUuid = s.sourceDeviceUuid,
+                originalPackage = s.originalPackage,
+                mappedPackage = s.mappedPackage,
+                appName = s.appName,
+                title = s.title,
+                text = s.text,
+                paramV2Raw = s.paramV2Raw,
+                picMap = s.picMap,
+                rawPayload = null,
+                featureId = s.featureId
+            )
+        }
     }
     
     /**
-     * 保存超级岛历史记录
+     * 获取每个特征ID对应的最新一条超级岛历史记录
+     * 用于去重显示，避免重复数据
+     */
+    suspend fun getLatestSuperIslandHistoryByFeature(): List<SuperIslandHistoryEntity> {
+        // 直接使用数据库层面的去重查询
+        return superIslandHistoryDao.getLatestByDistinctFeatureId()
+    }
+    
+    // 删除不需要的isSameContent方法，因为现在使用数据库层面的去重
+    
+    /**
+     * 根据特征ID获取最新的超级岛历史记录
+     */
+    suspend fun getLatestSuperIslandHistoryByFeatureId(featureId: String): SuperIslandHistoryEntity? {
+        return superIslandHistoryDao.getLatestByFeatureId(featureId)
+    }
+    
+    /**
+     * 保存超级岛历史记录列表
      */
     suspend fun saveSuperIslandHistory(history: List<SuperIslandHistoryEntity>) {
         superIslandHistoryDao.insertAll(history)
@@ -164,10 +199,53 @@ class DatabaseRepository(private val database: AppDatabase) {
     }
     
     /**
+     * 根据特征ID和内容更新或插入超级岛历史记录
+     * 相同特征ID但内容不同的记录会被保留
+     */
+    suspend fun upsertSuperIslandHistoryByFeatureAndContent(history: SuperIslandHistoryEntity) {
+        superIslandHistoryDao.upsertByFeatureAndContent(history)
+    }
+    
+    /**
+     * 根据特征ID获取最新的超级岛历史记录
+     */
+    suspend fun getSuperIslandHistoryByFeatureId(featureId: String): List<SuperIslandHistoryEntity> {
+        return superIslandHistoryDao.getAllHistory().filter { it.featureId == featureId }
+    }
+    
+    /**
      * 清空所有超级岛历史记录
      */
     suspend fun clearSuperIslandHistory() {
         superIslandHistoryDao.clearAll()
+    }
+
+    /**
+     * 按 id 获取完整的超级岛历史记录（包含 rawPayload），按需调用以避免一次性加载大字段
+     */
+    suspend fun getSuperIslandHistoryById(id: Long): SuperIslandHistoryEntity? {
+        return superIslandHistoryDao.getById(id)
+    }
+
+    /**
+     * 获取指定 id 的 rawPayload（仅字符串），按需使用以减少内存峰值
+     */
+    suspend fun getRawPayloadById(id: Long): String? {
+        return superIslandHistoryDao.getRawPayloadById(id)
+    }
+    
+    /**
+     * 删除旧的超级岛历史记录，只保留最新的指定数量记录
+     */
+    suspend fun deleteOldSuperIslandHistory(keepCount: Int) {
+        superIslandHistoryDao.deleteOldestRecords(keepCount)
+    }
+    
+    /**
+     * 删除单条超级岛历史记录
+     */
+    suspend fun deleteSuperIslandHistory(history: SuperIslandHistoryEntity) {
+        superIslandHistoryDao.delete(history)
     }
     
 

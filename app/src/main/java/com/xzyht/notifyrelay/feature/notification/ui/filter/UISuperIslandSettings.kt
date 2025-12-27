@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -28,39 +28,44 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParser
+import com.xzyht.notifyrelay.common.core.util.DataUrlUtils
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.core.util.DataUrlUtils
-import com.xzyht.notifyrelay.core.util.ImageLoader
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandImageStore
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistory
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandHistoryEntry
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistory
+import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslandHistoryEntry
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
+import com.xzyht.notifyrelay.feature.notification.ui.dialog.SuperIslandTestDialog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.max
-import kotlin.math.roundToInt
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.icon.MiuixIcons
 import java.util.Date
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private const val SUPER_ISLAND_IMAGE_MAX_DIMENSION = 320
 private const val SUPER_ISLAND_DOWNLOAD_MAX_BYTES = 4 * 1024 * 1024
@@ -75,7 +80,7 @@ fun UISuperIslandSettings() {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_KEY, true)) }
     var includeImageDataOnCopy by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, false)) }
-    var renderWithCompose by remember { mutableStateOf(StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)) }
+
     val historyState = remember(context) { SuperIslandHistory.historyState(context) }
     val history by historyState.collectAsState()
     val groups = remember(history) {
@@ -109,21 +114,6 @@ fun UISuperIslandSettings() {
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 渲染切换开关 - 使用普通Switch组件
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Compose渲染",
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Switch(
-                                checked = renderWithCompose,
-                                onCheckedChange = {
-                                    renderWithCompose = it
-                                    StorageManager.putBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, it)
-                                }
-                            )
-                        }
-                        
                         // 测试按钮
                         Button(
                             onClick = {
@@ -158,16 +148,16 @@ fun UISuperIslandSettings() {
                         Spacer(modifier = Modifier.height(0.dp))
 
                         SuperSwitch(
-                            title = "复制图片详细信息",
-                            summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
-                            checked = includeImageDataOnCopy,
-                            onCheckedChange = {
-                                includeImageDataOnCopy = it
-                                StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
-                            }
-                        )
+                title = "复制图片详细信息",
+                summary = "长按条目可复制原始消息，关闭时图片数据将在文本中替换为 \"图片\"。",
+                checked = includeImageDataOnCopy,
+                onCheckedChange = {
+                    includeImageDataOnCopy = it
+                    StorageManager.putBoolean(context, SUPER_ISLAND_COPY_IMAGE_DATA_KEY, it)
+                }
+            )
 
-                        Spacer(modifier = Modifier.height(0.dp))
+            Spacer(modifier = Modifier.height(0.dp))
 
                         if (groups.isEmpty()) {
                             Text("暂无超级岛历史记录", style = textStyles.body2, color = colorScheme.onSurfaceVariantSummary)
@@ -300,9 +290,7 @@ private fun SuperIslandHistorySummaryRow(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
-    val copyText = remember(entry, includeImageDataOnCopy) {
-        buildEntryCopyText(entry, includeImageDataOnCopy)
-    }
+    val coroutineScope = rememberCoroutineScope()
 
     val titleText = entry.title?.takeIf { it.isNotBlank() }
         ?: entry.appName?.takeIf { it.isNotBlank() }
@@ -310,7 +298,7 @@ private fun SuperIslandHistorySummaryRow(
         ?: entry.originalPackage?.takeIf { it.isNotBlank() }
         ?: "超级岛事件"
 
-    val displayTitle = titleText.let { unescapeHtml(it) }
+    val displayTitle = titleText.let { SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -321,7 +309,14 @@ private fun SuperIslandHistorySummaryRow(
                     triggerFloatingReplica(context, entry)
                 },
                 onLongClick = {
-                    copyEntryToClipboard(context, copyText)
+                    coroutineScope.launch(Dispatchers.IO) {
+                        val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                        val final = full ?: entry
+                        val text = buildEntryCopyText(final, includeImageDataOnCopy)
+                        withContext(Dispatchers.Main) {
+                            copyEntryToClipboard(context, text)
+                        }
+                    }
                 }
             )
     ) {
@@ -365,9 +360,7 @@ private fun SuperIslandHistoryEntryCard(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val context = LocalContext.current
-    val copyText = remember(entry, includeImageDataOnCopy) {
-        buildEntryCopyText(entry, includeImageDataOnCopy)
-    }
+        val coroutineScope = rememberCoroutineScope()
 
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -378,7 +371,12 @@ private fun SuperIslandHistoryEntryCard(
                     triggerFloatingReplica(context, entry)
                 },
                 onLongClick = {
-                    copyEntryToClipboard(context, copyText)
+                    coroutineScope.launch {
+                        val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                        val final = full ?: entry
+                        val text = buildEntryCopyText(final, includeImageDataOnCopy)
+                        copyEntryToClipboard(context, text)
+                    }
                 }
             )
     ) {
@@ -387,7 +385,7 @@ private fun SuperIslandHistoryEntryCard(
             ?: entry.mappedPackage?.takeIf { it.isNotBlank() }
             ?: entry.originalPackage?.takeIf { it.isNotBlank() }
             ?: "超级岛事件"
-        val displayTitle = titleText.let { unescapeHtml(it) }
+        val displayTitle = titleText.let { SuperIslandImageUtil.parseSimpleHtmlToAnnotatedString(it) }
         Text(displayTitle, style = textStyles.body1, color = colorScheme.onSurface)
 
         val detailText = entry.text
@@ -439,9 +437,10 @@ private fun SuperIslandHistoryEntryCard(
             )
         }
 
-        val rawPayload = entry.rawPayload
-        if (!rawPayload.isNullOrBlank()) {
-            val displayPayload = if (includeImageDataOnCopy) rawPayload else sanitizeImageContent(rawPayload, false)
+        var loadedDetail by remember { mutableStateOf<SuperIslandHistoryEntry?>(null) }
+        val displayPayloadRaw = loadedDetail?.rawPayload ?: entry.rawPayload
+        if (!displayPayloadRaw.isNullOrBlank()) {
+            val displayPayload = if (includeImageDataOnCopy) displayPayloadRaw else sanitizeImageContent(displayPayloadRaw, false)
             Text(
                 text = displayPayload,
                 style = textStyles.body2,
@@ -449,6 +448,18 @@ private fun SuperIslandHistoryEntryCard(
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis
             )
+        } else {
+            // 未加载 rawPayload，提供按需加载按钮
+            androidx.compose.material3.TextButton(onClick = {
+                coroutineScope.launch {
+                    val full = try { SuperIslandHistory.loadEntryDetail(context, entry.id) } catch (_: Exception) { null }
+                    if (full != null) {
+                        loadedDetail = full
+                    }
+                }
+            }) {
+                Text("加载详情")
+            }
         }
     }
 }
@@ -531,7 +542,7 @@ private fun SuperIslandHistoryImage(imageKey: String, data: String, modifier: Mo
 
 private suspend fun downloadBitmap(context: Context, urlString: String, timeoutMs: Int = 5_000): Bitmap? {
     return try {
-        ImageLoader.loadBitmapSuspend(context, urlString, timeoutMs)
+        SuperIslandImageUtil.loadBitmapSuspend(context, urlString, timeoutMs)
     } catch (_: Exception) { null }
 }
 
@@ -670,9 +681,7 @@ private fun copyEntryToClipboard(context: android.content.Context, content: Stri
         clipboard.setPrimaryClip(clip)
         android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-            android.util.Log.e("NotifyRelay", "复制超级岛原始消息失败", e)
-        }
+        Logger.e("NotifyRelay", "复制超级岛原始消息失败", e)
         android.widget.Toast.makeText(context, "复制失败", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
@@ -692,7 +701,8 @@ private fun triggerFloatingReplica(context: Context, entry: SuperIslandHistoryEn
         title = title,
         text = entry.text,
         paramV2Raw = entry.paramV2Raw,
-        picMap = entry.picMap.takeIf { it.isNotEmpty() }
+        picMap = entry.picMap.takeIf { it.isNotEmpty() },
+        isLocked = false
     )
 }
 

@@ -39,14 +39,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NotifyRelay">
-        <activity android:name=".feature.guide.GuideActivity"
+        <activity android:name=".feature.GuideActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".feature.main.MainActivity" android:exported="true" />
+        <activity android:name=".feature.MainActivity" android:exported="true" />
         <!-- 通知监听服务声明，用于系统识别通知访问权限 -->
         <service
             android:name=".feature.notification.service.NotifyRelayNotificationListenerService"

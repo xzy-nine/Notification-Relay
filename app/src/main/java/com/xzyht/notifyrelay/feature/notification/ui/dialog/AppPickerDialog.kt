@@ -1,7 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.ui.dialog
 
 import android.content.pm.ApplicationInfo
-import android.util.Log
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,7 +24,7 @@ import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.xzyht.notifyrelay.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
 
 /**
  * 应用选择的弹窗
@@ -42,10 +42,10 @@ fun AppPickerDialog(
     val pm = context.packageManager
     val coroutineScope = rememberCoroutineScope()
 
-    var showSystemApps by rememberSaveable(key = "showSystemApps") { mutableStateOf(true) }
-    var appSearchQuery by rememberSaveable(key = "appSearchQuery") { mutableStateOf("") }
+    var showSystemApps by rememberSaveable { mutableStateOf(true) }
+    var appSearchQuery by rememberSaveable { mutableStateOf("") }
 
-    val showDialog = rememberSaveable(key = "showDialog") { mutableStateOf(visible) }
+    val showDialog = rememberSaveable { mutableStateOf(visible) }
 
     // 监听 AppRepository 的状态
     val isLoading by AppRepository.isLoading.collectAsState()
@@ -177,7 +177,7 @@ fun AppPickerDialog(
                                     }
                                 }
 
-                                if (appSearchQuery.isNotBlank() && filteredApps.none { app: ApplicationInfo -> app.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]"))) {
+                                if (appSearchQuery.isNotBlank() && filteredApps.none { app: ApplicationInfo -> app.packageName == appSearchQuery } && appSearchQuery.matches(Regex("[a-zA-Z0-9_.]+"))) {
                                     item {
                                         Column(
                                             modifier = Modifier

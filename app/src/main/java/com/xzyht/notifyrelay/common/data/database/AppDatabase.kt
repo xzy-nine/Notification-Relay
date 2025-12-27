@@ -1,10 +1,10 @@
-package com.xzyht.notifyrelay.common.data.database
+﻿package com.xzyht.notifyrelay.common.data.database
 
 import android.content.Context
 import androidx.room.Database
-import androidx.room.migration.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import com.xzyht.notifyrelay.common.data.database.dao.AppConfigDao
 import com.xzyht.notifyrelay.common.data.database.dao.DeviceDao
 import com.xzyht.notifyrelay.common.data.database.dao.NotificationRecordDao
@@ -13,6 +13,7 @@ import com.xzyht.notifyrelay.common.data.database.entity.AppConfigEntity
 import com.xzyht.notifyrelay.common.data.database.entity.DeviceEntity
 import com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity
 import com.xzyht.notifyrelay.common.data.database.entity.SuperIslandHistoryEntity
+import com.xzyht.notifyrelay.common.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,7 +29,7 @@ import kotlinx.coroutines.launch
         NotificationRecordEntity::class,
         SuperIslandHistoryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -68,7 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
                         }
                     }
                 })
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { INSTANCE = it }
             }
         }
@@ -114,6 +115,21 @@ abstract class AppDatabase : RoomDatabase() {
         }
         
         /**
+         * 数据库迁移：从版本2到版本3
+         * 为super_island_history表添加featureId字段和相关索引
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // 1. 为super_island_history表添加featureId字段
+                database.execSQL("ALTER TABLE super_island_history ADD COLUMN featureId TEXT")
+                
+                // 2. 创建索引
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_super_island_feature_id ON super_island_history(featureId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_super_island_device_feature ON super_island_history(sourceDeviceUuid, featureId)")
+            }
+        }
+        
+        /**
          * 从旧存储迁移数据到Room数据库
          */
         private suspend fun migrateFromLegacyStorage(context: Context, database: AppDatabase) {
@@ -152,7 +168,7 @@ abstract class AppDatabase : RoomDatabase() {
                 com.xzyht.notifyrelay.common.data.database.migration.MigrationHelper.cleanupLegacyStorage(context)
             } catch (e: Exception) {
                 if (com.xzyht.notifyrelay.BuildConfig.DEBUG) {
-                    android.util.Log.e("AppDatabase", "迁移失败: ${e.message}", e)
+                   Logger.e("AppDatabase", "迁移失败: ${e.message}", e)
                 }
             }
         }

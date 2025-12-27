@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay.feature.notification.superisland
 
+import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
 import org.json.JSONObject
 
 /**
@@ -61,9 +62,9 @@ object SuperIslandRemoteStore {
         var p2 = old?.paramV2Raw
         val pics = old?.pics?.toMutableMap() ?: mutableMapOf()
 
-    if (diffObj.has("title")) title = diffObj.optString("title", "")
-    if (diffObj.has("text")) text = diffObj.optString("text", "")
-    if (diffObj.has("param_v2_raw")) p2 = diffObj.optString("param_v2_raw", "")
+        if (diffObj.has("title")) title = diffObj.optString("title", "")
+        if (diffObj.has("text")) text = diffObj.optString("text", "")
+        if (diffObj.has("param_v2_raw")) p2 = diffObj.optString("param_v2_raw", "")
 
         val picsChanged = diffObj.optJSONObject("pics")
         if (picsChanged != null) {

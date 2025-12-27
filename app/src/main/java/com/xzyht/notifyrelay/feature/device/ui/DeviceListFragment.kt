@@ -1,9 +1,17 @@
-package com.xzyht.notifyrelay.feature.device.ui
+﻿package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
-import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,7 +30,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
@@ -67,10 +75,10 @@ class DeviceListFragment : Fragment() {
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
     ): android.view.View? {
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
+        //Logger.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
-                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
+                //Logger.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
                 MiuixTheme {
                     DeviceListScreen()
                 }
@@ -143,8 +151,8 @@ fun DeviceListScreen() {
             .map { it.uuid }
     }
 
-    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
-    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
+    //Logger.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
+    //Logger.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
 
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {

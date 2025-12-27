@@ -38,13 +38,13 @@ object PermissionHelper {
         // 判断是否为 MIUI/澎湃系统（厂商或系统包识别）
         val isMiui = detectMiuiOrPengpai(context)
 
-    // 检查应用列表权限
-    var canQueryApps: Boolean
+        // 检查应用列表权限
+        var canQueryApps: Boolean
         try {
             val pm = context.packageManager
             val apps = pm.getInstalledApplications(0)
             canQueryApps = apps.size > 2
-                if (isMiui) {
+            if (isMiui) {
                 canQueryApps = canQueryApps && (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") == PackageManager.PERMISSION_GRANTED)
             }
         } catch (e: Exception) {
@@ -154,7 +154,13 @@ object PermissionHelper {
     @Suppress("DEPRECATION")
     fun isUsageStatsEnabled(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // API 29+ 使用 unsafeCheckOpNoThrow
+            appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        } else {
+            // API 29- 使用兼容的 checkOpNoThrow
+            appOps.checkOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        }
         return mode == android.app.AppOpsManager.MODE_ALLOWED
     }
 

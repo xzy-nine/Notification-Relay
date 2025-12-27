@@ -1,10 +1,9 @@
-package com.xzyht.notifyrelay.common.data
+﻿package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
-import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.util.Logger
 import java.io.File
 
 /** 持久化管理器。负责应用内与设备相关的数据持久化读写。*/
@@ -55,13 +54,13 @@ object PersistenceManager {
                 data ?: emptyList()
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("PersistenceManager", "读取设备 $device 的通知记录失败: ${e.message}")
+            Logger.e("PersistenceManager", "读取设备 $device 的通知记录失败: ${e.message}")
             // 直接删除损坏的文件
             try {
                 file.delete()
-                if (BuildConfig.DEBUG) Log.w("PersistenceManager", "已删除设备 $device 的损坏通知文件")
+                Logger.w("PersistenceManager", "已删除设备 $device 的损坏通知文件")
             } catch (ex: Exception) {
-                if (BuildConfig.DEBUG) Log.e("PersistenceManager", "删除损坏文件失败: ${ex.message}")
+                Logger.e("PersistenceManager", "删除损坏文件失败: ${ex.message}")
             }
             emptyList()
         }

@@ -4,6 +4,7 @@ import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 data class VersionInfo(val versionName: String, val versionCode: Int)
@@ -61,7 +62,7 @@ object Versioning {
     // 计算 version 信息
     // majorSubtract: 手动设置的减量（用于在大版本号更新后减去一定量，防止次版本号持续增长）
     fun compute(rootProjectDir: File, majorOverride: Int = 0, majorSubtract: Int = 0): VersionInfo {
-        val gitDir = findGitDir(rootProjectDir) ?: return VersionInfo("$majorOverride.0.0", 0)
+        val gitDir = findGitDir(rootProjectDir) ?: return VersionInfo("$majorOverride.0.0.0", 0)
     // parentFile 可为空（理论上不会，因为 gitDir 是 .git 文件夹），直接在调用时提供回退值以避免可空性问题
     val git = openGit(gitDir.parentFile ?: rootProjectDir)
 
@@ -71,35 +72,37 @@ object Versioning {
             ""
         }
 
-    // 统计 main 分支提交数（如果存在）
-    val mainCount = countExclusiveCommits(git, "refs/heads/main", null)
-    // 应用手动减量，确保不小于 0
-    val mainCountAdjusted = kotlin.math.max(0, mainCount - majorSubtract)
+        // 统计 main 分支提交数（如果存在）
+        val mainCount = countExclusiveCommits(git, "refs/heads/main", null)
+        // 应用手动减量，确保不小于 0
+        val mainCountAdjusted = kotlin.math.max(0, mainCount - majorSubtract)
 
-        // 非 main 分支的修订号应为该分支相对于 main 的独有提交数（等同于 git rev-list --count HEAD ^main）
-        val exclusiveHeadCount = try {
-            // 如果 main 分支不存在，回退到 HEAD 的全部可达提交数
-            val mainRefExists = try { git?.repository?.resolve("refs/heads/main") != null } catch (_: Exception) { false }
-            if (mainRefExists) {
-                countExclusiveCommits(git, "HEAD", "refs/heads/main")
-            } else {
-                countExclusiveCommits(git, "HEAD", null)
-            }
-        } catch (e: Exception) { 0 }
+        // 获取当前时间
+        val now = LocalDateTime.now()
+        val dateTime = now.format(DateTimeFormatter.ofPattern("MMddHHmm"))
 
-        val patch = if (branch == "main") {
-            val fmt = DateTimeFormatter.ofPattern("MMdd")
-            LocalDate.now().format(fmt).toInt()
+        // 生成 versionName 和 versionCode
+        // 简化版本号格式：所有分支统一使用 major.mainCount.MMddHHmm，main分支添加发布后缀
+        val versionName = if (branch == "main") {
+            // main分支：major.mainCount.MMddHHmm-release
+            "$majorOverride.$mainCountAdjusted.$dateTime-release"
         } else {
-            exclusiveHeadCount
+            // 非main分支：major.mainCount.MMddHHmm
+            "$majorOverride.$mainCountAdjusted.$dateTime"
         }
-
-    val versionName = "$majorOverride.$mainCountAdjusted.$patch"
-    val versionCode = (majorOverride * 10_000_000) + (mainCountAdjusted * 1000) + patch
+        
+        // versionCode 计算：确保远小于 Int.MAX_VALUE(2147483647)，避免溢出风险
+        // 调整系数：进一步降低各部分权重，确保长期递增
+        // 格式：major * 1_000_000 + mainCount * 1_000 + MMddHHmm
+        // 1_000_000 系数确保 major 为高位，1_000 系数确保 mainCount 为中位，MMddHHmm 为低位
+        // 最大值估算：200*1,000,000 + 100,000*1,000 + 12312359 = 312,312,359 < 2,147,483,647
+        val versionCode = (majorOverride * 1_000_000L + mainCountAdjusted * 1_000L + dateTime.toLong()).coerceAtMost(Int.MAX_VALUE.toLong())
+        
+        Pair(versionName, versionCode)
 
         // Close repository resources
         try { git?.repository?.close() } catch (_: Exception) {}
 
-        return VersionInfo(versionName, versionCode)
+        return VersionInfo(versionName, versionCode.toInt())
     }
 }

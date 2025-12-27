@@ -5,57 +5,32 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
-import android.text.Html
-import android.text.TextUtils
-import android.util.Log
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.lifecycle.LifecycleOwner
-import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.core.util.HapticFeedbackUtils
-import com.xzyht.notifyrelay.common.data.StorageManager
-import com.xzyht.notifyrelay.feature.notification.superisland.SuperIslandSettingsKeys
-import com.xzyht.notifyrelay.core.util.ImageLoader
+import com.xzyht.notifyrelay.R
+import com.xzyht.notifyrelay.common.core.util.HapticFeedbackUtils
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.common.SuperIslandImageUtil
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowLifecycleOwner
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.buildBigIslandCollapsedView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.bigislandarea.unescapeHtml
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.compose.buildComposeViewFromRawParam
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressBinding
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.CircularProgressView
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.HighlightInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.ProgressInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.SmallIslandArea
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.bindTimerUpdater
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.buildComposeViewFromTemplate
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.buildViewFromTemplate
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.formatTimerInfo
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.parseParamV2
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.renderer.resolveHighlightIconBitmap
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingComposeContainer
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.LifecycleManager
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.ParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.parseParamV2
+import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.abs
 
 /**
  * 接收端的超级岛复刻实现骨架。
@@ -64,92 +39,47 @@ import kotlin.math.abs
  */
 object FloatingReplicaManager {
     private const val TAG = "超级岛"
-    private const val EXPANDED_DURATION_MS = 3_000L
-    private const val TRANSITION_DURATION_MS = 220L
-    private const val AUTO_DISMISS_DURATION_MS = 12_000L
-    private const val PROGRESS_RESET_THRESHOLD = 5
     private const val FIXED_WIDTH_DP = 320 // 固定悬浮窗宽度，以确保MultiProgressRenderer完整显示
 
-    private var overlayView: WeakReference<View>? = null
-    private var stackContainer: WeakReference<LinearLayout>? = null
-    private var overlayLayoutParams: WindowManager.LayoutParams? = null
-    private var windowManager: WeakReference<WindowManager>? = null
+    // Compose浮窗管理器
+    private val floatingWindowManager = FloatingWindowManager().apply {
+        // 设置条目为空时的回调
+        onEntriesEmpty = { removeOverlayContainer() }
+    }
+    // Compose生命周期管理器
+    private val lifecycleManager = LifecycleManager()
     // 提供给 Compose 的生命周期所有者（不依赖 ViewTree）
     private var overlayLifecycleOwner: FloatingWindowLifecycleOwner? = null
 
-    // 通过反射调用 androidx.lifecycle.ViewTreeLifecycleOwner.set(view, owner)
-    private fun tryInstallViewTreeLifecycleOwner(view: View, owner: LifecycleOwner) {
-        try {
-            val clazz = Class.forName("androidx.lifecycle.ViewTreeLifecycleOwner")
-            val method = clazz.getMethod("set", View::class.java, LifecycleOwner::class.java)
-            method.invoke(null, view, owner)
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 安装 ViewTreeLifecycleOwner 失败: ${e.message}")
-        }
-    }
-
-    // 通过反射调用 androidx.savedstate.ViewTreeSavedStateRegistryOwner.set(view, owner)
-    private fun tryInstallViewTreeSavedStateRegistryOwner(view: View, owner: SavedStateRegistryOwner) {
-        try {
-            val clazz = Class.forName("androidx.savedstate.ViewTreeSavedStateRegistryOwner")
-            val method = clazz.getMethod(
-                "set",
-                View::class.java,
-                Class.forName("androidx.savedstate.SavedStateRegistryOwner")
-            )
-            method.invoke(null, view, owner)
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 安装 ViewTreeSavedStateRegistryOwner 失败: ${e.message}")
-        }
-    }
-    // 单独的全屏关闭层（拖动时显示底部中心关闭指示器）
-    private var closeOverlayView: WeakReference<View>? = null
-    private var closeOverlayLayoutParams: WindowManager.LayoutParams? = null
-    private var closeTargetView: WeakReference<View>? = null
-    // 使用Handler.Callback避免内存泄漏
-    private val handler = Handler(Looper.getMainLooper()) { message ->
-        // 所有Runnable都会通过这个方法执行
-        // 由于我们使用的是postDelayed，这里不需要处理具体message
-        false
-    }
+    // 浮窗容器视图
+    private var overlayView: WeakReference<View>? = null
+    // 浮窗布局参数
+    private var overlayLayoutParams: WindowManager.LayoutParams? = null
+    // WindowManager实例
+    private var windowManager: WeakReference<WindowManager>? = null
 
     // 会话级屏蔽池：进程结束后自然清空，value 为最后屏蔽时间戳
     private val blockedInstanceIds = ConcurrentHashMap<String, Long>()
     // 会话级屏蔽过期时间（默认 15 秒），避免用户刚刚关闭后立即再次弹出
     private const val BLOCK_EXPIRE_MS = 15_000L
-    
-    // 优化：缓存背景资源，避免重复创建GradientDrawable
-    private val expandedBackgroundCache = mutableMapOf<Context, GradientDrawable>()
-    private val summaryBackgroundCache = mutableMapOf<Context, GradientDrawable>()
-    // 优化：缓存密度值，避免频繁计算density
-    private val densityCache = mutableMapOf<Context, Float>()
-    
-    // 优化：获取密度值，优先从缓存中获取
-    private fun getDensity(context: Context): Float {
-        return densityCache.getOrPut(context) {
-            context.resources.displayMetrics.density
-        }
-    }
 
-    private data class EntryRecord(
-        val key: String,
-        val container: FrameLayout,
-        var expandedView: View,
-        var summaryView: View,
-        val summaryOnly: Boolean = false,
-        var isExpanded: Boolean = true,
-        var collapseRunnable: Runnable? = null,
-        var removalRunnable: Runnable? = null,
-        var lastExpandedProgress: Int? = null,
-        var lastSummaryProgress: Int? = null
-    )
+    // 保存sourceId到entryKey列表的映射，以便后续能正确移除条目
+    // 一个sourceId可能对应多个条目，所以使用列表保存
+    private val sourceIdToEntryKeyMap = mutableMapOf<String, MutableList<String>>()
 
-    private data class SummaryViewResult(
-        val view: View,
-        val progressBinding: CircularProgressBinding?
-    )
+    // 单独的全屏关闭层（拖动时显示底部中心关闭指示器）
+    private var closeOverlayView: WeakReference<View>? = null
+    private var closeOverlayLayoutParams: WindowManager.LayoutParams? = null
+    private var closeTargetView: WeakReference<View>? = null
 
-    private val entries = ConcurrentHashMap<String, EntryRecord>()
+    // 当前是否正在拖动容器
+    private var isContainerDragging = false
+
+    // 关闭区位置信息
+    private var closeAreaTop: Int = 0
+    private var closeAreaBottom: Int = 0
+    private var closeAreaLeft: Int = 0
+    private var closeAreaRight: Int = 0
 
     /**
      * 显示超级岛复刻悬浮窗。
@@ -159,20 +89,23 @@ object FloatingReplicaManager {
     // sourceId: 用于区分不同来源的超级岛通知（通常传入 superPkg），用于刷新/去重同一来源的浮窗
     fun showFloating(
         context: Context,
-        sourceId: String?,
+        sourceId: String,
         title: String?,
         text: String?,
         paramV2Raw: String? = null,
-        picMap: Map<String, String>? = null
+        picMap: Map<String, String>? = null,
+        appName: String? = null,
+        isLocked: Boolean = false
     ) {
         try {
             // 会话级屏蔽检查：同一个 instanceId 在本轮被用户关闭后不再展示
-            if (!sourceId.isNullOrBlank() && isInstanceBlocked(sourceId)) {
-                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
+            if (sourceId.isNotBlank() && isInstanceBlocked(sourceId)) {
+                Logger.i(TAG, "超级岛: instanceId=$sourceId 已在本轮会话中被屏蔽，忽略展示")
                 return
             }
 
             if (!canShowOverlay(context)) {
+                Logger.i(TAG, "超级岛: 无悬浮窗权限，尝试请求权限")
                 requestOverlayPermission(context)
                 return
             }
@@ -183,92 +116,57 @@ object FloatingReplicaManager {
                     if (overlayLifecycleOwner == null) {
                         overlayLifecycleOwner = FloatingWindowLifecycleOwner()
                     }
+                    // 通知Compose生命周期管理器浮窗显示
+                    lifecycleManager.onShow()
                     // 尝试解析paramV2
                     val paramV2 = parseParamV2Safe(paramV2Raw)
-                    
+
                     // 判断是否为摘要态
                     val summaryOnly = when {
                         paramV2?.business == "miui_flashlight" -> true
                         paramV2Raw?.contains("miui_flashlight") == true -> true
                         else -> false
                     }
-                    
+
                     // 将所有图片 intern 为引用，避免重复保存相同图片
                     val internedPicMap = SuperIslandImageStore.internAll(context, picMap)
-                    val entryKey = sourceId ?: "${title ?: ""}|${text ?: ""}"
-                    val smallIsland = paramV2?.paramIsland?.smallIslandArea
-                    val summaryBitmap = smallIsland?.iconKey?.let { iconKey -> downloadBitmapByKey(context, internedPicMap, iconKey) }
-                    val fallbackBitmap = summaryBitmap ?: downloadFirstAvailableImage(context, internedPicMap)
-                    // 使用Compose构建视图的开关（来自设置页）
-                    val useCompose = StorageManager.getBoolean(context, SuperIslandSettingsKeys.RENDER_WITH_COMPOSE, true)
-                    
-                    // 优化渲染逻辑：即使paramV2为null，也尝试使用Compose渲染
-                    var expandedBinding: CircularProgressBinding? = null
-                    val expandedView = if (useCompose) {
-                        try {
-                            if (paramV2 != null) {
-                                val composeResult = buildComposeViewFromTemplate(context, paramV2, internedPicMap, null, overlayLifecycleOwner)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染，sourceId=$sourceId, paramV2=${paramV2.business}")
-                                composeResult.view
-                            } else if (!paramV2Raw.isNullOrBlank()) {
-                                // 尝试直接使用paramV2Raw构建ComposeView
-                                val composeView = buildComposeViewFromRawParam(context, paramV2Raw, internedPicMap, overlayLifecycleOwner)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用Compose渲染(直接从raw)，sourceId=$sourceId")
-                                composeView as View
-                            } else {
-                                // 回退到View渲染
-                                val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                                expandedBinding = templateResult?.progressBinding
-                                val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                                if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
-                                view
-                            }
-                        } catch (e: Exception) {
-                            // Compose渲染失败，回退到View渲染
-                            val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                            expandedBinding = templateResult?.progressBinding
-                            val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: Compose渲染失败，回退到View渲染，sourceId=$sourceId, error=${e.message}")
-                            view
-                        }
-                    } else {
-                        val templateResult = paramV2?.let { buildViewFromTemplate(context, it, internedPicMap, null) }
-                        expandedBinding = templateResult?.progressBinding
-                        val view = templateResult?.view ?: buildLegacyExpandedView(context, title, text, fallbackBitmap)
-                        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 使用View渲染，sourceId=$sourceId, paramV2=${paramV2?.business}, type=${if (templateResult != null) "template" else "legacy"}")
-                        view
-                    }
-                    val collapsedSummary = buildCollapsedSummaryView(context, paramV2Raw, internedPicMap)
-                        ?: buildSummaryView(
-                            context,
-                            smallIsland,
-                            paramV2?.highlightInfo,
-                            title,
-                            text,
-                            summaryBitmap ?: fallbackBitmap,
-                            internedPicMap
-                        )
+                    // 生成唯一的entryKey，确保包含sourceId，以便后续能正确移除
+                    // 对于同一通知的不同时间更新，应该使用相同的key，所以不能包含时间戳
+                    val entryKey = sourceId
 
-                    // 增强空指针保护：确保所有必要参数都不为null
-                    addOrUpdateEntry(
-                        context,
-                        entryKey,
-                        expandedView,
-                        collapsedSummary.view,
-                        expandedBinding, // View渲染传递实际的progressBinding，Compose暂时为null
-                        collapsedSummary.progressBinding,
-                        summaryOnly
+                    // 更新Compose浮窗管理器的条目
+                    // 锁屏状态下不自动展开，非锁屏状态保持原有逻辑
+                    floatingWindowManager.addOrUpdateEntry(
+                        key = entryKey,
+                        paramV2 = paramV2,
+                        paramV2Raw = paramV2Raw,
+                        picMap = internedPicMap,
+                        isExpanded = if (isLocked) false else !summaryOnly,
+                        summaryOnly = summaryOnly,
+                        business = paramV2?.business,
+                        title = title,
+                        text = text,
+                        appName = appName
                     )
+
+                    // 保存sourceId到entryKey的映射，以便后续能正确移除
+                    if (sourceId.isNotBlank()) {
+                        // 如果sourceId已存在，添加到列表中；否则创建新列表
+                        val entryKeys = sourceIdToEntryKeyMap.getOrPut(sourceId) { mutableListOf() }
+                        // 确保每个entryKey只添加一次
+                        if (!entryKeys.contains(entryKey)) {
+                            entryKeys.add(entryKey)
+                        }
+                    }
+
+                    // 创建或更新浮窗UI
+                    addOrUpdateEntry(context, entryKey, summaryOnly)
                 } catch (e: Exception) {
-                    if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败(协程): ${'$'}{e.message}")
-                    // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
-                    removeOverlayIfNoEntries()
+                    Logger.w(TAG, "超级岛: 显示浮窗失败(协程): ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
-            // 若此前已创建 Overlay 但未成功添加条目，立即移除以避免空容器拦截触摸
-            removeOverlayIfNoEntries()
+            Logger.w(TAG, "超级岛: 显示浮窗失败，退化为通知: ${e.message}")
         }
     }
 
@@ -278,121 +176,21 @@ object FloatingReplicaManager {
         if (instanceId.isNullOrBlank()) return false
         val now = System.currentTimeMillis()
         val ts = blockedInstanceIds[instanceId] ?: return false
-        // 超过过期时间则自动移除黑名单
+        // 检查是否超过过期时间
         if (now - ts > BLOCK_EXPIRE_MS) {
             blockedInstanceIds.remove(instanceId)
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 屏蔽过期，自动移除 instanceId=$instanceId")
+            Logger.i(TAG, "超级岛: 屏蔽过期，自动移除 instanceId=$instanceId")
             return false
         }
+        // 如果会话仍在活跃（有新请求），更新屏蔽时间，让屏蔽继续保持
+        blockedInstanceIds[instanceId] = now
         return true
     }
 
     private fun blockInstance(instanceId: String?) {
         if (instanceId.isNullOrBlank()) return
         blockedInstanceIds[instanceId] = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 会话级屏蔽 instanceId=$instanceId")
-    }
-
-    // 关闭指示器高亮/还原动画
-    private fun animateCloseTargetHighlight(highlight: Boolean) {
-        val target = closeTargetView?.get() ?: return
-        val endScale = if (highlight) 1.2f else 1.0f
-        val endAlpha = if (highlight) 1.0f else 0.7f
-
-        try {
-            target.animate()
-                .scaleX(endScale)
-                .scaleY(endScale)
-                .alpha(endAlpha)
-                .setDuration(160L)
-                .start()
-        } catch (_: Exception) {
-        }
-    }
-
-    // 触觉反馈：进入/离开关闭区域时短振动
-    private fun performHapticFeedback(context: Context) {
-        HapticFeedbackUtils.performLightHaptic(context)
-    }
-
-    /**
-     * 构建“收起态（摘要态）”视图：完全独立于展开态模板。
-     * 若 param_v2 中存在 bigIslandArea/bigIsland，则使用 BigIslandCollapsedRenderer 进行渲染；
-     * 否则返回 null 以便上层回退到旧的摘要视图。
-     */
-    private fun buildCollapsedSummaryView(
-        context: Context,
-        paramV2Raw: String?,
-        picMap: Map<String, String>?
-    ): SummaryViewResult? {
-        val bigIslandJson = try {
-            val raw = paramV2Raw ?: return null
-            if (raw.isBlank()) return null
-            val root = JSONObject(raw)
-            val island = root.optJSONObject("param_island")
-                ?: root.optJSONObject("paramIsland")
-                ?: root.optJSONObject("islandParam")
-            island?.optJSONObject("bigIslandArea") ?: island?.optJSONObject("bigIsland")
-        } catch (_: Exception) { null }
-
-        bigIslandJson ?: return null
-
-        // 提取回落文本（用于 B 为空时填充）：优先 baseInfo.title/content，其次 iconTextInfo.title/content
-        var fbTitle: String? = null
-        var fbContent: String? = null
-        try {
-            val raw2 = paramV2Raw ?: return null
-            val root = JSONObject(raw2)
-            root.optJSONObject("baseInfo")?.let { bi ->
-                fbTitle = bi.optString("title", "").takeIf { it.isNotBlank() }
-                fbContent = bi.optString("content", "").takeIf { it.isNotBlank() }
-            }
-            if (fbTitle.isNullOrBlank() && fbContent.isNullOrBlank()) {
-                root.optJSONObject("iconTextInfo")?.let { ii ->
-                    fbTitle = ii.optString("title", "").takeIf { it.isNotBlank() } ?: fbTitle
-                    fbContent = ii.optString("content", "").takeIf { it.isNotBlank() } ?: fbContent
-                }
-            }
-        } catch (_: Exception) { }
-
-        val view = buildBigIslandCollapsedView(context, bigIslandJson, picMap, fbTitle, fbContent)
-
-        // 若 B区包含 progressTextInfo，则尝试从视图树中定位圆环并创建绑定，以获得平滑进度动画与状态记忆
-        var binding: CircularProgressBinding? = null
-        try {
-            val progressText = bigIslandJson.optJSONObject("progressTextInfo")
-            val pInfoObj = progressText?.optJSONObject("progressInfo")
-            if (pInfoObj != null) {
-                val progress = pInfoObj.optInt("progress", -1)
-                if (progress in 0..100) {
-                    val colorReach = pInfoObj.optString("colorReach", "").takeIf { it.isNotBlank() }
-                    val colorUnReach = pInfoObj.optString("colorUnReach", "").takeIf { it.isNotBlank() }
-                    val isCCW = pInfoObj.optBoolean("isCCW", false)
-
-                    val ring = view.findViewWithTag("collapsed_b_progress_ring") as? CircularProgressView
-                    if (ring != null) {
-                        val mapped = ProgressInfo(
-                            progress = progress,
-                            colorProgress = colorReach,
-                            colorProgressEnd = colorUnReach,
-                            isCCW = isCCW,
-                            isAutoProgress = false
-                        )
-                        binding = CircularProgressBinding(
-                            context = context,
-                            progressView = ring,
-                            completionView = null,
-                            picMap = picMap,
-                            progressInfo = mapped,
-                            completionIcon = null,
-                            completionIconDark = null
-                        )
-                    }
-                }
-            }
-        } catch (_: Exception) { }
-
-        return SummaryViewResult(view, binding)
+        Logger.i(TAG, "超级岛: 会话级屏蔽 instanceId=$instanceId")
     }
 
     // 兼容空值的 param_v2 解析包装，避免在调用点产生空值分支和推断问题
@@ -403,536 +201,256 @@ object FloatingReplicaManager {
         } catch (_: Exception) { null }
     }
 
-    // ---- 多条浮窗管理实现 ----
-
-    // 当没有任何条目时，彻底移除 Overlay，避免占位区域拦截顶端触摸
-    private fun removeOverlayIfNoEntries() {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            handler.post { removeOverlayIfNoEntries() }
+    private fun onEntryClicked(key: String) {
+        // 使用FloatingWindowManager管理条目状态
+        val entry = floatingWindowManager.getEntry(key)
+        if (entry == null) {
             return
         }
 
-        if (entries.isEmpty()) {
-            try {
-                // 首先隐藏关闭层
-                hideCloseOverlay()
-                val wm = windowManager?.get()
-                val view = overlayView?.get()
-                if (wm != null && view != null) {
-                    // 通知生命周期结束，便于 Compose 清理
-                    try {
-                        overlayLifecycleOwner?.onDestroy()
-                    } catch (_: Exception) { }
-                    wm.removeView(view)
-                    if (BuildConfig.DEBUG) {
-                        Log.i(TAG, "超级岛: 所有条目移除，销毁浮窗容器")
-                    }
+        // 切换展开/折叠状态，toggleEntryExpanded内部会处理摘要态的情况
+        floatingWindowManager.toggleEntryExpanded(key)
+    }
+
+    // 关闭指示器高亮/还原动画
+    private fun animateCloseTargetHighlight(highlight: Boolean) {
+        val target = closeTargetView?.get() ?: return
+        val endScale = if (highlight) 1.2f else 1.0f
+        val endAlpha = if (highlight) 1.0f else 0.7f
+
+        try {
+            // 使用ViewPropertyAnimatorCompat处理动画
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 160L
+                addUpdateListener { animator ->
+                    val progress = animator.animatedValue as Float
+                    val currentScale = 1.0f + (endScale - 1.0f) * progress
+                    val currentAlpha = 0.7f + (endAlpha - 0.7f) * progress
+                    target.scaleX = currentScale
+                    target.scaleY = currentScale
+                    target.alpha = currentAlpha
                 }
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) {
-                    Log.w(TAG, "超级岛: 销毁浮窗容器失败: ${e.message}")
-                }
-            } finally {
-                // 优化：清理Handler消息，避免内存泄漏
-                handler.removeCallbacksAndMessages(null)
-                
-                // 清理背景缓存，避免内存泄漏
-                expandedBackgroundCache.clear()
-                summaryBackgroundCache.clear()
-                
-                // 无论移除是否成功，都置空全局引用，避免内存泄漏
-                overlayView = null
-                stackContainer = null
-                overlayLayoutParams = null
-                windowManager = null
-                overlayLifecycleOwner = null
+                start()
             }
+        } catch (_: Exception) {
         }
     }
 
-    private fun addOrUpdateEntry(
-        context: Context,
-        key: String,
-        expandedView: View,
-        summaryView: View,
-        expandedBinding: CircularProgressBinding?,
-        summaryBinding: CircularProgressBinding?,
-        summaryOnly: Boolean
-    ) {
+    // 触觉反馈：进入/离开关闭区域时短振动
+    private fun performHapticFeedback(context: Context) {
+        HapticFeedbackUtils.performLightHaptic(context)
+    }
+
+    /**
+     * 显示关闭层
+     */
+    private fun showCloseOverlay() {
+        // 获取上下文并显示关闭层
+        overlayView?.get()?.context?.let { showCloseOverlay(it) }
+    }
+
+    /**
+     * 隐藏关闭层
+     */
+    private fun hideCloseOverlay() {
+        // 获取上下文并隐藏关闭层
+        overlayView?.get()?.context?.let { hideCloseOverlay(it) }
+    }
+
+    /**
+     * 处理容器拖动开始事件
+     */
+    private fun onContainerDragStarted() {
+        // 显示关闭层
+        showCloseOverlay()
+        // 记录容器正在拖动
+        isContainerDragging = true
+        // 立即更新一次重叠状态，确保初始状态正确
+        updateEntriesOverlappingStatus()
+    }
+
+    /**
+     * 处理容器拖动结束事件
+     */
+    private fun onContainerDragEnded() {
+        // 检查是否有条目与关闭区重叠
+        checkEntriesInCloseArea()
+        // 清除所有条目的重叠状态
+        floatingWindowManager.clearAllEntriesOverlapping()
+        // 隐藏关闭层
+        hideCloseOverlay()
+        // 记录容器拖动结束
+        isContainerDragging = false
+    }
+
+    /**
+     * 更新条目的重叠状态，用于实时检测
+     */
+    private fun updateEntriesOverlappingStatus() {
         try {
-            // 首条条目到来时再创建 Overlay 容器，避免先有空容器
-            if (overlayView?.get() == null || stackContainer?.get() == null || windowManager?.get() == null || overlayLayoutParams == null) {
-                    try {
-                        val appCtx = context.applicationContext
-                        val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-                        val container = FrameLayout(context)
-                        val padding = (12 * getDensity(context)).toInt()
-                        val innerStack = LinearLayout(context).apply {
-                            orientation = LinearLayout.VERTICAL
-                            setPadding(padding, padding, padding, padding)
-                        }
-                        container.addView(innerStack)
+            // 获取所有条目
+            val entries = floatingWindowManager.entriesList
+            if (entries.isEmpty()) return
 
-                        // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
-                        val lifecycleOwner = overlayLifecycleOwner ?: FloatingWindowLifecycleOwner().also {
-                            overlayLifecycleOwner = it
-                        }
-                        // 安装 ViewTreeLifecycleOwner + ViewTreeSavedStateRegistryOwner，满足 ComposeView 附着校验
-                        tryInstallViewTreeLifecycleOwner(container, lifecycleOwner)
-                        try {
-                            val savedStateOwner = lifecycleOwner as SavedStateRegistryOwner
-                            tryInstallViewTreeSavedStateRegistryOwner(container, savedStateOwner)
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: lifecycleOwner 非 SavedStateRegistryOwner 或安装失败: ${e.message}")
-                        }
+            // 获取容器当前位置
+            val containerX = overlayLayoutParams?.x ?: 0
+            val containerY = overlayLayoutParams?.y ?: 0
 
-                        // 移除浮窗容器中的关闭指示器，统一由showCloseOverlay函数创建和管理
-                        // 浮窗容器只负责显示浮窗条目，关闭功能由专门的关闭层处理
+            // 获取显示密度
+            val density = overlayView?.get()?.context?.resources?.displayMetrics?.density ?: 1f
 
-                        val layoutParams = WindowManager.LayoutParams(
-                            (FIXED_WIDTH_DP * getDensity(context)).toInt(),
-                            WindowManager.LayoutParams.WRAP_CONTENT,
-                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                            PixelFormat.TRANSLUCENT
-                        ).apply {
-                            gravity = Gravity.LEFT or Gravity.TOP
-                            x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * getDensity(context)).toInt()) / 2).coerceAtLeast(0)
-                            y = 100
-                        }
+            // 计算容器宽度
+            val containerWidth = (FIXED_WIDTH_DP * density).toInt()
 
-                        var added = false
-                        try {
-                            wm.addView(container, layoutParams)
-                            added = true
-                        } catch (e: Exception) {
-                            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addView 失败: ${e.message}")
-                        }
-                        if (added) {
-                            // 标记浮窗进入前台生命周期，供 Compose 使用
-                            try { lifecycleOwner.onShow() } catch (_: Exception) {}
-                            overlayView = WeakReference(container)
-                            stackContainer = WeakReference(innerStack)
-                            overlayLayoutParams = layoutParams
-                            windowManager = WeakReference(wm)
-                            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
-                        }
-                    } catch (e: Exception) {
-                        if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
-                    }
-                }
-
-            val stack = stackContainer?.get() ?: return
-            val existing = entries[key]
-            if (existing != null) {
-                val wasExpanded = existing.isExpanded
-                updateRecordContent(existing, expandedView, summaryView)
-                attachDragHandler(existing.container, context)
-                existing.lastExpandedProgress = applyProgressBinding(expandedBinding, existing.lastExpandedProgress)
-                existing.lastSummaryProgress = applyProgressBinding(summaryBinding, existing.lastSummaryProgress)
-                if (!existing.summaryOnly) {
-                    if (wasExpanded) {
-                        scheduleCollapse(existing)
-                    } else {
-                        cancelCollapse(existing)
-                    }
-                } else {
-                    existing.isExpanded = false
-                    existing.expandedView.visibility = View.GONE
-                    existing.summaryView.visibility = View.VISIBLE
-                    cancelCollapse(existing)
-                }
-                scheduleRemoval(existing, key)
-                if (BuildConfig.DEBUG) Log.d(TAG, "超级岛: 刷新浮窗条目 key=$key，保持${if (wasExpanded) "展开" else "摘要"}态")
+            // 检查关闭区是否已经初始化（非默认值）
+            if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
+                // 如果关闭区位置没有初始化，直接返回
                 return
             }
 
-            val container = object : FrameLayout(context) {
-                private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
-                private var startX = 0f
-                private var startY = 0f
-                private var isDragging = false
+            // 记录之前的重叠状态，用于判断是否需要振动
+            val previousOverlappingKeys = mutableSetOf<String>()
+            entries.forEach { entry ->
+                if (entry.isOverlapping) {
+                    previousOverlappingKeys.add(entry.key)
+                }
+            }
 
-                override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
-                    when (event.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> {
-                            startX = event.rawX
-                            startY = event.rawY
-                            isDragging = false
-                        }
-                        MotionEvent.ACTION_MOVE -> {
-                            if (!isDragging) {
-                                val dx = abs(event.rawX - startX)
-                                val dy = abs(event.rawY - startY)
-                                if (dx > touchSlop || dy > touchSlop) {
-                                    isDragging = true
-                                    // 拦截拖动事件，交给自己的OnTouchListener处理
-                                    return true
-                                }
+            // 遍历所有条目，检查每个条目是否与关闭区重叠
+            var currentY = containerY
+            for ((index, entry) in entries.withIndex()) {
+                // 使用条目实际高度，如果高度为0（未测量）则使用默认值
+                val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
+                
+                // 计算当前条目的位置（垂直排列，最新的在底部）
+                val entryTop = currentY
+                val entryBottom = entryTop + currentHeight
+                val entryCenterX = containerX + containerWidth / 2
+                
+                // 更新当前Y坐标，为下一个条目做准备
+                currentY += currentHeight
+
+                // 检查条目是否与关闭区重叠
+                val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom
+                val isHorizontallyOverlapping = entryCenterX > closeAreaLeft && entryCenterX < closeAreaRight
+                val isOverlapping = isVerticallyOverlapping && isHorizontallyOverlapping
+
+                // 如果条目重叠状态发生变化
+                if (entry.isOverlapping != isOverlapping) {
+                    // 更新条目重叠状态
+                    floatingWindowManager.setEntryOverlapping(entry.key, isOverlapping)
+
+                    // 如果条目开始重叠，执行振动反馈
+                    if (isOverlapping) {
+                        // 获取上下文，用于振动反馈
+                        val context = overlayView?.get()?.context
+                        if (context != null) {
+                            // 执行振动反馈
+                            try {
+                                HapticFeedbackUtils.performLightHaptic(context)
+                                Logger.i(TAG, "超级岛: 执行振动反馈 - Key: ${entry.key}")
+                            } catch (e: Exception) {
+                                Logger.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
                             }
                         }
                     }
-                    // 不拦截点击事件，让事件传递给子视图
-                    return super.onInterceptTouchEvent(event)
                 }
-            }.apply {
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                val margin = (4 * getDensity(context)).toInt()
-                lp.setMargins(0, margin, 0, margin)
-                layoutParams = lp
-                isClickable = true
-                // 统一背景放在条目容器上，并进行圆角/描边/阴影管理
-                background = createEntryBackground(context, /*isExpanded=*/!summaryOnly)
-                elevation = 6f * getDensity(context)
-                // 将 entryKey（通常为 instanceId/sourceId）挂到 tag，供拖动关闭逻辑使用
-                tag = key
             }
-
-            detachFromParent(summaryView)
-            detachFromParent(expandedView)
-            // 标记视图状态，并移除各自根背景，避免与容器背景叠加
-            expandedView.tag = "state_expanded"
-            summaryView.tag = "state_summary"
-            stripRootBackground(expandedView)
-            stripRootBackground(summaryView)
-
-            if (summaryOnly) {
-                summaryView.visibility = View.VISIBLE
-                expandedView.visibility = View.GONE
-            } else {
-                summaryView.visibility = View.GONE
-                expandedView.visibility = View.VISIBLE
-            }
-            container.addView(summaryView)
-            container.addView(expandedView)
-            container.setOnClickListener { onEntryClicked(key) }
-            attachDragHandler(container, context)
-
-            stack.addView(container, 0)
-
-            val record = EntryRecord(
-                key = key,
-                container = container,
-                expandedView = expandedView,
-                summaryView = summaryView,
-                summaryOnly = summaryOnly,
-                isExpanded = !summaryOnly
-            )
-            entries[key] = record
-            record.lastExpandedProgress = applyProgressBinding(expandedBinding, record.lastExpandedProgress)
-            record.lastSummaryProgress = applyProgressBinding(summaryBinding, record.lastSummaryProgress)
-            if (!summaryOnly) {
-                showExpanded(record)
-                scheduleCollapse(record)
-            } else {
-                record.isExpanded = false
-            }
-            scheduleRemoval(record, key)
-            if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 新增浮窗条目 key=$key")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
+            Logger.w(TAG, "超级岛: 更新条目重叠状态失败: ${e.message}")
+               e.printStackTrace()
         }
     }
 
-    private fun updateRecordContent(record: EntryRecord, expandedView: View, summaryView: View) {
-        val wasExpanded = record.isExpanded
-        detachFromParent(summaryView)
-        detachFromParent(expandedView)
-        record.container.removeAllViews()
-        // 确保容器具备统一背景
-        if (record.container.background !is GradientDrawable) {
-            record.container.background = createEntryBackground(record.container.context, wasExpanded && !record.summaryOnly)
-            record.container.elevation = 6f * record.container.resources.displayMetrics.density
-        }
-
-        // 标记状态并移除子根背景
-        expandedView.tag = "state_expanded"
-        summaryView.tag = "state_summary"
-        stripRootBackground(expandedView)
-        stripRootBackground(summaryView)
-
-        record.container.addView(summaryView)
-        record.container.addView(expandedView)
-        record.expandedView = expandedView
-        record.summaryView = summaryView
-        record.isExpanded = wasExpanded && !record.summaryOnly
-        if (record.summaryOnly || !record.isExpanded) {
-            record.expandedView.visibility = View.GONE
-            record.summaryView.visibility = View.VISIBLE
-        } else {
-            record.summaryView.visibility = View.GONE
-            record.expandedView.visibility = View.VISIBLE
-        }
-    }
-
-    private fun applyProgressBinding(
-        binding: CircularProgressBinding?,
-        previousProgress: Int?
-    ): Int? {
-        if (binding == null) return null
-        
-        val target = binding.currentProgress
-        // 确保target在合理范围内
-        val safeTarget = target?.coerceIn(0, 100)
-        
-        val effectivePrevious = if (
-            safeTarget != null && previousProgress != null && safeTarget < previousProgress && safeTarget <= PROGRESS_RESET_THRESHOLD
-        ) {
-            // 新一轮传输通常会重置到极小值，主动回退到0避免出现倒退动画
-            0
-        } else {
-            previousProgress?.coerceIn(0, 100) // 确保previousProgress也在合理范围内
-        }
-        
-        // 优化：只有当进度值有效时才应用更新
-        if (safeTarget != null) {
-            binding.apply(effectivePrevious)
-        }
-        
-        return safeTarget
-    }
-
-    private fun onEntryClicked(key: String) {
-        val record = entries[key] ?: return
-        if (record.summaryOnly) {
-            scheduleRemoval(record, key)
-            return
-        }
-        showExpanded(record)
-        scheduleCollapse(record)
-        scheduleRemoval(record, key)
-    }
-
-    private fun showExpanded(record: EntryRecord) {
-        if (record.isExpanded) return
-        crossfade(record.summaryView, record.expandedView)
-        record.isExpanded = true
-    }
-
-    private fun showSummary(record: EntryRecord) {
-        if (!record.isExpanded) return
-        crossfade(record.expandedView, record.summaryView)
-        record.isExpanded = false
-    }
-
-    private fun crossfade(fromView: View, toView: View) {
+    /**
+     * 检查条目是否与关闭区重叠
+     */
+    private fun checkEntriesInCloseArea() {
         try {
-            // 取消可能存在的动画
-            fromView.animate()?.cancel()
-            toView.animate()?.cancel()
+            // 获取所有条目
+            val entries = floatingWindowManager.entriesList
+            if (entries.isEmpty()) return
 
-            val density = getDensity(fromView.context)
-            val up = 4f * density
+            // 获取容器当前位置
+            val containerX = overlayLayoutParams?.x ?: 0
+            val containerY = overlayLayoutParams?.y ?: 0
 
-            // 以上边框为基准进行缩放
-            fromView.pivotY = 0f
-            toView.pivotY = 0f
+            // 获取显示密度
+            val density = overlayView?.get()?.context?.resources?.displayMetrics?.density ?: 1f
 
-            // 准备目标视图（向上边框缩 + 渐入）
-            toView.alpha = 0f
-            toView.scaleX = 0.96f
-            toView.scaleY = 0.96f
-            toView.translationY = -up
-            toView.visibility = View.VISIBLE
+            // 计算容器宽度
+            val containerWidth = (FIXED_WIDTH_DP * density).toInt()
 
-            // 淡出 + 向上边框缩
-            fromView.animate()
-                .alpha(0f)
-                .scaleX(0.96f)
-                .scaleY(0.96f)
-                .translationY(-up)
-                .setDuration(TRANSITION_DURATION_MS)
-                .withEndAction {
-                    fromView.visibility = View.GONE
-                    fromView.alpha = 1f
-                    fromView.scaleX = 1f
-                    fromView.scaleY = 1f
-                    fromView.translationY = 0f
-                }
-                .start()
+            // 添加调试日志，便于检查关闭区和容器位置
+            Logger.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
+            Logger.i(TAG, "超级岛: 容器位置 - X: $containerX, Y: $containerY, Width: $containerWidth")
 
-            // 淡入 + 回弹
-            toView.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .translationY(0f)
-                .setDuration(TRANSITION_DURATION_MS)
-                .start()
+            // 检查关闭区是否已经初始化（非默认值）
+            if (closeAreaLeft == 0 && closeAreaTop == 0 && closeAreaRight == 0 && closeAreaBottom == 0) {
+                // 如果关闭区位置没有初始化，直接返回
+                return
+            }
 
-            // 同步圆角过渡（在容器背景上）
-            val parent = (fromView.parent as? View)
-            val bg = parent?.background as? GradientDrawable
-            if (bg != null) {
-                val dens = getDensity(fromView.context)
-                val expandedR = 16f * dens
-                val summaryR = 999f
-                val toIsExpanded = (toView.tag == "state_expanded")
-                val startR = if (toIsExpanded) summaryR else expandedR
-                val endR = if (toIsExpanded) expandedR else summaryR
-                val animator = ValueAnimator.ofFloat(startR, endR).apply {
-                    duration = TRANSITION_DURATION_MS
-                    addUpdateListener { a ->
-                        val r = a.animatedValue as Float
-                        bg.cornerRadius = r
+            // 遍历所有条目，检查每个条目是否与关闭区重叠
+            var currentY = containerY
+            for ((index, entry) in entries.withIndex()) {
+                // 使用条目实际高度，如果高度为0（未测量）则使用默认值
+                val currentHeight = if (entry.height > 0) entry.height else (100f * density).toInt()
+                
+                // 计算当前条目的位置（垂直排列，最新的在底部）
+                val entryTop = currentY
+                val entryBottom = entryTop + currentHeight
+                val entryCenterX = containerX + containerWidth / 2
+                
+                // 更新当前Y坐标，为下一个条目做准备
+                currentY += currentHeight
+
+                // 检查条目是否与关闭区重叠
+                val isVerticallyOverlapping = entryBottom > closeAreaTop && entryTop < closeAreaBottom
+                val isHorizontallyOverlapping = entryCenterX > closeAreaLeft && entryCenterX < closeAreaRight
+
+                // 添加调试日志
+                Logger.i(TAG, "超级岛: 条目重叠检测 - Key: ${entry.key}, Index: $index, 垂直重叠: $isVerticallyOverlapping, 水平重叠: $isHorizontallyOverlapping")
+
+                // 如果条目与关闭区重叠
+                if (isVerticallyOverlapping && isHorizontallyOverlapping) {
+                    // 获取上下文，用于振动反馈
+                    val context = overlayView?.get()?.context
+                    if (context != null) {
+                        // 执行振动反馈
+                        try {
+                            HapticFeedbackUtils.performLightHaptic(context)
+                            Logger.i(TAG, "超级岛: 执行振动反馈")
+                        } catch (e: Exception) {
+                            Logger.w(TAG, "超级岛: 振动反馈执行失败: ${e.message}")
+                        }
                     }
+
+                    // 关闭重叠的条目
+                    Logger.i(TAG, "超级岛: 关闭重叠条目 - Key: ${entry.key}")
+
+                    // 添加会话级屏蔽，避免用户刚关闭就再次弹出
+                    blockInstance(entry.key)
+
+                    floatingWindowManager.removeEntry(entry.key)
+
+                    // 只关闭一个重叠条目，然后退出循环
+                    break
                 }
-                animator.start()
             }
-        } catch (_: Exception) {
-            // 回退：无动画切换
-            fromView.visibility = View.GONE
-            toView.visibility = View.VISIBLE
-            fromView.alpha = 1f
-            fromView.scaleX = 1f
-            fromView.scaleY = 1f
-            fromView.translationY = 0f
-            toView.alpha = 1f
-            toView.scaleX = 1f
-            toView.scaleY = 1f
-            toView.translationY = 0f
-        }
-    }
-
-    private fun createEntryBackground(context: Context, isExpanded: Boolean): GradientDrawable {
-        // 优化：使用缓存避免重复创建GradientDrawable
-        val cache = if (isExpanded) expandedBackgroundCache else summaryBackgroundCache
-        return cache.getOrPut(context) {
-            val dens = getDensity(context)
-            GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = if (isExpanded) 16f * dens else 999f
-                setColor(0xEE000000.toInt())
-                setStroke(dens.toInt().coerceAtLeast(1), 0x80FFFFFF.toInt())
-            }
-        }
-    }
-
-    private fun stripRootBackground(view: View) {
-        try {
-            view.background = null
-        } catch (_: Exception) {}
-    }
-
-    private fun cancelCollapse(record: EntryRecord) {
-        record.collapseRunnable?.let { handler.removeCallbacks(it) }
-        record.collapseRunnable = null
-    }
-
-    private fun scheduleCollapse(record: EntryRecord, delayMs: Long = EXPANDED_DURATION_MS) {
-        record.collapseRunnable?.let { handler.removeCallbacks(it) }
-        val runnable = Runnable {
-            if (!entries.containsKey(record.key)) return@Runnable
-            showSummary(record)
-            record.collapseRunnable = null
-        }
-        record.collapseRunnable = runnable
-        handler.postDelayed(runnable, delayMs)
-    }
-
-    private fun scheduleRemoval(record: EntryRecord, key: String, delayMs: Long = AUTO_DISMISS_DURATION_MS) {
-        record.removalRunnable?.let { handler.removeCallbacks(it) }
-        val runnable = Runnable { removeEntry(key) }
-        record.removalRunnable = runnable
-        handler.postDelayed(runnable, delayMs)
-    }
-
-    private fun removeEntry(key: String) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            handler.post { removeEntry(key) }
-            return
-        }
-
-        val record = entries.remove(key) ?: return
-        
-        // 清理所有Runnable
-        record.collapseRunnable?.let { handler.removeCallbacks(it) }
-        record.removalRunnable?.let { handler.removeCallbacks(it) }
-        
-        // 清理视图资源
-        try {
-            // 取消所有可能的动画
-            record.expandedView.animate()?.cancel()
-            record.summaryView.animate()?.cancel()
-            
-            // 简化：只移除必要的监听器
-            record.container.setOnTouchListener(null)
-            record.container.setOnClickListener(null)
-            
-            // 移除视图
-            stackContainer?.get()?.removeView(record.container)
-            
-            // 清理视图的背景
-            record.expandedView.background = null
-            record.summaryView.background = null
-            record.container.background = null
-            
-            // 移除所有子视图，确保资源被释放
-            record.container.removeAllViews()
-            
-            // 确保视图被完全分离，避免内存泄漏
-            detachFromParent(record.expandedView)
-            detachFromParent(record.summaryView)
-            
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 移除浮窗条目资源失败: ${e.message}")
-            }
-        } finally {
-            // 确保所有Runnable引用被清空
-            record.collapseRunnable = null
-            record.removalRunnable = null
-        }
-        
-        if (BuildConfig.DEBUG) Log.i(TAG, "超级岛: 自动移除浮窗条目 key=$key")
-        // 若已无任何条目，彻底移除Overlay，避免空容器占位影响顶端触摸
-        removeOverlayIfNoEntries()
-    }
-
-    // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
-    fun dismissBySource(sourceId: String) {
-        try {
-            removeEntry(sourceId)
-            // 如果对应的会话结束（SI_END），同步移除黑名单，允许后续同一通知重新展示
-            blockedInstanceIds.remove(sourceId)
-        } catch (_: Exception) {}
-    }
-
-    private fun detachFromParent(view: View) {
-        try {
-            val parent = view.parent as? ViewGroup ?: return
-            parent.removeView(view)
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 从父视图移除视图失败: ${e.message}")
-            }
-        }
-    }
-
-    private fun attachDragHandler(target: View, context: Context) {
-        val params = overlayLayoutParams
-        val wm = windowManager?.get()
-        val root = overlayView?.get()
-        if (params != null && wm != null && root != null) {
-            // 这里的 tag 保存的是 entryKey，一般等于 instanceId/sourceId
-            val entryKey = (target.tag as? String)
-            target.setOnTouchListener(FloatingTouchListener(params, wm, root, context, entryKey))
-        } else {
-            target.setOnTouchListener(null)
+            Logger.w(TAG, "超级岛: 检查条目与关闭区重叠失败: ${e.message}")
         }
     }
 
     // 显示全屏关闭层，底部中心有关闭指示器
     private fun showCloseOverlay(context: Context) {
         if (closeOverlayView?.get() != null) return
-        
-        // 获取windowManager，优先使用全局引用，否则从context中获取
-        val wm = windowManager?.get() ?: context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
 
-        val density = getDensity(context)
+        // 获取windowManager
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+
+        val density = context.resources.displayMetrics.density
         val container = FrameLayout(context)
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -954,9 +472,9 @@ object FloatingReplicaManager {
                     shape = GradientDrawable.OVAL
                     setColor(0x99000000.toInt())
                 }
-                // 使用实际的叉号图标（请在资源中提供 ic_pip_close）
+                // 使用实际的叉号图标
                 try {
-                    setImageResource(com.xzyht.notifyrelay.R.drawable.ic_pip_close)
+                    setImageResource(R.drawable.ic_pip_close)
                 } catch (_: Exception) { }
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 alpha = 0.7f
@@ -964,11 +482,13 @@ object FloatingReplicaManager {
                 contentDescription = "close_overlay_target"
                 setOnClickListener {
                     // 点击关闭按钮时，移除所有浮窗条目
-                    entries.keys.toList().forEach { key ->
-                        removeEntry(key)
+                    // 为每个条目添加会话级屏蔽
+                    floatingWindowManager.entriesList.forEach { entry ->
+                        blockInstance(entry.key)
                     }
+                    floatingWindowManager.clearAllEntries()
                     // 隐藏全屏关闭层
-                    hideCloseOverlay()
+                    hideCloseOverlay(context)
                 }
             }
         container.addView(closeView)
@@ -978,11 +498,35 @@ object FloatingReplicaManager {
             closeOverlayView = WeakReference(container)
             closeOverlayLayoutParams = lp
             closeTargetView = WeakReference(closeView)
-            closeView.animate().alpha(1f).setDuration(150L).start()
-        } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 显示关闭层失败: ${e.message}")
+
+            // 计算关闭区位置信息 - 确保在屏幕底部中心
+            val displayMetrics = context.resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
+
+            // 关闭区大小和边距（与关闭按钮一致）
+            val closeAreaSize = closeSize
+            val closeAreaMargin = (24 * density).toInt()
+
+            // 计算关闭区的边界 - 底部中心位置
+            closeAreaLeft = (screenWidth - closeAreaSize) / 2
+            closeAreaRight = closeAreaLeft + closeAreaSize
+            closeAreaTop = screenHeight - closeAreaSize - closeAreaMargin
+            closeAreaBottom = closeAreaTop + closeAreaSize
+
+            // 添加调试日志，便于检查关闭区位置
+            Logger.i(TAG, "超级岛: 关闭区位置 - Left: $closeAreaLeft, Top: $closeAreaTop, Right: $closeAreaRight, Bottom: $closeAreaBottom")
+
+            // 使用ValueAnimator实现淡入动画
+            ValueAnimator.ofFloat(0.7f, 1.0f).apply {
+                duration = 150L
+                addUpdateListener { animator ->
+                    closeView.alpha = animator.animatedValue as Float
+                }
+                start()
             }
+        } catch (e: Exception) {
+            Logger.w(TAG, "超级岛: 显示关闭层失败: ${e.message}")
             // 清理资源
             try {
                 container.removeAllViews()
@@ -994,25 +538,16 @@ object FloatingReplicaManager {
         }
     }
 
-    private fun hideCloseOverlay() {
+    private fun hideCloseOverlay(context: Context? = null) {
         val view = closeOverlayView?.get() ?: return
-        val wm = windowManager?.get()
-        
+        val actualContext = context ?: view.context
+        val wm = actualContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
+
         try {
-            if (wm != null) {
-                wm.removeView(view)
-                if (BuildConfig.DEBUG) {
-                    Log.d(TAG, "超级岛: 关闭层已隐藏")
-                }
-            } else {
-                if (BuildConfig.DEBUG) {
-                    Log.w(TAG, "超级岛: windowManager为空，无法移除关闭层")
-                }
-            }
+            wm.removeView(view)
+            //Logger.d(TAG, "超级岛: 关闭层已隐藏")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) {
-                Log.w(TAG, "超级岛: 隐藏关闭层失败: ${e.message}")
-            }
+            Logger.w(TAG, "超级岛: 隐藏关闭层失败: ${e.message}")
         } finally {
             // 无论移除是否成功，都置空全局引用，避免内存泄漏
             closeTargetView = null
@@ -1021,207 +556,150 @@ object FloatingReplicaManager {
         }
     }
 
-    private fun buildLegacyExpandedView(context: Context, title: String?, content: String?, image: Bitmap?): View {
-        val density = getDensity(context)
-        return LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            val padding = (8 * density).toInt()
-            setPadding(padding, padding, padding, padding)
-            // 圆角矩形背景（展开态）
-            background = createEntryBackground(context, true)
-            clipToOutline = true
-            elevation = 6f * density
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-
-            if (image != null) {
-                val size = (56 * density).toInt()
-                val iconView = ImageView(context).apply {
-                    id = android.R.id.icon
-                    setImageBitmap(image)
-                    layoutParams = LinearLayout.LayoutParams(size, size)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
+    // 新增：按来源键立刻移除指定浮窗（用于接收终止事件SI_END时立即消除）
+    fun dismissBySource(sourceId: String) {
+        try {
+            // 从映射中获取所有对应的entryKey
+            val entryKeys = sourceIdToEntryKeyMap[sourceId]
+            if (entryKeys != null) {
+                // 移除所有相关条目
+                entryKeys.forEach { entryKey ->
+                    floatingWindowManager.removeEntry(entryKey)
                 }
-                addView(iconView)
+                // 清理映射关系
+                sourceIdToEntryKeyMap.remove(sourceId)
+            } else {
+                // 如果没有找到映射，尝试直接使用sourceId移除
+                floatingWindowManager.removeEntry(sourceId)
             }
+            // 如果对应的会话结束（SI_END），同步移除黑名单，允许后续同一通知重新展示
+            blockedInstanceIds.remove(sourceId)
+        } catch (_: Exception) {}
+    }
 
-            val textColumn = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-                val marginStart = if (image != null) (8 * density).toInt() else 0
-                lp.setMargins(marginStart, 0, 0, 0)
-                layoutParams = lp
+    /**
+     * 移除浮窗容器
+     */
+    private fun removeOverlayContainer() {
+        try {
+            // 关闭关闭层，确保在移除浮窗容器前清理
+            hideCloseOverlay()
+
+            val view = overlayView?.get()
+            val wm = windowManager?.get()
+            val lp = overlayLayoutParams
+
+            if (view != null && wm != null && lp != null) {
+                // 移除浮窗容器
+                wm.removeView(view)
+                Logger.i(TAG, "超级岛: 浮窗容器已移除")
+
+                // 清理资源
+                overlayView = null
+                overlayLayoutParams = null
+                windowManager = null
+
+                // 通知Compose生命周期管理器浮窗隐藏
+                lifecycleManager.onHide()
+
+                // 调用生命周期所有者的onHide方法
+                overlayLifecycleOwner?.let {
+                    try { it.onHide() } catch (_: Exception) {}
+                }
             }
-
-            val titleView = TextView(context).apply {
-                id = android.R.id.text1
-                setTextColor(0xFFFFFFFF.toInt())
-                textSize = 14f
-                ellipsize = TextUtils.TruncateAt.END
-                maxLines = 1
-                text = Html.fromHtml(unescapeHtml(title ?: "(无标题)"), Html.FROM_HTML_MODE_COMPACT)
-            }
-
-            val textView = TextView(context).apply {
-                id = android.R.id.text2
-                setTextColor(0xFFDDDDDD.toInt())
-                textSize = 12f
-                ellipsize = TextUtils.TruncateAt.END
-                maxLines = 2
-                text = Html.fromHtml(unescapeHtml(content ?: "(无内容)"), Html.FROM_HTML_MODE_COMPACT)
-            }
-
-            textColumn.addView(titleView)
-            textColumn.addView(textView)
-            addView(textColumn)
+        } catch (e: Exception) {
+            Logger.w(TAG, "超级岛: 移除浮窗容器失败: ${e.message}")
+            // 即使移除失败，也要清理资源引用，避免内存泄漏
+            overlayView = null
+            overlayLayoutParams = null
+            windowManager = null
+            // 确保关闭层被清理
+            hideCloseOverlay()
         }
     }
 
-    private fun buildSummaryView(
+    /**
+     * 添加或更新浮窗条目
+     * @param context 上下文
+     * @param key 条目唯一标识
+     * @param summaryOnly 是否为摘要态
+     */
+    private fun addOrUpdateEntry(
         context: Context,
-        smallIsland: SmallIslandArea?,
-        highlightInfo: HighlightInfo?,
-        fallbackTitle: String?,
-        fallbackText: String?,
-        bitmap: Bitmap?,
-        picMap: Map<String, String>?
-    ): SummaryViewResult {
-        val density = context.resources.displayMetrics.density
-        val timerInfo = highlightInfo?.timerInfo
-        val timerLine = timerInfo?.let { formatTimerInfo(it) }?.takeIf { it.isNotBlank() }
-        val hasTimerLine = !timerLine.isNullOrBlank()
+        key: String,
+        summaryOnly: Boolean
+    ) {
+        try {
+            // 首条条目到来时再创建 Overlay 容器，避免先有空容器
+            if (overlayView?.get() == null || windowManager?.get() == null || overlayLayoutParams == null) {
+                    try {
+                        val appCtx = context.applicationContext
+                        val wm = appCtx.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                            ?: return
 
-        val displayLines = mutableListOf<String>()
-        timerLine?.let { displayLines.add(it) }
+                        // 确保存在用于 Compose 的生命周期所有者（不依赖 ViewTree）
+                        val lifecycleOwner = overlayLifecycleOwner ?: FloatingWindowLifecycleOwner().also {
+                            overlayLifecycleOwner = it
+                        }
+                        // 标记浮窗进入前台生命周期，供 Compose 使用
+                        try { lifecycleOwner.onShow() } catch (_: Exception) {}
+                        // 通知Compose生命周期管理器浮窗显示
+                        lifecycleManager.onShow()
 
-        fun addLineCandidate(value: String?) {
-            val line = sanitizeSummaryLine(value, hasTimerLine)
-            if (!line.isNullOrBlank() && !displayLines.contains(line)) {
-                displayLines.add(line)
+                        val density = context.resources.displayMetrics.density
+                        val layoutParams = WindowManager.LayoutParams(
+                            (FIXED_WIDTH_DP * density).toInt(),
+                            WindowManager.LayoutParams.WRAP_CONTENT,
+                            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                            PixelFormat.TRANSLUCENT
+                        ).apply {
+                            gravity = Gravity.LEFT or Gravity.TOP
+                            x = ((context.resources.displayMetrics.widthPixels - (FIXED_WIDTH_DP * density).toInt()) / 2).coerceAtLeast(0)
+                            y = 100
+                        }
+
+            // 使用Compose容器替代传统的FrameLayout和LinearLayout
+            val composeContainer = FloatingComposeContainer(context).apply {
+                val padding = (12 * density).toInt()
+                setPadding(padding, padding, padding, padding)
+                // 设置浮窗管理器
+                this.floatingWindowManager = this@FloatingReplicaManager.floatingWindowManager
+                // 设置生命周期所有者
+                this.lifecycleOwner = lifecycleOwner
+                // 设置WindowManager和LayoutParams，用于更新浮窗位置
+                this.windowManager = wm
+                this.windowLayoutParams = layoutParams
+                // 设置条目点击回调
+                this.onEntryClick = { entryKey -> onEntryClicked(entryKey) }
+                // 设置容器拖动开始回调
+                this.onContainerDragStart = { onContainerDragStarted() }
+                // 设置容器拖动中回调，用于实时检测重叠
+                this.onContainerDragging = { updateEntriesOverlappingStatus() }
+                // 设置容器拖动结束回调
+                this.onContainerDragEnd = { onContainerDragEnded() }
             }
+
+                        var added = false
+                        try {
+                            wm.addView(composeContainer, layoutParams)
+                            added = true
+                        } catch (e: Exception) {
+                            Logger.w(TAG, "超级岛: addView 失败: ${e.message}")
+                        }
+                        if (added) {
+                            overlayView = WeakReference(composeContainer)
+                            overlayLayoutParams = layoutParams
+                            windowManager = WeakReference(wm)
+                            Logger.i(TAG, "超级岛: 浮窗容器已创建(首条条目触发)，x=${layoutParams.x}, y=${layoutParams.y}")
+                        }
+                    } catch (e: Exception) {
+                        Logger.w(TAG, "超级岛: 创建浮窗容器失败: ${e.message}")
+                    }
+                }
+        } catch (e: Exception) {
+            Logger.w(TAG, "超级岛: addOrUpdateEntry 出错: ${e.message}")
         }
-
-        addLineCandidate(smallIsland?.primaryText)
-        addLineCandidate(highlightInfo?.title)
-        addLineCandidate(highlightInfo?.content)
-        addLineCandidate(highlightInfo?.subContent)
-        addLineCandidate(smallIsland?.secondaryText)
-        addLineCandidate(fallbackTitle)
-        addLineCandidate(fallbackText)
-
-        if (displayLines.isEmpty()) {
-            displayLines.add("(无内容)")
-        }
-
-        val linesToRender = displayLines.take(2)
-
-        var progressBinding: CircularProgressBinding? = null
-        val iconSize = (48 * density).toInt()
-        val iconContainer = FrameLayout(context).apply {
-            layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
-        }
-
-        val highlightBitmap = highlightInfo?.let { resolveHighlightIconBitmap(context, it, picMap) }
-        val iconBitmap = highlightBitmap ?: bitmap
-        var hasIconContent = false
-
-        if (iconBitmap != null) {
-            val iconView = ImageView(context).apply {
-                layoutParams = FrameLayout.LayoutParams(iconSize, iconSize)
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = "focus_icon"
-                setImageBitmap(iconBitmap)
-            }
-            iconContainer.addView(iconView)
-            hasIconContent = true
-        }
-
-        val progressInfo = smallIsland?.progressInfo
-        if (progressInfo != null) {
-            val progressView = CircularProgressView(context).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-                setStrokeWidthDp(3f)
-                visibility = View.GONE
-            }
-            iconContainer.addView(progressView)
-            progressBinding = CircularProgressBinding(
-                context = context,
-                progressView = progressView,
-                completionView = null,
-                picMap = picMap,
-                progressInfo = progressInfo,
-                completionIcon = null,
-                completionIconDark = null
-            )
-            hasIconContent = true
-        }
-
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            val paddingH = (10 * density).toInt()
-            val paddingV = (6 * density).toInt()
-            setPadding(paddingH, paddingV, paddingH, paddingV)
-            // 胶囊背景
-            background = createEntryBackground(context, false)
-            elevation = 6f * density
-            clipToPadding = false
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            if (hasIconContent) {
-                addView(iconContainer)
-            }
-        }
-
-        val textColumn = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            val lp = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-            val marginStart = if (hasIconContent) (8 * density).toInt() else 0
-            lp.setMargins(marginStart, 0, 0, 0)
-            layoutParams = lp
-        }
-
-        linesToRender.forEachIndexed { index, text ->
-            val tv = TextView(context).apply {
-                setTextColor(if (index == 0) 0xFFFFFFFF.toInt() else 0xFFDDDDDD.toInt())
-                textSize = if (index == 0) 13f else 11f
-                typeface = if (index == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                maxLines = 1
-                this.text = Html.fromHtml(unescapeHtml(text), Html.FROM_HTML_MODE_COMPACT)
-            }
-            // 简化条件：当hasTimerLine为true时，timerLine必然存在于linesToRender[0]，timerInfo也必然不为null
-        if (index == 0 && hasTimerLine) {
-            tv.ellipsize = null
-            bindTimerUpdater(tv, timerInfo)
-        } else {
-            tv.ellipsize = TextUtils.TruncateAt.END
-        }
-            textColumn.addView(tv)
-        }
-
-        container.addView(textColumn)
-
-        return SummaryViewResult(container, progressBinding)
-    }
-
-    private fun sanitizeSummaryLine(value: String?, suppressStatus: Boolean): String? {
-        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (suppressStatus && text.contains("进行中")) return null
-        return text
     }
 
     private fun canShowOverlay(context: Context): Boolean {
@@ -1238,7 +716,7 @@ object FloatingReplicaManager {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
+            Logger.w(TAG, "超级岛: 请求悬浮窗权限失败: ${e.message}")
         }
     }
 
@@ -1257,7 +735,7 @@ object FloatingReplicaManager {
                 val bmp = withContext(Dispatchers.IO) { downloadBitmap(context, resolved, 5000) }
                 if (bmp != null) return bmp
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
+                Logger.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             }
         }
         return null
@@ -1265,142 +743,10 @@ object FloatingReplicaManager {
 
     private suspend fun downloadBitmap(context: Context, url: String, timeoutMs: Int): Bitmap? {
         return try {
-            ImageLoader.loadBitmapSuspend(context, url, timeoutMs)
+            SuperIslandImageUtil.loadBitmapSuspend(context, url, timeoutMs)
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w(TAG, "超级岛: 下载图片失败: ${e.message}")
+            Logger.w(TAG, "超级岛: 下载图片失败: ${e.message}")
             null
-        }
-    }
-
-    // 简单的触摸拖动实现
-    private class FloatingTouchListener(
-        private val params: WindowManager.LayoutParams,
-        private val wm: WindowManager,
-        private val rootView: View,
-        context: Context,
-        private val entryKey: String?
-    ) : View.OnTouchListener {
-        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
-        private var lastX = 0f
-        private var lastY = 0f
-        private var startX = 0
-        private var startY = 0
-        private var isDragging = false
-        private val displayMetrics = context.resources.displayMetrics
-        private val screenWidth = displayMetrics.widthPixels
-        private val screenHeight = displayMetrics.heightPixels
-        // 使用实际视图宽度替代固定值
-        private val windowWidth: Int
-            get() = rootView.width.takeIf { it > 0 } ?: (FIXED_WIDTH_DP * displayMetrics.density).toInt()
-        // 使用实际视图高度替代固定值
-        private val windowHeight: Int
-            get() = rootView.height.takeIf { it > 0 } ?: (200 * displayMetrics.density).toInt()
-        // 关闭区域：屏幕底部中间一块圆形区域（类似画中画关闭手势）
-        private val closeRadius = (72 * displayMetrics.density)
-        private val closeCenterX = screenWidth / 2f
-        private val closeCenterY = screenHeight - (96 * displayMetrics.density)
-        private var isInCloseArea = false
-        // 优化：限制视图更新频率，避免频繁UI更新
-        private var lastUpdateTime = 0L
-        private val UPDATE_INTERVAL = 16L // 约60fps
-
-        private fun isCenterInCloseArea(): Boolean {
-            val centerX = params.x + windowWidth / 2f
-            val centerY = params.y + windowHeight / 2f
-            val dx = centerX - closeCenterX
-            val dy = centerY - closeCenterY
-            val distanceSq = dx * dx + dy * dy
-            return distanceSq <= closeRadius * closeRadius
-        }
-
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastX = event.rawX
-                    lastY = event.rawY
-                    startX = params.x
-                    startY = params.y
-                    isDragging = false
-                    isInCloseArea = false
-                    // 拖动开始时再显示关闭层，避免点击时不必要的显示
-                    return true // 需要返回true以接收后续事件
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - lastX
-                    val dy = event.rawY - lastY
-                    if (!isDragging && (abs(dx) > touchSlop || abs(dy) > touchSlop)) {
-                        isDragging = true
-                        // 检测到拖动开始，显示全屏关闭层
-                        showCloseOverlay(rootView.context)
-                    }
-                    if (isDragging) {
-                        val newX = startX + (event.rawX - lastX).toInt()
-                        val newY = startY + (event.rawY - lastY).toInt()
-                        // 边界检查：将位置限制在边界内，确保浮窗始终可见
-                        val actualWidth = windowWidth
-                        val actualHeight = windowHeight
-                        
-                        // 优化：将位置限制在边界内，而不是完全不更新
-                        val boundedX = newX.coerceIn(0, screenWidth - actualWidth)
-                        val boundedY = newY.coerceIn(0, screenHeight - actualHeight)
-                        
-                        params.x = boundedX
-                        params.y = boundedY
-                        
-                        // 优化：限制视图更新频率，避免频繁UI更新
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
-                            try {
-                                wm.updateViewLayout(rootView, params)
-                                // 减少频繁的日志输出，仅在必要时记录
-                            } catch (_: Exception) {}
-                            lastUpdateTime = currentTime
-                            
-                            // 仅在视图更新时检测关闭区域，减少计算频率
-                            val nowInClose = isCenterInCloseArea()
-                            if (nowInClose != isInCloseArea) {
-                                isInCloseArea = nowInClose
-                                animateCloseTargetHighlight(nowInClose)
-                                performHapticFeedback(rootView.context)
-                            }
-                        }
-                        return true
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isDragging) {
-                        // 在松手时，如果中心点落在底部中间的关闭圆形区域内，则视为“关闭并屏蔽本轮会话的该 instanceId”
-                        val nowInClose = isCenterInCloseArea()
-                        if (nowInClose) {
-                            // 命中关闭区域：会话级屏蔽 + 移除浮窗条目
-                            val effectiveKey = entryKey ?: (v.tag as? String)
-                            if (!effectiveKey.isNullOrBlank()) {
-                                blockInstance(effectiveKey)
-                                removeEntry(effectiveKey)
-                            } else {
-                                // 作为最后的兜底方案，移除所有条目
-                                entries.keys.toList().forEach { key ->
-                                    removeEntry(key)
-                                }
-                            }
-                        }
-                        isDragging = false
-                        if (isInCloseArea) {
-                            isInCloseArea = false
-                            animateCloseTargetHighlight(false)
-                        }
-                        // 结束拖动时移除全屏关闭层
-                        hideCloseOverlay()
-                        return true
-                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
-                        // 非拖动的 ACTION_UP，视为点击事件，手动触发 onClickListener
-                        v.performClick()
-                    }
-                    // 非拖动结束时，如果显示了关闭层，也需要隐藏
-                    hideCloseOverlay()
-                }
-            }
-            return false
         }
     }
 }
