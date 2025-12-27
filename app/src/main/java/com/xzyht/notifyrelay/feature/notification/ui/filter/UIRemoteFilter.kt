@@ -2,26 +2,37 @@ package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
 import com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AddKeywordDialog
 import com.xzyht.notifyrelay.feature.notification.ui.dialog.AppPickerDialog
-import com.xzyht.notifyrelay.core.repository.AppRepository
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
 /**
  * 将 DeviceForwardFragment 中原有的远程过滤内联实现移动到这里：
  * 该组件负责读取/写入 RemoteFilterConfig 并提供完整的远程过滤 UI
@@ -30,27 +41,36 @@ import top.yukonga.miuix.kmp.basic.Text
 fun UIRemoteFilter() {
     val context = LocalContext.current
 
-    // 确保 RemoteFilterConfig 已加载
-    if (!RemoteFilterConfig.isLoaded) {
-        RemoteFilterConfig.load(context)
-        RemoteFilterConfig.isLoaded = true
-    }
-
-    // 前端状态 - 直接从 RemoteFilterConfig 初始化
-    var filterMode by remember { mutableStateOf(RemoteFilterConfig.filterMode) }
-    var enableDedup by remember { mutableStateOf(RemoteFilterConfig.enableDeduplication) }
-    var enablePackageGroupMapping by remember { mutableStateOf(RemoteFilterConfig.enablePackageGroupMapping) }
+    // 前端状态 - 先使用默认值，然后在配置加载完成后更新
+    var filterMode by remember { mutableStateOf("none") }
+    var enableDedup by remember { mutableStateOf(true) }
+    var enablePackageGroupMapping by remember { mutableStateOf(true) }
     var allGroups by remember { mutableStateOf<List<MutableList<String>>>(
-        (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
-                RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() }
     ) }
     var allGroupEnabled by remember { mutableStateOf<List<Boolean>>(
-        (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        RemoteFilterConfig.defaultGroupEnabled.toMutableList()
     ) }
-    var filterListText by remember { mutableStateOf(
-        RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
-    ) }
-    var enableLockScreenOnly by remember { mutableStateOf(RemoteFilterConfig.enableLockScreenOnly) }
+    var filterListText by remember { mutableStateOf("") }
+    var enableLockScreenOnly by remember { mutableStateOf(false) }
+    
+    // 在LaunchedEffect中异步加载RemoteFilterConfig，避免阻塞UI
+    LaunchedEffect(Unit) {
+        if (!RemoteFilterConfig.isLoaded) {
+            RemoteFilterConfig.load(context)
+            RemoteFilterConfig.isLoaded = true
+        }
+        
+        // 配置加载完成后更新前端状态
+        filterMode = RemoteFilterConfig.filterMode
+        enableDedup = RemoteFilterConfig.enableDeduplication
+        enablePackageGroupMapping = RemoteFilterConfig.enablePackageGroupMapping
+        allGroups = (RemoteFilterConfig.defaultPackageGroups.map { it.toMutableList() } +
+                RemoteFilterConfig.customPackageGroups.map { it.toMutableList() }).toMutableList()
+        allGroupEnabled = (RemoteFilterConfig.defaultGroupEnabled + RemoteFilterConfig.customGroupEnabled).toMutableList()
+        filterListText = RemoteFilterConfig.filterList.joinToString("\n") { it.first + (it.second?.let { k-> ","+k } ?: "") }
+        enableLockScreenOnly = RemoteFilterConfig.enableLockScreenOnly
+    }
 
     var showAppPickerForGroup by remember { mutableStateOf<Pair<Boolean, Int>>(false to -1) }
 
@@ -62,7 +82,7 @@ fun UIRemoteFilter() {
         val textStyles = MiuixTheme.textStyles
 
         Column(
-            modifier = androidx.compose.ui.Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
                 .padding(top = 12.dp)
@@ -70,10 +90,10 @@ fun UIRemoteFilter() {
         // 包名等价功能总开关
             Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
         ) {
             Text("启用包名等价映射", style = textStyles.body2, color = colorScheme.onSurface)
-            Spacer(modifier = androidx.compose.ui.Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(16.dp))
                 top.yukonga.miuix.kmp.basic.Switch(
                 checked = enablePackageGroupMapping,
                 onCheckedChange = {
@@ -81,7 +101,7 @@ fun UIRemoteFilter() {
                     RemoteFilterConfig.save(context)
                     enablePackageGroupMapping = it
                 },
-                modifier = androidx.compose.ui.Modifier.size(width = 24.dp, height = 12.dp)
+                modifier = Modifier.size(width = 24.dp, height = 12.dp)
             )
         }
 
@@ -95,16 +115,16 @@ fun UIRemoteFilter() {
                 val group = allGroups[idx]
                 val groupEnabled = enablePackageGroupMapping
                 top.yukonga.miuix.kmp.basic.Card(
-                    modifier = androidx.compose.ui.Modifier
+                    modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
                         .then(
-                            if (groupEnabled) androidx.compose.ui.Modifier.clickable {
+                            if (groupEnabled) Modifier.clickable {
                                 allGroupEnabled = allGroupEnabled.toMutableList().apply { set(idx, !allGroupEnabled[idx]) }
-                            } else androidx.compose.ui.Modifier
+                            } else Modifier
                         )
                 ) {
-                    Column(modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(4.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                                 top.yukonga.miuix.kmp.basic.Checkbox(
                                 checked = allGroupEnabled[idx],
@@ -117,21 +137,21 @@ fun UIRemoteFilter() {
                                     RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
                                     RemoteFilterConfig.save(context)
                                 },
-                                modifier = androidx.compose.ui.Modifier.size(20.dp),
+                                modifier = Modifier.size(20.dp),
                                 enabled = enablePackageGroupMapping
                             )
                                 Text(
                                 if (idx < RemoteFilterConfig.defaultPackageGroups.size) "默认组${idx+1}" else "自定义组${idx+1-RemoteFilterConfig.defaultPackageGroups.size}",
-                                style = textStyles.body2, color = colorScheme.onSurface, modifier = androidx.compose.ui.Modifier.padding(end = 4.dp)
+                                style = textStyles.body2, color = colorScheme.onSurface, modifier = Modifier.padding(end = 4.dp)
                             )
                             Spacer(Modifier.weight(1f))
                             if (idx >= RemoteFilterConfig.defaultPackageGroups.size) {
                                 top.yukonga.miuix.kmp.basic.Button(
                                     onClick = { showAppPickerForGroup = true to idx },
-                                    modifier = androidx.compose.ui.Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
+                                    modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp),
                                     enabled = enablePackageGroupMapping
                                 ) {
-                                    top.yukonga.miuix.kmp.basic.Text("+")
+                                    Text("+")
                                 }
                                 top.yukonga.miuix.kmp.basic.Button(
                                     onClick = {
@@ -145,28 +165,48 @@ fun UIRemoteFilter() {
                                         RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
                                         RemoteFilterConfig.save(context)
                                     },
-                                    modifier = androidx.compose.ui.Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp).padding(start = 2.dp),
+                                    modifier = Modifier.defaultMinSize(minWidth = 32.dp, minHeight = 32.dp).padding(start = 2.dp),
                                     enabled = enablePackageGroupMapping
                                 ) {
-                                    top.yukonga.miuix.kmp.basic.Text("×")
+                                    Text("×")
                                 }
                             }
                         }
                         // 包名自动换行显示
                         androidx.compose.foundation.layout.FlowRow(
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(top = 4.dp),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            val installedPkgs = remember { AppRepository.getInstalledPackageNamesSync(context) }
+                            // 监听AppRepository的状态，确保数据已加载
+                            val installedPkgs by remember { AppRepository.apps }.collectAsState()
+                            val installedPkgSet = installedPkgs.map { it.packageName }.toSet()
+                            
+                            // 确保应用列表已加载
+                            LaunchedEffect(Unit) {
+                                if (!AppRepository.isDataLoaded()) {
+                                    AppRepository.loadApps(context)
+                                }
+                            }
+                            
                             group.forEach { pkg ->
-                                val isInstalled = installedPkgs.contains(pkg)
-                                val iconBitmap = AppRepository.getAppIconSync(context, pkg)
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = androidx.compose.ui.Modifier.padding(end = 8.dp)) {
-                                    if (iconBitmap != null) {
-                                        Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = null, modifier = androidx.compose.ui.Modifier.size(18.dp))
+                                val isInstalled = installedPkgSet.contains(pkg)
+                                // 使用mutableStateOf保存图标状态，这样更新时会触发UI重新渲染
+                                var iconBitmap by remember { mutableStateOf(AppRepository.getAppIcon(pkg)) }
+                                
+                                // 异步加载缺失的图标，并在加载完成后更新状态
+                                LaunchedEffect(pkg) {
+                                    if (iconBitmap == null) {
+                                        // 异步加载图标
+                                        val loadedIcon = AppRepository.getAppIconAsync(context, pkg)
+                                        // 更新状态，触发UI重新渲染
+                                        iconBitmap = loadedIcon
                                     }
-                                    Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = androidx.compose.ui.Modifier.padding(start = 2.dp))
+                                }
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+                                    iconBitmap?.let { Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(18.dp)) }
+                                    Text(pkg, style = textStyles.body2, color = if (isInstalled) colorScheme.primary else colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp))
                                 }
                             }
                         }
@@ -188,10 +228,10 @@ fun UIRemoteFilter() {
                 RemoteFilterConfig.customGroupEnabled = newEnabled.drop(defaultSize).toMutableList()
                 RemoteFilterConfig.save(context)
             },
-            modifier = androidx.compose.ui.Modifier.padding(vertical = 2.dp),
+            modifier = Modifier.padding(vertical = 2.dp),
             enabled = enablePackageGroupMapping
         ) {
-            top.yukonga.miuix.kmp.basic.Text("添加新组")
+            Text("添加新组")
         }
 
         // 应用选择弹窗（封装组件调用）
@@ -218,7 +258,7 @@ fun UIRemoteFilter() {
         }
 
         // 过滤模式选择与黑白名单编辑
-                Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("过滤模式:", style = textStyles.body2, color = colorScheme.onSurface)
             val modes = listOf("none" to "无", "black" to "黑名单", "white" to "白名单", "peer" to "对等")
             modes.forEach { (value, label) ->
@@ -232,7 +272,7 @@ fun UIRemoteFilter() {
                     modifier = Modifier.padding(horizontal = 2.dp),
                     colors = if (filterMode == value) top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary() else top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors()
                 ) {
-                    top.yukonga.miuix.kmp.basic.Text(label)
+                    Text(label)
                 }
             }
         }
@@ -246,7 +286,7 @@ fun UIRemoteFilter() {
                 style = textStyles.body2,
                 color = colorScheme.onSurface
             )
-                Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 top.yukonga.miuix.kmp.basic.TextField(
                     value = filterListText,
                     onValueChange = {
@@ -257,14 +297,14 @@ fun UIRemoteFilter() {
                         }
                         RemoteFilterConfig.save(context)
                     },
-                    modifier = androidx.compose.ui.Modifier.weight(1f),
+                    modifier = Modifier.weight(1f),
                     label = "com.a,关键字\ncom.b"
                 )
                 top.yukonga.miuix.kmp.basic.Button(
                     onClick = { showFilterAppPicker = true },
-                    modifier = androidx.compose.ui.Modifier.padding(start = 6.dp)
+                    modifier = Modifier.padding(start = 6.dp)
                 ) {
-                    top.yukonga.miuix.kmp.basic.Text("添加包名")
+                    Text("添加包名")
                 }
             }
             if (showFilterAppPicker) {
@@ -290,7 +330,7 @@ fun UIRemoteFilter() {
                         val newFilterListText = if (filterListText.isBlank()) line else filterListText.trimEnd() + "\n" + line
                         filterListText = newFilterListText
                         // 更新后端状态
-                        RemoteFilterConfig.filterList = newFilterListText.lines().filter { it.isNotBlank() }.map { it ->
+                        RemoteFilterConfig.filterList = newFilterListText.lines().filter { it.isNotBlank() }.map {
                             val arr = it.split(",", limit=2)
                             arr[0].trim() to arr.getOrNull(1)?.trim().takeIf { k->!k.isNullOrBlank() }
                         }
@@ -315,7 +355,7 @@ fun UIRemoteFilter() {
                     RemoteFilterConfig.save(context)
                     enableDedup = it
                 },
-                modifier = androidx.compose.ui.Modifier.padding(end = 4.dp)
+                modifier = Modifier.padding(end = 4.dp)
             )
             Text("智能去重", style = textStyles.body2, color = colorScheme.onSurface)
         }
@@ -329,7 +369,7 @@ fun UIRemoteFilter() {
                     RemoteFilterConfig.save(context)
                     enableLockScreenOnly = it
                 },
-                modifier = androidx.compose.ui.Modifier.padding(end = 4.dp)
+                modifier = Modifier.padding(end = 4.dp)
             )
             Text("仅复刻锁屏通知到通知栏", style = textStyles.body2, color = colorScheme.onSurface)
         }
@@ -340,9 +380,9 @@ fun UIRemoteFilter() {
                 // 所有状态已经实时同步到后端，这里只需要确保最终保存
                 RemoteFilterConfig.save(context)
             },
-            modifier = androidx.compose.ui.Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 8.dp)
         ) {
-            top.yukonga.miuix.kmp.basic.Text("应用")
+            Text("应用")
         }
     }
     }

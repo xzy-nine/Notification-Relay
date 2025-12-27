@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <!-- 触觉反馈：用于超级岛关闭指示器的振动效果 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 蓝牙名称获取相关权限 -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
@@ -37,14 +39,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.NotifyRelay">
-        <activity android:name=".feature.guide.GuideActivity"
+        <activity android:name=".feature.GuideActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity" android:exported="true" />
+        <activity android:name=".feature.MainActivity" android:exported="true" />
         <!-- 通知监听服务声明，用于系统识别通知访问权限 -->
         <service
             android:name=".feature.notification.service.NotifyRelayNotificationListenerService"

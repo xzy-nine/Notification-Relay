@@ -9,6 +9,8 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
+import com.xzyht.notifyrelay.common.core.util.ToastUtils
 
 /**
  * 权限辅助工具类
@@ -38,13 +40,13 @@ object PermissionHelper {
         // 判断是否为 MIUI/澎湃系统（厂商或系统包识别）
         val isMiui = detectMiuiOrPengpai(context)
 
-    // 检查应用列表权限
-    var canQueryApps: Boolean
+        // 检查应用列表权限
+        var canQueryApps: Boolean
         try {
             val pm = context.packageManager
             val apps = pm.getInstalledApplications(0)
             canQueryApps = apps.size > 2
-                if (isMiui) {
+            if (isMiui) {
                 canQueryApps = canQueryApps && (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") == PackageManager.PERMISSION_GRANTED)
             }
         } catch (e: Exception) {
@@ -73,11 +75,11 @@ object PermissionHelper {
         // 判断是否为 MIUI/澎湃系统（厂商或系统包识别）
         val isMiui = detectMiuiOrPengpai(activity)
 
-    // 通知访问权限：引导用户打开通知监听器设置
-    val intentNotification = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-    activity.startActivity(intentNotification)
+        // 通知访问权限：引导用户打开通知监听器设置
+        val intentNotification = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+        activity.startActivity(intentNotification)
 
-            if (isMiui) {
+        if (isMiui) {
             // MIUI/澎湃优先动态申请应用列表权限
             if (ContextCompat.checkSelfPermission(activity, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(activity, arrayOf("com.android.permission.GET_INSTALLED_APPS"), 999)
@@ -134,11 +136,11 @@ object PermissionHelper {
                     activity.startActivity(intent)
                 } catch (_: Exception) {
                     // 跳转失败，提示手动设置
-                    android.widget.Toast.makeText(activity, "请手动在设置-通知-增强型通知关闭", android.widget.Toast.LENGTH_LONG).show()
+                    ToastUtils.showLongToast(activity, "请手动在设置-通知-增强型通知关闭")
                 }
             } else {
                 // 其他系统提示使用 ADB
-                android.widget.Toast.makeText(activity, "请用adb授权: adb shell appops set ${activity.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow", android.widget.Toast.LENGTH_LONG).show()
+                ToastUtils.showLongToast(activity, "请用adb授权: adb shell appops set ${activity.packageName} RECEIVE_SENSITIVE_NOTIFICATIONS allow")
             }
         }
     }
@@ -154,7 +156,13 @@ object PermissionHelper {
     @Suppress("DEPRECATION")
     fun isUsageStatsEnabled(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
-        val mode = appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // API 29+ 使用 unsafeCheckOpNoThrow
+            appOps.unsafeCheckOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        } else {
+            // API 29- 使用兼容的 checkOpNoThrow
+            appOps.checkOpNoThrow("android:get_usage_stats", android.os.Process.myUid(), context.packageName)
+        }
         return mode == android.app.AppOpsManager.MODE_ALLOWED
     }
 
@@ -233,6 +241,19 @@ object PermissionHelper {
             "enabled_notification_listeners"
         )
         return enabledListeners?.contains(context.packageName) == true
+    }
+
+    /**
+     * 检查开发者选项-停用屏幕共享保护是否已开启。
+     *
+     * @param context 用于读取 Settings.Global 的上下文。
+     * @return 如果停用屏幕共享保护已开启则返回 true，否则返回 false。
+     */
+    fun checkDevScreenShareProtectOff(context: Context): Boolean {
+        return try {
+            val value = Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
+            value == 1
+        } catch (_: Exception) { false }
     }
 
     /**

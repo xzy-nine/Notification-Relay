@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 第一条斜线 "\" -->
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:rotation="45">
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M 11 5 L 13 5 L 13 19 L 11 19 Z" />
+    </group>
+
+    <!-- 第二条斜线 "/" -->
+    <group
+        android:pivotX="12"
+        android:pivotY="12"
+        android:rotation="-45">
+        <path
+            android:fillColor="@android:color/white"
+            android:pathData="M 11 5 L 13 5 L 13 19 L 11 19 Z" />
+    </group>
+
+</vector>

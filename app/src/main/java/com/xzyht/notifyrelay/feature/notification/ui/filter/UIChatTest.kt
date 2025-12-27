@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.ui.filter
+﻿package com.xzyht.notifyrelay.feature.notification.ui.filter
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,12 +8,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import top.yukonga.miuix.kmp.basic.Button
@@ -42,7 +49,7 @@ fun UIChatTest(
         }
         val notificationCallback: (String) -> Unit = remember {
             { data: String ->
-                if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.d("NotifyRelay(狂鼠)", "UIChatTest onNotificationDataReceived: $data")
+                //Logger.d("NotifyRelay(狂鼠)", "UIChatTest onNotificationDataReceived: $data")
                 chatHistoryState.value = ChatMemory.getChatHistory(context)
             }
         }
@@ -98,7 +105,7 @@ fun UIChatTest(
                                             clipboard.setPrimaryClip(clip)
                                             android.widget.Toast.makeText(context, "已复制原始消息到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
                                         } catch (e: Exception) {
-                                            if (com.xzyht.notifyrelay.BuildConfig.DEBUG) android.util.Log.e("NotifyRelay", "复制失败", e)
+                                            Logger.e("NotifyRelay", "复制失败", e)
                                         }
                                     }
                                 )
@@ -129,7 +136,7 @@ fun UIChatTest(
                 )
                 Button(
                     onClick = {
-                        com.xzyht.notifyrelay.core.util.MessageSender.sendChatMessage(
+                        com.xzyht.notifyrelay.common.core.util.MessageSender.sendChatMessage(
                             context,
                             chatInput,
                             deviceManager
@@ -137,11 +144,22 @@ fun UIChatTest(
                         chatHistoryState.value = ChatMemory.getChatHistory(context)
                         chatInput = ""
                     },
-                    enabled = com.xzyht.notifyrelay.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
-                            com.xzyht.notifyrelay.core.util.MessageSender.isValidMessage(chatInput),
+                    enabled = com.xzyht.notifyrelay.common.core.util.MessageSender.hasAvailableDevices(deviceManager) &&
+                            com.xzyht.notifyrelay.common.core.util.MessageSender.isValidMessage(chatInput),
                     modifier = Modifier.align(Alignment.CenterVertically)
                 ) {
                     Text("发送")
+                }
+                Button(
+                    onClick = {
+                        ChatMemory.clearAll(context)
+                        chatHistoryState.value = ChatMemory.getChatHistory(context)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(start = 4.dp)
+                ) {
+                    Text("清空对话")
                 }
             }
         }

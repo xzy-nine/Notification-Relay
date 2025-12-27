@@ -1,9 +1,17 @@
-package com.xzyht.notifyrelay.feature.device.ui
+﻿package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
-import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,8 +30,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
-import com.xzyht.notifyrelay.BuildConfig
-import com.xzyht.notifyrelay.common.data.PersistenceManager
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
@@ -48,7 +54,7 @@ object GlobalSelectedDeviceHolder {
     @Composable
     fun current(): State<DeviceInfo?> {
         // 这样可在任意Compose页面通过 GlobalSelectedDeviceHolder.current().value 响应式获取
-        val state = rememberUpdatedState(_selectedDevice)
+        rememberUpdatedState(_selectedDevice)
         // 由于mutableStateOf已全局可观察，直接返回即可
         return androidx.compose.runtime.remember { object : State<DeviceInfo?> {
             override val value: DeviceInfo? get() = _selectedDevice
@@ -67,11 +73,11 @@ class DeviceListFragment : Fragment() {
         inflater: android.view.LayoutInflater,
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
-    ): android.view.View? {
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
+    ): android.view.View {
+        //Logger.d("NotifyRelay", "[UI] DeviceListFragment onCreateView called")
         return ComposeView(requireContext()).apply {
             setContent {
-                if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
+                //Logger.d("NotifyRelay", "[UI] Compose setContent in DeviceListFragment")
                 MiuixTheme {
                     DeviceListScreen()
                 }
@@ -96,21 +102,20 @@ fun DeviceListScreen() {
     fun toggleUdpDiscovery(enabled: Boolean) {
         udpDiscoveryEnabled = enabled
         deviceManager.udpDiscoveryEnabled = enabled
-        if (enabled) {
-            deviceManager.startDiscovery()
-        } else {
-            // 只停止UDP相关线程，避免影响TCP服务
-            try {
-                val broadcastField = deviceManager.javaClass.getDeclaredField("broadcastThread")
-                broadcastField.isAccessible = true
-                (broadcastField.get(deviceManager) as? Thread)?.interrupt()
-                broadcastField.set(deviceManager, null)
-                val listenField = deviceManager.javaClass.getDeclaredField("listenThread")
-                listenField.isAccessible = true
-                (listenField.get(deviceManager) as? Thread)?.interrupt()
-                listenField.set(deviceManager, null)
-            } catch (_: Exception) {}
-        }
+        try {
+            val discoveryField = deviceManager.javaClass.getDeclaredField("discoveryManager")
+            discoveryField.isAccessible = true
+            val discovery = discoveryField.get(deviceManager)
+            if (enabled) {
+                val startMethod = discovery.javaClass.getDeclaredMethod("startDiscovery")
+                startMethod.isAccessible = true
+                startMethod.invoke(discovery)
+            } else {
+                val stopMethod = discovery.javaClass.getDeclaredMethod("stopDiscovery")
+                stopMethod.isAccessible = true
+                stopMethod.invoke(discovery)
+            }
+        } catch (_: Exception) {}
     }
     // 新增：未认证设备连接弹窗状态
     var showConnectDialog by remember { mutableStateOf(false) }
@@ -145,8 +150,8 @@ fun DeviceListScreen() {
             .map { it.uuid }
     }
 
-    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
-    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
+    //Logger.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
+    //Logger.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
 
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {
@@ -204,7 +209,7 @@ fun DeviceListScreen() {
     }
 
     val buttonMinHeight = 44.dp // 更适合内容自适应，防止裁剪
-    val textScrollModifier = Modifier
+    Modifier
         .padding(horizontal = 2.dp, vertical = 4.dp)
 
     // 横竖屏都显示UDP发现开关
@@ -505,7 +510,7 @@ fun DeviceListScreen() {
 
     // 连接设备弹窗
     if (showConnectDialog && pendingConnectDevice != null) {
-        val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+        val activity = LocalContext.current as? android.app.Activity
         val showDialog = remember { mutableStateOf(true) }
         ConnectDeviceDialog(
             showDialog = showDialog,
@@ -534,9 +539,7 @@ fun DeviceListScreen() {
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
-                        try {
-                            PersistenceManager.deleteNotificationFile(appContext, uuid)
-                        } catch (_: Exception) {}
+                        // 使用Room数据库后，不需要手动删除JSON文件
                     }
                     // 持久化认证状态
                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
@@ -612,9 +615,7 @@ fun DeviceListScreen() {
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
-                        try {
-                            PersistenceManager.deleteNotificationFile(appContext, uuid)
-                        } catch (_: Exception) {}
+                        // 使用Room数据库后，不需要手动删除JSON文件
                     }
                     val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
                     saveMethod.isAccessible = true

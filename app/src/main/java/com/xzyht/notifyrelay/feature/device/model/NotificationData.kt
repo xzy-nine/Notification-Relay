@@ -1,48 +1,81 @@
-package com.xzyht.notifyrelay.feature.device.model
+﻿package com.xzyht.notifyrelay.feature.device.model
 
 import android.app.Notification
 import android.content.Context
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.runBlocking
-import com.xzyht.notifyrelay.common.data.PersistenceManager
-import com.google.gson.reflect.TypeToken
-import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
 import com.xzyht.notifyrelay.feature.notification.model.NotificationRecordEntity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.runBlocking
 
 class NotificationRecordStore(private val context: Context) {
+    // 数据库仓库实例
+    private val repository = com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context)
+    
+    // 转换方法：将旧的NotificationRecordEntity转换为新的Room实体
+    private fun convertToRoomEntity(old: NotificationRecordEntity, deviceUuid: String): com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity {
+        return com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity(
+            key = old.key,
+            deviceUuid = deviceUuid,
+            packageName = old.packageName,
+            appName = old.appName,
+            title = old.title,
+            text = old.text,
+            time = old.time
+        )
+    }
+    
+    // 转换方法：将新的Room实体转换为旧的NotificationRecordEntity
+    private fun convertFromRoomEntity(new: com.xzyht.notifyrelay.common.data.database.entity.NotificationRecordEntity): NotificationRecordEntity {
+        return NotificationRecordEntity(
+            key = new.key,
+            packageName = new.packageName,
+            appName = new.appName,
+            title = new.title,
+            text = new.text,
+            time = new.time,
+            device = new.deviceUuid
+        )
+    }
+    
     internal fun readAll(device: String): MutableList<NotificationRecordEntity> {
-        val typeToken = object : TypeToken<List<NotificationRecordEntity>>() {}
-        return PersistenceManager.readNotificationRecords(context, device, typeToken).toMutableList()
+        val deviceUuid = if (device == "local") "本机" else device
+        return runBlocking {
+            repository.getNotificationsByDevice(deviceUuid)
+        }.map { convertFromRoomEntity(it) }.toMutableList()
     }
 
     internal fun writeAll(list: List<NotificationRecordEntity>, device: String) {
-        PersistenceManager.saveNotificationRecords(context, device, list)
+        val deviceUuid = if (device == "local") "本机" else device
+        runBlocking {
+            val roomEntities = list.map { convertToRoomEntity(it, deviceUuid) }
+            repository.saveNotifications(roomEntities)
+        }
     }
 
     suspend fun insert(record: NotificationRecordEntity) {
-        val list = readAll(record.device)
-        list.removeAll { it.key == record.key }
-        list.add(0, record)
-        writeAll(list, record.device)
+        val deviceUuid = if (record.device == "local") "本机" else record.device
+        val roomEntity = convertToRoomEntity(record, deviceUuid)
+        repository.saveNotification(roomEntity)
     }
 
     suspend fun getAll(device: String): List<NotificationRecordEntity> {
-        return readAll(device).sortedByDescending { it.time }
+        val deviceUuid = if (device == "local") "本机" else device
+        return repository.getNotificationsByDevice(deviceUuid)
+            .map { convertFromRoomEntity(it) }
+            .sortedByDescending { it.time }
     }
 
     suspend fun deleteByKey(key: String, device: String) {
-        val list = readAll(device)
-        list.removeAll { it.key == key }
-        writeAll(list, device)
+        repository.deleteNotificationByKey(key)
     }
 
     suspend fun clearByDevice(device: String) {
-        PersistenceManager.clearNotificationRecords(context, device)
+        val deviceUuid = if (device == "local") "本机" else device
+        repository.deleteNotificationsByDevice(deviceUuid)
     }
 }
 
@@ -90,11 +123,11 @@ object NotificationRepository {
             // 同时更新内存列表，确保内存与当前设备同步
             notifications.clear()
             notifications.addAll(mapped)
-            if (BuildConfig.DEBUG) Log.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
+            //Logger.d("NotifyRelay", "notifyHistoryChanged device=$realKey, 加载数量=${mapped.size}")
         } catch (e: Exception) {
             _notificationHistoryFlow.value = emptyList()
             notifications.clear()
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "notifyHistoryChanged 失败", e)
+            Logger.e("NotifyRelay", "notifyHistoryChanged 失败", e)
         }
     }
 
@@ -105,9 +138,9 @@ object NotificationRepository {
     fun addRemoteNotification(packageName: String, appName: String?, title: String, text: String, time: Long, device: String, context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
+        Logger.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] contextType=$ctxType, hash=$ctxHash, device=$device")
         if (context !is android.app.Application) {
-            if (BuildConfig.DEBUG) Log.w("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
+            Logger.w("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] context is not Application: $ctxType, hash=$ctxHash")
         }
         val key = (time.toString() + packageName + device)
         // 使用传入的appName参数
@@ -128,13 +161,13 @@ object NotificationRepository {
             ))
             // writeAll是同步的，不需要runBlocking
             store.writeAll(oldList, fileKey)
-            if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
+            Logger.i("秩序之光 狂鼠 NotifyRelay", "写入远端历史 device=$device, size=${oldList.size}")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
+            Logger.e("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] 写入远程设备json失败: $device, error=${e.message}")
         }
         // 写入后主动推送变更
         notifyHistoryChanged(device, context)
-        if (BuildConfig.DEBUG) Log.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
+        Logger.i("秩序之光 狂鼠 NotifyRelay", "[addRemoteNotification] after sync (no global add), device=$device")
     }
     /**
      * 新增通知到历史记录（支持监听服务调用）
@@ -182,7 +215,7 @@ object NotificationRepository {
                 // 时间戳在容差范围内认为相同
                 if (Math.abs(it.time - time) <= timeTolerance) {
                     existed = true
-                    if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "[判重] 发现重复通知，不添加到历史: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time差=${Math.abs(it.time - time)}ms")
+                    Logger.i("回声 NotifyRelay", "[判重] 发现重复通知，不添加到历史: key=${it.key}, pkg=${it.packageName}, title=${it.title}, text=${it.text}, time差=${Math.abs(it.time - time)}ms")
                 }
             }
         }
@@ -204,10 +237,10 @@ object NotificationRepository {
                 if (com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.enableDeduplication) {
                     com.xzyht.notifyrelay.feature.notification.backend.BackendRemoteFilter.onLocalNotificationEnqueued(title, text, packageName, time, context)
                 } else {
-                    if (BuildConfig.DEBUG) Log.d("NotifyRelay", "智能去重已关闭，跳过被动去重推送")
+                    //Logger.d("NotifyRelay", "智能去重已关闭，跳过被动去重推送")
                 }
             } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Log.e("NotifyRelay", "调用 onLocalNotificationEnqueued 失败", e)
+                Logger.e("NotifyRelay", "调用 onLocalNotificationEnqueued 失败", e)
             }
         }
 
@@ -230,17 +263,28 @@ object NotificationRepository {
     // 设备列表，自动维护
     val deviceList: MutableList<String> = mutableListOf("本机")
 
-    // 新增：扫描本地所有 notification_records_*.json 文件，自动识别设备
+    // 扫描数据库中的设备，自动识别所有设备
     fun scanDeviceList(context: Context) {
-        val files = context.filesDir.listFiles()?.filter { it.name.startsWith("notification_records_") && it.name.endsWith(".json") } ?: emptyList()
-        val found = files.mapNotNull {
-            val name = it.name.removePrefix("notification_records_").removeSuffix(".json")
-            if (name == "local") "本机" else name
-        }.toMutableSet()
+        // 从Room数据库中获取所有已认证设备
+        val allDevicesFromDb = runBlocking {
+            com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository.getInstance(context).getDevices()
+        }
+        
+        // 添加本机设备
+        val found = mutableSetOf<String>()
         found.add("本机")
+        
+        // 添加数据库中的所有已认证设备UUID
+        allDevicesFromDb.forEach { device ->
+            val uuid = device.uuid
+            if (!uuid.isNullOrEmpty() && uuid != "本机") {
+                found.add(uuid)
+            }
+        }
+        
         // 保证本机在首位
         val sorted = found.sortedWith(compareBy({ if (it == "本机") 0 else 1 }, { it }))
-        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[scanDeviceList] found devices: $sorted") //打印本机存储的通知
+        Logger.i("NotifyRelay", "[scanDeviceList] found devices: $sorted")
         deviceList.clear()
         deviceList.addAll(sorted)
     }
@@ -252,7 +296,7 @@ object NotificationRepository {
     fun init(context: Context) {
         try {
             scanDeviceList(context)
-            val store = NotifyRelayStoreProvider.getInstance(context)
+            NotifyRelayStoreProvider.getInstance(context)
             // 主动加载本地历史到内存，保证判重有效
             val store2 = NotifyRelayStoreProvider.getInstance(context)
             val localList = store2.readAll("本机").map {
@@ -278,16 +322,16 @@ object NotificationRepository {
      */
     @Synchronized
     fun removeNotification(key: String, context: Context) {
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "开始删除通知 key=$key")
-        val beforeSize = notifications.size
+        //Logger.d("NotifyRelay", "开始删除通知 key=$key")
+        notifications.size
 
         // 查找要删除的通知，检查其设备类型
         val notificationToRemove = notifications.find { it.key == key }
         val isLocalDevice = notificationToRemove?.device == "本机"
 
         notifications.removeAll { it.key == key }
-        val afterSize = notifications.size
-        if (BuildConfig.DEBUG) Log.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
+        notifications.size
+        //Logger.d("NotifyRelay", "删除通知 key=$key, 删除前数量=$beforeSize, 删除后数量=$afterSize")
         syncToCache(context)
 
         // 仅在本机设备时清理processedNotifications缓存
@@ -305,7 +349,7 @@ object NotificationRepository {
     fun removeNotificationsByPackage(packageName: String, context: Context) {
         // 收集要清除的通知key，用于清理缓存
         val notificationsToRemove = notifications.filter { it.packageName == packageName }
-        val keysToClear = notificationsToRemove.map { it.key }.toSet()
+        notificationsToRemove.map { it.key }.toSet()
 
         // 检查是否有本机设备的通知
         val hasLocalNotifications = notificationsToRemove.any { it.device == "本机" }
@@ -332,10 +376,8 @@ object NotificationRepository {
         notifications.removeAll { it.device == device }
         syncToCache(context)
 
-        // 对于清除操作，等待写入完成确保数据确实被清除
-        if (device == "本机") {
-            PersistenceManager.waitForAllWrites(2000) // 等待最多2秒
-        }
+        // Room数据库操作是异步的，不需要等待写入完成
+        // 清除操作已经通过Repository提交到数据库
 
         // 仅在本机设备时清理processedNotifications缓存（非本机设备没有缓存）
         if (device == "本机") {
@@ -357,7 +399,7 @@ object NotificationRepository {
     internal fun syncToCache(context: Context) {
         val ctxType = context::class.java.name
         val ctxHash = System.identityHashCode(context)
-        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
+        Logger.i("NotifyRelay", "[syncToCache] contextType=$ctxType, hash=$ctxHash")
         try {
             val store = NotifyRelayStoreProvider.getInstance(context)
             val grouped = notifications.groupBy { it.device }
@@ -376,12 +418,12 @@ object NotificationRepository {
                 val fileKey = if (device == "本机") "local" else device
                 // 移除不必要的runBlocking，writeAll已经是同步的
                 store.writeAll(entities, fileKey)
-                if (BuildConfig.DEBUG) Log.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
+                Logger.i("回声 NotifyRelay", "写入本地历史 device=$device, fileKey=$fileKey, size=${entities.size}")
             }
             scanDeviceList(context)
         } catch (e: Exception) {
             val device = notifications.firstOrNull()?.device ?: "(unknown)"
-            if (BuildConfig.DEBUG) Log.e("NotifyRelay", "通知保存到缓存失败, contextType=$ctxType, hash=$ctxHash, device=$device, error=${e.message}\n${e.stackTraceToString()}")
+            Logger.e("NotifyRelay", "通知保存到缓存失败, contextType=$ctxType, hash=$ctxHash, device=$device, error=${e.message}\n${e.stackTraceToString()}")
         }
     }
 
@@ -391,7 +433,7 @@ object NotificationRepository {
     @Synchronized
     fun getNotificationsByDevice(device: String): List<NotificationRecord> {
         val filtered = notifications.filter { it.device == device }
-        if (BuildConfig.DEBUG) Log.i("NotifyRelay", "[getNotificationsByDevice] device=$device, found=${filtered.size}")
+        Logger.i("NotifyRelay", "[getNotificationsByDevice] device=$device, found=${filtered.size}")
         return filtered
     }
 

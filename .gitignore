@@ -25,3 +25,5 @@ lancomm/
 
 # Other generated Gradle files
 /gradle-app.setting
+.trae/documents/
+debug/

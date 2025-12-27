@@ -84,7 +84,7 @@
 }
 
 # Keep core classes
--keep class com.xzyht.notifyrelay.core.** {
+-keep class com.xzyht.notifyrelay.common.core.** {
     *;
 }
 

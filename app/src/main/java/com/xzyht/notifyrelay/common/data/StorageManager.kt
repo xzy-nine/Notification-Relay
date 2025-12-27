@@ -1,66 +1,36 @@
 package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
-import android.content.SharedPreferences
-import com.xzyht.notifyrelay.BuildConfig
-import android.util.Log
+import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.database.repository.DatabaseRepository
+import kotlinx.coroutines.runBlocking
 
 /**
- * StorageManager 是一个用于统一管理应用 SharedPreferences 的工具单例。
+ * StorageManager 是一个用于统一管理应用配置的工具单例，现在使用Room数据库存储。
  *
  * 它将偏好设置按用途分为三类：通用（GENERAL）、设备（DEVICE）和过滤器（FILTER），
  * 并提供了一系列便捷的读写方法（支持字符串、布尔、整数、长整数、字符串集合以及批量写入）。
  * 所有方法内部均包含异常保护，避免因异常导致应用崩溃。
  */
 object StorageManager {
-
+    
     /**
-     * 通用偏好设置名称，存储应用范围内的通用配置。
-     */
-    private const val PREFS_GENERAL = "notifyrelay_prefs"
-
-    /**
-     * 设备相关的偏好设置名称，存储与设备有关的配置或状态。
-     */
-    private const val PREFS_DEVICE = "notifyrelay_device_prefs"
-
-    /**
-     * 过滤器相关的偏好设置名称，存储通知/消息过滤器相关配置。
-     */
-    private const val PREFS_FILTER = "notifyrelay_filter_prefs"
-
-    /**
-     * 获取通用偏好设置对象。
+     * 根据 [PrefsType] 为键名添加前缀，避免不同类型的偏好键名冲突。
      *
-     * @param context 任意 Context 实例（通常传入 ApplicationContext 更安全）。
-     * @return 对应名称的 [SharedPreferences] 实例，模式为 [Context.MODE_PRIVATE]。
+     * @param key 原始键名。
+     * @param prefsType 偏好集合类型。
+     * @return 添加前缀后的键名。
      */
-    fun getGeneralPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_GENERAL, Context.MODE_PRIVATE)
+    private fun getPrefixedKey(key: String, prefsType: PrefsType): String {
+        return when (prefsType) {
+            PrefsType.GENERAL -> "general_$key"
+            PrefsType.DEVICE -> "device_$key"
+            PrefsType.FILTER -> "filter_$key"
+        }
     }
 
     /**
-     * 获取设备偏好设置对象。
-     *
-     * @param context 任意 Context 实例（通常传入 ApplicationContext 更安全）。
-     * @return 对应名称的 [SharedPreferences] 实例，模式为 [Context.MODE_PRIVATE]。
-     */
-    fun getDevicePrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_DEVICE, Context.MODE_PRIVATE)
-    }
-
-    /**
-     * 获取过滤器偏好设置对象。
-     *
-     * @param context 任意 Context 实例（通常传入 ApplicationContext 更安全）。
-     * @return 对应名称的 [SharedPreferences] 实例，模式为 [Context.MODE_PRIVATE]。
-     */
-    fun getFilterPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_FILTER, Context.MODE_PRIVATE)
-    }
-
-    /**
-     * 从偏好设置中读取字符串值，带异常保护。
+     * 从Room数据库中读取字符串值，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -70,15 +40,25 @@ object StorageManager {
      */
     fun getString(context: Context, key: String, default: String = "", prefsType: PrefsType = PrefsType.GENERAL): String {
         return try {
-            getPrefs(context, prefsType).getString(key, default) ?: default
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.getConfig(prefixedKey, default)
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取字符串时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取字符串失败，键: $key", e)
+            Logger.w("StorageManager", "获取字符串失败，键: $key", e)
             default
         }
     }
 
     /**
-     * 将字符串写入偏好设置，带异常保护。
+     * 将字符串写入Room数据库，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -87,14 +67,23 @@ object StorageManager {
      */
     fun putString(context: Context, key: String, value: String, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().putString(key, value).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.setConfig(prefixedKey, value)
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入字符串时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入字符串失败，键: $key", e)
+            Logger.w("StorageManager", "写入字符串失败，键: $key", e)
         }
     }
 
     /**
-     * 从偏好设置中读取布尔值，带异常保护。
+     * 从Room数据库中读取布尔值，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -104,15 +93,25 @@ object StorageManager {
      */
     fun getBoolean(context: Context, key: String, default: Boolean = false, prefsType: PrefsType = PrefsType.GENERAL): Boolean {
         return try {
-            getPrefs(context, prefsType).getBoolean(key, default)
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.getConfig(prefixedKey, default.toString()).toBoolean()
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取布尔值时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取布尔值失败，键: $key", e)
+            Logger.w("StorageManager", "获取布尔值失败，键: $key", e)
             default
         }
     }
 
     /**
-     * 将布尔值写入偏好设置，带异常保护。
+     * 将布尔值写入Room数据库，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -121,14 +120,18 @@ object StorageManager {
      */
     fun putBoolean(context: Context, key: String, value: Boolean, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().putBoolean(key, value).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.setConfig(prefixedKey, value.toString())
+            }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入布尔值失败，键: $key", e)
+            Logger.w("StorageManager", "写入布尔值失败，键: $key", e)
         }
     }
 
     /**
-     * 批量写入布尔值（原子性由 SharedPreferences.Editor 管理，使用 apply 异步提交）。
+     * 批量写入布尔值到Room数据库。
      *
      * @param context 任意 Context 实例。
      * @param values 要写入的键值对集合。
@@ -136,16 +139,25 @@ object StorageManager {
      */
     fun putBooleans(context: Context, values: Map<String, Boolean>, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().apply {
-                values.forEach { (key, value) -> putBoolean(key, value) }
-            }.apply()
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                for ((key, value) in values) {
+                    val prefixedKey = getPrefixedKey(key, prefsType)
+                    repository.setConfig(prefixedKey, value.toString())
+                }
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入布尔值时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入布尔值失败", e)
+            Logger.w("StorageManager", "批量写入布尔值失败", e)
         }
     }
 
     /**
-     * 从偏好设置中读取整数，带异常保护。
+     * 从Room数据库中读取整数，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -155,15 +167,25 @@ object StorageManager {
      */
     fun getInt(context: Context, key: String, default: Int = 0, prefsType: PrefsType = PrefsType.GENERAL): Int {
         return try {
-            getPrefs(context, prefsType).getInt(key, default)
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.getConfig(prefixedKey, default.toString()).toInt()
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取整数失败，键: $key", e)
+            Logger.w("StorageManager", "获取整数失败，键: $key", e)
             default
         }
     }
 
     /**
-     * 将整数写入偏好设置，带异常保护。
+     * 将整数写入Room数据库，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -172,14 +194,23 @@ object StorageManager {
      */
     fun putInt(context: Context, key: String, value: Int, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().putInt(key, value).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.setConfig(prefixedKey, value.toString())
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入整数失败，键: $key", e)
+            Logger.w("StorageManager", "写入整数失败，键: $key", e)
         }
     }
 
     /**
-     * 从偏好设置中读取长整数（Long），带异常保护。
+     * 从Room数据库中读取长整数（Long），带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -189,15 +220,25 @@ object StorageManager {
      */
     fun getLong(context: Context, key: String, default: Long = 0L, prefsType: PrefsType = PrefsType.GENERAL): Long {
         return try {
-            getPrefs(context, prefsType).getLong(key, default)
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.getConfig(prefixedKey, default.toString()).toLong()
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取长整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取长整数失败，键: $key", e)
+            Logger.w("StorageManager", "获取长整数失败，键: $key", e)
             default
         }
     }
 
     /**
-     * 将长整数（Long）写入偏好设置，带异常保护。
+     * 将长整数（Long）写入Room数据库，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -206,14 +247,23 @@ object StorageManager {
      */
     fun putLong(context: Context, key: String, value: Long, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().putLong(key, value).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.setConfig(prefixedKey, value.toString())
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入长整数时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入长整数失败，键: $key", e)
+            Logger.w("StorageManager", "写入长整数失败，键: $key", e)
         }
     }
 
     /**
-     * 批量写入字符串键值对。
+     * 批量写入字符串键值对到Room数据库。
      *
      * @param context 任意 Context 实例。
      * @param values 要写入的字符串键值对集合。
@@ -221,16 +271,25 @@ object StorageManager {
      */
     fun putStrings(context: Context, values: Map<String, String>, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().apply {
-                values.forEach { (key, value) -> putString(key, value) }
-            }.apply()
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                for ((key, value) in values) {
+                    val prefixedKey = getPrefixedKey(key, prefsType)
+                    repository.setConfig(prefixedKey, value)
+                }
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入字符串时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入字符串失败", e)
+            Logger.w("StorageManager", "批量写入字符串失败", e)
         }
     }
 
     /**
-     * 批量写入整数键值对。
+     * 批量写入整数键值对到Room数据库。
      *
      * @param context 任意 Context 实例。
      * @param values 要写入的整数键值对集合。
@@ -238,16 +297,25 @@ object StorageManager {
      */
     fun putInts(context: Context, values: Map<String, Int>, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().apply {
-                values.forEach { (key, value) -> putInt(key, value) }
-            }.apply()
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                for ((key, value) in values) {
+                    val prefixedKey = getPrefixedKey(key, prefsType)
+                    repository.setConfig(prefixedKey, value.toString())
+                }
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "批量写入整数时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "批量写入整数失败", e)
+            Logger.w("StorageManager", "批量写入整数失败", e)
         }
     }
 
     /**
-     * 从偏好设置中读取字符串集合，带异常保护。
+     * 从Room数据库中读取字符串集合，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -257,15 +325,28 @@ object StorageManager {
      */
     fun getStringSet(context: Context, key: String, default: Set<String> = emptySet(), prefsType: PrefsType = PrefsType.GENERAL): Set<String> {
         return try {
-            getPrefs(context, prefsType).getStringSet(key, default) ?: default
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            val json = runBlocking {
+                repository.getConfig(prefixedKey, "[]")
+            }
+            val gson = com.google.gson.Gson()
+            val type = com.google.gson.reflect.TypeToken.getParameterized(Set::class.java, String::class.java).type
+            gson.fromJson(json, type) ?: default
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "获取字符串集合时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
+            default
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "获取字符串集合失败，键: $key", e)
+            Logger.w("StorageManager", "获取字符串集合失败，键: $key", e)
             default
         }
     }
 
     /**
-     * 将字符串集合写入偏好设置，带异常保护。
+     * 将字符串集合写入Room数据库，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 键名。
@@ -274,14 +355,25 @@ object StorageManager {
      */
     fun putStringSet(context: Context, key: String, value: Set<String>, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().putStringSet(key, value).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val gson = com.google.gson.Gson()
+            val json = gson.toJson(value)
+            val repository = DatabaseRepository.getInstance(context)
+            runBlocking {
+                repository.setConfig(prefixedKey, json)
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "写入字符串集合时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "写入字符串集合失败，键: $key", e)
+            Logger.w("StorageManager", "写入字符串集合失败，键: $key", e)
         }
     }
 
     /**
-     * 从偏好设置中移除指定键，带异常保护。
+     * 从Room数据库中移除指定键，带异常保护。
      *
      * @param context 任意 Context 实例。
      * @param key 要移除的键名。
@@ -289,9 +381,19 @@ object StorageManager {
      */
     fun remove(context: Context, key: String, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().remove(key).apply()
+            val prefixedKey = getPrefixedKey(key, prefsType)
+            val repository = DatabaseRepository.getInstance(context)
+            // Room中没有直接删除的方法，我们可以设置为空字符串表示删除
+            runBlocking {
+                repository.setConfig(prefixedKey, "")
+            }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.w("StorageManager", "移除键时线程被中断，键: $key", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "移除键失败: $key", e)
+            Logger.w("StorageManager", "移除键失败: $key", e)
         }
     }
 
@@ -303,24 +405,10 @@ object StorageManager {
      */
     fun clear(context: Context, prefsType: PrefsType = PrefsType.GENERAL) {
         try {
-            getPrefs(context, prefsType).edit().clear().apply()
+            // 目前不支持清空整个集合，因为Room中没有批量删除的方法
+            Logger.w("StorageManager", "clear方法目前不支持，因为Room中没有批量删除的方法")
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.w("StorageManager", "清空偏好失败", e)
-        }
-    }
-
-    /**
-     * 根据 [PrefsType] 返回对应的 [SharedPreferences] 实例。
-     *
-     * @param context 任意 Context 实例。
-     * @param prefsType 偏好集合类型，决定返回哪一个 [SharedPreferences]。
-     * @return 对应的 [SharedPreferences] 实例。
-     */
-    private fun getPrefs(context: Context, prefsType: PrefsType): SharedPreferences {
-        return when (prefsType) {
-            PrefsType.GENERAL -> getGeneralPrefs(context)
-            PrefsType.DEVICE -> getDevicePrefs(context)
-            PrefsType.FILTER -> getFilterPrefs(context)
+            Logger.w("StorageManager", "清空偏好失败", e)
         }
     }
 
@@ -338,14 +426,17 @@ object StorageManager {
     fun migrateData(context: Context, fromVersion: Int, toVersion: Int) {
         try {
             // 使用 fromVersion 参数以避免编译时的未使用参数警告，并记录调用意图
-            val _from = fromVersion // 显式读取参数，确保不会被诊断为未使用
-            if (BuildConfig.DEBUG) Log.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
-            val prefs = getGeneralPrefs(context)
-            val currentVersion = prefs.getInt("data_version", 0)
+            fromVersion // 显式读取参数，确保不会被诊断为未使用
+            //Logger.d("StorageManager", "migrateData 被调用: fromVersion=${_from}, toVersion=$toVersion")
+            
+            val repository = DatabaseRepository.getInstance(context)
+            val currentVersion = runBlocking {
+                repository.getConfig("general_data_version", "0").toInt()
+            }
 
             if (currentVersion < toVersion) {
                 // 执行数据迁移逻辑
-                if (BuildConfig.DEBUG) Log.i("StorageManager", "正在迁移数据: 从 v$currentVersion 到 v$toVersion")
+                Logger.i("StorageManager", "正在迁移数据: 从 v$currentVersion 到 v$toVersion")
 
                 // 示例迁移：重命名键
                 if (currentVersion < 1) {
@@ -358,16 +449,23 @@ object StorageManager {
                 }
 
                 // 更新版本号
-                prefs.edit().putInt("data_version", toVersion).apply()
-                if (BuildConfig.DEBUG) Log.i("StorageManager", "数据迁移完成")
+                runBlocking {
+                    repository.setConfig("general_data_version", toVersion.toString())
+                }
+                Logger.i("StorageManager", "数据迁移完成")
             }
+        } catch (e: InterruptedException) {
+            // 处理线程中断，记录日志但不抛出异常
+            Logger.e("StorageManager", "数据迁移时线程被中断", e)
+            // 恢复中断状态
+            Thread.currentThread().interrupt()
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("StorageManager", "数据迁移失败", e)
+            Logger.e("StorageManager", "数据迁移失败", e)
         }
     }
 
     /**
-     * 偏好集合类型枚举：用于区分不同用途的 SharedPreferences。
+     * 偏好集合类型枚举：用于区分不同用途的 Room 数据库存储。
      */
     enum class PrefsType {
         /** 通用偏好（应用范围） */
