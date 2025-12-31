@@ -1,6 +1,8 @@
 package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -31,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.ui.dialog.ConnectDeviceDialog
 import com.xzyht.notifyrelay.feature.device.ui.dialog.HandshakeRequestDialog
@@ -160,7 +164,24 @@ fun DeviceListScreen() {
         rejectedDeviceUuids = deviceManager.getRejectedDevices()
     }
 
-    // 移除onHandshakeRequest回调监听，改为使用其他方式处理握手请求
+    // 注册握手请求处理器，接收到服务端握手时在主线程拉起弹窗
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    DisposableEffect(deviceManager) {
+        val handler = object : DeviceConnectionManager.HandshakeRequestHandler {
+            override fun onHandshakeRequest(deviceInfo: DeviceInfo, publicKey: String, callback: (Boolean) -> Unit) {
+                mainHandler.post {
+                    pendingHandshakeRequest = HandshakeRequest(deviceInfo, publicKey, callback)
+                    showHandshakeDialog = true
+                }
+            }
+        }
+        deviceManager.handshakeRequestHandler = handler
+        onDispose {
+            if (deviceManager.handshakeRequestHandler === handler) {
+                deviceManager.handshakeRequestHandler = null
+            }
+        }
+    }
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
