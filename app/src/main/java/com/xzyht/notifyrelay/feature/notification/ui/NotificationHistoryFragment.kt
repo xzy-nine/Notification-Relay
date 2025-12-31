@@ -54,6 +54,7 @@ import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -213,21 +214,35 @@ fun NotificationCard(
 }
 
 // 工具函数：获取应用名和图标（文件级顶层）
+@OptIn(DelicateCoroutinesApi::class)
 fun getAppNameAndIcon(context: android.content.Context, packageName: String?): Pair<String, android.graphics.Bitmap?> {
     var name = packageName ?: ""
     var icon: android.graphics.Bitmap? = null
     if (packageName != null) {
         try {
-            // 使用统一的图标获取方法，自动处理本地和外部应用
-            icon = AppRepository.getAppIconWithAutoRequest(context, packageName)
-            
-            // 获取应用名
+            // 先获取应用名
             name = try {
                 val pm = context.packageManager
                 val appInfo = pm.getApplicationInfo(packageName, 0)
                 pm.getApplicationLabel(appInfo).toString()
             } catch (_: Exception) {
                 packageName // 外部应用或获取失败时使用包名
+            }
+            
+            // 使用统一的图标获取方法，自动处理本地和外部应用
+            // 先从内存缓存获取，不阻塞
+            icon = AppRepository.getAppIcon(packageName)
+            
+            // 如果内存缓存中没有，尝试从持久化缓存加载（非阻塞）
+            if (icon == null) {
+                // 异步加载图标，不等待结果
+                kotlinx.coroutines.GlobalScope.launch {
+                    val loadedIcon = AppRepository.getAppIconAsync(context, packageName)
+                    if (loadedIcon != null) {
+                        // 使用现有的公共方法缓存外部应用图标
+                        AppRepository.cacheExternalAppIcon(packageName, loadedIcon)
+                    }
+                }
             }
         } catch (_: Exception) {
             // 如果所有尝试都失败，使用包名和默认图标
@@ -284,11 +299,30 @@ fun NotificationHistoryScreen() {
 
     // 使用流处理分组，避免内存缓存
     // 跟踪每个分组的展开状态
+    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    // 包名到应用名和图标的缓存
+    val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
+    
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
     // 跟踪每个分组的排序时间，只有在分组收起时才更新
     val groupSortTimes = remember { mutableStateMapOf<String, Long>() }
+    
+    // 添加一个刷新触发器，用于通知UI重新渲染
+    val refreshTrigger = remember { androidx.compose.runtime.mutableStateOf(0L) }
+    
+    // 监听AppRepository的iconUpdates流，当图标更新时刷新UI
+    LaunchedEffect(Unit) {
+        AppRepository.iconUpdates.collect {
+            if (it != null) {
+                // 图标更新，刷新UI
+                refreshTrigger.value = System.currentTimeMillis()
+                // 清除缓存，确保下次获取时能拿到最新图标
+                appInfoCache.remove(it)
+            }
+        }
+    }
 
-    val mixedList by remember {
+    val mixedList by remember(refreshTrigger.value) {
         derivedStateOf {
             // 使用缓存的包名集合，避免同步加载
             val installedPkgs = AppRepository.getInstalledPackageNames(context)
@@ -317,9 +351,6 @@ fun NotificationHistoryScreen() {
             }
         }
     }
-    val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-    // 包名到应用名和图标的缓存
-    val appInfoCache = remember { mutableStateMapOf<String, Pair<String, android.graphics.Bitmap?>>() }
     // 设置系统状态栏字体颜色和背景色
     LaunchedEffect(isDarkTheme) {
         val window = (context as? android.app.Activity)?.window
@@ -337,9 +368,15 @@ fun NotificationHistoryScreen() {
     // 工具函数：获取并缓存应用名和图标
     fun getCachedAppInfo(packageName: String?): Pair<String, android.graphics.Bitmap?> {
         if (packageName == null) return "" to null
-        return appInfoCache.getOrPut(packageName) {
-            getAppNameAndIcon(context, packageName)
+        
+        // 从缓存获取，如果缓存中没有或图标为null，重新获取
+        var appInfo = appInfoCache[packageName]
+        if (appInfo == null || appInfo.second == null) {
+            appInfo = getAppNameAndIcon(context, packageName)
+            appInfoCache[packageName] = appInfo
         }
+        
+        return appInfo
     }
 
     val clearHistory: () -> Unit = {
