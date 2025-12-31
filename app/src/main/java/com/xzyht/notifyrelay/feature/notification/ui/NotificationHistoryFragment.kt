@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.snapTo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,9 +32,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.notification.data.NotificationRecord
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.core.sync.MessageSender
 import com.xzyht.notifyrelay.common.core.util.IntentUtils
@@ -53,7 +54,7 @@ import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
-import com.xzyht.notifyrelay.common.core.notification.data.NotificationRecord
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -70,14 +71,12 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Delete
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import kotlin.math.roundToInt
-
-
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 // 日期格式化工具（线程安全）
 private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
@@ -283,7 +282,13 @@ fun NotificationHistoryScreen() {
     // 订阅当前分组的通知历史
     val notifications by NotificationRepository.notificationHistoryFlow.collectAsState()
 
-    val mixedList by remember(notifications) {
+    // 使用流处理分组，避免内存缓存
+    // 跟踪每个分组的展开状态
+    val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    // 跟踪每个分组的排序时间，只有在分组收起时才更新
+    val groupSortTimes = remember { mutableStateMapOf<String, Long>() }
+
+    val mixedList by remember {
         derivedStateOf {
             // 使用缓存的包名集合，避免同步加载
             val installedPkgs = AppRepository.getInstalledPackageNames(context)
@@ -296,7 +301,20 @@ fun NotificationHistoryScreen() {
                 val list = entry.value.sortedByDescending { it.time }
                 unifiedList.add(list)
             }
-            unifiedList.sortedByDescending { it.firstOrNull()?.time ?: 0L }
+            // 排序分组，使用固定的排序时间
+            unifiedList.sortedByDescending { list ->
+                val groupKey = list.firstOrNull()?.packageName ?: "unknown"
+                val isExpanded = expandedGroups.getOrPut(groupKey) { false }
+                if (isExpanded) {
+                    // 如果分组展开，使用之前保存的排序时间或当前时间
+                    groupSortTimes.getOrPut(groupKey) { list.firstOrNull()?.time ?: 0L }
+                } else {
+                    // 如果分组收起，更新排序时间并使用新时间
+                    val newTime = list.firstOrNull()?.time ?: 0L
+                    groupSortTimes[groupKey] = newTime
+                    newTime
+                }
+            }
         }
     }
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
@@ -348,32 +366,47 @@ fun NotificationHistoryScreen() {
     fun NotificationListBlock(
         notifications: List<NotificationRecord>,
         mixedList: List<List<NotificationRecord>>,
-        getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>
+        getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>,
+        expandedGroups: MutableMap<String, Boolean>
     ) {
+        val coroutineScope = rememberCoroutineScope()
         if (notifications.isNotEmpty()) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(mixedList) { list ->
-                    val anchoredDraggableState = remember {
+                items(
+                    items = mixedList,
+                    // 为每个分组提供稳定的 key，基于分组的包名
+                    key = { list -> list.firstOrNull()?.packageName ?: "unknown" }
+                ) { list ->
+                    // 为每个分组的拖动状态提供稳定的键，确保状态与分组关联
+                    // 使用更稳定的键：分组包名 + 列表大小，确保列表变化时重置状态
+                    val groupKey = list.firstOrNull()?.packageName ?: "unknown"
+                    val anchoredDraggableState = remember(groupKey, list.size) {
                         AnchoredDraggableState(
                             initialValue = DragValue.Center
                         )
                     }
-                    val anchors = DraggableAnchors {
-                        DragValue.Center at 0f
-                        DragValue.End at -deleteWidthPx
-                    }
-                    LaunchedEffect(anchors) {
-                        anchoredDraggableState.updateAnchors(anchors)
-                    }
-                    LaunchedEffect(anchoredDraggableState.currentValue) {
-                        if (anchoredDraggableState.currentValue == DragValue.End) {
-                            //Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮")
+                    
+                    // 为每个分组重新计算锚点，确保始终有效
+                    val anchors = remember(groupKey, deleteWidthPx) {
+                        DraggableAnchors {
+                            DragValue.Center at 0f
+                            DragValue.End at -deleteWidthPx
                         }
                     }
-                    val offset = when {
-                        anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
-                        anchoredDraggableState.offset.isNaN() -> 0f
-                        else -> anchoredDraggableState.offset
+                    
+                    // 确保锚点始终有效，在状态创建或锚点变化时立即更新
+                    LaunchedEffect(anchoredDraggableState, anchors) {
+                        // 直接更新锚点，不需要额外的contains检查
+                        anchoredDraggableState.updateAnchors(anchors)
+                    }
+                    
+                    // 安全地计算偏移量，避免无效状态
+                    val offset = remember(anchoredDraggableState.currentValue, anchoredDraggableState.offset) {
+                        when {
+                            anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
+                            anchoredDraggableState.offset.isNaN() -> 0f
+                            else -> anchoredDraggableState.offset
+                        }
                     }
                     val deleteWidth = 80.dp
                     Box(modifier = Modifier.fillMaxWidth()) {
@@ -400,7 +433,6 @@ fun NotificationHistoryScreen() {
                                 )
                             } else {
                                 val latest = list.maxByOrNull { it.time }
-                                var expanded by remember { mutableStateOf(false) }
                                 // 使用映射后的包名获取应用信息，使用缓存的包名集合，避免同步加载
                                 val installedPkgs = AppRepository.getInstalledPackageNames(context)
                                 val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPkgs)
@@ -413,19 +445,24 @@ fun NotificationHistoryScreen() {
                                     mappedPkg.isNotBlank() -> mappedPkg
                                     else -> "(未知应用)"
                                 }
+                                // 使用全局展开状态映射
+                                val groupKey = mappedPkg
+                                val expanded = expandedGroups.getOrPut(groupKey) { false }
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 8.dp),
-                                    onClick = { expanded = !expanded },
+                                    onClick = { expandedGroups[groupKey] = !expanded },
                                     cornerRadius = 12.dp,
                                     insideMargin = PaddingValues(12.dp),
                                     colors = CardDefaults.defaultColors(
                                         color = colorScheme.surface,
                                         contentColor = colorScheme.onSurface
                                     ),
-                                    showIndication = true,
-                                    pressFeedbackType = PressFeedbackType.Sink
+                                    // 展开时不显示按压效果
+                                    showIndication = !expanded,
+                                    // 展开时不显示按压反馈
+                                    pressFeedbackType = if (expanded) PressFeedbackType.None else PressFeedbackType.Sink
                                 ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -506,30 +543,40 @@ fun NotificationHistoryScreen() {
                                                 expandedList
                                             }
 
-                                            displayList.forEach { record ->
+                                            // 使用IndexedValue获取索引，便于后续处理
+                                            displayList.forEachIndexed { index, record ->
                                                 val density = LocalDensity.current
-                                                val anchoredDraggableState = remember {
+                                                val deleteWidthPx = with(density) { 80.dp.toPx() }
+                                                val itemCoroutineScope = rememberCoroutineScope()
+                                                
+                                                // 为每个单个通知提供独立的拖动状态，使用record.key作为稳定键
+                                                val anchoredDraggableState = remember(record.key) {
                                                     AnchoredDraggableState(
                                                         initialValue = DragValue.Center
                                                     )
                                                 }
-                                                val deleteWidthPx = with(density) { 80.dp.toPx() }
-                                                val anchors = DraggableAnchors {
-                                                    DragValue.Center at 0f
-                                                    DragValue.End at -deleteWidthPx
-                                                }
-                                                LaunchedEffect(anchors) {
-                                                    anchoredDraggableState.updateAnchors(anchors)
-                                                }
-                                                LaunchedEffect(anchoredDraggableState.currentValue) {
-                                                    if (anchoredDraggableState.currentValue == DragValue.End) {
-                                                        //Logger.d("NotifyRelay", "轮胎: 左滑显示删除按钮 - 展开列表")
+                                                
+                                                // 为每个通知重新计算锚点，确保始终有效
+                                                val anchors = remember(record.key, deleteWidthPx) {
+                                                    DraggableAnchors {
+                                                        DragValue.Center at 0f
+                                                        DragValue.End at -deleteWidthPx
                                                     }
                                                 }
-                                                val offset = when {
-                                                    anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
-                                                    anchoredDraggableState.offset.isNaN() -> 0f
-                                                    else -> anchoredDraggableState.offset
+                                                
+                                                // 确保锚点始终有效，在状态创建或锚点变化时立即更新
+                                                LaunchedEffect(anchoredDraggableState, anchors) {
+                                                    // 直接更新锚点，不需要额外的contains检查
+                                                    anchoredDraggableState.updateAnchors(anchors)
+                                                }
+                                                
+                                                // 安全地计算偏移量，避免无效状态
+                                                val offset = remember(anchoredDraggableState.currentValue, anchoredDraggableState.offset) {
+                                                    when {
+                                                        anchoredDraggableState.currentValue == DragValue.End -> -deleteWidthPx
+                                                        anchoredDraggableState.offset.isNaN() -> 0f
+                                                        else -> anchoredDraggableState.offset
+                                                    }
                                                 }
                                                 val deleteWidth = 80.dp
                                                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -559,8 +606,13 @@ fun NotificationHistoryScreen() {
                                                             onClick = {
                                                                 NotificationRepository.currentDevice = selectedDevice
                                                                 //Logger.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
+                                                                // 在删除前，先将拖动状态重置到中心位置，避免后续操作中出现状态不一致
+                                                                // 使用 snapTo 方法同步重置状态
+                                                                itemCoroutineScope.launch {
+                                                                    anchoredDraggableState.snapTo(DragValue.Center)
+                                                                }
                                                                 NotificationRepository.removeNotification(record.key, context)
-                                                                NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                                                // 不需要手动调用notifyHistoryChanged，removeNotification方法内部会处理
                                                             },
                                                             modifier = Modifier.align(Alignment.CenterEnd).width(deleteWidth).fillMaxHeight()
                                                         )
@@ -587,9 +639,19 @@ fun NotificationHistoryScreen() {
                                     NotificationRepository.currentDevice = selectedDevice
                                     //Logger.d("NotifyRelay", "轮胎: 删除按钮点击, key=${list[0].key}, size=${list.size}")
                                     try {
+                                        // 在删除前，先将拖动状态重置到中心位置，避免后续操作中出现状态不一致
+                                        // 使用 snapTo 方法同步重置状态
+                                        coroutineScope.launch {
+                                            anchoredDraggableState.snapTo(DragValue.Center)
+                                        }
+                                        
                                         if (list.size == 1) {
+                                            // 保存要删除的包名，用于后续重置状态
+                                            val pkgName = list[0].packageName
                                             NotificationRepository.removeNotification(list[0].key, context)
-                                            NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                            // 重置该分组的展开状态和排序时间
+                                            expandedGroups.remove(pkgName)
+                                            groupSortTimes.remove(pkgName)
                                         } else {
                                             // 使用更高效的分组删除方法，避免循环调用
                                             val firstRecord = list[0]
@@ -597,7 +659,12 @@ fun NotificationHistoryScreen() {
                                             val installedPkgs = AppRepository.getInstalledPackageNames(context)
                                             val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(firstRecord.packageName, installedPkgs)
                                             NotificationRepository.removeNotificationsByPackage(mappedPkg, context)
+                                            // 重置分组的展开状态和排序时间
+                                            expandedGroups.remove(mappedPkg)
+                                            groupSortTimes.remove(mappedPkg)
                                         }
+                                        // 重新获取通知历史，更新UI
+                                        NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                     } catch (e: Exception) {
                                         Logger.e("NotifyRelay", "删除失败", e)
                                     }
@@ -708,10 +775,11 @@ fun NotificationHistoryScreen() {
                     )
                 } else {
                     NotificationListBlock(
-                        notifications = notifications,
-                        mixedList = mixedList,
-                        getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) }
-                    )
+                            notifications = notifications,
+                            mixedList = mixedList,
+                            getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) },
+                            expandedGroups = expandedGroups
+                        )
                 }
             }
         }

@@ -70,6 +70,7 @@ class NotificationRecordStore(private val context: Context) {
     }
 
     suspend fun deleteByKey(key: String, device: String) {
+        // 直接调用数据库删除方法，key是唯一的，不需要设备参数
         repository.deleteNotificationByKey(key)
     }
 
@@ -329,7 +330,6 @@ object NotificationRepository {
     @Synchronized
     fun removeNotification(key: String, context: Context) {
         //Logger.d("NotifyRelay", "开始删除通知 key=$key")
-        notifications.size
 
         // 查找要删除的通知，检查其设备类型
         val notificationToRemove = notifications.find { it.key == key && it.device == currentDevice }
@@ -343,14 +343,14 @@ object NotificationRepository {
         runBlocking {
             store.deleteByKey(key, currentDevice)
         }
-        
-        syncToCache(context)
 
         // 仅在本机设备时清理processedNotifications缓存
         if (isLocalDevice) {
             clearProcessedCache(setOf(key))
         }
 
+        // 通知历史变更，UI会自动刷新
+        // 注意：notifyHistoryChanged会重新从数据库加载数据，所以不需要单独调用syncToCache
         notifyHistoryChanged(currentDevice, context)
     }
 
@@ -402,8 +402,6 @@ object NotificationRepository {
         runBlocking {
             store.clearByDevice(deviceToClear)
         }
-        
-        syncToCache(context)
 
         // 仅在本机设备时清理processedNotifications缓存（非本机设备没有缓存）
         if (deviceToClear == "本机") {
@@ -415,6 +413,7 @@ object NotificationRepository {
         }
 
         // 写入后主动推送变更
+        // 注意：notifyHistoryChanged会重新从数据库加载数据，所以不需要单独调用syncToCache
         notifyHistoryChanged(deviceToClear, context)
     }
 
