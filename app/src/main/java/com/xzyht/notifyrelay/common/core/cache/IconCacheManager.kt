@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.common.core.cache
+package com.xzyht.notifyrelay.common.core.cache
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -257,5 +257,14 @@ object IconCacheManager {
         val totalSize = getCacheSize()
         val expiredCount = metadata.count { (_, timestamp) -> System.currentTimeMillis() - timestamp > MAX_CACHE_AGE_DAYS * 24 * 60 * 60 * 1000L }
         return CacheStats(totalFiles, totalSize, totalSize / (1024.0 * 1024.0), expiredCount, cacheDir.absolutePath)
+    }
+
+    /**
+     * 获取所有已缓存图标的包名集合。
+     *
+     * @return 已缓存图标的包名集合
+     */
+    fun getAllIconKeys(): Set<String> {
+        return loadMetadata().keys
     }
 }

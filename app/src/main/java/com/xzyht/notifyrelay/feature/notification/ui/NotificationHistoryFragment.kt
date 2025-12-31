@@ -219,48 +219,21 @@ fun getAppNameAndIcon(context: android.content.Context, packageName: String?): P
     var icon: android.graphics.Bitmap? = null
     if (packageName != null) {
         try {
-            // 优先使用缓存的图标（同步版本）
-            icon = AppRepository.getAppIconSync(context, packageName)
-            if (icon != null) {
-                // 如果有缓存图标，获取应用名
-                name = try {
-                    val pm = context.packageManager
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    pm.getApplicationLabel(appInfo).toString()
-                } catch (_: Exception) {
-                    packageName
-                }
-            } else {
-                // 尝试获取外部应用图标（来自其他设备的同步）
-                icon = AppRepository.getExternalAppIcon(packageName)
-                if (icon != null) {
-                    // 如果有外部图标，使用记录中的应用名或包名
-                    name = packageName // 外部应用使用包名作为应用名
-                } else {
-                    // 如果都没有，尝试直接获取（本地安装的应用）
-                    val pm = context.packageManager
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    name = pm.getApplicationLabel(appInfo).toString()
-                    val drawable = pm.getApplicationIcon(appInfo)
-                    icon = drawableToBitmap(drawable)
-                }
+            // 使用统一的图标获取方法，自动处理本地和外部应用
+            icon = AppRepository.getAppIconWithAutoRequest(context, packageName)
+            
+            // 获取应用名
+            name = try {
+                val pm = context.packageManager
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (_: Exception) {
+                packageName // 外部应用或获取失败时使用包名
             }
         } catch (_: Exception) {
-            // 如果本地应用不存在，尝试获取外部应用图标
-            icon = AppRepository.getExternalAppIcon(packageName)
-            if (icon != null) {
-                name = packageName // 外部应用使用包名作为应用名
-            } else {
-                try {
-                    val pm = context.packageManager
-                    val appInfo = pm.getApplicationInfo(context.packageName, 0)
-                    name = pm.getApplicationLabel(appInfo).toString()
-                    val drawable = pm.getApplicationIcon(appInfo)
-                    icon = drawableToBitmap(drawable)
-                } catch (_: Exception) {
-                    icon = null
-                }
-            }
+            // 如果所有尝试都失败，使用包名和默认图标
+            name = packageName
+            icon = null
         }
     }
     return name to icon

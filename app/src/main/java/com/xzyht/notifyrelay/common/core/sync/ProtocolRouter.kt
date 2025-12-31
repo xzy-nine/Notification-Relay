@@ -90,7 +90,7 @@ object ProtocolRouter {
                 }
                 // DATA_APP_LIST_RESPONSE：应用列表请求的响应，用于更新本机缓存/状态
                 "DATA_APP_LIST_RESPONSE" -> {
-                    AppListSyncManager.handleAppListResponse(decrypted, context)
+                    AppListSyncManager.handleAppListResponse(decrypted, context, remoteUuid)
                     true
                 }
                 else -> {

@@ -112,4 +112,78 @@ object AppListHelper {
             appInfo.packageName.contains(query, ignoreCase = true)
         }
     }
+    
+    /**
+     * 从 JSONArray 解析远程应用列表
+     *
+     * @param appsArray 包含应用信息的 JSONArray
+     * @return 解析后的应用列表，格式为 Map<包名, 应用名>
+     */
+    fun parseRemoteAppList(appsArray: org.json.JSONArray): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for (i in 0 until appsArray.length()) {
+            val appItem = appsArray.optJSONObject(i) ?: continue
+            val packageName = appItem.optString("packageName")
+            val appName = appItem.optString("appName")
+            if (packageName.isNotEmpty() && appName.isNotEmpty()) {
+                result[packageName] = appName
+            }
+        }
+        return result
+    }
+    
+    /**
+     * 合并本地和远程应用列表
+     *
+     * @param context 用于访问 PackageManager 的 Context
+     * @param remoteApps 远程应用列表，格式为 Map<包名, 应用名>
+     * @return 合并后的应用列表，保留本地应用的名称
+     */
+    fun mergeLocalAndRemoteApps(
+        context: Context,
+        remoteApps: Map<String, String>
+    ): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val localApps = getInstalledApplications(context)
+        
+        // 添加本地应用
+        localApps.forEach {
+            val packageName = it.packageName
+            val appName = getApplicationLabel(context, packageName)
+            result[packageName] = appName
+        }
+        
+        // 添加远程应用（不覆盖本地应用）
+        remoteApps.forEach {
+            if (!result.containsKey(it.key)) {
+                result[it.key] = it.value
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * 获取应用名，优先使用本地应用名，其次使用远程应用名
+     *
+     * @param context 用于访问 PackageManager 的 Context
+     * @param packageName 应用包名
+     * @param remoteAppName 远程应用名
+     * @return 应用的显示名称
+     */
+    fun getAppNameWithFallback(
+        context: Context,
+        packageName: String,
+        remoteAppName: String? = null
+    ): String {
+        // 优先尝试获取本地应用名
+        return try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            // 本地获取失败，使用远程应用名或包名
+            remoteAppName ?: packageName
+        }
+    }
 }
