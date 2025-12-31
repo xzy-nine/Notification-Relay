@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.sync.MessageSender
 import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.core.util.ToastUtils
@@ -168,7 +169,7 @@ fun NotificationCard(
                     // 发送高优先级悬浮通知
                     val title = record.title ?: "(无标题)"
                     val text = record.text ?: "(无内容)"
-                    com.xzyht.notifyrelay.common.core.util.MessageSender.sendHighPriorityNotification(context, title, text)
+                    MessageSender.sendHighPriorityNotification(context, title, text)
                     intent!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     context.startActivity(intent)
                 }

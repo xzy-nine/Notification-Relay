@@ -1,8 +1,16 @@
-﻿package com.xzyht.notifyrelay.common.core.util
+package com.xzyht.notifyrelay.common.core.sync
 
+import android.R
+import android.app.KeyguardManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.graphics.Color
 import android.net.Uri
+import android.os.Handler
 import android.util.Base64
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
@@ -20,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 消息发送工具类
+ * 消息发送类
  * 整合聊天测试和普通通知转发的消息发送功能
  * 支持队列和限流，避免大量并发发送导致的通知丢失
  */
@@ -32,9 +40,9 @@ object MessageSender {
     private const val RETRY_DELAY_MS = 1000L // 重试延迟
 
     // 发送队列
-    private val sendChannel = Channel<SendTask>(Channel.UNLIMITED)
+    private val sendChannel = Channel<SendTask>(Channel.Factory.UNLIMITED)
     // 超级岛单独发送队列（不去重、持续发送）
-    private val superIslandSendChannel = Channel<SuperIslandTask>(Channel.UNLIMITED)
+    private val superIslandSendChannel = Channel<SuperIslandTask>(Channel.Factory.UNLIMITED)
     private val sendSemaphore = Semaphore(MAX_CONCURRENT_SENDS)
     private val activeSends = AtomicInteger(0)
     // 超级岛发送并发控制（独立于普通通知）
@@ -169,7 +177,7 @@ object MessageSender {
                 }
 
                 // 使用统一发送器
-                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
                 try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
                 //Logger.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
@@ -204,7 +212,7 @@ object MessageSender {
                     return
                 }
 
-                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
                 success = true
                 //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
@@ -235,7 +243,7 @@ object MessageSender {
                 return
             }
 
-            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+            ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
             //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
             Logger.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")
@@ -333,7 +341,7 @@ object MessageSender {
             }
 
             // 获取锁屏状态
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
 
             // 构建标准 JSON 格式的通知数据
@@ -400,7 +408,7 @@ object MessageSender {
                 return
             }
 
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
 
             // 处理图片：若 picMap 中是本地 URI/file 路径则读取并编码为 base64 data URI，http(s) 地址或其他字符串保持不变
@@ -411,12 +419,16 @@ object MessageSender {
                     picMap.forEach { (k, v) ->
                         try {
                             val lower = v.lowercase()
-                            if (lower.startsWith("content://") || lower.startsWith("file://") || v.startsWith("/")) {
+                            if (lower.startsWith("content://") || lower.startsWith("file://") || v.startsWith(
+                                    "/"
+                                )
+                            ) {
                                 try {
                                     val uri = Uri.parse(v)
                                     context.contentResolver.openInputStream(uri)?.use { input ->
                                         val bytes = input.readBytes()
-                                        val mime = context.contentResolver.getType(uri) ?: "image/png"
+                                        val mime =
+                                            context.contentResolver.getType(uri) ?: "image/png"
                                         val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                                         processedPics[k] = "data:$mime;base64,$b64"
                                     } ?: run {
@@ -516,7 +528,7 @@ object MessageSender {
         try {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
             if (authenticatedDevices.isEmpty()) return
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
             val featureId = featureIdOverride ?: SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
@@ -552,33 +564,33 @@ object MessageSender {
      */
     fun sendHighPriorityNotification(context: Context, title: String?, text: String?) {
         try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "notifyrelay_temp"
 
             // 创建通知渠道（如果不存在）
             if (notificationManager.getNotificationChannel(channelId) == null) {
-                val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+                val channel = NotificationChannel(channelId, "跳转通知", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "应用内跳转指示通知"
                     enableLights(true)
-                    lightColor = android.graphics.Color.BLUE
+                    lightColor = Color.BLUE
                     enableVibration(false)
                     setSound(null, null)
-                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     setShowBadge(false)
-                    importance = android.app.NotificationManager.IMPORTANCE_HIGH
+                    importance = NotificationManager.IMPORTANCE_HIGH
                     setBypassDnd(true)
                 }
                 notificationManager.createNotificationChannel(channel)
             }
 
             // 构建通知
-            val builder = android.app.Notification.Builder(context, channelId).apply {
+            val builder = Notification.Builder(context, channelId).apply {
                 setContentTitle(title ?: "(无标题)")
                 setContentText(text ?: "(无内容)")
-                setSmallIcon(android.R.drawable.ic_dialog_info)
-                setCategory(android.app.Notification.CATEGORY_MESSAGE)
+                setSmallIcon(R.drawable.ic_dialog_info)
+                setCategory(Notification.CATEGORY_MESSAGE)
                 setAutoCancel(true)
-                setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                setVisibility(Notification.VISIBILITY_PUBLIC)
                 setOngoing(false)
             }
 
@@ -587,7 +599,7 @@ object MessageSender {
             notificationManager.notify(notifyId, builder.build())
 
             // 5秒后自动销毁通知
-            android.os.Handler(context.mainLooper).postDelayed({
+            Handler(context.mainLooper).postDelayed({
                 notificationManager.cancel(notifyId)
             }, 5000)
 

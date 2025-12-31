@@ -6,6 +6,7 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.sync.MessageSender
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
@@ -40,7 +41,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (pair != null) {
                     val deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
                     val (superPkg, featureId) = pair
-                    com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandEnd(
+                    MessageSender.sendSuperIslandEnd(
                         applicationContext,
                         superPkg,
                         try { applicationContext.packageName } catch (_: Exception) { null },
@@ -196,7 +197,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         val featureId = oldId ?: computedId
                         // 初次出现时登记；后续保持不变
                         try { if (oldId == null) superIslandFeatureByKey[sbnInstanceId] = superPkg to featureId } catch (_: Exception) {}
-                        com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandData(
+                        MessageSender.sendSuperIslandData(
                             applicationContext,
                             superPkg,
                             superData.appName ?: "超级岛",
@@ -290,7 +291,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             }
 
             // 使用整合的消息发送工具
-            com.xzyht.notifyrelay.common.core.util.MessageSender.sendNotificationMessage(
+            MessageSender.sendNotificationMessage(
                 applicationContext,
                 sbn.packageName,
                 appName,
