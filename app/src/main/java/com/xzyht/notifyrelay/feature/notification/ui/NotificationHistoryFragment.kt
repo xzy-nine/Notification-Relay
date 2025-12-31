@@ -118,14 +118,14 @@ fun NotificationCard(
     context: android.content.Context, 
     getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>,
     cardColor: Color,
-    contentColor: Color
+    contentColor: Color,
+    installedPackages: Set<String>
 ) {
     val notificationTextStyles = MiuixTheme.textStyles
     val cardColorScheme = MiuixTheme.colorScheme
     
     // 对包名进行等价映射，使用缓存的包名集合，避免同步加载
-    val installedPkgs = AppRepository.getInstalledPackageNames(context)
-    val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
+    val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPackages)
     
     // 使用映射后的包名获取应用信息
     val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
@@ -141,8 +141,7 @@ fun NotificationCard(
             val pkg = record.packageName
             if (pkg.isNotEmpty()) {
                 // 应用等价映射，使用缓存的包名集合，避免同步加载
-                val installedPkgs = AppRepository.getInstalledPackageNames(context)
-                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPkgs)
+                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg, installedPackages)
                 
                 var canOpen = false
                 var intent: android.content.Intent? = null
@@ -309,6 +308,15 @@ fun NotificationHistoryScreen() {
     
     // 添加一个刷新触发器，用于通知UI重新渲染
     val refreshTrigger = remember { androidx.compose.runtime.mutableStateOf(0L) }
+    val installedPackagesState = remember { androidx.compose.runtime.mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(Unit) {
+        val cachedPkgs = AppRepository.getInstalledPackageNames(context)
+        installedPackagesState.value = cachedPkgs
+        if (cachedPkgs.isEmpty()) {
+            installedPackagesState.value = AppRepository.getInstalledPackageNamesAsync(context)
+        }
+    }
+    val installedPackages = installedPackagesState.value
     
     // 监听AppRepository的iconUpdates流，当图标更新时刷新UI
     LaunchedEffect(Unit) {
@@ -322,13 +330,12 @@ fun NotificationHistoryScreen() {
         }
     }
 
-    val mixedList by remember(refreshTrigger.value) {
+    val mixedList by remember(refreshTrigger.value, installedPackages) {
         derivedStateOf {
             // 使用缓存的包名集合，避免同步加载
-            val installedPkgs = AppRepository.getInstalledPackageNames(context)
             val grouped = notifications.groupBy { record ->
                 // 使用映射后的包名进行分组
-                com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPkgs)
+                com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(record.packageName, installedPackages)
             }
             val unifiedList = mutableListOf<List<NotificationRecord>>()
             for (entry in grouped.entries) {
@@ -337,7 +344,9 @@ fun NotificationHistoryScreen() {
             }
             // 排序分组，使用固定的排序时间
             unifiedList.sortedByDescending { list ->
-                val groupKey = list.firstOrNull()?.packageName ?: "unknown"
+                val groupKey = list.firstOrNull()?.packageName?.let {
+                    com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(it, installedPackages)
+                } ?: "unknown"
                 val isExpanded = expandedGroups.getOrPut(groupKey) { false }
                 if (isExpanded) {
                     // 如果分组展开，使用之前保存的排序时间或当前时间
@@ -396,6 +405,7 @@ fun NotificationHistoryScreen() {
     }
     val density = LocalDensity.current
     val deleteWidthPx = with(density) { 80.dp.toPx() }
+    val deleteWidth = 80.dp
 
     // 通用通知列表块
     @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -404,7 +414,8 @@ fun NotificationHistoryScreen() {
         notifications: List<NotificationRecord>,
         mixedList: List<List<NotificationRecord>>,
         getCachedAppInfo: (String?) -> Pair<String, android.graphics.Bitmap?>,
-        expandedGroups: MutableMap<String, Boolean>
+        expandedGroups: MutableMap<String, Boolean>,
+        installedPackages: Set<String>
     ) {
         val coroutineScope = rememberCoroutineScope()
         if (notifications.isNotEmpty()) {
@@ -412,11 +423,18 @@ fun NotificationHistoryScreen() {
                 items(
                     items = mixedList,
                     // 为每个分组提供稳定的 key，基于分组的包名
-                    key = { list -> list.firstOrNull()?.packageName ?: "unknown" }
+                    key = { list ->
+                        list.firstOrNull()?.packageName?.let {
+                            com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(it, installedPackages)
+                        } ?: "unknown"
+                    }
                 ) { list ->
                     // 为每个分组的拖动状态提供稳定的键，确保状态与分组关联
                     // 使用更稳定的键：分组包名 + 列表大小，确保列表变化时重置状态
-                    val groupKey = list.firstOrNull()?.packageName ?: "unknown"
+                    val groupKey = list.firstOrNull()?.packageName?.let {
+                        com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(it, installedPackages)
+                    } ?: "unknown"
+                    val sortedList = list
                     val anchoredDraggableState = remember(groupKey, list.size) {
                         AnchoredDraggableState(
                             initialValue = DragValue.Center
@@ -445,7 +463,6 @@ fun NotificationHistoryScreen() {
                             else -> anchoredDraggableState.offset
                         }
                     }
-                    val deleteWidth = 80.dp
                     Box(modifier = Modifier.fillMaxWidth()) {
                         // 卡片
                         Box(
@@ -466,13 +483,13 @@ fun NotificationHistoryScreen() {
                                     context = context, 
                                     getCachedAppInfo = getCachedAppInfo,
                                     cardColor = colorScheme.surface,
-                                    contentColor = colorScheme.onSurface
+                                    contentColor = colorScheme.onSurface,
+                                    installedPackages = installedPackages
                                 )
                             } else {
-                                val latest = list.maxByOrNull { it.time }
+                                val latest = sortedList.firstOrNull()
                                 // 使用映射后的包名获取应用信息，使用缓存的包名集合，避免同步加载
-                                val installedPkgs = AppRepository.getInstalledPackageNames(context)
-                                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPkgs)
+                                val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(latest?.packageName ?: "", installedPackages)
                                 val appInfo: Pair<String, android.graphics.Bitmap?> = getCachedAppInfo(mappedPkg)
                                 val (appName, appIcon) = appInfo
                                 // 修正：分组折叠标题优先显示json中的appName字段，其次本地应用名，再次包名，最后(未知应用)
@@ -531,7 +548,7 @@ fun NotificationHistoryScreen() {
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        val showList = if (expanded) list.sortedByDescending { it.time } else list.sortedByDescending { it.time }.take(3)
+                                        val showList = if (expanded) sortedList else sortedList.take(3)
                                         if (!expanded) {
                                             showList.forEachIndexed { idx, record ->
                                                 Row(
@@ -572,7 +589,7 @@ fun NotificationHistoryScreen() {
                                             }
                                         } else {
                                             // 优化：限制展开时显示的通知数量，避免性能问题
-                                            val expandedList = list.sortedByDescending { it.time }
+                                            val expandedList = sortedList
                                             val maxExpandedItems = 50 // 限制最多显示50条通知
                                             val displayList = if (expandedList.size > maxExpandedItems) {
                                                 expandedList.take(maxExpandedItems)
@@ -582,10 +599,6 @@ fun NotificationHistoryScreen() {
 
                                             // 使用IndexedValue获取索引，便于后续处理
                                             displayList.forEachIndexed { index, record ->
-                                                val density = LocalDensity.current
-                                                val deleteWidthPx = with(density) { 80.dp.toPx() }
-                                                val itemCoroutineScope = rememberCoroutineScope()
-                                                
                                                 // 为每个单个通知提供独立的拖动状态，使用record.key作为稳定键
                                                 val anchoredDraggableState = remember(record.key) {
                                                     AnchoredDraggableState(
@@ -615,7 +628,6 @@ fun NotificationHistoryScreen() {
                                                         else -> anchoredDraggableState.offset
                                                     }
                                                 }
-                                                val deleteWidth = 80.dp
                                                 Box(modifier = Modifier.fillMaxWidth()) {
                                                     // 卡片
                                                     Box(
@@ -634,7 +646,8 @@ fun NotificationHistoryScreen() {
                                                             context = context,
                                                             getCachedAppInfo = getCachedAppInfo,
                                                             cardColor = colorScheme.surfaceContainer,
-                                                            contentColor = colorScheme.onSurface
+                                                            contentColor = colorScheme.onSurface,
+                                                            installedPackages = installedPackages
                                                         )
                                                     }
                                                     // 删除按钮
@@ -645,7 +658,7 @@ fun NotificationHistoryScreen() {
                                                                 //Logger.d("NotifyRelay", "轮胎: 删除按钮点击 - 展开列表单个通知, key=${record.key}")
                                                                 // 在删除前，先将拖动状态重置到中心位置，避免后续操作中出现状态不一致
                                                                 // 使用 snapTo 方法同步重置状态
-                                                                itemCoroutineScope.launch {
+                                                                coroutineScope.launch {
                                                                     anchoredDraggableState.snapTo(DragValue.Center)
                                                                 }
                                                                 NotificationRepository.removeNotification(record.key, context)
@@ -685,16 +698,16 @@ fun NotificationHistoryScreen() {
                                         if (list.size == 1) {
                                             // 保存要删除的包名，用于后续重置状态
                                             val pkgName = list[0].packageName
+                                            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkgName, installedPackages)
                                             NotificationRepository.removeNotification(list[0].key, context)
                                             // 重置该分组的展开状态和排序时间
-                                            expandedGroups.remove(pkgName)
-                                            groupSortTimes.remove(pkgName)
+                                            expandedGroups.remove(mappedPkg)
+                                            groupSortTimes.remove(mappedPkg)
                                         } else {
                                             // 使用更高效的分组删除方法，避免循环调用
                                             val firstRecord = list[0]
                                             // 使用映射后的包名进行删除，确保删除整个分组
-                                            val installedPkgs = AppRepository.getInstalledPackageNames(context)
-                                            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(firstRecord.packageName, installedPkgs)
+                                            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(firstRecord.packageName, installedPackages)
                                             NotificationRepository.removeNotificationsByPackage(mappedPkg, context)
                                             // 重置分组的展开状态和排序时间
                                             expandedGroups.remove(mappedPkg)
@@ -815,7 +828,8 @@ fun NotificationHistoryScreen() {
                             notifications = notifications,
                             mixedList = mixedList,
                             getCachedAppInfo = { pkg -> getCachedAppInfo(pkg) },
-                            expandedGroups = expandedGroups
+                            expandedGroups = expandedGroups,
+                            installedPackages = installedPackages
                         )
                 }
             }
