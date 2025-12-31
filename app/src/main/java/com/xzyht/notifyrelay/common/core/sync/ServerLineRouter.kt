@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.common.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
 import com.xzyht.notifyrelay.common.core.util.EncryptionManager
@@ -105,9 +105,9 @@ object ServerLineRouter {
                     writer.close()
                     reader.close()
                     client.close()
-                } else if (deviceManager.onHandshakeRequest != null) {
+                } else if (deviceManager.handshakeRequestHandler != null) {
                     // 5. 未认证但有回调：交由 UI 确认是否接受连接
-                    deviceManager.onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
+                    deviceManager.handshakeRequestHandler!!.onHandshakeRequest(remoteDevice, remotePubKey) { accepted ->
                         if (accepted) {
                             // 用户点击“接受”：生成共享密钥并写入认证表
                             val sharedSecret = EncryptionManager.generateSharedSecret(deviceManager.localPublicKey, remotePubKey)

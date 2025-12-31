@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.service
+package com.xzyht.notifyrelay.feature.notification.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -38,7 +38,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             try {
                 val pair = superIslandFeatureByKey.remove(notificationKey)
                 if (pair != null) {
-                    val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+                    val deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
                     val (superPkg, featureId) = pair
                     com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandEnd(
                         applicationContext,
@@ -86,7 +86,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
         // 初始化设备连接管理器并启动发现
-        connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+        connectionManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
         try {
             val discoveryField = connectionManager.javaClass.getDeclaredField("discoveryManager")
             discoveryField.isAccessible = true
@@ -95,21 +95,6 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             startMethod.isAccessible = true
             startMethod.invoke(discovery)
         } catch (_: Exception) {}
-
-        // 注册设备列表变化回调：立即刷新持久化通知（确保在主线程更新UI/通知）
-        try {
-            //Logger.d("黑影 NotifyRelay", "注册 onDeviceListChanged 回调到 connectionManager=$connectionManager")
-            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-            connectionManager.onDeviceListChanged = {
-                try {
-                    mainHandler.post {
-                        try { updateNotification() } catch (_: Exception) {}
-                    }
-                } catch (_: Exception) {}
-            }
-        } catch (e: Exception) {
-            Logger.w("黑影 NotifyRelay", "注册 onDeviceListChanged 失败: ${e.message}")
-        }
 
         // 监听设备状态变化，更新通知
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
@@ -194,7 +179,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (superData != null) {
                     Logger.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
                     try {
-                        val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+                        val deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
                         // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
                         val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
                         // 严格以通知 sbn.key 作为会话键：一条系统通知只对应一座“岛”
@@ -294,7 +279,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
         Logger.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
-            val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+            val deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
             var appName: String? = null
             try {
                 val pm = applicationContext.packageManager
@@ -387,13 +372,6 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     stopMethod.isAccessible = true
                     stopMethod.invoke(discovery)
                 } catch (_: Exception) {}
-                // 注销设备列表变化回调
-                try {
-                    //Logger.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")
-                    connectionManager.onDeviceListChanged = null
-                } catch (e: Exception) {
-                    Logger.w("黑影 NotifyRelay", "注销 onDeviceListChanged 失败: ${e.message}")
-                }
             }
         } catch (_: Exception) {}
         // 注销网络监听器

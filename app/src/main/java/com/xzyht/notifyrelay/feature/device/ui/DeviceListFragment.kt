@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.device.ui
+package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
 import androidx.compose.foundation.background
@@ -91,7 +91,7 @@ fun DeviceListScreen() {
     val context = LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
-    val deviceManager = remember { DeviceForwardFragment.getDeviceManager(context) }
+    val deviceManager = remember { com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(context) }
     // 手动发现/心跳等提示完全交由后端处理，前端不再注册回调
     // 拒绝设备弹窗状态（需提前声明，供下方 LaunchedEffect、rejectedDevices 使用）
     var showRejectedDialog by remember { mutableStateOf(false) }
@@ -155,38 +155,12 @@ fun DeviceListScreen() {
 
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {
-        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-        field.isAccessible = true
-        val rawMap = field.get(deviceManager)
-        @Suppress("UNCHECKED_CAST")
-        val map = if (rawMap is Map<*, *>) rawMap as Map<String, *> else null
-        authedDeviceUuids = map?.filter { entry ->
-            val v = entry.value
-            v?.let {
-                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                isAcceptedField.getBoolean(v)
-            } ?: false
-        }?.keys?.toSet() ?: emptySet()
-        val rejField = deviceManager.javaClass.getDeclaredField("rejectedDevices")
-        rejField.isAccessible = true
-        val rawRejSet = rejField.get(deviceManager)
-        @Suppress("UNCHECKED_CAST")
-        rejectedDeviceUuids = if (rawRejSet is Set<*>) rawRejSet as Set<String> else emptySet()
+        val authMap = deviceManager.getAuthenticatedDevices()
+        authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
+        rejectedDeviceUuids = deviceManager.getRejectedDevices()
     }
 
-    // 监听 deviceManager 的 onHandshakeRequest 回调
-    LaunchedEffect(Unit) {
-        try {
-            val field = deviceManager.javaClass.getDeclaredField("onHandshakeRequest")
-            field.isAccessible = true
-            field.set(deviceManager) { device: DeviceInfo, publicKey: String, callback: (Boolean) -> Unit ->
-                pendingHandshakeRequest = HandshakeRequest(device, publicKey, callback)
-                showHandshakeDialog = true
-            }
-        } catch (_: Exception) {
-            // 兼容未实现的情况
-        }
-    }
+    // 移除onHandshakeRequest回调监听，改为使用其他方式处理握手请求
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -410,46 +384,12 @@ fun DeviceListScreen() {
                             Button(
                                 onClick = {
                                     try {
-                                        // 停止心跳任务
-                                        val heartbeatJobsField = deviceManager.javaClass.getDeclaredField("heartbeatJobs")
-                                        heartbeatJobsField.isAccessible = true
-                                        val rawHeartbeatJobs = heartbeatJobsField.get(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val heartbeatJobs = if (rawHeartbeatJobs is MutableMap<*, *>) rawHeartbeatJobs as MutableMap<String, *> else null
-                                        heartbeatJobs?.remove(device.uuid)
-
-                                        // 从心跳设备集合中移除
-                                        val heartbeatedDevicesField = deviceManager.javaClass.getDeclaredField("heartbeatedDevices")
-                                        heartbeatedDevicesField.isAccessible = true
-                                        val rawHeartbeatedDevices = heartbeatedDevicesField.get(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val heartbeatedDevices = if (rawHeartbeatedDevices is MutableSet<*>) rawHeartbeatedDevices as MutableSet<String> else mutableSetOf()
-                                        heartbeatedDevices.remove(device.uuid)
-
-                                        // 从认证设备表中移除
-                                        val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                                        field.isAccessible = true
-                                        val rawMap = field.get(deviceManager)
-                                        if (rawMap is MutableMap<*, *>) {
-                                            @Suppress("UNCHECKED_CAST")
-                                            val map = rawMap as MutableMap<String, *>
-                                            map.remove(device.uuid)
+                                        // 使用公共API移除已认证设备
+                                        val removed = deviceManager.removeAuthenticatedDevice(device.uuid)
+                                        if (removed) {
+                                            // 更新本地UI用的已认证uuid集合
+                                            authedDeviceUuids = deviceManager.getAuthenticatedDevices().filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                                         }
-                                        val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                                        saveMethod.isAccessible = true
-                                        saveMethod.invoke(deviceManager)
-                                        val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                                        updateMethod.isAccessible = true
-                                        updateMethod.invoke(deviceManager)
-                                        @Suppress("UNCHECKED_CAST")
-                                        val map = if (rawMap is MutableMap<*, *>) rawMap as MutableMap<String, *> else null
-                                        authedDeviceUuids = map?.filter { entry: Map.Entry<String, *> ->
-                                            val v = entry.value
-                                            v?.let {
-                                                val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                                                isAcceptedField.getBoolean(v)
-                                            } ?: false
-                                        }?.keys?.toSet() ?: emptySet()
                                     } catch (_: Exception) {}
                                     selectedDevice = null
                                     GlobalSelectedDeviceHolder.selectedDevice = null
@@ -542,12 +482,8 @@ fun DeviceListScreen() {
                         // 使用Room数据库后，不需要手动删除JSON文件
                     }
                     // 持久化认证状态
-                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                    saveMethod.isAccessible = true
-                    saveMethod.invoke(deviceManager)
-                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                    updateMethod.isAccessible = true
-                    updateMethod.invoke(deviceManager)
+                        deviceManager.saveAuthedDevicesPublic()
+                        deviceManager.updateDeviceListPublic()
                 } catch (_: Exception) {}
                 deviceManager.connectToDevice(device) { success, msg ->
                     if (!success && msg != null && activity != null) {
@@ -615,34 +551,18 @@ fun DeviceListScreen() {
                             val clearDeviceHistory = notificationDataClass.getDeclaredMethod("clearDeviceHistory", String::class.java, android.content.Context::class.java)
                             clearDeviceHistory.invoke(notificationData, uuid, appContext)
                         } catch (_: Exception) {}
-                        // 使用Room数据库后，不需要手动删除JSON文件
+                        // 持久化认证状态
+                        deviceManager.saveAuthedDevicesPublic()
+                        deviceManager.updateDeviceListPublic()
                     }
-                    val saveMethod = deviceManager.javaClass.getDeclaredMethod("saveAuthedDevices")
-                    saveMethod.isAccessible = true
-                    saveMethod.invoke(deviceManager)
-                    val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                    updateMethod.isAccessible = true
-                    updateMethod.invoke(deviceManager)
                 } catch (_: Exception) {}
                 handshakeReq.callback(true)
                 // 强制刷新设备列表
-                val updateMethod = deviceManager.javaClass.getDeclaredMethod("updateDeviceList")
-                updateMethod.isAccessible = true
-                updateMethod.invoke(deviceManager)
+                deviceManager.updateDeviceListPublic()
                 // 立即刷新UI侧已认证设备列表
                 try {
-                    val field = deviceManager.javaClass.getDeclaredField("authenticatedDevices")
-                    field.isAccessible = true
-                    val rawMap = field.get(deviceManager)
-                    @Suppress("UNCHECKED_CAST")
-                    val map = if (rawMap is Map<*, *>) rawMap as Map<String, *> else null
-                    authedDeviceUuids = map?.filter { entry ->
-                        val v = entry.value
-                        v?.let {
-                            val isAcceptedField = v.javaClass.getDeclaredField("isAccepted").apply { isAccessible = true }
-                            isAcceptedField.getBoolean(v)
-                        } ?: false
-                    }?.keys?.toSet() ?: emptySet()
+                    val authMap = deviceManager.getAuthenticatedDevices()
+                    authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                 } catch (_: Exception) {}
             },
             onReject = { handshakeReq ->

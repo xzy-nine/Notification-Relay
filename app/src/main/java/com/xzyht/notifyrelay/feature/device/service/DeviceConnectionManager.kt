@@ -156,7 +156,12 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         
         // 认证设备加载完成后，更新设备列表状态，确保 listeners（例如通知服务）能及时感知认证状态
         try {
-            coroutineScope.launch { updateDeviceList() }
+            coroutineScope.launch {
+                updateDeviceList()
+                // 更新Flow值
+                _authenticatedDevicesFlow.value = authenticatedDevices.toMap()
+                _rejectedDevicesFlow.value = rejectedDevices.toSet()
+            }
         } catch (_: Exception) {}
     }
 
@@ -204,18 +209,25 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                 deviceEntities.forEach {
                     repository.saveDevice(it)
                 }
+                
+                // 更新Flow值
+                _authenticatedDevicesFlow.value = authenticatedDevices.toMap()
+                _rejectedDevicesFlow.value = rejectedDevices.toSet()
             }
         } catch (_: Exception) {}
     }
     /**
-     * 新增：服务端握手请求回调，UI层应监听此回调并弹窗确认，参数为请求设备uuid/displayName/公钥，回调参数true=同意，false=拒绝
+     * 握手请求处理接口
      */
-    var onHandshakeRequest: ((DeviceInfo, String, (Boolean) -> Unit) -> Unit)? = null
+    interface HandshakeRequestHandler {
+        fun onHandshakeRequest(deviceInfo: DeviceInfo, publicKey: String, callback: (Boolean) -> Unit)
+    }
+
     /**
-     * 新增：设备列表变化回调，设备列表（认证/在线状态）发生改变时触发。
-     * UI 或服务可注册该回调以在设备数变化时立即刷新通知/界面。
+     * 握手请求处理器
      */
-    var onDeviceListChanged: (() -> Unit)? = null
+    var handshakeRequestHandler: HandshakeRequestHandler? = null
+
     /**
      * 设备发现/连接/数据发送/接收，全部本地实现。
      */
@@ -242,6 +254,18 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      * 只要认证过的设备会一直保留，未认证设备3秒未发现则消失
      */
     val devices: StateFlow<Map<String, Pair<DeviceInfo, Boolean>>> = _devices
+    
+    private val _authenticatedDevicesFlow = MutableStateFlow<Map<String, AuthInfo>>(emptyMap())
+    /**
+     * 已认证设备状态流
+     */
+    val authenticatedDevicesFlow: StateFlow<Map<String, AuthInfo>> = _authenticatedDevicesFlow
+    
+    private val _rejectedDevicesFlow = MutableStateFlow<Set<String>>(emptySet())
+    /**
+     * 已拒绝设备状态流
+     */
+    val rejectedDevicesFlow: StateFlow<Set<String>> = _rejectedDevicesFlow
     internal val uuid: String
 
     // 认证设备表，key为uuid
@@ -335,19 +359,13 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     // 心跳定时任务
     private val heartbeatJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
     // UI全局开关：是否启用UDP发现，使用内存缓存避免频繁数据库访问
-    private var _udpDiscoveryEnabled: Boolean? = null
+    // 使用AppConfig管理UDP发现配置
     var udpDiscoveryEnabled: Boolean
         get() {
-            if (_udpDiscoveryEnabled == null) {
-                _udpDiscoveryEnabled = StorageManager.getBoolean(context, "udp_discovery_enabled", true)
-            }
-            return _udpDiscoveryEnabled!!
+            return com.xzyht.notifyrelay.common.core.util.AppConfig.getUdpDiscoveryEnabled(context)
         }
         set(value) {
-            if (_udpDiscoveryEnabled != value) {
-                _udpDiscoveryEnabled = value
-                StorageManager.putBoolean(context, "udp_discovery_enabled", value)
-            }
+            com.xzyht.notifyrelay.common.core.util.AppConfig.setUdpDiscoveryEnabled(context, value)
         }
 
     init {
@@ -371,8 +389,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         // 私钥可临时
         localPrivateKey = UUID.randomUUID().toString().replace("-", "")
         // 兼容旧用户：首次运行时如无保存则默认true
-        if (!StorageManager.getBoolean(context, "udp_discovery_enabled", false)) {
-            StorageManager.putBoolean(context, "udp_discovery_enabled", true)
+        if (!com.xzyht.notifyrelay.common.core.util.AppConfig.getUdpDiscoveryEnabled(context)) {
+            com.xzyht.notifyrelay.common.core.util.AppConfig.setUdpDiscoveryEnabled(context, true)
         }
         loadAuthedDevices()
         // 新增：初始补全本机 deviceInfoCache，便于反向 connectToDevice
@@ -455,26 +473,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             newMap.count { (uuid, pair) -> pair.second && (authSnapshot[uuid]?.isAccepted == true) }
         } catch (_: Exception) { 0 }
 
-        // 仅在设备列表或认证在线数量发生实际变化时触发回调，避免频繁刷新
-        if (oldMap != newMap || oldAuthOnlineCount != newAuthOnlineCount) {
-            run {
-                try {
-                    //Logger.d(
-                    //    "死神-NotifyRelay",
-                    //    "[updateDeviceList] device list changed: oldSize=${oldMap.size}, newSize=${newMap.size}, oldAuthOnline=$oldAuthOnlineCount, newAuthOnline=$newAuthOnlineCount"
-                    //)
-                } catch (_: Exception) {
-                }
-            }
-            _devices.value = newMap
-            try {
-                onDeviceListChanged?.invoke()
-            } catch (e: Exception) {
-                Logger.w("死神-NotifyRelay", "onDeviceListChanged callback failed: ${e.message}")
-            }
-        } else {
-            _devices.value = newMap
-        }
+        // 直接更新Flow值，UI层通过Flow订阅获取变化
+        _devices.value = newMap
     }
 
     private fun getDeviceInfo(uuid: String): DeviceInfo? {
@@ -499,6 +499,38 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             return DeviceInfo(uuid, displayName, localIp, listenPort)
         }
         return null
+    }
+
+    /**
+     * 获取已认证设备列表
+     */
+    fun getAuthenticatedDevices(): Map<String, AuthInfo> {
+        synchronized(authenticatedDevices) {
+            return authenticatedDevices.toMap()
+        }
+    }
+
+    /**
+     * 获取已拒绝设备列表
+     */
+    fun getRejectedDevices(): Set<String> {
+        synchronized(rejectedDevices) {
+            return rejectedDevices.toSet()
+        }
+    }
+
+    /**
+     * 保存已认证设备（公开API）
+     */
+    fun saveAuthedDevicesPublic() {
+        saveAuthedDevices()
+    }
+
+    /**
+     * 更新设备列表（公开API）
+     */
+    fun updateDeviceListPublic() {
+        updateDeviceList()
     }
 
     /**
@@ -700,7 +732,14 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             } catch (_: Exception) {}
 
             // 触发更新，确保 StateFlow 与回调被通知
-            try { coroutineScope.launch { updateDeviceList() } } catch (_: Exception) {}
+            try { 
+                coroutineScope.launch { 
+                    updateDeviceList() 
+                    // 更新Flow值
+                    _authenticatedDevicesFlow.value = authenticatedDevices.toMap()
+                    _rejectedDevicesFlow.value = rejectedDevices.toSet()
+                } 
+            } catch (_: Exception) {}
             return existed
         } catch (e: Exception) {
             Logger.w("死神-NotifyRelay", "removeAuthenticatedDevice failed: ${e.message}")

@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.device.ui
+package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
 import androidx.compose.foundation.background
@@ -58,14 +58,7 @@ class DeviceForwardFragment : Fragment() {
     }
 
     companion object {
-        // 全局单例，保证同一进程内所有页面共享同一个 deviceManager
-        @Volatile
-        private var sharedDeviceManager: DeviceConnectionManager? = null
-        fun getDeviceManager(context: android.content.Context): DeviceConnectionManager {
-            return sharedDeviceManager ?: synchronized(this) {
-                sharedDeviceManager ?: DeviceConnectionManager(context.applicationContext).also { sharedDeviceManager = it }
-            }
-        }
+        // 移除了兼容方法，直接使用 DeviceConnectionManagerSingleton
     }
 
     // 加载已认证设备uuid集合
@@ -105,7 +98,7 @@ class DeviceForwardFragment : Fragment() {
             setContent {
                 MiuixTheme {
                     DeviceForwardScreen(
-                        deviceManager = getDeviceManager(requireContext())
+                        deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(requireContext())
                     )
                 }
             }
