@@ -25,7 +25,7 @@ object ServiceManager {
      */
     fun startNotificationListenerService(context: Context): Boolean {
         return try {
-            val cn = ComponentName(context, "com.xzyht.notifyrelay.feature.notification.service.NotifyRelayNotificationListenerService")
+            val cn = ComponentName(context, "com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService")
             val restartIntent = Intent()
             restartIntent.component = cn
             restartIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

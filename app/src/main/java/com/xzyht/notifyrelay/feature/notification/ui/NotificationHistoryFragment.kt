@@ -53,7 +53,7 @@ import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
-import com.xzyht.notifyrelay.feature.notification.model.NotificationRecord
+import com.xzyht.notifyrelay.common.core.notification.data.NotificationRecord
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
