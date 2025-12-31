@@ -1,5 +1,7 @@
 
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -66,6 +68,48 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        val keystorePath = System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH") as? String
+        val signingStorePassword = System.getenv("STORE_PASSWORD") ?: project.findProperty("STORE_PASSWORD") as? String
+        val signingKeyPassword = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") as? String
+        val signingKeyAlias = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") as? String
+
+        // Local-only fallback (not committed): read optional properties from two locations, otherwise pick first .jks in PublicHub
+        val publicHubDir = file("D:/xzy/nas-Sync/androidKey/PublicHub")
+        val localPropFiles = listOf(
+            File("D:/xzy/nas-Sync/androidKey/signing.local.properties"),
+            File(publicHubDir, "signing.local.properties")
+        )
+        val localProps = Properties().apply {
+            localPropFiles.filter { it.isFile }.forEach { file ->
+                file.inputStream().use { load(it) }
+            }
+        }
+        val localKeystore = if (publicHubDir.isDirectory) {
+            publicHubDir.listFiles()?.firstOrNull { it.extension == "jks" }
+        } else {
+            null
+        }
+
+        val resolvedKeystore = keystorePath
+            ?: localProps.getProperty("KEYSTORE_PATH")
+            ?: localKeystore?.absolutePath
+        val resolvedStorePassword = signingStorePassword ?: localProps.getProperty("STORE_PASSWORD")
+        val resolvedKeyPassword = signingKeyPassword ?: localProps.getProperty("KEY_PASSWORD")
+        val resolvedKeyAlias = signingKeyAlias ?: localProps.getProperty("KEY_ALIAS")
+
+        if (!resolvedKeystore.isNullOrBlank() && !resolvedStorePassword.isNullOrBlank() && !resolvedKeyPassword.isNullOrBlank() && !resolvedKeyAlias.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(resolvedKeystore)
+                storePassword = resolvedStorePassword
+                keyAlias = resolvedKeyAlias
+                keyPassword = resolvedKeyPassword
+            }
+        }
+    }
+
+    val releaseSigning = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+
     buildTypes {
         getByName("debug") {
         }
@@ -76,7 +120,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
         }
     }
     compileOptions {
