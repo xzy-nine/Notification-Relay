@@ -133,24 +133,7 @@ suspend fun replicateNotification(
                 }
             }
 
-            // 如果仍然没有图标，尝试直接获取（本地安装的应用）
-            if (appIcon == null) {
-                val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(pkg, 0)
-                val icon = pm.getApplicationIcon(appInfo)
-                if (icon is android.graphics.drawable.BitmapDrawable) {
-                    appIcon = icon.bitmap
-                } else {
-                    val iconDrawable = icon
-                    val width: Int = if (iconDrawable.intrinsicWidth > 0) iconDrawable.intrinsicWidth else 96
-                    val height: Int = if (iconDrawable.intrinsicHeight > 0) iconDrawable.intrinsicHeight else 96
-                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                    val canvas = android.graphics.Canvas(bitmap)
-                    iconDrawable.setBounds(0, 0, width, height)
-                    iconDrawable.draw(canvas)
-                    appIcon = bitmap
-                }
-            }
+            // 统一方法已经处理了本地和外部图标的获取，无需额外逻辑
 
             if (appIcon != null) {
                 //Logger.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")

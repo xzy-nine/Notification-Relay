@@ -591,8 +591,12 @@ fun NotificationHistoryScreen() {
                                             NotificationRepository.removeNotification(list[0].key, context)
                                             NotificationRepository.notifyHistoryChanged(selectedDevice, context)
                                         } else {
-                                            NotificationRepository.removeNotificationsByPackage(list[0].packageName, context)
-                                            NotificationRepository.notifyHistoryChanged(selectedDevice, context)
+                                            // 使用更高效的分组删除方法，避免循环调用
+                                            val firstRecord = list[0]
+                                            // 使用映射后的包名进行删除，确保删除整个分组
+                                            val installedPkgs = AppRepository.getInstalledPackageNames(context)
+                                            val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(firstRecord.packageName, installedPkgs)
+                                            NotificationRepository.removeNotificationsByPackage(mappedPkg, context)
                                         }
                                     } catch (e: Exception) {
                                         Logger.e("NotifyRelay", "删除失败", e)
