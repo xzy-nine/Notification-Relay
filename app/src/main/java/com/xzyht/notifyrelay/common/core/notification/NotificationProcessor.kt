@@ -141,7 +141,8 @@ object NotificationProcessor {
             val installedPkgs = com.xzyht.notifyrelay.common.core.repository.AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
-            val isSuper = forceSuper || (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
+            // 强制使用 header 决定是否为超级岛，移除基于 JSON/package 的类型判断
+            val isSuper = forceSuper
             if (!isSuper) return false
 
             val siType = try { json.optString("type", "") } catch (_: Exception) { "" }

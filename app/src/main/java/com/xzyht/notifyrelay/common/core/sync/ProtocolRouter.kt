@@ -56,14 +56,21 @@ object ProtocolRouter {
         // 路由
         return try {
             when (header) {
-                // DATA / DATA_JSON / DATA_SUPERISLAND / DATA_MEDIAPLAY / DATA_NOTIFICATION：远程通知主通道（含超级岛、去重与复刻等完整处理），入口统一交给 NotificationProcessor
-                "DATA", "DATA_JSON", "DATA_SUPERISLAND", "DATA_MEDIAPLAY", "DATA_NOTIFICATION" -> {
+                // 主通道：进入 header-only 模式。仅按报文头路由；历史上的 DATA 默认为普通通知（DATA_NOTIFICATION）。
+                "DATA", "DATA_SUPERISLAND", "DATA_MEDIAPLAY", "DATA_NOTIFICATION" -> {
+                    val routedHeader = when (header) {
+                        "DATA_SUPERISLAND" -> "DATA_SUPERISLAND"
+                        "DATA_MEDIAPLAY" -> "DATA_MEDIAPLAY"
+                        "DATA_NOTIFICATION" -> "DATA_NOTIFICATION"
+                        else -> "DATA_NOTIFICATION" // DATA -> 普通通知（强制头-only 策略）
+                    }
+
                     com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.process(
                         context,
                         deviceManager,
                         deviceManager.coroutineScopeInternal,
                         com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.NotificationInput(
-                            header = header,
+                            header = routedHeader,
                             rawData = decrypted,
                             sharedSecret = auth.sharedSecret,
                             remoteUuid = remoteUuid
