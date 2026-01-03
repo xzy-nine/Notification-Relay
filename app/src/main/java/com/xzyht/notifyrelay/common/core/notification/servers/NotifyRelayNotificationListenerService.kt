@@ -3,15 +3,24 @@ package com.xzyht.notifyrelay.common.core.notification.servers
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.app.Notification
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
+import android.os.Parcelable
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Base64
+import android.view.View
 import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.xzyht.notifyrelay.BuildConfig
 import com.xzyht.notifyrelay.R
 import com.xzyht.notifyrelay.common.core.sync.MessageSender
@@ -28,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
     companion object {
@@ -157,6 +167,100 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val processedNotifications = mutableMapOf<String, Long>()
     // 记录本机转发过的超级岛特征ID，用于在移除时发送终止包
     private val superIslandFeatureByKey = mutableMapOf<String, Pair<String, String>>() // sbnKey -> (superPkg, featureId)
+    
+    // 媒体播放通知状态管理：使用sbn.key作为会话键，跟踪每个媒体通知的状态
+    private val mediaPlayStateByKey = mutableMapOf<String, MediaPlayState>()
+    
+    // 媒体播放状态数据类
+    data class MediaPlayState(
+        val title: String,
+        val text: String,
+        val packageName: String,
+        val postTime: Long,
+        val coverUrl: String? = null
+    )
+    
+    /**
+     * 将Drawable转换为Bitmap
+     */
+    private fun Drawable.toBitmap(): Bitmap {
+        val bitmap = Bitmap.createBitmap(intrinsicWidth, intrinsicHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        setBounds(0, 0, canvas.width, canvas.height)
+        draw(canvas)
+        return bitmap
+    }
+    
+    /**
+     * 处理媒体播放通知
+     */
+    private fun processMediaNotification(sbn: StatusBarNotification) {
+        val sbnKey = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
+        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
+        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
+        
+        // 获取音乐封面图标
+        var coverUrl: String? = null
+        try {
+            // 尝试从通知的大图中获取封面
+            val largeIcon = sbn.notification.getLargeIcon()
+            if (largeIcon != null) {
+                // 将Drawable转换为Bitmap
+                val drawable = largeIcon.loadDrawable(applicationContext)
+                if (drawable != null) {
+                    val bitmap = drawable.toBitmap()
+                    val stream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+                    val bytes = stream.toByteArray()
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    coverUrl = "data:image/jpeg;base64,$base64"
+                }
+            }
+        } catch (e: Exception) {
+            Logger.e("NotifyRelay-Media", "获取音乐封面失败", e)
+        }
+        
+        // 记录日志
+        Logger.v("NotifyRelay-Media", "processMediaNotification: title='$title', text='$text', sbnKey=$sbnKey, coverUrl=${coverUrl?.take(20)}...")
+        
+        // 检查状态是否变化，只在内容变化时发送
+        val currentState = MediaPlayState(title, text, sbn.packageName, sbn.postTime, coverUrl)
+        val lastState = mediaPlayStateByKey[sbnKey]
+        
+        if (lastState == null || lastState.title != currentState.title || lastState.text != currentState.text || lastState.coverUrl != currentState.coverUrl) {
+            // 状态变化，发送通知
+            Logger.i("NotifyRelay-Media", "媒体播放状态变化，发送通知: $title - $text")
+            
+            try {
+                val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                var appName: String? = null
+                try {
+                    val pm = applicationContext.packageManager
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    appName = pm.getApplicationLabel(appInfo).toString()
+                } catch (_: Exception) {
+                    appName = sbn.packageName
+                }
+                
+                // 使用专门的协议前缀标记媒体通知
+                MessageSender.sendMediaPlayNotification(
+                    applicationContext,
+                    "mediaplay:${sbn.packageName}",
+                    appName,
+                    title,
+                    text,
+                    coverUrl,
+                    sbn.postTime,
+                    deviceManager
+                )
+                
+                // 更新状态缓存
+                mediaPlayStateByKey[sbnKey] = currentState
+            } catch (e: Exception) {
+                Logger.e("NotifyRelay-Media", "发送媒体播放通知失败", e)
+            }
+        }
+    }
 
     private fun cleanupExpiredCacheEntries(currentTime: Long) {
         if (processedNotifications.size <= CACHE_CLEANUP_THRESHOLD) return
@@ -185,6 +289,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val superIslandEnabled = try {
             StorageManager.getBoolean(applicationContext, "superisland_enabled", true)
         } catch (_: Exception) { true }
+
+        // 检查是否为媒体播放通知
+        val isMediaNotification = sbn.notification.category == Notification.CATEGORY_TRANSPORT
+        if (isMediaNotification) {
+            // 媒体播放通知，单独处理
+            processMediaNotification(sbn)
+            return
+        }
 
         // 在本机本地过滤前，尝试读取超级岛信息并单独转发
         // 当开关开启且检测到超级岛数据时，只发送超级岛分支，不再走普通通知转发

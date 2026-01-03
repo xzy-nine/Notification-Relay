@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.notification.backend
+package com.xzyht.notifyrelay.feature.notification.backend
 
 import android.app.Notification
 import android.app.NotificationManager
@@ -220,9 +220,6 @@ object BackendLocalFilter {
         if (BuildConfig.DEBUG && !isFromPeriodicCheck) {
             Logger.v("NotifyRelay-Filter", "shouldForward: title='$title', text='$text'")
         }
-
-        // 过滤媒体通知（不存储，避免蓝牙歌词等标题频繁变化）
-        if (sbn.notification.category == Notification.CATEGORY_TRANSPORT) return false
 
         // 持久化/前台服务过滤，包含服务相关关键词
         if (filterOngoing) {
