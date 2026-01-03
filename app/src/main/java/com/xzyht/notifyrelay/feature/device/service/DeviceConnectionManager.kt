@@ -610,7 +610,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                     //Logger.d("死神-NotifyRelay", "未认证设备，禁止发送")
                     return@launch
                 }
-                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_JSON", data, 10000L)
+                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this@DeviceConnectionManager, device, "DATA_NOTIFICATION", data, 10000L)
             } catch (e: Exception) {
                 Logger.e("死神-NotifyRelay", "发送通知数据失败", e)
             }
@@ -862,7 +862,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
 
             // 通过统一加密发送器发回对端
             val deviceInfo = DeviceInfo(remoteUuid, DeviceConnectionManagerUtil.getDisplayNameByUuid(remoteUuid), ip, port)
-            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_JSON", ackObj.toString(), 3000L)
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, deviceInfo, "DATA_SUPERISLAND", ackObj.toString(), 3000L)
         } catch (_: Exception) {
         }
     }

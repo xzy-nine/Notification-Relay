@@ -265,8 +265,12 @@ object MessageSender {
                     return
                 }
 
-                // 使用统一发送器
-                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                // 根据负载类型选择报文头（媒体播放使用 DATA_MEDIAPLAY，其它使用 DATA_NOTIFICATION）
+                val header = try {
+                    val obj = org.json.JSONObject(task.data)
+                    if (obj.optString("type", "").equals("MEDIA_PLAY", true)) "DATA_MEDIAPLAY" else "DATA_NOTIFICATION"
+                } catch (_: Exception) { "DATA_NOTIFICATION" }
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, header, task.data, 10000L)
                 success = true
                 try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
                 //Logger.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
@@ -301,7 +305,7 @@ object MessageSender {
                     return
                 }
 
-                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_SUPERISLAND", task.data, 10000L)
                 success = true
                 //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
@@ -332,7 +336,7 @@ object MessageSender {
                 return
             }
 
-            ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+            ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_SUPERISLAND", task.data, 10000L)
             //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
             Logger.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")

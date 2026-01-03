@@ -33,6 +33,7 @@ object NotificationProcessor {
     private val superIslandDeduplicationCache = mutableSetOf<String>()
 
     data class NotificationInput(
+        val header: String?,
         val rawData: String,
         val sharedSecret: String?,
         val remoteUuid: String?,
@@ -49,7 +50,7 @@ object NotificationProcessor {
         input: NotificationInput,
         notificationCallbacks: Collection<(String) -> Unit>
     ) {
-        val (data, sharedSecret, remoteUuid) = input
+        val (header, data, sharedSecret, remoteUuid) = input
 
         // 1. 解密
         val decrypted = if (sharedSecret != null) {
@@ -63,8 +64,8 @@ object NotificationProcessor {
 
         //Logger.d(TAG, "处理通知数据: $decrypted")
 
-        // 2. JSON 级别处理：超级岛协议 + NotificationRepository 写入
-        handleJsonLevel(context, manager, decrypted, sharedSecret, remoteUuid)
+        // 2. JSON 级别处理：由报文头决定是否为超级岛/媒体/普通通知
+        handleJsonLevel(context, manager, header, decrypted, sharedSecret, remoteUuid)
 
         // 3. 过滤与复刻
         handleFilterAndReplicate(context, manager, scope, decrypted, remoteUuid)
@@ -83,6 +84,7 @@ object NotificationProcessor {
     private fun handleJsonLevel(
         context: Context,
         manager: DeviceConnectionManager,
+        header: String?,
         decrypted: String,
         sharedSecret: String?,
         remoteUuid: String?
@@ -97,7 +99,9 @@ object NotificationProcessor {
                 val time = json.optLong("time", System.currentTimeMillis())
 
                 // 超级岛优先分支
-                if (handleSuperIslandIfNeeded(context, manager, json, decrypted, pkg, appName, title, text, time, sharedSecret, remoteUuid)) {
+                val forceSuper = try { header != null && header.equals("DATA_SUPERISLAND", true) } catch (_: Exception) { false }
+
+                if (handleSuperIslandIfNeeded(context, manager, json, decrypted, pkg, appName, title, text, time, sharedSecret, remoteUuid, forceSuper)) {
                     return
                 }
 
@@ -130,13 +134,14 @@ object NotificationProcessor {
         text: String?,
         time: Long,
         sharedSecret: String?,
-        remoteUuid: String
+        remoteUuid: String,
+        forceSuper: Boolean = false
     ): Boolean {
         return try {
             val installedPkgs = com.xzyht.notifyrelay.common.core.repository.AppRepository.getInstalledPackageNamesSync(context)
             val mappedPkg = com.xzyht.notifyrelay.feature.notification.backend.RemoteFilterConfig.mapToLocalPackage(pkg.orEmpty(), installedPkgs)
 
-            val isSuper = (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
+            val isSuper = forceSuper || (!mappedPkg.isNullOrEmpty() && mappedPkg.startsWith("superisland:")) || (pkg?.startsWith("superisland:") == true)
             if (!isSuper) return false
 
             val siType = try { json.optString("type", "") } catch (_: Exception) { "" }

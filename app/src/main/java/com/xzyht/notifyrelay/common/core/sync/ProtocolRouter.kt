@@ -56,13 +56,14 @@ object ProtocolRouter {
         // 路由
         return try {
             when (header) {
-                // DATA / DATA_JSON：远程通知主通道（含超级岛、去重与复刻等完整处理），入口统一交给 NotificationProcessor
-                "DATA", "DATA_JSON" -> {
+                // DATA / DATA_JSON / DATA_SUPERISLAND / DATA_MEDIAPLAY / DATA_NOTIFICATION：远程通知主通道（含超级岛、去重与复刻等完整处理），入口统一交给 NotificationProcessor
+                "DATA", "DATA_JSON", "DATA_SUPERISLAND", "DATA_MEDIAPLAY", "DATA_NOTIFICATION" -> {
                     com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.process(
                         context,
                         deviceManager,
                         deviceManager.coroutineScopeInternal,
                         com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.NotificationInput(
+                            header = header,
                             rawData = decrypted,
                             sharedSecret = auth.sharedSecret,
                             remoteUuid = remoteUuid
@@ -107,7 +108,7 @@ object ProtocolRouter {
                 }
                 else -> {
                     // 其他未识别的 DATA_* 报文：当前版本不支持，直接忽略（方便后向兼容）
-                    //Logger.d(TAG, "未知DATA通道: $header")
+                    Logger.d(TAG, "未知DATA通道: $header")
                     true
                 }
             }
