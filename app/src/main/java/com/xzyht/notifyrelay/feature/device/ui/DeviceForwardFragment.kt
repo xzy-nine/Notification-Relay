@@ -127,7 +127,7 @@ fun DeviceForwardScreen(
         }
     }
     // TabRow相关状态
-    val tabTitles = listOf("远程过滤", "聊天测试", "本地过滤", "超级岛")
+    val tabTitles = listOf("远程过滤", "本地过滤", "音频转发", "超级岛", "聊天测试")
     
     // Pager相关状态 - 使用Pager状态作为唯一数据源
     val pagerState = rememberPagerState(initialPage = 0) {
@@ -220,17 +220,21 @@ fun DeviceForwardScreen(
                         com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
                     }
                     1 -> {
-                        // 聊天测试 Tab：独立到 UIChatTest 组件
-                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
-                    }
-                    2 -> {
                         // 本地通知过滤 Tab
                         UILocalFilter()
+                    }
+                    2 -> {
+                        // 音频转发 Tab
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIAudioForwarding()
                     }
                     3 -> {
                         // 超级岛设置 Tab
                         //Logger.d("超级岛", "UI: 打开超级岛设置 Tab")
                         com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
+                    }
+                    4 -> {
+                        // 聊天测试 Tab：独立到 UIChatTest 组件
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
                     }
                 }
             }

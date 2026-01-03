@@ -66,6 +66,25 @@ data class AuthInfo(
 
 // =================== 设备连接管理器主类 ===================
 class DeviceConnectionManager(private val context: android.content.Context) {
+    // 单例实例
+    companion object {
+        @Volatile
+        private var instance: DeviceConnectionManager? = null
+        
+        /**
+         * 获取单例实例
+         */
+        fun getInstance(context: android.content.Context): DeviceConnectionManager {
+            if (instance == null) {
+                synchronized(this) {
+                    if (instance == null) {
+                        instance = DeviceConnectionManager(context.applicationContext)
+                    }
+                }
+            }
+            return instance!!
+        }
+    }
     // 获取本地设备显示名称，优先级按要求：1. 蓝牙 -> 2. Settings.Secure(bluetooth_name) -> 3. Settings.Global(device_name) -> 4. Build.MODEL/DEVICE -> 5. 兜底
     // 不再使用应用持久化或 SharedPreferences 中的 device_name
     private fun getLocalDisplayName(): String {
@@ -607,6 +626,20 @@ class DeviceConnectionManager(private val context: android.content.Context) {
         } catch (_: Exception) {}
     }
 
+    /**
+     * 公开API：请求远端设备转发音频。
+     * @return 是否成功发送请求
+     */
+    fun requestAudioForwarding(device: DeviceInfo): Boolean {
+        try {
+            val request = "{\"type\":\"AUDIO_REQUEST\"}"
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, device, "DATA_AUDIO_REQUEST", request, 10000L)
+            return true
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
     init {
         // 启动图标同步过期请求清理协程
         coroutineScope.launch {
@@ -683,6 +716,54 @@ class DeviceConnectionManager(private val context: android.content.Context) {
             }
         } catch (_: Exception) {
             return 0
+        }
+    }
+
+    /**
+     * 获取在线且已认证的设备列表（线程安全）。
+     * 该方法读取当前设备列表快照和认证表快照，返回同时在线并且认证通过（isAccepted==true）的设备列表。
+     */
+    fun getAuthenticatedOnlineDevices(): List<DeviceInfo> {
+        try {
+            val authSnapshot = synchronized(authenticatedDevices) { authenticatedDevices.toMap() }
+            val deviceInfoSnapshot = synchronized(deviceInfoCache) { deviceInfoCache.toMap() }
+            val devsSnapshot = devices.value
+            
+            // 调试日志
+            Logger.d("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 认证设备: ${authSnapshot.size} 个设备")
+            Logger.d("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 设备信息缓存: ${deviceInfoSnapshot.size} 个设备")
+            Logger.d("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 设备列表: ${devsSnapshot.size} 个设备")
+            
+            // 首先获取所有已认证设备
+            val allAuthenticatedDevices = authSnapshot.filter { (_, auth) -> auth.isAccepted }
+            
+            // 从所有已认证设备中构建设备列表
+            val result = allAuthenticatedDevices.mapNotNull { (uuid, auth) ->
+                // 从设备信息缓存中获取设备信息
+                var deviceInfo = deviceInfoSnapshot[uuid]
+                
+                // 如果缓存中没有，从设备列表中获取
+                if (deviceInfo == null) {
+                    deviceInfo = devsSnapshot[uuid]?.first
+                }
+                
+                // 如果还是没有，从认证信息中构建
+                if (deviceInfo == null) {
+                    val name = auth.displayName ?: "已认证设备"
+                    val ip = auth.lastIp ?: ""
+                    val port = auth.lastPort ?: listenPort
+                    deviceInfo = DeviceInfo(uuid, name, ip, port)
+                }
+                
+                Logger.d("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 已认证设备: $uuid, name=${deviceInfo.displayName}, ip=${deviceInfo.ip}")
+                deviceInfo
+            }
+            
+            Logger.d("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 返回结果: ${result.size} 个设备")
+            return result
+        } catch (e: Exception) {
+            Logger.e("死神-NotifyRelay", "[getAuthenticatedOnlineDevices] 出错: ${e.message}", e)
+            return emptyList()
         }
     }
 

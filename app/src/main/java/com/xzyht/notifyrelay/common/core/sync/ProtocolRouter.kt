@@ -93,6 +93,18 @@ object ProtocolRouter {
                     AppListSyncManager.handleAppListResponse(decrypted, context, remoteUuid)
                     true
                 }
+                // DATA_AUDIO_REQUEST：对方请求本机音频转发
+                "DATA_AUDIO_REQUEST" -> {
+                    // 目前仅支持转发，直接同意
+                    val response = "{\"type\":\"AUDIO_RESPONSE\",\"result\":\"accepted\"}"
+                    ProtocolSender.sendEncrypted(deviceManager, deviceManager.resolveDeviceInfo(remoteUuid, clientIp), "DATA_AUDIO_RESPONSE", response)
+                    true
+                }
+                // DATA_AUDIO_RESPONSE：音频转发请求的响应
+                "DATA_AUDIO_RESPONSE" -> {
+                    // 处理音频转发响应，这里可以添加相应的逻辑
+                    true
+                }
                 else -> {
                     // 其他未识别的 DATA_* 报文：当前版本不支持，直接忽略（方便后向兼容）
                     //Logger.d(TAG, "未知DATA通道: $header")
