@@ -307,8 +307,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     Logger.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
                     try {
                         val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
-                        // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
-                        val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
+                        // 不再使用包名前缀标记；通过通道头 DATA_SUPERISLAND 区分超级岛
+                        val superPkg = superData.sourcePackage ?: "unknown"
                         // 严格以通知 sbn.key 作为会话键：一条系统通知只对应一座“岛”
                         val sbnInstanceId = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
                         // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判

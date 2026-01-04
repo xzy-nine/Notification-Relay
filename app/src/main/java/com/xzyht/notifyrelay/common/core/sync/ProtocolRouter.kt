@@ -56,15 +56,9 @@ object ProtocolRouter {
         // 路由
         return try {
             when (header) {
-                // 主通道：进入 header-only 模式。仅按报文头路由；历史上的 DATA 默认为普通通知（DATA_NOTIFICATION）。
-                "DATA", "DATA_SUPERISLAND", "DATA_MEDIAPLAY", "DATA_NOTIFICATION" -> {
-                    val routedHeader = when (header) {
-                        "DATA_SUPERISLAND" -> "DATA_SUPERISLAND"
-                        "DATA_MEDIAPLAY" -> "DATA_MEDIAPLAY"
-                        "DATA_NOTIFICATION" -> "DATA_NOTIFICATION"
-                        else -> "DATA_NOTIFICATION" // DATA -> 普通通知（强制头-only 策略）
-                    }
-
+                // 主通道：历史上的 DATA 默认为普通通知（DATA_NOTIFICATION）
+                "DATA", "DATA_NOTIFICATION" -> {
+                    val routedHeader = "DATA_NOTIFICATION"
                     com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.process(
                         context,
                         deviceManager,
@@ -77,6 +71,27 @@ object ProtocolRouter {
                         ),
                         deviceManager.notificationDataReceivedCallbacksInternal
                     )
+                    true
+                }
+                "DATA_SUPERISLAND" -> {
+                    // 分流到 SuperIslandProcessor 专门处理
+                    try {
+                        val handled = com.xzyht.notifyrelay.common.core.notification.SuperIslandProcessor.process(
+                            context,
+                            deviceManager,
+                            decrypted,
+                            auth.sharedSecret,
+                            remoteUuid
+                        )
+                        if (handled) return true
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "SuperIsland 处理异常", e)
+                    }
+                    true
+                }
+                "DATA_MEDIAPLAY" -> {
+                    // 暂时忽略 MEDIA_PLAY 报文：移动端当前没有展示逻辑，与其他未支持的 DATA_* 保持一致
+                    Logger.i(TAG, "忽略 DATA_MEDIAPLAY（移动端暂不处理）")
                     true
                 }
                 // DATA_ICON_REQUEST：对方向本机请求应用图标，本机查找后会通过 DATA_ICON_RESPONSE 回传

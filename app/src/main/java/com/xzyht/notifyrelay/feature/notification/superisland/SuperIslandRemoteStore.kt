@@ -12,29 +12,73 @@ object SuperIslandRemoteStore {
 
     @Synchronized
     fun applyIncoming(sourceId: String, payload: JSONObject): SuperIslandProtocol.State? {
-        val type = payload.optString("type", SuperIslandProtocol.TYPE_FULL)
-        return when (type) {
-            SuperIslandProtocol.TYPE_FULL -> {
-                val state = parseStateFromFull(payload)
-                store[sourceId] = state
-                state
+        // 兼容：不再依赖 payload 内的 type/featureKey 字段，改为根据字段自动推断
+        return try {
+            // 结束包标识：存在 terminateValue 且等于约定值
+            val term = payload.optString("terminateValue", "")
+            if (term == SuperIslandProtocol.TERMINATE_VALUE) {
+                store.remove(sourceId)
+                return null
             }
-            SuperIslandProtocol.TYPE_DELTA -> {
+
+            // 差异包标识：存在 changes 字段
+            if (payload.has("changes")) {
                 val old = store[sourceId]
                 val merged = applyDelta(old, payload.optJSONObject("changes"))
                 if (merged != null) store[sourceId] = merged
-                merged
+                return merged
             }
-            SuperIslandProtocol.TYPE_END -> {
-                store.remove(sourceId)
-                null
-            }
-            else -> {
-                // 兼容旧包：当无type时视为全量
-                val state = parseStateFromFull(payload)
-                store[sourceId] = state
-                state
-            }
+
+            // 其它视为全量包（兼容旧包以及首包）
+            val state = parseStateFromFull(payload)
+            store[sourceId] = state
+            state
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 根据 deviceUuid 和 mappedPkg 前缀寻找并移除匹配的 sourceId 条目，返回被移除的 sourceId 列表。
+     * 用于在接收到结束包但 featureId 无法可靠重算时，清理存储并告知上层进行浮窗关闭。
+     */
+    @Synchronized
+    fun removeByDeviceAndPkgPrefix(deviceUuid: String, mappedPkg: String): List<String> {
+        return try {
+            val prefix = listOf(deviceUuid, mappedPkg).joinToString("|")
+            val toRemove = store.keys.filter { it.startsWith(prefix) }
+            toRemove.forEach { store.remove(it) }
+            toRemove
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 根据 featureKey（特征 ID）后缀查找并移除匹配的 sourceId，返回被移除的 sourceId 列表。
+     * 兼容只传入 featureKey 的结束包（例如仅包含 featureKeyValue），用于定位完整的 sourceId。
+     */
+    @Synchronized
+    fun removeByFeatureKey(featureKey: String): List<String> {
+        return try {
+            val suffix = "|$featureKey"
+            val toRemove = store.keys.filter { it.endsWith(suffix) || it == featureKey }
+            toRemove.forEach { store.remove(it) }
+            toRemove
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 精确移除指定的 sourceId（如果存在），返回是否成功移除。
+     */
+    @Synchronized
+    fun removeExact(sourceId: String): Boolean {
+        return try {
+            store.remove(sourceId) != null
+        } catch (_: Exception) {
+            false
         }
     }
 
