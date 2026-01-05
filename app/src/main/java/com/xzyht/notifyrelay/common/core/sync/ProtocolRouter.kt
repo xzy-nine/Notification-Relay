@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.common.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
 import com.xzyht.notifyrelay.common.core.util.Logger
@@ -117,15 +117,64 @@ object ProtocolRouter {
                     true
                 }
                 // DATA_AUDIO_REQUEST：对方请求本机音频转发
-                "DATA_AUDIO_REQUEST" -> {
-                    // 目前仅支持转发，直接同意
-                    val response = "{\"type\":\"AUDIO_RESPONSE\",\"result\":\"accepted\"}"
-                    ProtocolSender.sendEncrypted(deviceManager, deviceManager.resolveDeviceInfo(remoteUuid, clientIp), "DATA_AUDIO_RESPONSE", response)
-                    true
-                }
-                // DATA_AUDIO_RESPONSE：音频转发请求的响应
-                "DATA_AUDIO_RESPONSE" -> {
-                    // 处理音频转发响应，这里可以添加相应的逻辑
+                "DATA_MEDIA_CONTROL" -> {
+                    // 处理媒体控制命令，包括音频转发和媒体播放控制
+                    try {
+                        val json = org.json.JSONObject(decrypted)
+                        val action = json.getString("action")
+                        
+                        // 执行相应的媒体控制操作，优先通过通知的 PendingIntent 触发
+                        when (action) {
+                            // 媒体播放控制
+                            "playPause" -> {
+                                try {
+                                    val sbn = com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService.latestMediaSbn
+                                    if (sbn != null) {
+                                        com.xzyht.notifyrelay.common.core.util.MediaControlUtil.triggerPlayPauseFromNotification(sbn)
+                                    } else {
+                                        Logger.w(TAG, "playPause: 未找到媒体通知，无法触发本机媒体操作")
+                                    }
+                                } catch (e: Exception) {
+                                    Logger.e(TAG, "执行 playPause 失败", e)
+                                }
+                            }
+                            "next" -> {
+                                try {
+                                    val sbn = com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService.latestMediaSbn
+                                    if (sbn != null) {
+                                        com.xzyht.notifyrelay.common.core.util.MediaControlUtil.triggerNextFromNotification(sbn)
+                                    } else {
+                                        Logger.w(TAG, "next: 未找到媒体通知，无法触发本机媒体操作")
+                                    }
+                                } catch (e: Exception) {
+                                    Logger.e(TAG, "执行 next 失败", e)
+                                }
+                            }
+                            "previous" -> {
+                                try {
+                                    val sbn = com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService.latestMediaSbn
+                                    if (sbn != null) {
+                                        com.xzyht.notifyrelay.common.core.util.MediaControlUtil.triggerPreviousFromNotification(sbn)
+                                    } else {
+                                        Logger.w(TAG, "previous: 未找到媒体通知，无法触发本机媒体操作")
+                                    }
+                                } catch (e: Exception) {
+                                    Logger.e(TAG, "执行 previous 失败", e)
+                                }
+                            }
+                            // 音频转发控制
+                            "audioRequest" -> {
+                                // 目前仅支持转发，直接同意
+                                val response = "{\"type\":\"MEDIA_CONTROL\",\"action\":\"audioResponse\",\"result\":\"accepted\"}"
+                                ProtocolSender.sendEncrypted(deviceManager, deviceManager.resolveDeviceInfo(remoteUuid, clientIp), "DATA_MEDIA_CONTROL", response)
+                            }
+                            "audioResponse" -> {
+                                // 处理音频转发响应，这里可以添加相应的逻辑
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "处理媒体控制命令失败", e)
+                    }
                     true
                 }
                 else -> {

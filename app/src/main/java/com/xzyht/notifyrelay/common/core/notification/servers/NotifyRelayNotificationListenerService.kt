@@ -44,6 +44,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         private const val MAX_CACHE_SIZE = 2000
         private const val CACHE_CLEANUP_THRESHOLD = 1500
         private const val CACHE_ENTRY_TTL = 24 * 60 * 60 * 1000L // 24小时TTL
+        // 最新的媒体播放通知（用于被外部工具查询并触发其 action）
+        @Volatile
+        var latestMediaSbn: StatusBarNotification? = null
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         // 只补发本应用的前台服务通知（必须channelId和id都匹配）
@@ -195,6 +198,10 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
      * 处理媒体播放通知
      */
     private fun processMediaNotification(sbn: StatusBarNotification) {
+        // 更新全局持有的最新媒体通知，方便外部通过工具类触发操作
+        try {
+            latestMediaSbn = sbn
+        } catch (_: Exception) {}
         val sbnKey = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
         val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
         val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""

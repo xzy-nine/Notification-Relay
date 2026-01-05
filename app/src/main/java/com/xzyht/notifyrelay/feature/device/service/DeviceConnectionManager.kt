@@ -632,8 +632,8 @@ class DeviceConnectionManager(private val context: android.content.Context) {
      */
     fun requestAudioForwarding(device: DeviceInfo): Boolean {
         try {
-            val request = "{\"type\":\"AUDIO_REQUEST\"}"
-            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, device, "DATA_AUDIO_REQUEST", request, 10000L)
+            val request = "{\"type\":\"MEDIA_CONTROL\",\"action\":\"audioRequest\"}"
+            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(this, device, "DATA_MEDIA_CONTROL", request, 10000L)
             return true
         } catch (_: Exception) {
             return false
