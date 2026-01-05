@@ -52,7 +52,7 @@ object MessageSender {
     // 去重集合：防止同一设备、同一数据在未完成前被重复入队
     private val pendingKeys = ConcurrentHashMap.newKeySet<String>()
     // 已发送记录（带 TTL），防止短时间内重复发送已成功发送的通知
-    private const val SENT_KEY_TTL_MS = 60_000L // 60秒内视为已发送，避免重复
+    private const val SENT_KEY_TTL_MS = 10_000L // 10秒内视为已发送，避免重复
     private val sentKeys = ConcurrentHashMap<String, Long>()
 
     // 超级岛：为实现“首次全量，后续差异”，需要跟踪每个设备下每个feature的上次完整状态
@@ -66,7 +66,8 @@ object MessageSender {
         val title: String,
         val text: String,
         val packageName: String,
-        val coverUrl: String? = null
+        val coverUrl: String? = null,
+        val sentTime: Long = System.currentTimeMillis() // 添加发送时间戳
     )
     
     // 媒体播放差异数据类
@@ -100,7 +101,6 @@ object MessageSender {
         if (old.coverUrl != new.coverUrl) cover = new.coverUrl
         return MediaPlayDiff(t, c, cover)
     }
-    
     /**
      * 构建媒体播放全量包
      */
@@ -117,7 +117,7 @@ object MessageSender {
             put("title", state.title)
             put("text", state.text)
             if (state.coverUrl != null) put("coverUrl", state.coverUrl)
-            put("time", time)
+            put("time", System.currentTimeMillis()) // 使用当前时间戳
             put("isLocked", isLocked)
             put("type", "MEDIA_PLAY")
             put("mediaType", "FULL") // 全量包
@@ -478,8 +478,9 @@ object MessageSender {
                 
                 val json = payloadObj.toString()
                 
-                // 立即更新本地lastState（用于后续差异计算）
-                synchronized(mediaLastStatePerDevice) { deviceMap[mediaSourceId] = currentState }
+                // 立即更新本地lastState（用于后续差异计算），包含当前时间戳
+                val updatedState = currentState.copy(sentTime = System.currentTimeMillis())
+                synchronized(mediaLastStatePerDevice) { deviceMap[mediaSourceId] = updatedState }
                 
                 val dedupKey = buildDedupKey(deviceInfo.uuid, json)
                 // 检查是否正在等待发送或最近已发送过

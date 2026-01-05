@@ -180,7 +180,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val text: String,
         val packageName: String,
         val postTime: Long,
-        val coverUrl: String? = null
+        val coverUrl: String? = null,
+        val sentTime: Long = System.currentTimeMillis() // 添加发送时间戳
     )
     
     /**
@@ -234,9 +235,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val currentState = MediaPlayState(title, text, sbn.packageName, sbn.postTime, coverUrl)
         val lastState = mediaPlayStateByKey[sbnKey]
         
-        if (lastState == null || lastState.title != currentState.title || lastState.text != currentState.text || lastState.coverUrl != currentState.coverUrl) {
-            // 状态变化，发送消息
-            Logger.i("NotifyRelay-Media", "媒体播放状态变化，发送消息: $title - $text")
+        // 发送条件：状态变化 或 距离上次发送超过15秒
+        val now = System.currentTimeMillis()
+        val sendRequired = lastState == null || 
+                          lastState.title != currentState.title || 
+                          lastState.text != currentState.text || 
+                          lastState.coverUrl != currentState.coverUrl ||
+                          (now - lastState.sentTime > 15 * 1000) // 超过15秒未发送
+        
+        if (sendRequired) {
+            // 状态变化或超时，发送消息
+            Logger.i("NotifyRelay-Media", "媒体播放消息发送条件满足: $title - $text")
             
             try {
                 val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
@@ -262,8 +271,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     deviceManager
                 )
                 
-                // 更新状态缓存
-                mediaPlayStateByKey[sbnKey] = currentState
+                // 更新状态缓存，包含发送时间
+                mediaPlayStateByKey[sbnKey] = currentState.copy(sentTime = now)
             } catch (e: Exception) {
                 Logger.e("NotifyRelay-Media", "发送媒体播放消息失败", e)
             }
