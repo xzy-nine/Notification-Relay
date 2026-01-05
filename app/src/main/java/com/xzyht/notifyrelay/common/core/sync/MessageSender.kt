@@ -412,7 +412,7 @@ object MessageSender {
      */
     fun sendMediaPlayNotification(
         context: Context,
-        packageName: String, // 带mediaplay:前缀
+        packageName: String, // 应为实际应用包名，通过 payload 中的 type=MEDIA_PLAY 区分媒体消息
         appName: String?,
         title: String?,
         text: String?,
@@ -437,7 +437,7 @@ object MessageSender {
             val currentState = MediaPlayState(
                 title = title ?: "",
                 text = text ?: "",
-                packageName = packageName, // 带mediaplay:前缀
+                packageName = packageName, // 传入实际包名（不含前缀）
                 coverUrl = coverUrl
             )
             

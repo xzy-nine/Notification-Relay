@@ -305,13 +305,9 @@ object IconSyncManager {
     }
 
     private fun getLocalAppIcon(context: Context, packageName: String): Bitmap? {
-        // 移除媒体播放前缀，获取实际应用包名
-        val actualPackageName = if (packageName.startsWith("mediaplay:")) {
-            packageName.substring("mediaplay:".length)
-        } else {
-            packageName
-        }
-        
+        // packageName 应为实际应用包名
+        val actualPackageName = packageName
+
         return try {
             AppRepository.getAppIconSync(context, actualPackageName) ?: run {
                 val pm = context.packageManager

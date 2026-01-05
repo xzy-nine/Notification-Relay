@@ -235,8 +235,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val lastState = mediaPlayStateByKey[sbnKey]
         
         if (lastState == null || lastState.title != currentState.title || lastState.text != currentState.text || lastState.coverUrl != currentState.coverUrl) {
-            // 状态变化，发送通知
-            Logger.i("NotifyRelay-Media", "媒体播放状态变化，发送通知: $title - $text")
+            // 状态变化，发送消息
+            Logger.i("NotifyRelay-Media", "媒体播放状态变化，发送消息: $title - $text")
             
             try {
                 val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
@@ -250,9 +250,10 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 }
                 
                 // 使用专门的协议前缀标记媒体通知
+                // 移除此前用于标记的包名前缀，统一使用报文头（"type":"MEDIA_PLAY"）判断媒体消息
                 MessageSender.sendMediaPlayNotification(
                     applicationContext,
-                    "mediaplay:${sbn.packageName}",
+                    sbn.packageName,
                     appName,
                     title,
                     text,
@@ -264,7 +265,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 // 更新状态缓存
                 mediaPlayStateByKey[sbnKey] = currentState
             } catch (e: Exception) {
-                Logger.e("NotifyRelay-Media", "发送媒体播放通知失败", e)
+                Logger.e("NotifyRelay-Media", "发送媒体播放消息失败", e)
             }
         }
     }
@@ -300,7 +301,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 检查是否为媒体播放通知
         val isMediaNotification = sbn.notification.category == Notification.CATEGORY_TRANSPORT
         if (isMediaNotification) {
-            // 媒体播放通知，单独处理
+            // 媒体播放消息，单独处理
             processMediaNotification(sbn)
             return
         }
