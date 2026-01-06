@@ -195,9 +195,13 @@ class FloatingComposeContainer @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
-                if (isDragging) {
+                val wasDragging = isDragging
+                if (wasDragging) {
                     // 调用容器拖动结束回调
                     onContainerDragEnd?.invoke()
+                    // 消费事件，避免拖动结束后触发点击事件
+                    isDragging = false
+                    return true
                 }
                 // 结束拖动
                 isDragging = false
@@ -234,7 +238,8 @@ class FloatingComposeContainer @JvmOverloads constructor(
                     lifecycleOwner = currentLifecycleOwner,
                     onUpdateEntryHeight = { key, height -> 
                         floatingWindowManager.updateEntryHeight(key, height)
-                    }
+                    },
+                    isContainerDragging = isDragging
                 )
             }
 

@@ -70,7 +70,8 @@ fun FloatingWindowContainer(
     onEntryClick: (String) -> Unit,
     lifecycleOwner: LifecycleOwner?,
     modifier: Modifier = Modifier.Companion,
-    onUpdateEntryHeight: ((String, Int) -> Unit)? = null
+    onUpdateEntryHeight: ((String, Int) -> Unit)? = null,
+    isContainerDragging: Boolean = false
 ) {
     LocalContext.current
 
@@ -95,7 +96,12 @@ fun FloatingWindowContainer(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null, // 移除默认点击效果
-                            onClick = { onEntryClick(entry.key) }
+                            onClick = { 
+                                // 只有当容器未拖动时才执行点击操作
+                                if (!isContainerDragging) {
+                                    onEntryClick(entry.key)
+                                }
+                            }
                         )
                         .onGloballyPositioned {
                             // 测量条目实际高度并更新

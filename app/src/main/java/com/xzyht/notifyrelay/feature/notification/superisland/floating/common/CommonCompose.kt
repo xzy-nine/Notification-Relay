@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xzyht.notifyrelay.feature.notification.superisland.common.AutoScrollText
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 
@@ -98,6 +99,13 @@ fun CommonTextBlockCompose(
     contentFontSize: TextUnit = 12.sp,
     maxWidth: Dp = 160.dp // 适当增加最大宽度，确保内容完整显示
 ) {
+    // 确定字体家族
+    val fontFamily = when {
+        monospace -> FontFamily.Monospace
+        narrow -> FontFamily.SansSerif
+        else -> FontFamily.Default
+    }
+    
     Column(
         modifier = Modifier
             .wrapContentWidth()
@@ -105,59 +113,44 @@ fun CommonTextBlockCompose(
     ) {
         // 前置标题
         frontTitle?.let {
-            Text(
+            AutoScrollText(
                 text = it,
-                color = frontTitleColor,
-                fontSize = frontTitleFontSize,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    fontFamily = when {
-                        monospace -> FontFamily.Monospace
-                        narrow -> FontFamily.SansSerif
-                        else -> FontFamily.Default
-                    }
+                    fontFamily = fontFamily,
+                    fontSize = frontTitleFontSize
                 ),
-                modifier = Modifier.widthIn(max = maxWidth)
+                color = frontTitleColor,
+                baseSpeedPxPerSec = 80f,
+                pauseMillis = 800
             )
         }
         
         // 主标题
         title?.let {
-            Text(
+            AutoScrollText(
                 text = it,
-                color = titleColor,
-                fontSize = titleFontSize,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
                     fontWeight = FontWeight.Bold,
-                    fontFamily = when {
-                        monospace -> FontFamily.Monospace
-                        narrow -> FontFamily.SansSerif
-                        else -> FontFamily.Default
-                    }
+                    fontFamily = fontFamily,
+                    fontSize = titleFontSize
                 ),
-                modifier = Modifier.widthIn(max = maxWidth)
+                color = titleColor,
+                baseSpeedPxPerSec = 100f,
+                pauseMillis = 1000
             )
         }
         
         // 内容
         content?.let {
-            Text(
+            AutoScrollText(
                 text = it,
-                color = contentColor,
-                fontSize = contentFontSize,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    fontFamily = when {
-                        monospace -> FontFamily.Monospace
-                        narrow -> FontFamily.SansSerif
-                        else -> FontFamily.Default
-                    }
+                    fontFamily = fontFamily,
+                    fontSize = contentFontSize
                 ),
-                modifier = Modifier.widthIn(max = maxWidth)
+                color = contentColor,
+                baseSpeedPxPerSec = 130f,// 基础滚动速度，单位：px/秒
+                pauseMillis = 200
             )
         }
     }
