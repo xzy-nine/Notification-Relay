@@ -2,6 +2,7 @@ package com.xzyht.notifyrelay.common.core.sync
 
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.common.core.util.BatteryUtils
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -57,28 +58,13 @@ object HeartbeatSender {
 
     private const val TAG = "HeartbeatSender"
     private const val HEARTBEAT_PORT = 23334 // 与发现端口一致
-
-    /**
-     * 获取设备电量百分比
-     */
-    private fun getBatteryLevel(context: android.content.Context): Int {
-        return try {
-            val batteryManager = context.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
-            val batteryLevel = batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
-            // 确保电量值在0-100之间
-            batteryLevel.coerceIn(0, 100)
-        } catch (e: Exception) {
-            //Logger.d(TAG, "获取电量失败: ${e.message}")
-            0
-        }
-    }
-
+    
     fun sendHeartbeat(manager: DeviceConnectionManager, target: DeviceInfo): Boolean {
         var socket: DatagramSocket? = null
         return try {
             socket = DatagramSocket()
             // 心跳格式：HEARTBEAT:<deviceUuid><设备电量%>
-            val batteryLevel = getBatteryLevel(manager.contextInternal)
+            val batteryLevel = BatteryUtils.getBatteryLevel(manager.contextInternal)
             val payload = "HEARTBEAT:${manager.uuid}$batteryLevel"
             val buf = payload.toByteArray()
             val address = InetAddress.getByName(target.ip)

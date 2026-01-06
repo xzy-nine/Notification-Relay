@@ -146,7 +146,8 @@ class ConnectionDiscoveryManager(
                                                 remoteUuid,
                                                 displayName,
                                                 ip,
-                                                old?.port ?: 23333
+                                                old?.port ?: 23333,
+                                                batteryLevel
                                             )
                                         }
                                         

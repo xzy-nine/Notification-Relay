@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,12 +12,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
@@ -33,6 +36,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
+import com.xzyht.notifyrelay.common.core.util.BatteryUtils
+import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.device.model.HandshakeRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
@@ -41,6 +46,8 @@ import com.xzyht.notifyrelay.feature.device.ui.dialog.HandshakeRequestDialog
 import com.xzyht.notifyrelay.feature.device.ui.dialog.RejectedDevicesDialog
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -132,6 +139,14 @@ fun DeviceListScreen() {
     val devices: List<DeviceInfo> = deviceMap.values.map { it.first }
     val deviceStates: Map<String, Boolean> = deviceMap.mapValues { it.value.second }
     var selectedDevice by remember { mutableStateOf(GlobalSelectedDeviceHolder.selectedDevice) }
+    // 删除按钮二次确认状态管理
+    var deleteConfirmStates by rememberSaveable { mutableStateOf(mapOf<String, Boolean>()) }
+    
+    // 获取本机电量，使用 remember 缓存并监听电量变化
+    val localBatteryLevel = remember {
+        BatteryUtils.getBatteryLevel(context)
+    }
+    
     // 本机按钮始终在最前
     val allDevices: List<DeviceInfo?> = listOf<DeviceInfo?>(null) + devices
     // 只展示deviceMap中存在的认证设备，彻底移除已无效的旧UUID设备
@@ -153,10 +168,6 @@ fun DeviceListScreen() {
             .filter { it.ip == ip && it.uuid != exceptUuid && authedDeviceUuids.contains(it.uuid) }
             .map { it.uuid }
     }
-
-    //Logger.d("NotifyRelay", "[UI] 设备列表界面 DeviceListScreen 调用")
-    //Logger.d("NotifyRelay", "[UI] 设备Map=${deviceMap.keys}，未认证设备=${unauthedDevices.map { it.uuid }}")
-
     // 认证状态监听，deviceMap/弹窗关闭/恢复操作均会触发刷新
     LaunchedEffect(deviceMap, showRejectedDialog) {
         val authMap = deviceManager.getAuthenticatedDevices()
@@ -204,8 +215,289 @@ fun DeviceListScreen() {
     }
 
     val buttonMinHeight = 44.dp // 更适合内容自适应，防止裁剪
-    Modifier
-        .padding(horizontal = 2.dp, vertical = 4.dp)
+
+    // 提取UDP广播开关组件
+    @Composable
+    fun UdpDiscoverySwitch() {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        ) {
+            Text(
+                text = "主动广播和接收",
+                style = textStyles.body2,
+                modifier = Modifier.weight(1f)
+            )
+            top.yukonga.miuix.kmp.basic.Switch(
+                checked = udpDiscoveryEnabled,
+                onCheckedChange = { toggleUdpDiscovery(it) }
+            )
+        }
+    }
+
+    // 提取本机按钮组件
+    @Composable
+    fun LocalDeviceButton() {
+        // 使用真实本机电量
+        val batteryLevel = localBatteryLevel
+        val progress = batteryLevel.toFloat() / 100f
+        
+        // 根据电量百分比设置进度条颜色
+        val progressColor = when {
+            batteryLevel > 70 -> Color(0xFF4CAF50) // 绿色
+            batteryLevel > 30 -> Color(0xFFFFC107) // 黄色
+            else -> Color(0xFFF44336) // 红色
+        }
+        
+        if (isLandscape) {
+            // 横屏模式：垂直排列，进度条在按钮下方
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.padding(bottom = 4.dp),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // 水平进度条，宽度与按钮一致
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp),
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = progressColor,
+                        backgroundColor = colorScheme.surfaceVariant
+                    )
+                )
+                Button(
+                    onClick = { onSelectDevice(null) },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = buttonMinHeight)
+                        .fillMaxWidth(),
+                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    colors = if (selectedDevice == null) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
+                ) {
+                    Text(
+                        text = "本机",
+                        style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary),
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        } else {
+            // 竖屏模式：进度条显示在按钮下方，独立布局
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.padding(end = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                // 竖屏下不显示进度条，仅通过按钮文本颜色体现电量（不修改按钮背景）
+                val localBtnColors = if (selectedDevice == null) {
+                    ButtonDefaults.buttonColorsPrimary()
+                } else {
+                    ButtonDefaults.buttonColors()
+                }
+                Button(
+                    onClick = { onSelectDevice(null) },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = buttonMinHeight)
+                        .widthIn(min = 88.dp, max = 200.dp), // 自适应宽度，避免文本裁剪，允许在 88-200dp 之间扩展
+                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                    colors = localBtnColors
+                ) {
+                    Text(
+                        text = "本机",
+                        style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else progressColor),
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+
+    // 提取已认证设备按钮组件
+    @Composable
+    fun AuthenticatedDeviceButton(device: DeviceInfo) {
+        val isOnline = deviceStates[device.uuid] == true
+        val isDeleteConfirming = deleteConfirmStates[device.uuid] ?: false
+        val context = LocalContext.current
+        
+        // 使用 remember 缓存电量值，避免初始默认值导致跳动
+        val batteryLevel = remember {
+            mutableStateOf(100)
+        }
+        // 只有当电量有效（不是默认值-1）且与当前值不同时才更新
+        LaunchedEffect(device.batteryLevel) {
+            if (device.batteryLevel != -1 && device.batteryLevel != batteryLevel.value) {
+                batteryLevel.value = device.batteryLevel.coerceIn(0, 100)
+            }
+        }
+        val progress = batteryLevel.value.toFloat() / 100f
+        
+        // 根据电量百分比设置进度条颜色
+        val progressColor = when {
+            batteryLevel.value > 70 -> Color(0xFF4CAF50) // 绿色
+            batteryLevel.value > 30 -> Color(0xFFFFC107) // 黄色
+            else -> Color(0xFFF44336) // 红色
+        }
+        
+        // 添加2秒窗口期，超过时间自动清除确认状态
+        LaunchedEffect(isDeleteConfirming, device.uuid) {
+            if (isDeleteConfirming) {
+                // 2秒后自动清除确认状态
+                kotlinx.coroutines.delay(2000)
+                // 检查状态是否仍为true，避免竞态条件
+                if (deleteConfirmStates[device.uuid] == true) {
+                    deleteConfirmStates = deleteConfirmStates - device.uuid
+                }
+            }
+        }
+        
+        Row(
+            verticalAlignment = Alignment.Top, // 改为顶部对齐，避免进度条被裁剪
+            modifier = if (isLandscape) Modifier.padding(bottom = 4.dp) else Modifier.padding(end = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isLandscape) {
+                // 横屏模式：垂直排列，进度条在按钮下方
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    // 水平进度条，宽度与按钮一致
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
+                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                            foregroundColor = progressColor,
+                            backgroundColor = colorScheme.surfaceVariant
+                        )
+                    )
+                    Button(
+                        onClick = { onSelectDevice(device) },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = buttonMinHeight)
+                            .fillMaxWidth(),
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
+                    ) {
+                        Text(
+                            device.displayName + if (!isOnline) " (离线)" else "",
+                            style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            } else {
+                // 竖屏模式：进度条显示在按钮下方，独立布局
+                Column(
+                    modifier = Modifier,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Button(
+                        onClick = { onSelectDevice(device) },
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = buttonMinHeight)
+                            .width(120.dp), // 固定宽度，避免文本裁剪
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                        colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
+                    ) {
+                        Text(
+                            device.displayName + if (!isOnline) " (离线)" else "",
+                            style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else progressColor),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                    // 竖屏下不显示进度条，仅通过按钮颜色体现电量
+                }
+            }
+            if (selectedDevice?.uuid == device.uuid) {
+                Spacer(Modifier.width(4.dp))
+                Button(
+                    onClick = {
+                        if (isDeleteConfirming) {
+                            // 第二次点击，执行删除操作
+                            try {
+                                // 使用 DeviceConnectionManager 提供的安全 API 移除已认证设备
+                                val removed = deviceManager.removeAuthenticatedDevice(device.uuid)
+                                if (removed) {
+                                    // 更新本地 UI 用的已认证 uuid 集合
+                                    authedDeviceUuids = authedDeviceUuids - device.uuid
+                                    // 清除确认状态
+                                    deleteConfirmStates = deleteConfirmStates - device.uuid
+                                }
+                            } catch (_: Exception) {}
+                            selectedDevice = null
+                            GlobalSelectedDeviceHolder.selectedDevice = null
+                        } else {
+                            // 第一次点击，显示提示并进入确认状态
+                            ToastUtils.showShortToast(context, "再次点击确认删除该设备")
+                            deleteConfirmStates = deleteConfirmStates + (device.uuid to true)
+                        }
+                    },
+                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = buttonMinHeight)
+                        .heightIn(min = buttonMinHeight),
+                    // 确认状态下使用更亮的红色，非确认状态使用普通红色
+                    colors = if (isDeleteConfirming) {
+                        ButtonDefaults.buttonColors(color = Color(0xFFFF0000)) // 更亮的红色
+                    } else {
+                        ButtonDefaults.buttonColors(color = Color.Red)
+                    }
+                ) {
+                    Text(
+                        text = if (isDeleteConfirming) "确认?" else "删除",
+                        style = textStyles.body2.copy(color = Color.White),
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+
+    // 提取未认证设备按钮组件
+    @Composable
+    fun UnauthenticatedDeviceButton(device: DeviceInfo) {
+        val isOnline = deviceStates[device.uuid] == true
+        Button(
+            onClick = { onSelectDevice(device) },
+            modifier = Modifier
+                .then(if (isLandscape) Modifier.fillMaxWidth() else Modifier)
+                .defaultMinSize(minHeight = buttonMinHeight)
+                .then(if (isLandscape) Modifier.padding(vertical = 2.dp) else Modifier.padding(end = 6.dp)),
+            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
+        ) {
+            Text(
+                device.displayName + if (!isOnline) " (离线)" else "",
+                style = textStyles.body2.copy(color = colorScheme.primary),
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
+
+    // 提取已拒绝设备按钮组件
+    @Composable
+    fun RejectedDevicesButton() {
+        Button(
+            onClick = { showRejectedDialog = true },
+            modifier = Modifier
+                .then(if (isLandscape) Modifier.fillMaxWidth() else Modifier)
+                .defaultMinSize(minHeight = buttonMinHeight)
+                .then(if (isLandscape) Modifier.padding(vertical = 2.dp) else Modifier.padding(end = 6.dp)),
+            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
+        ) {
+            Text(
+                "查看已拒绝设备",
+                style = textStyles.body2.copy(color = colorScheme.secondary),
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
 
     // 横竖屏都显示UDP发现开关
     if (isLandscape) {
@@ -217,124 +509,24 @@ fun DeviceListScreen() {
                 .padding(12.dp)
         ) {
             // UDP广播开关
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            ) {
-                Text(
-                    text = "主动广播和接收",
-                    style = textStyles.body2,
-                    modifier = Modifier.weight(1f)
-                )
-                top.yukonga.miuix.kmp.basic.Switch(
-                    checked = udpDiscoveryEnabled,
-                    onCheckedChange = { toggleUdpDiscovery(it) }
-                )
-            }
+            UdpDiscoverySwitch()
             // 设备列表竖排
+            LocalDeviceButton()
+            
+            // 已认证设备
             allDevices.forEach { device: DeviceInfo? ->
-                if (device == null) {
-                    Button(
-                        onClick = { onSelectDevice(null) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = buttonMinHeight)
-                            .padding(vertical = 2.dp),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = if (selectedDevice == null) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                    ) {
-                        Text(
-                            text = "本机",
-                            style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                } else if (authedDeviceUuids.contains(device.uuid)) {
-                    val isOnline = deviceStates[device.uuid] == true
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    ) {
-                        Button(
-                            onClick = { onSelectDevice(device) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .defaultMinSize(minHeight = buttonMinHeight),
-                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                            colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                        ) {
-                            Text(
-                                device.displayName + if (!isOnline) " (离线)" else "",
-                                style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                                        if (selectedDevice?.uuid == device.uuid) {
-                            Spacer(Modifier.width(4.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        // 使用 DeviceConnectionManager 提供的安全 API 移除已认证设备
-                                        val removed = deviceManager.removeAuthenticatedDevice(device.uuid)
-                                        if (removed) {
-                                            // 更新本地 UI 用的已认证 uuid 集合
-                                            authedDeviceUuids = authedDeviceUuids - device.uuid
-                                        }
-                                    } catch (_: Exception) {}
-                                    selectedDevice = null
-                                    GlobalSelectedDeviceHolder.selectedDevice = null
-                                },
-                                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = buttonMinHeight)
-                                    .heightIn(min = buttonMinHeight),
-                                colors = ButtonDefaults.buttonColors(color = Color.Red)
-                            ) {
-                                Text(
-                                    text = "删除",
-                                    style = textStyles.body2.copy(color = Color.White),
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
+                if (device != null && authedDeviceUuids.contains(device.uuid)) {
+                    AuthenticatedDeviceButton(device)
                 }
             }
+            
             // 未认证设备
-            unauthedDevices.forEach { device ->
-                val isOnline = deviceStates[device.uuid] == true
-                Button(
-                    onClick = { onSelectDevice(device) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = buttonMinHeight)
-                        .padding(vertical = 2.dp),
-                    insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                    colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
-                ) {
-                    Text(
-                        device.displayName + if (!isOnline) " (离线)" else "",
-                        style = textStyles.body2.copy(color = colorScheme.primary),
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                }
+            unauthedDevices.forEach {
+                UnauthenticatedDeviceButton(it)
             }
+            
             // 已拒绝设备按钮
-            Button(
-                onClick = { showRejectedDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = buttonMinHeight)
-                    .padding(vertical = 2.dp),
-                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
-            ) {
-                Text(
-                    "查看已拒绝设备",
-                    style = textStyles.body2.copy(color = colorScheme.secondary),
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
-            }
+            RejectedDevicesButton()
         }
     } else {
         Column(
@@ -344,127 +536,27 @@ fun DeviceListScreen() {
                 .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp)
         ) {
             // UDP广播开关
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            ) {
-                Text(
-                    text = "主动广播和接收",
-                    style = textStyles.body2,
-                    modifier = Modifier.weight(1f)
-                )
-                top.yukonga.miuix.kmp.basic.Switch(
-                    checked = udpDiscoveryEnabled,
-                    onCheckedChange = { toggleUdpDiscovery(it) }
-                )
-            }
+            UdpDiscoverySwitch()
             // 设备列表横排，顺序：本机、已认证、未认证、已拒绝
             androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top, // 改为顶部对齐，避免进度条被裁剪
             ) {
                 // 本机按钮
-                item {
-                    Button(
-                        onClick = { onSelectDevice(null) },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = buttonMinHeight)
-                            .padding(end = 6.dp),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = if (selectedDevice == null) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                    ) {
-                        Text(
-                            "本机",
-                            style = textStyles.body2.copy(color = if (selectedDevice == null) colorScheme.onPrimary else colorScheme.primary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                item { LocalDeviceButton() }
+                
                 // 已认证设备
-                items(allDevices.filterNotNull().filter { authedDeviceUuids.contains(it.uuid) }) { device ->
-                    val isOnline = deviceStates[device.uuid] == true
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Button(
-                            onClick = { onSelectDevice(device) },
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = buttonMinHeight),
-                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                            colors = if (selectedDevice?.uuid == device.uuid) ButtonDefaults.buttonColorsPrimary() else ButtonDefaults.buttonColors()
-                        ) {
-                            Text(
-                                device.displayName + if (!isOnline) " (离线)" else "",
-                                style = textStyles.body2.copy(color = if (selectedDevice?.uuid == device.uuid) colorScheme.onPrimary else colorScheme.primary),
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
-                        }
-                        if (selectedDevice?.uuid == device.uuid) {
-                            Spacer(Modifier.width(4.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        // 使用公共API移除已认证设备
-                                        val removed = deviceManager.removeAuthenticatedDevice(device.uuid)
-                                        if (removed) {
-                                            // 更新本地UI用的已认证uuid集合
-                                            authedDeviceUuids = deviceManager.getAuthenticatedDevices().filter { (_, auth) -> auth.isAccepted }.keys.toSet()
-                                        }
-                                    } catch (_: Exception) {}
-                                    selectedDevice = null
-                                    GlobalSelectedDeviceHolder.selectedDevice = null
-                                },
-                                insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = buttonMinHeight)
-                                    .heightIn(min = buttonMinHeight),
-                                colors = ButtonDefaults.buttonColors(color = Color.Red)
-                            ) {
-                                Text(
-                                    text = "删除",
-                                    style = textStyles.body2.copy(color = Color.White),
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
+                items(allDevices.filterNotNull().filter { authedDeviceUuids.contains(it.uuid) }) {
+                    AuthenticatedDeviceButton(it)
                 }
+                
                 // 未认证设备
-                items(unauthedDevices) { device ->
-                    val isOnline = deviceStates[device.uuid] == true
-                    Button(
-                        onClick = { onSelectDevice(device) },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = buttonMinHeight)
-                            .padding(end = 6.dp),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = ButtonDefaults.buttonColors(color = colorScheme.surface)
-                    ) {
-                        Text(
-                            device.displayName + if (!isOnline) " (离线)" else "",
-                            style = textStyles.body2.copy(color = colorScheme.primary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
+                items(unauthedDevices) {
+                    UnauthenticatedDeviceButton(it)
                 }
+                
                 // 已拒绝设备按钮
-                item {
-                    Button(
-                        onClick = { showRejectedDialog = true },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = buttonMinHeight)
-                            .padding(end = 6.dp),
-                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                        colors = ButtonDefaults.buttonColors(color = colorScheme.secondaryContainer)
-                    ) {
-                        Text(
-                            "查看已拒绝设备",
-                            style = textStyles.body2.copy(color = colorScheme.secondary),
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                item { RejectedDevicesButton() }
             }
         }
     }
