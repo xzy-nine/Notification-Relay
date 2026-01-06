@@ -120,7 +120,34 @@ fun UIAudioForwarding() {
         ) {
             Text("开始音频转发")
         }
-        
+                Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "启用远端媒体超级岛显示",
+                    style = textStyles.body1,
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = "接收远端设备媒体播放信息并以超级岛形式显示",
+                    style = textStyles.body2,
+                    color = colorScheme.onSurfaceSecondary
+                )
+            }
+            Switch(
+                checked = islandEnabled,
+                onCheckedChange = { enabled ->
+                    islandEnabled = enabled
+                    RemoteMediaSessionManager.setEnabled(context, enabled)
+                    if (!enabled) {
+                        RemoteMediaSessionManager.clearSession()
+                    }
+                }
+            )
+        }
         // 媒体控制标题
         Text(
             text = "媒体控制",
@@ -197,7 +224,7 @@ fun UIAudioForwarding() {
                 },
                 modifier = Modifier.width(100.dp)
             ) {
-                Text("播放/暂停")
+                Text("播放\n暂停")
             }
             
             // 下一首按钮
@@ -249,33 +276,6 @@ fun UIAudioForwarding() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "启用远端媒体超级岛显示",
-                    style = textStyles.body1,
-                    color = colorScheme.onSurface
-                )
-                Text(
-                    text = "接收远端设备媒体播放信息并以超级岛形式显示",
-                    style = textStyles.body2,
-                    color = colorScheme.onSurfaceSecondary
-                )
-            }
-            Switch(
-                checked = islandEnabled,
-                onCheckedChange = { enabled ->
-                    islandEnabled = enabled
-                    RemoteMediaSessionManager.setEnabled(context, enabled)
-                    if (!enabled) {
-                        RemoteMediaSessionManager.clearSession()
-                    }
-                }
-            )
-        }
+
     }
 }
