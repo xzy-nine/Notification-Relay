@@ -32,14 +32,36 @@ object RemoteMediaSessionManager {
     // 媒体会话数据缓存，用于定时复传
     private val mediaSessionCache = mutableMapOf<String, MediaSessionCacheData>()
     
-    // 超时时间（毫秒），与发送端超时发送时间匹配（15秒）
-    private const val MEDIA_SESSION_TIMEOUT_MS = 15 * 1000L
+    // 超时时间（毫秒），与发送端超时发送时间匹配并略长（16秒）
+    private const val MEDIA_SESSION_TIMEOUT_MS = 16 * 1000L
     
     // 定时复传间隔（毫秒），设置为6秒，确保在12秒自动关闭前更新两次
     private const val MEDIA_SESSION_RESEND_INTERVAL_MS = 6 * 1000L
     
+    // 定时检查超时会话的间隔（毫秒）
+    private const val CLEANUP_INTERVAL_MS = 3 * 1000L
+    
     // 用于处理延迟任务的Handler
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    
+    // 定期检查超时会话的任务
+    private lateinit var cleanupRunnable: Runnable
+    
+    // 初始化定期检查任务
+    private fun initCleanupRunnable() {
+        cleanupRunnable = Runnable {
+            try {
+                // 获取上下文，使用应用上下文
+                val context = android.content.ContextWrapper(android.app.Application::class.java.getDeclaredMethod("getInstance").invoke(null) as android.content.Context)
+                cleanupTimeoutSessions(context)
+            } catch (e: Exception) {
+                Logger.e("RemoteMediaSessionManager", "定期检查超时会话失败", e)
+            } finally {
+                // 重新安排下一次检查
+                handler.postDelayed(cleanupRunnable, CLEANUP_INTERVAL_MS)
+            }
+        }
+    }
     
     // 媒体会话缓存数据类
     private data class MediaSessionCacheData(
@@ -56,6 +78,11 @@ object RemoteMediaSessionManager {
             DEFAULT_ENABLED
         }
         Logger.i("RemoteMediaSessionManager", "远端媒体超级岛功能已${if (isEnabled) "启用" else "禁用"}")
+        
+        // 初始化定期检查任务
+        initCleanupRunnable()
+        // 启动定期检查超时会话的任务
+        handler.postDelayed(cleanupRunnable, CLEANUP_INTERVAL_MS)
     }
 
     fun isEnabled(context: Context): Boolean {
@@ -90,6 +117,41 @@ object RemoteMediaSessionManager {
         }
 
         try {
+            // 检查是否为结束包
+            val mediaType = json.optString("mediaType", "")
+            val terminateValue = json.optString("terminateValue", "")
+            val isEndPackage = mediaType.equals("END", true) || terminateValue.equals("__END__", true)
+            
+            val sourceKey = SOURCE_KEY_PREFIX + "_" + device.uuid
+            
+            if (isEndPackage) {
+                // 处理结束包
+                Logger.i("RemoteMediaSessionManager", "收到媒体会话结束包，关闭浮窗: ${device.displayName}")
+                
+                // 取消复传任务
+                cancelResendTask(device.uuid)
+                
+                // 从Store中移除状态
+                SuperIslandRemoteStore.removeExact(sourceKey)
+                
+                // 关闭浮窗
+                com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager.dismissBySource(sourceKey)
+                
+                // 清理各种缓存
+                mediaFeatureIdCache.remove(device.uuid)
+                mediaLastUpdateTime.remove(device.uuid)
+                mediaSessionCache.remove(device.uuid)
+                
+                // 如果是当前会话，清除当前会话
+                if (currentDevice?.uuid == device.uuid) {
+                    currentSession = null
+                    currentDevice = null
+                }
+                
+                return
+            }
+            
+            // 处理普通媒体消息
             val packageName = json.optString("packageName", "")
             val appName = json.optString("appName", "")
             val title = json.optString("title", "")
@@ -118,9 +180,6 @@ object RemoteMediaSessionManager {
                 timestamp = timestamp
             )
             currentDevice = device
-
-            // 构建符合超级岛协议的payload，委托给SuperIslandRemoteStore处理差异
-            val sourceKey = SOURCE_KEY_PREFIX + "_" + device.uuid
 
             // 获取上次状态，计算差异
             val lastFeatureId = mediaFeatureIdCache[device.uuid]
@@ -317,8 +376,16 @@ object RemoteMediaSessionManager {
         // 创建新的复传任务
         val resendRunnable = Runnable {
             try {
-                // 更新最后更新时间
-                mediaLastUpdateTime[deviceUuid] = System.currentTimeMillis()
+                // 获取原始的最后更新时间，不再更新它
+                val originalLastUpdateTime = mediaLastUpdateTime[deviceUuid] ?: System.currentTimeMillis()
+                val currentTime = System.currentTimeMillis()
+                
+                // 检查是否已接近超时（比正常超时时间少1秒）
+                if (currentTime - originalLastUpdateTime > (MEDIA_SESSION_TIMEOUT_MS - 1000)) {
+                    // 已接近超时，不再安排下一次复传
+                    Logger.i("RemoteMediaSessionManager", "媒体会话已接近超时，停止复传: $deviceUuid")
+                    return@Runnable
+                }
                 
                 // 获取上次状态，用于保留旧的图标
                 val sourceKey = SOURCE_KEY_PREFIX + "_" + deviceUuid

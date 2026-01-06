@@ -61,25 +61,60 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
             processedNotifications.remove(notificationKey)
             Logger.v("NotifyRelay", "通知移除，从缓存中清理: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
-            // 超级岛：发送终止包
-            try {
-                val pair = superIslandFeatureByKey.remove(notificationKey)
-                if (pair != null) {
+            
+            // 检查是否为媒体通知
+            val isMediaNotification = sbn.notification.category == Notification.CATEGORY_TRANSPORT
+            if (isMediaNotification) {
+                // 媒体通知被移除，发送媒体结束包
+                try {
+                    Logger.i("NotifyRelay-Media", "媒体通知被移除，发送结束包: pkg=${sbn.packageName}")
                     val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
-                    val (superPkg, featureId) = pair
-                    MessageSender.sendSuperIslandEnd(
+                    var appName: String? = null
+                    try {
+                        val pm = applicationContext.packageManager
+                        val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                        appName = pm.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {
+                        appName = sbn.packageName
+                    }
+                    // 发送媒体结束包
+                    MessageSender.sendMediaPlayEndNotification(
                         applicationContext,
-                        superPkg,
-                        try { applicationContext.packageName } catch (_: Exception) { null },
+                        sbn.packageName,
+                        appName,
                         System.currentTimeMillis(),
-                        try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
-                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
-                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
-                        deviceManager,
-                        featureIdOverride = featureId
+                        deviceManager
                     )
+                    // 清理媒体状态缓存
+                    mediaPlayStateByKey.remove(notificationKey)
+                    // 更新全局最新媒体通知
+                    if (latestMediaSbn?.key == sbn.key) {
+                        latestMediaSbn = null
+                    }
+                } catch (e: Exception) {
+                    Logger.e("NotifyRelay-Media", "发送媒体结束包失败", e)
                 }
-            } catch (_: Exception) {}
+            } else {
+                // 超级岛：发送终止包
+                try {
+                    val pair = superIslandFeatureByKey.remove(notificationKey)
+                    if (pair != null) {
+                        val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                        val (superPkg, featureId) = pair
+                        MessageSender.sendSuperIslandEnd(
+                            applicationContext,
+                            superPkg,
+                            try { applicationContext.packageName } catch (_: Exception) { null },
+                            System.currentTimeMillis(),
+                            try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
+                            try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
+                            try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
+                            deviceManager,
+                            featureIdOverride = featureId
+                        )
+                    }
+                } catch (_: Exception) {}
+            }
         }
     }
     override fun onTaskRemoved(rootIntent: Intent?) {

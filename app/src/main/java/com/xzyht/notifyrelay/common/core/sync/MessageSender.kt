@@ -151,6 +151,28 @@ object MessageSender {
             put("mediaType", "DELTA") // 差异包
         }
     }
+    
+    /**
+     * 构建媒体播放结束包
+     */
+    private fun buildMediaPlayEndPayload(
+        packageName: String,
+        appName: String?,
+        time: Long,
+        isLocked: Boolean
+    ): JSONObject {
+        return JSONObject().apply {
+            put("packageName", packageName)
+            put("appName", appName ?: packageName)
+            put("time", time)
+            put("isLocked", isLocked)
+            put("type", "MEDIA_PLAY")
+            put("mediaType", "END") // 结束包标记
+            put("terminateValue", "__END__") // 统一结束标识
+            put("featureKeyName", "si_feature_id") // 与超级岛保持一致
+            put("featureKeyValue", "media_island_global") // 媒体会话全局特征ID
+        }
+    }
     // 超级岛：ACK 跟踪与强制全量发送控制
     private const val SI_ACK_TIMEOUT_MS = 4_000L
     private data class PendingAck(val hash: String, val ts: Long)
@@ -520,6 +542,79 @@ object MessageSender {
             //Logger.i(TAG, "媒体播放通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
             Logger.e(TAG, "发送媒体播放通知失败", e)
+        }
+    }
+    
+    /**
+     * 发送媒体播放结束包
+     * 用于通知接收端关闭媒体会话超级岛
+     */
+    fun sendMediaPlayEndNotification(
+        context: Context,
+        packageName: String,
+        appName: String?,
+        time: Long,
+        deviceManager: DeviceConnectionManager
+    ) {
+        try {
+            // 获取所有已认证设备
+            val authenticatedDevices = getAuthenticatedDevices(deviceManager)
+
+            if (authenticatedDevices.isEmpty()) {
+                Logger.w(TAG, "没有已认证的设备")
+                return
+            }
+
+            // 获取锁屏状态
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            val isLocked = keyguardManager.isKeyguardLocked
+            
+            // 构建结束包
+            val payload = buildMediaPlayEndPayload(
+                packageName,
+                appName,
+                time,
+                isLocked
+            ).toString()
+
+            // 将发送任务加入队列（带去重）
+            authenticatedDevices.forEach { deviceInfo ->
+                val dedupKey = buildDedupKey(deviceInfo.uuid, payload)
+                // 检查最近是否已发送过相同消息，避免短时间内重复
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    //Logger.d(TAG, "跳过已发送的重复媒体结束消息(短期内): ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                if (!pendingKeys.add(dedupKey)) {
+                    //Logger.d(TAG, "跳过重复媒体结束消息入队: ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(deviceInfo, payload, deviceManager, dedupKey = dedupKey)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        Logger.d(TAG, "媒体结束通知已加入发送队列: ${deviceInfo.displayName}")
+                    } catch (e: Exception) {
+                        // 入队失败时及时移除去重键
+                        pendingKeys.remove(dedupKey)
+                        Logger.e(TAG, "加入媒体结束发送队列失败: ${deviceInfo.displayName}", e)
+                    }
+                }
+            }
+            
+            // 清理媒体状态缓存
+            authenticatedDevices.forEach { deviceInfo ->
+                val deviceMap = synchronized(mediaLastStatePerDevice) {
+                    mediaLastStatePerDevice.getOrPut(deviceInfo.uuid) { mutableMapOf() }
+                }
+                // 全局只会存在一个媒体会话，使用固定的媒体源ID
+                val mediaSourceId = "global_media_session"
+                synchronized(mediaLastStatePerDevice) { deviceMap.remove(mediaSourceId) }
+            }
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "发送媒体播放结束通知失败", e)
         }
     }
     /**
