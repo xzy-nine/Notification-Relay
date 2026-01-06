@@ -103,6 +103,7 @@ object MessageSender {
     }
     /**
      * 构建媒体播放全量包
+     * 确保包含完整的当前状态信息
      */
     private fun buildMediaPlayFullPayload(
         packageName: String,
@@ -114,9 +115,13 @@ object MessageSender {
         return JSONObject().apply {
             put("packageName", packageName)
             put("appName", appName ?: packageName)
+            // 全量包始终包含完整的title和text
             put("title", state.title)
             put("text", state.text)
-            if (state.coverUrl != null) put("coverUrl", state.coverUrl)
+            // 如果有封面URL，添加到payload中
+            if (state.coverUrl != null) {
+                put("coverUrl", state.coverUrl)
+            }
             put("time", System.currentTimeMillis()) // 使用当前时间戳
             put("isLocked", isLocked)
             put("type", "MEDIA_PLAY")
@@ -455,9 +460,15 @@ object MessageSender {
                 // 计算差异
                 val diff = diffMediaPlay(lastState, currentState)
                 
+                // 判断是否需要发送全量包：首次发送、封面变化、或超过15秒
+                val now = System.currentTimeMillis()
+                val needFullPayload = lastState == null || 
+                                      diff.coverUrl != null ||
+                                      (lastState != null && now - lastState.sentTime > 15 * 1000)
+                
                 // 构建发送数据
-                val payloadObj = if (lastState == null || diff.coverUrl != null) {
-                    // 首次发送或封面变化，发送包含封面的全量包
+                val payloadObj = if (needFullPayload) {
+                    // 首次发送、封面变化或超时，发送包含当前完整状态的全量包
                     buildMediaPlayFullPayload(
                         packageName,
                         appName,

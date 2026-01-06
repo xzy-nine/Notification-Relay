@@ -136,9 +136,55 @@ fun FloatingWindowContainer(
                             content = {
                                 val hasParamV2 = entry.paramV2 != null
 
+                                val context = LocalContext.current
                                 if (hasParamV2) {
                                     entry.paramV2?.let { paramV2 ->
                                         when {
+                                            // 媒体类型处理
+                                            paramV2.business == "media" -> {
+                                                // 构建MediaSessionData
+                                                val mediaSession = com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.model.MediaSessionData(
+                                                    packageName = entry.key,
+                                                    appName = entry.appName,
+                                                    title = entry.title ?: "",
+                                                    text = entry.text ?: "",
+                                                    coverUrl = entry.picMap?.get("miui.focus.pic_cover") ?: entry.picMap?.values?.firstOrNull(),
+                                                    deviceName = entry.appName ?: ""
+                                                )
+                                                // 使用媒体类型大岛组件
+                                                com.xzyht.notifyrelay.feature.notification.superisland.floating.BigIsland.components.MediaIslandCompose(
+                                                    mediaSession = mediaSession,
+                                                    isExpanded = entry.isExpanded,
+                                                    onCollapse = {
+                                                        // 点击条目切换展开状态
+                                                        onEntryClick(entry.key)
+                                                    },
+                                                    onPlayPause = {
+                                                        // 媒体控制按钮点击事件，由RemoteMediaSessionManager处理
+                                                        com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager.onPlayPause(
+                                                            context,
+                                                            com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager.getInstance(context)
+                                                        )
+                                                    },
+                                                    onPrevious = {
+                                                        com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager.onPrevious(
+                                                            context,
+                                                            com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager.getInstance(context)
+                                                        )
+                                                    },
+                                                    onNext = {
+                                                        com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager.onNext(
+                                                            context,
+                                                            com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager.getInstance(context)
+                                                        )
+                                                    },
+                                                    onClose = {
+                                                        // 发送关闭指令，由外部处理
+                                                        onEntryClick(entry.key)
+                                                    }
+                                                )
+                                            }
+                                            
                                             paramV2.baseInfo != null -> {
                                                 BaseInfoCompose(
                                                     paramV2.baseInfo,

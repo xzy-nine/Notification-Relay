@@ -3,6 +3,9 @@ package com.xzyht.notifyrelay.common.core.sync
 import android.content.Context
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager
+import org.json.JSONObject
 
 /**
  * 统一协议路由器
@@ -90,8 +93,15 @@ object ProtocolRouter {
                     true
                 }
                 "DATA_MEDIAPLAY" -> {
-                    // 暂时忽略 MEDIA_PLAY 报文：移动端当前没有展示逻辑，与其他未支持的 DATA_* 保持一致
-                    Logger.i(TAG, "忽略 DATA_MEDIAPLAY（移动端暂不处理）")
+                    // 处理远端媒体播放通知，触发超级岛显示
+                    try {
+                        val json = JSONObject(decrypted)
+                        val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
+                        Logger.i(TAG, "收到远端媒体播放DATA_MEDIAPLAY: ${json.optString("title", "")} - ${json.optString("text", "")} (来自 ${source?.displayName ?: "未知设备"})")
+                        RemoteMediaSessionManager.onMediaMessageReceived(context, json, source!!)
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "处理远端媒体播放通知DATA_MEDIAPLAY", e)
+                    }
                     true
                 }
                 // DATA_ICON_REQUEST：对方向本机请求应用图标，本机查找后会通过 DATA_ICON_RESPONSE 回传

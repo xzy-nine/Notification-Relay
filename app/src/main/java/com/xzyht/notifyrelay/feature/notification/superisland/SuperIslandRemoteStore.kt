@@ -82,10 +82,22 @@ object SuperIslandRemoteStore {
         }
     }
 
+    /**
+     * 获取指定sourceId的状态，用于外部查询当前状态
+     */
+    @Synchronized
+    fun getState(sourceId: String): SuperIslandProtocol.State? {
+        return try {
+            store[sourceId]
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun parseStateFromFull(obj: JSONObject): SuperIslandProtocol.State {
-    val title = obj.optString("title", "").takeIf { it.isNotEmpty() }
-    val text = obj.optString("text", "").takeIf { it.isNotEmpty() }
-    val p2 = obj.optString("param_v2_raw", "").takeIf { it.isNotEmpty() }
+        val title = obj.optString("title", "").takeIf { it.isNotEmpty() }
+        val text = obj.optString("text", "").takeIf { it.isNotEmpty() }
+        val p2 = obj.optString("param_v2_raw", "").takeIf { it.isNotEmpty() }
         val picsJson = obj.optJSONObject("pics")
         val picsMap = mutableMapOf<String, String>()
         if (picsJson != null) {
