@@ -464,7 +464,7 @@ object MessageSender {
                 val now = System.currentTimeMillis()
                 val needFullPayload = lastState == null || 
                                       diff.coverUrl != null ||
-                                      (lastState != null && now - lastState.sentTime > 15 * 1000)
+                                      (now - lastState.sentTime > 15 * 1000)
                 
                 // 构建发送数据
                 val payloadObj = if (needFullPayload) {
