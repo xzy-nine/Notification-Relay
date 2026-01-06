@@ -117,6 +117,64 @@ class ConnectionDiscoveryManager(
                                         connectToAuthedDevice(device)
                                     }
                                 }
+                            } else if (msg.startsWith("HEARTBEAT:")) {
+                                // 处理UDP心跳
+                                // 心跳格式：HEARTBEAT:<deviceUuid><设备电量%>
+                                // UUID固定为36个字符（8-4-4-4-12格式），电量在UUID后直接拼接
+                                val heartbeatPrefix = "HEARTBEAT:" 
+                                if (msg.length > heartbeatPrefix.length + 36) {
+                                    val remoteUuid = msg.substring(heartbeatPrefix.length, heartbeatPrefix.length + 36)
+                                    val batteryStr = msg.substring(heartbeatPrefix.length + 36)
+                                    // 解析电量，确保在0-100之间
+                                    val batteryLevel = try {
+                                        batteryStr.toInt().coerceIn(0, 100)
+                                    } catch (e: NumberFormatException) {
+                                        0
+                                    }
+                                    
+                                    // 仅已在认证表中的设备才接受心跳
+                                    val isAuthed = synchronized(deviceManager.authenticatedDevices) {
+                                        deviceManager.authenticatedDevices.containsKey(remoteUuid)
+                                    }
+                                    
+                                    if (isAuthed && !ip.isNullOrEmpty() && remoteUuid != deviceManager.uuid) {
+                                        // 1. 用最新 IP 更新设备缓存
+                                        synchronized(deviceManager.deviceInfoCacheInternal) {
+                                            val old = deviceManager.deviceInfoCacheInternal[remoteUuid]
+                                            val displayName = old?.displayName ?: "未知设备"
+                                            deviceManager.deviceInfoCacheInternal[remoteUuid] = DeviceInfo(
+                                                remoteUuid,
+                                                displayName,
+                                                ip,
+                                                old?.port ?: 23333
+                                            )
+                                        }
+                                        
+                                        // 2. 更新认证信息中的 lastIp
+                                        synchronized(deviceManager.authenticatedDevices) {
+                                            val auth = deviceManager.authenticatedDevices[remoteUuid]
+                                            if (auth != null) {
+                                                deviceManager.authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
+                                                deviceManager.saveAuthedDevicesInternal()
+                                            }
+                                        }
+                                        
+                                        // 3. 用心跳驱动在线状态：刷新 lastSeen + 标记已建立心跳
+                                        deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
+                                        deviceManager.heartbeatedDevicesInternal.add(remoteUuid)
+                                        deviceManager.coroutineScopeInternal.launch { 
+                                            deviceManager.updateDeviceListInternal() 
+                                        }
+                                        
+                                        // 4. 若本端尚未给对方发心跳，则自动反向 connectToDevice
+                                        if (!deviceManager.heartbeatJobsInternal.containsKey(remoteUuid)) {
+                                            val info = deviceManager.getDeviceInfoInternal(remoteUuid)
+                                            if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
+                                                deviceManager.connectToDevice(info)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         } catch (e: java.net.SocketTimeoutException) {
                             // 超时异常，继续循环检查条件

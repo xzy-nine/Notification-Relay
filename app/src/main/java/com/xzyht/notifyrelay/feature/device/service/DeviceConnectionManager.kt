@@ -662,7 +662,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
                             val reader = BufferedReader(InputStreamReader(client.getInputStream()))
                             val line = reader.readLine()
                             if (line != null) {
-                                ServerLineRouter.handleClientLine(line, client, reader, this@DeviceConnectionManager, context)
+                                ServerLineRouter.routeLine(line, client, reader, this@DeviceConnectionManager, context)
                             } else {
                                 try { reader.close() } catch (_: Exception) {}
                                 try { client.close() } catch (_: Exception) {}
