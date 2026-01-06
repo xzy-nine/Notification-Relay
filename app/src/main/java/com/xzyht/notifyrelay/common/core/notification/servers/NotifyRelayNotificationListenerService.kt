@@ -229,7 +229,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
         
         // 记录日志
-        Logger.v("NotifyRelay-Media", "processMediaNotification: title='$title', text='$text', sbnKey=$sbnKey, coverUrl=${coverUrl?.take(20)}...")
+        //Logger.v("NotifyRelay-Media", "processMediaNotification: title='$title', text='$text', sbnKey=$sbnKey, coverUrl=${coverUrl?.take(20)}...")
         
         // 检查状态是否变化，只在内容变化时发送
         val currentState = MediaPlayState(title, text, sbn.packageName, sbn.postTime, coverUrl)
@@ -245,7 +245,6 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         
         if (sendRequired) {
             // 状态变化或超时，发送消息
-            Logger.i("NotifyRelay-Media", "媒体播放消息发送条件满足: $title - $text")
             
             try {
                 val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
@@ -258,8 +257,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     appName = sbn.packageName
                 }
                 
-                // 使用专门的协议前缀标记媒体通知
-                // 移除此前用于标记的包名前缀，统一使用报文头（"type":"MEDIA_PLAY"）判断媒体消息
+                // 使用专门的协议前缀标记媒体通知,使用报文头（"type":"MEDIA_PLAY"）判断媒体消息
                 MessageSender.sendMediaPlayNotification(
                     applicationContext,
                     sbn.packageName,

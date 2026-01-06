@@ -497,7 +497,7 @@ object MessageSender {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         sendChannel.send(task)
-                        Logger.d(TAG, "媒体播放通知已加入发送队列: ${deviceInfo.displayName}, type=${if (lastState == null || diff.coverUrl != null) "FULL_WITH_COVER" else "DELTA_TEXT_ONLY"}")
+                        //Logger.d(TAG, "媒体播放通知已加入发送队列: ${deviceInfo.displayName}, type=${if (lastState == null || diff.coverUrl != null) "FULL_WITH_COVER" else "DELTA_TEXT_ONLY"}")
                     } catch (e: Exception) {
                         // 入队失败时及时移除去重键
                         pendingKeys.remove(dedupKey)
@@ -506,7 +506,7 @@ object MessageSender {
                 }
             }
 
-            Logger.i(TAG, "媒体播放通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
+            //Logger.i(TAG, "媒体播放通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
         } catch (e: Exception) {
             Logger.e(TAG, "发送媒体播放通知失败", e)
         }
