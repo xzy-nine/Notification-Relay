@@ -140,7 +140,7 @@ object SuperIslandProcessor {
 
                 try {
                     // 仅在有实际可展示内容时才创建浮窗，避免只含基础元信息的空白浮窗
-                    val hasContent = !finalTitle.isNullOrBlank() || !finalText.isNullOrBlank() || !mParam2.isNullOrBlank() || (mPics != null && mPics.isNotEmpty())
+                    val hasContent = !finalTitle.isNullOrBlank() || !finalText.isNullOrBlank() || !mParam2.isNullOrBlank() || (mPics.isNotEmpty())
                     if (hasContent) {
                         FloatingReplicaManager.showFloating(context, sourceKey, finalTitle, finalText, mParam2, mPics, appName, isLocked)
                     } else {

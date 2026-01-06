@@ -260,10 +260,12 @@ object NotificationRepository {
      * 兼容 Bundle 字段类型，支持 CharSequence/SpannableString 自动转 String
      */
     fun getStringCompat(bundle: android.os.Bundle, key: String): String? {
-        val str = bundle.getString(key)
-        if (str != null) return str
-        val charSeq = bundle.getCharSequence(key)
-        return charSeq?.toString()
+        try {
+            val charSeq = bundle.getCharSequence(key)
+            return charSeq?.toString()
+        } catch (e: Exception) {
+            return null
+        }
     }
     // 当前选中设备
     var currentDevice: String = "本机"

@@ -11,18 +11,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
+import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService
+import com.xzyht.notifyrelay.common.core.sync.ProtocolSender
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.core.util.MediaControlUtil
 import com.xzyht.notifyrelay.common.core.util.ToastUtils
-import com.xzyht.notifyrelay.common.core.notification.servers.NotifyRelayNotificationListenerService
-import com.xzyht.notifyrelay.common.core.sync.ProtocolSender
+import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.ui.GlobalSelectedDeviceHolder
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -69,7 +69,11 @@ fun UIAudioForwarding() {
         
         // 显示当前选中的设备
         Text(
-            text = "当前选中设备: ${selectedDevice?.displayName ?: "本机"}",
+            text = if (BuildConfig.DEBUG) {
+                "当前选中设备: ${selectedDevice?.displayName ?: "本机"}${selectedDevice?.uuid?.let { " ($it)" } ?: ""}"
+            } else {
+                "当前选中设备: ${selectedDevice?.displayName ?: "本机"}"
+            },
             style = textStyles.body1,
             color = colorScheme.onSurface
         )
