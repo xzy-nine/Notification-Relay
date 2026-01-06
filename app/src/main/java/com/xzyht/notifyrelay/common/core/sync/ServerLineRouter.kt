@@ -282,22 +282,27 @@ object ServerLineRouter {
                             val sharedSecret = parts[4]
                             // 只有 sharedSecret 完全匹配时才认为是该设备的手动发现包
                             if (auth.sharedSecret == sharedSecret) {
-                                val ip = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                val device = DeviceInfo(remoteUuid, displayName, ip, port)
-                                deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
-                                synchronized(deviceManager.deviceInfoCacheInternal) { deviceManager.deviceInfoCacheInternal[remoteUuid] = device }
-                                synchronized(deviceManager.authenticatedDevices) {
-                                    val a = deviceManager.authenticatedDevices[remoteUuid]
-                                    if (a != null) {
-                                        deviceManager.authenticatedDevices[remoteUuid] = a.copy(lastIp = ip, lastPort = port)
-                                        deviceManager.saveAuthedDevicesInternal()
+                                    val ip = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                                    val device = DeviceInfo(remoteUuid, displayName, ip, port)
+                                    deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
+                                    synchronized(deviceManager.deviceInfoCacheInternal) { deviceManager.deviceInfoCacheInternal[remoteUuid] = device }
+                                    synchronized(deviceManager.authenticatedDevices) {
+                                        val a = deviceManager.authenticatedDevices[remoteUuid]
+                                        if (a != null) {
+                                            // 同时更新设备名称、IP和端口
+                                            deviceManager.authenticatedDevices[remoteUuid] = a.copy(
+                                                displayName = displayName,
+                                                lastIp = ip, 
+                                                lastPort = port
+                                            )
+                                            deviceManager.saveAuthedDevicesInternal()
+                                        }
                                     }
+                                    // 同步更新全局设备名缓存，以便 UI 显示
+                                    DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
+                                    deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
+                                    //Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
                                 }
-                                // 同步更新全局设备名缓存，以便 UI 显示
-                                DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
-                                deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
-                                //Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
-                            }
                         }
                     }
                 }

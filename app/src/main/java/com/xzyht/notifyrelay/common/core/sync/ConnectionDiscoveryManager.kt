@@ -57,6 +57,15 @@ class ConnectionDiscoveryManager(
             deviceManager.deviceInfoCacheInternal[device.uuid] = device
         }
         
+        // 同时更新已认证设备表中的设备名称
+        synchronized(deviceManager.authenticatedDevices) {
+            val auth = deviceManager.authenticatedDevices[device.uuid]
+            if (auth != null && auth.displayName != device.displayName) {
+                deviceManager.authenticatedDevices[device.uuid] = auth.copy(displayName = device.displayName)
+                deviceManager.saveAuthedDevicesInternal()
+            }
+        }
+        
         com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil.updateGlobalDeviceName(device.uuid, device.displayName)
         scope.launch { deviceManager.updateDeviceListInternal() }
     }
