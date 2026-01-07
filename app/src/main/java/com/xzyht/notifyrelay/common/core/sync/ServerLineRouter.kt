@@ -56,6 +56,7 @@ object ServerLineRouter {
      * - 若已认证则直接回复 ACCEPT
      * - 否则触发 `onHandshakeRequest` 回调给 UI，由用户选择接受/拒绝
      * - 根据结果更新 `authenticatedDevices` / `rejectedDevices`
+     * 握手格式：HANDSHAKE:<uuid>:<publicKey>:<ipAddress>:<batteryLevel>:<deviceType>
      */
     private fun handleHandshake(
         line: String,
@@ -65,9 +66,13 @@ object ServerLineRouter {
     ) {
         try {
             val parts = line.split(":")
-            if (parts.size >= 3) {
+            if (parts.size >= 6) {
                 val remoteUuid = parts[1]
                 val remotePubKey = parts[2]
+                val remoteIp: String = parts.getOrNull(3) ?: client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                val remoteBattery: String = parts.getOrNull(4) ?: ""
+                val remoteDeviceType: String = parts.getOrNull(5) ?: "unknown"
+
                 val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
 
                 // 1. 同步更新设备 IP 缓存，端口保持原有或默认
@@ -100,11 +105,27 @@ object ServerLineRouter {
                 // 4. 已认证设备：自动 ACCEPT（静默建立信任链）
                 if (alreadyAuthed) {
                     val writer = OutputStreamWriter(client.getOutputStream())
-                    writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}\n")
+                    val localBattery = getLocalBatteryInfo(deviceManager)
+                    val localDeviceType = "android"
+                    val localIp = getLocalIpAddress(deviceManager)
+                    writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}:$localIp:$localBattery:$localDeviceType\n")
                     writer.flush()
                     writer.close()
                     reader.close()
                     client.close()
+                    
+                    // 更新已认证设备的 deviceType 和 lastIp
+                    synchronized(deviceManager.authenticatedDevices) {
+                        val auth = deviceManager.authenticatedDevices[remoteUuid]
+                        if (auth != null) {
+                            deviceManager.authenticatedDevices[remoteUuid] = auth.copy(
+                                deviceType = remoteDeviceType,
+                                lastIp = ip
+                            )
+                            deviceManager.saveAuthedDevicesInternal()
+                            Logger.d(TAG, "已更新已认证设备的 deviceType: $remoteDeviceType, lastIp: $ip")
+                        }
+                    }
                 } else if (deviceManager.handshakeRequestHandler != null) {
                     // 5. 未认证但有回调：交由 UI 确认是否接受连接
                     deviceManager.handshakeRequestHandler!!.onHandshakeRequest(remoteDevice, remotePubKey) { accepted ->
@@ -113,7 +134,10 @@ object ServerLineRouter {
                             val sharedSecret = com.xzyht.notifyrelay.common.core.util.EncryptionManager.generateSharedSecret(deviceManager.localPublicKey, remotePubKey)
                             synchronized(deviceManager.authenticatedDevices) {
                                 deviceManager.authenticatedDevices.remove(remoteUuid)
-                                deviceManager.authenticatedDevices[remoteUuid] = com.xzyht.notifyrelay.feature.device.service.AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
+                                deviceManager.authenticatedDevices[remoteUuid] = com.xzyht.notifyrelay.feature.device.service.AuthInfo(
+                                remotePubKey, sharedSecret, true, remoteDevice.displayName,
+                                deviceType = remoteDeviceType, battery = remoteBattery
+                            )
                                 deviceManager.saveAuthedDevicesInternal()
                             }
                             try { deviceManager.updateDeviceListInternal() } catch (_: Exception) {}
@@ -126,8 +150,11 @@ object ServerLineRouter {
                         // 6. 通过 TCP 回写 ACCEPT/REJECT 结果给对端
                         deviceManager.coroutineScopeInternal.launch {
                             val writer = OutputStreamWriter(client.getOutputStream())
+                            val localBattery = getLocalBatteryInfo(deviceManager)
+                            val localDeviceType = "android"
+                            val localIp = getLocalIpAddress(deviceManager)
                             if (accepted) {
-                                writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}\n")
+                                writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}:$localIp:$localBattery:$localDeviceType\n")
                             } else {
                                 writer.write("REJECT:${deviceManager.uuid}\n")
                             }
@@ -238,6 +265,37 @@ object ServerLineRouter {
         } finally {
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun getLocalBatteryInfo(deviceManager: DeviceConnectionManager): String {
+        return try {
+            val batteryLevel = com.xzyht.notifyrelay.common.core.util.BatteryUtils.getBatteryLevel(deviceManager.contextInternal)
+            val isCharging = com.xzyht.notifyrelay.common.core.util.BatteryUtils.isCharging(deviceManager.contextInternal)
+            if (isCharging) "$batteryLevel+" else "$batteryLevel"
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun getLocalIpAddress(deviceManager: DeviceConnectionManager): String {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (address is java.net.Inet4Address && !address.isLoopbackAddress) {
+                        return address.hostAddress ?: "0.0.0.0"
+                    }
+                }
+            }
+            "0.0.0.0"
+        } catch (_: Exception) {
+            "0.0.0.0"
         }
     }
 }

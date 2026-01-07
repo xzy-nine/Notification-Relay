@@ -24,4 +24,20 @@ object BatteryUtils {
             100
         }
     }
+
+    /**
+     * 检查设备是否正在充电
+     * @param context 上下文
+     * @return true 表示正在充电，false 表示未充电
+     */
+    fun isCharging(context: Context): Boolean {
+        return try {
+            val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+            val status = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS)
+            status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        } catch (e: Exception) {
+            // 获取充电状态失败时返回 false
+            false
+        }
+    }
 }

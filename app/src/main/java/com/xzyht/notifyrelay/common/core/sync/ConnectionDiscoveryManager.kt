@@ -124,12 +124,27 @@ class ConnectionDiscoveryManager(
                             }
                         } else if (msg.startsWith("HEARTBEAT:")) {
                             // 处理UDP心跳
-                            // 心跳格式：HEARTBEAT:<deviceUuid><设备电量%>
-                            // UUID固定为36个字符（8-4-4-4-12格式），电量在UUID后直接拼接
+                            // 心跳格式：HEARTBEAT:<deviceUuid><设备电量%><设备类型>
+                            // UUID固定为36个字符（8-4-4-4-12格式），电量在UUID后直接拼接，设备类型在电量后直接拼接
                             val heartbeatPrefix = "HEARTBEAT:" 
                             if (msg.length > heartbeatPrefix.length + 36) {
                                 val remoteUuid = msg.substring(heartbeatPrefix.length, heartbeatPrefix.length + 36)
-                                val batteryStr = msg.substring(heartbeatPrefix.length + 36)
+                                val suffix = msg.substring(heartbeatPrefix.length + 36)
+                                
+                                // 解析电量和设备类型
+                                // 设备类型可能是pc或android，固定长度为2-7个字符
+                                var batteryStr = suffix
+                                var deviceType = "unknown"
+                                
+                                // 尝试提取设备类型（从字符串末尾）
+                                if (suffix.endsWith("pc", ignoreCase = true)) {
+                                    batteryStr = suffix.substring(0, suffix.length - 2)
+                                    deviceType = "pc"
+                                } else if (suffix.endsWith("android", ignoreCase = true)) {
+                                    batteryStr = suffix.substring(0, suffix.length - 7)
+                                    deviceType = "android"
+                                }
+                                
                                 // 解析电量，确保在0-100之间
                                 val batteryLevel = try {
                                     batteryStr.toInt().coerceIn(0, 100)
@@ -156,11 +171,14 @@ class ConnectionDiscoveryManager(
                                         )
                                     }
                                     
-                                    // 2. 更新认证信息中的 lastIp
+                                    // 2. 更新认证信息中的 lastIp 和 deviceType
                                     synchronized(deviceManager.authenticatedDevices) {
                                         val auth = deviceManager.authenticatedDevices[remoteUuid]
                                         if (auth != null) {
-                                            deviceManager.authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
+                                            deviceManager.authenticatedDevices[remoteUuid] = auth.copy(
+                                                lastIp = ip,
+                                                deviceType = deviceType
+                                            )
                                             deviceManager.saveAuthedDevicesInternal()
                                         }
                                     }

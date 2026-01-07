@@ -2,9 +2,10 @@ package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /**
@@ -18,8 +19,14 @@ import org.json.JSONObject
  * 不处理：HANDSHAKE、HEARTBEAT、以及“手动发现”之类的特殊报文（仍由 DeviceConnectionManager 内部处理）。
  */
 object ProtocolRouter {
-
     private const val TAG = "ProtocolRouter"
+    private const val DEVICE_TYPE_PC = "pc"
+
+    private fun isRemoteDevicePc(auth: AuthInfo?): Boolean {
+        // 只允许明确为PC设备的情况
+        // 设备类型应该从握手消息中正确获取并设置
+        return auth?.deviceType?.lowercase() == DEVICE_TYPE_PC
+    }
 
     /**
      * 处理一条 DATA* 加密通道的 TCP 首行。
@@ -36,7 +43,7 @@ object ProtocolRouter {
 
         // 统一解析：DATA_*:<remoteUuid>:<remotePubKey>:<encryptedPayload>
         val parts = line.split(":", limit = 4)
-        if (parts.size < 4) return true // 形如 DATA:xxx 但结构不满足，直接忽略
+        if (parts.size < 4) return true 
 
         val header = parts[0]
         val remoteUuid = parts[1]
@@ -61,6 +68,7 @@ object ProtocolRouter {
             when (header) {
                 // 主通道：历史上的 DATA 默认为普通通知（DATA_NOTIFICATION）
                 "DATA", "DATA_NOTIFICATION" -> {
+                    Logger.d(TAG, "接收到 DATA_NOTIFICATION 消息: $decrypted")
                     val routedHeader = "DATA_NOTIFICATION"
                     com.xzyht.notifyrelay.common.core.notification.NotificationProcessor.process(
                         context,
@@ -77,7 +85,8 @@ object ProtocolRouter {
                     true
                 }
                 "DATA_SUPERISLAND" -> {
-                    // 分流到 SuperIslandProcessor 专门处理
+                    // 分流到 SuperIslandProcessor 专门处理超级岛通知
+                    Logger.d(TAG, "接收到 DATA_NOTIFICATION 消息: $decrypted")
                     try {
                         val handled = com.xzyht.notifyrelay.common.core.notification.SuperIslandProcessor.process(
                             context,
@@ -94,6 +103,7 @@ object ProtocolRouter {
                 }
                 "DATA_MEDIAPLAY" -> {
                     // 处理远端媒体播放通知，触发超级岛显示
+                    Logger.d(TAG, "接收到 DATA_MEDIAPLAY 消息: $decrypted")
                     try {
                         val json = JSONObject(decrypted)
                         val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
@@ -106,28 +116,33 @@ object ProtocolRouter {
                 }
                 // DATA_ICON_REQUEST：对方向本机请求应用图标，本机查找后会通过 DATA_ICON_RESPONSE 回传
                 "DATA_ICON_REQUEST" -> {
+                    Logger.d(TAG, "接收到 DATA_ICON_REQUEST 消息: $decrypted")
                     val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
                     IconSyncManager.handleIconRequest(decrypted, deviceManager, source, context)
                     true
                 }
                 // DATA_ICON_RESPONSE：图标请求的响应，更新本机图标缓存供通知复刻使用
                 "DATA_ICON_RESPONSE" -> {
+                    Logger.d(TAG, "接收到 DATA_ICON_RESPONSE 消息: $decrypted")
                     IconSyncManager.handleIconResponse(decrypted, context)
                     true
                 }
                 // DATA_APP_LIST_REQUEST：对方请求本机应用列表，本机查询后通过 DATA_APP_LIST_RESPONSE 返回
                 "DATA_APP_LIST_REQUEST" -> {
+                    Logger.d(TAG, "接收到 DATA_APP_LIST_REQUEST 消息: $decrypted")
                     val source = deviceManager.resolveDeviceInfo(remoteUuid, clientIp)
                     AppListSyncManager.handleAppListRequest(decrypted, deviceManager, source, context)
                     true
                 }
                 // DATA_APP_LIST_RESPONSE：应用列表请求的响应，用于更新本机缓存/状态
                 "DATA_APP_LIST_RESPONSE" -> {
+                    Logger.d(TAG, "接收到 DATA_APP_LIST_RESPONSE 消息: $decrypted")
                     AppListSyncManager.handleAppListResponse(decrypted, context, remoteUuid)
                     true
                 }
                 // DATA_AUDIO_REQUEST：对方请求本机音频转发
                 "DATA_MEDIA_CONTROL" -> {
+                    Logger.d(TAG, "接收到 DATA_MEDIA_CONTROL 消息: $decrypted")
                     // 处理媒体控制命令，包括音频转发和媒体播放控制
                     try {
                         val json = org.json.JSONObject(decrypted)
@@ -172,11 +187,14 @@ object ProtocolRouter {
                                     Logger.e(TAG, "执行 previous 失败", e)
                                 }
                             }
-                            // 音频转发控制
+                            // 音频转发控制（仅对 PC 设备响应）
                             "audioRequest" -> {
-                                // 目前仅支持转发，直接同意
-                                val response = "{\"type\":\"MEDIA_CONTROL\",\"action\":\"audioResponse\",\"result\":\"accepted\"}"
-                                ProtocolSender.sendEncrypted(deviceManager, deviceManager.resolveDeviceInfo(remoteUuid, clientIp), "DATA_MEDIA_CONTROL", response)
+                                if (!isRemoteDevicePc(auth)) {
+                                    Logger.w(TAG, "音频转发请求被忽略：非 PC 设备")
+                                } else {
+                                    val response = "{\"type\":\"MEDIA_CONTROL\",\"action\":\"audioResponse\",\"result\":\"accepted\"}"
+                                    ProtocolSender.sendEncrypted(deviceManager, deviceManager.resolveDeviceInfo(remoteUuid, clientIp), "DATA_MEDIA_CONTROL", response)
+                                }
                             }
                             "audioResponse" -> {
                                 // 处理音频转发响应，这里可以添加相应的逻辑
@@ -184,6 +202,82 @@ object ProtocolRouter {
                         }
                     } catch (e: Exception) {
                         Logger.e(TAG, "处理媒体控制命令失败", e)
+                    }
+                    true
+                }
+                "DATA_SFTP" -> {
+                    Logger.d(TAG, "接收到 DATA_SFTP 消息，clientIp: $clientIp, remoteUuid: $remoteUuid")
+                    if (!isRemoteDevicePc(auth)) {
+                        Logger.w(TAG, "SFTP 请求被忽略：非 PC 设备")
+                        return true
+                    }
+                    Logger.d(TAG, "设备类型验证通过，开始处理 SFTP 命令")
+                    // 使用设备管理器的协程作用域处理 suspend 函数调用
+                    deviceManager.coroutineScopeInternal.launch {
+                        try {
+                            val json = JSONObject(decrypted)
+                            val action = json.optString("action", "")
+                            Logger.i(TAG, "SFTP 命令 action: $action")
+
+                            when (action) {
+                                "start" -> {
+                                    Logger.i(TAG, "开始启动 SFTP 服务器")
+                                    val sharedSecret = auth.sharedSecret
+                                    val deviceName = deviceManager.getLocalDisplayName()
+                                    Logger.d(TAG, "使用共享密钥派生 SFTP 凭据")
+                                    val sftpInfo = SftpServer.start(sharedSecret, deviceName)
+                                    if (sftpInfo != null) {
+                                        Logger.i(TAG, "SFTP 服务器启动成功，IP: ${sftpInfo.ipAddress}, 端口: ${sftpInfo.port}")
+                                        val responseJson = JSONObject().apply {
+                                            put("action", "started")
+                                            put("ipAddress", sftpInfo.ipAddress)
+                                            put("port", sftpInfo.port)
+                                            put("username", sftpInfo.username)
+                                            put("password", sftpInfo.password)
+                                        }
+                                        Logger.d(TAG, "发送 SFTP 服务器信息到 PC")
+                                        ProtocolSender.sendEncrypted(
+                                            deviceManager,
+                                            deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
+                                            "DATA_SFTP",
+                                            responseJson.toString()
+                                        )
+                                        Logger.i(TAG, "SFTP server started and info sent to PC (derived from sharedSecret)")
+                                    } else {
+                                        Logger.e(TAG, "SFTP 服务器启动失败")
+                                        val errorJson = JSONObject().apply {
+                                            put("action", "error")
+                                            put("message", "Failed to start SFTP server")
+                                        }
+                                        ProtocolSender.sendEncrypted(
+                                            deviceManager,
+                                            deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
+                                            "DATA_SFTP",
+                                            errorJson.toString()
+                                        )
+                                    }
+                                }
+                                "stop" -> {
+                                    Logger.i(TAG, "停止 SFTP 服务器")
+                                    SftpServer.stop()
+                                    val responseJson = JSONObject().apply {
+                                        put("action", "stopped")
+                                    }
+                                    ProtocolSender.sendEncrypted(
+                                        deviceManager,
+                                        deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
+                                        "DATA_SFTP",
+                                        responseJson.toString()
+                                    )
+                                    Logger.i(TAG, "SFTP server stopped via command")
+                                }
+                                else -> {
+                                    Logger.w(TAG, "未知的 SFTP action: $action")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Logger.e(TAG, "处理 SFTP 命令失败", e)
+                        }
                     }
                     true
                 }

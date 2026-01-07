@@ -145,6 +145,13 @@ android {
             isUniversalApk = true
         }
     }
+
+    // 配置资源打包选项，解决 META-INF/DEPENDENCIES 冲突问题
+    packaging {
+        resources {
+            excludes += "META-INF/DEPENDENCIES"
+        }
+    }
 }
 
 dependencies {
@@ -205,6 +212,10 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.4.0")
     // DiskLruCache: stable disk-based LRU cache for icons
     implementation("com.jakewharton:disklrucache:2.0.2")
+
+    // Apache SSHD for SFTP server
+    implementation(libs.apache.sshd)
+    implementation(libs.apache.sshd.sftp)
 }
 
 // 移除强制使用旧版本stdlib的配置，让项目使用与Kotlin 2.1.21兼容的stdlib版本

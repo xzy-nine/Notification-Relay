@@ -60,9 +60,11 @@ data class AuthInfo(
     val publicKey: String,
     val sharedSecret: String,
     val isAccepted: Boolean,
-    val displayName: String? = null, // 新增：持久化设备名
+    val displayName: String? = null,
     val lastIp: String? = null,
-    val lastPort: Int? = null
+    val lastPort: Int? = null,
+    val deviceType: String? = null,
+    val battery: String? = null
 )
 
 // =================== 设备连接管理器主类 ===================
@@ -88,7 +90,7 @@ class DeviceConnectionManager(private val context: android.content.Context) {
     }
     // 获取本地设备显示名称，优先级按要求：1. 蓝牙 -> 2. Settings.Secure(bluetooth_name) -> 3. Settings.Global(device_name) -> 4. Build.MODEL/DEVICE -> 5. 兜底
     // 不再使用应用持久化或 SharedPreferences 中的 device_name
-    private fun getLocalDisplayName(): String {
+    internal fun getLocalDisplayName(): String {
         try {
             // 1. 蓝牙名称（Android 12+ 需要 BLUETOOTH_CONNECT 权限）
             try {
