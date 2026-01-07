@@ -1,7 +1,10 @@
 package com.xzyht.notifyrelay.common.core.sync
 
+import android.content.Context
+import android.os.Build
 import android.util.Base64
 import com.xzyht.notifyrelay.common.core.util.Logger
+import org.apache.sshd.common.file.FileSystemFactory
 import org.apache.sshd.common.file.nativefs.NativeFileSystemFactory
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory
 import org.apache.sshd.common.keyprovider.KeyPairProvider
@@ -15,6 +18,7 @@ import org.apache.sshd.sftp.server.SftpSubsystemFactory
 import java.nio.file.Paths
 import java.security.KeyPair
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class SftpServerInfo(
     val username: String,
@@ -31,8 +35,13 @@ object SftpServer {
     private val PORT_RANGE = 5151..5169
 
     private var sshd: org.apache.sshd.server.SshServer? = null
-    private var isRunning = false
+    private var isRunning = AtomicBoolean(false)
     private var serverInfo: SftpServerInfo? = null
+    private lateinit var applicationContext: Context
+    
+    fun setContext(context: Context) {
+        this.applicationContext = context.applicationContext
+    }
 
     init {
         System.setProperty(SecurityUtils.SECURITY_PROVIDER_REGISTRARS, "")
@@ -56,10 +65,21 @@ object SftpServer {
 
         override fun loadKeys(session: SessionContext?): Iterable<KeyPair> = listOf(keyPair)
     }
-
-    private class SimpleFileSystemFactory : VirtualFileSystemFactory() {
-        init {
-            defaultHomeDir = Paths.get("/storage/emulated/0/")
+    
+    private fun createFileSystemFactory(): FileSystemFactory {
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                // Android 10+ 使用VirtualFileSystemFactory
+                VirtualFileSystemFactory(Paths.get("/storage/emulated/0/"))
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                // Android 8+ 使用NativeFileSystemFactory
+                NativeFileSystemFactory()
+            }
+            else -> {
+                // 旧版本使用VirtualFileSystemFactory
+                VirtualFileSystemFactory(Paths.get("/storage/emulated/0/"))
+            }
         }
     }
 
@@ -101,18 +121,31 @@ object SftpServer {
     }
 
     fun initialize() {
-        if (sshd != null) return
-        val sshd = ServerBuilder.builder().apply {
-            fileSystemFactory(NativeFileSystemFactory())
-        }.build()
-        this.sshd = sshd
+        // 初始化方法不再需要，在start方法中动态创建
     }
 
-    fun start(sharedSecret: String, deviceName: String): SftpServerInfo? {
+    fun start(sharedSecret: String, deviceName: String, context: Context): SftpServerInfo? {
         Logger.i(TAG, "SFTP 服务器启动请求，设备名称: $deviceName")
-        if (isRunning) {
+        if (isRunning.get()) {
             Logger.i(TAG, "SFTP 服务器已在运行，返回当前服务器信息")
             return serverInfo
+        }
+        
+        // 设置上下文
+        this.applicationContext = context.applicationContext
+        
+        // 检查文件管理权限
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                Logger.w(TAG, "SFTP 服务需要文件管理权限，当前未授权")
+                // 在UI线程中显示Toast提示用户
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    com.xzyht.notifyrelay.common.core.util.ToastUtils.showShortToast(context, "SFTP 服务需要文件管理权限，请先授权")
+                }
+                // 跳转到权限设置页面
+                com.xzyht.notifyrelay.common.PermissionHelper.requestManageExternalStoragePermission(context)
+                return null
+            }
         }
 
         Logger.d(TAG, "从共享密钥派生 SFTP 凭据")
@@ -124,8 +157,12 @@ object SftpServer {
         PORT_RANGE.forEach { port ->
             try {
                 Logger.d(TAG, "尝试在端口 $port 启动 SFTP 服务器")
+                
+                // 创建文件系统工厂
+                val fileSystemFactory = createFileSystemFactory()
+                
                 sshd = ServerBuilder.builder().apply {
-                    fileSystemFactory(SimpleFileSystemFactory())
+                    fileSystemFactory(fileSystemFactory)
                 }.build().apply {
                     this.port = port
                     keyPairProvider = PfxKeyPairProvider()
@@ -135,7 +172,7 @@ object SftpServer {
                     start()
                 }
 
-                isRunning = true
+                isRunning.set(true)
                 val ipAddress = getDeviceIpAddress()
                 Logger.i(TAG, "SFTP 服务器在端口 $port 启动成功，IP 地址: $ipAddress")
 
@@ -158,9 +195,9 @@ object SftpServer {
 
     fun stop() {
         try {
-            if (isRunning) {
+            if (isRunning.get()) {
                 sshd?.stop(true)
-                isRunning = false
+                isRunning.set(false)
                 serverInfo = null
                 com.xzyht.notifyrelay.common.core.util.Logger.i(TAG, "SFTP server stopped")
             }

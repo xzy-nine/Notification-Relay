@@ -57,6 +57,7 @@ object PermissionHelper {
         val hasPost = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else true
+        
         return hasNotification && canQueryApps && hasPost
     }
 
@@ -254,6 +255,33 @@ object PermissionHelper {
             val value = Settings.Global.getInt(context.contentResolver, "disable_screen_sharing_protection", 0)
             value == 1
         } catch (_: Exception) { false }
+    }
+    
+    /**
+     * 检查文件管理权限（MANAGE_EXTERNAL_STORAGE）。
+     *
+     * @param context 用于检查权限的上下文。
+     * @return 在 API 30+（Android 11）时检查是否具有文件管理权限，低版本始终返回 true。
+     */
+    fun checkManageExternalStoragePermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else {
+            true // 低版本默认有权限
+        }
+    }
+    
+    /**
+     * 请求文件管理权限（MANAGE_EXTERNAL_STORAGE）。
+     *
+     * @param context 用于启动设置页面的上下文。
+     */
+    fun requestManageExternalStoragePermission(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.data = android.net.Uri.parse("package:${context.packageName}")
+            IntentUtils.startActivity(context, intent, true)
+        }
     }
 
     /**

@@ -225,7 +225,7 @@ object ProtocolRouter {
                                     val sharedSecret = auth.sharedSecret
                                     val deviceName = deviceManager.getLocalDisplayName()
                                     Logger.d(TAG, "使用共享密钥派生 SFTP 凭据")
-                                    val sftpInfo = SftpServer.start(sharedSecret, deviceName)
+                                    val sftpInfo = SftpServer.start(sharedSecret, deviceName, context)
                                     if (sftpInfo != null) {
                                         Logger.i(TAG, "SFTP 服务器启动成功，IP: ${sftpInfo.ipAddress}, 端口: ${sftpInfo.port}")
                                         val responseJson = JSONObject().apply {
