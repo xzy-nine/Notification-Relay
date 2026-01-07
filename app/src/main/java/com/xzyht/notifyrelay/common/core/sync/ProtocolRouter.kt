@@ -1,7 +1,14 @@
 package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import com.xzyht.notifyrelay.common.core.sync.SftpServer.StartResult.ALREADY_RUNNING
+import com.xzyht.notifyrelay.common.core.sync.SftpServer.StartResult.PERMISSION_DENIED
+import com.xzyht.notifyrelay.common.core.sync.SftpServer.StartResult.SUCCESS
+import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.feature.GuideActivity
 import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.superisland.RemoteMediaSessionManager
@@ -225,36 +232,41 @@ object ProtocolRouter {
                                     val sharedSecret = auth.sharedSecret
                                     val deviceName = deviceManager.getLocalDisplayName()
                                     Logger.d(TAG, "使用共享密钥派生 SFTP 凭据")
-                                    val sftpInfo = SftpServer.start(sharedSecret, deviceName, context)
-                                    if (sftpInfo != null) {
-                                        Logger.i(TAG, "SFTP 服务器启动成功，IP: ${sftpInfo.ipAddress}, 端口: ${sftpInfo.port}")
-                                        val responseJson = JSONObject().apply {
-                                            put("action", "started")
-                                            put("ipAddress", sftpInfo.ipAddress)
-                                            put("port", sftpInfo.port)
-                                            put("username", sftpInfo.username)
-                                            put("password", sftpInfo.password)
+                                    val sftpStartResult = SftpServer.start(sharedSecret, deviceName, context)
+                                    when (sftpStartResult.status) {
+                                        SUCCESS, ALREADY_RUNNING -> {
+                                            val sftpInfo = sftpStartResult.serverInfo
+                                            if (sftpInfo != null) {
+                                                Logger.i(TAG, "SFTP 服务器启动成功，IP: ${sftpInfo.ipAddress}, 端口: ${sftpInfo.port}")
+                                                val responseJson = JSONObject().apply {
+                                                    put("action", "started")
+                                                    put("ipAddress", sftpInfo.ipAddress)
+                                                    put("port", sftpInfo.port)
+                                                    // 不再发送用户名和密码，PC端可以从sharedSecret独立计算
+                                                }
+                                                Logger.d(TAG, "发送 SFTP 服务器信息到 PC")
+                                                ProtocolSender.sendEncrypted(
+                                                    deviceManager,
+                                                    deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
+                                                    "DATA_SFTP",
+                                                    responseJson.toString()
+                                                )
+                                                Logger.i(TAG, "SFTP server started and info sent to PC (derived from sharedSecret)")
+                                                
+                                                // 检查是否需要跳转到引导页授权
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                                    if (!Environment.isExternalStorageManager()) {
+                                                        // 跳转到引导页，让用户手动授权
+                                                        val intent = IntentUtils.createIntent(context, GuideActivity::class.java)
+                                                        intent.putExtra("fromSftp", true)
+                                                        intent.putExtra("fromInternal", true)
+                                                        IntentUtils.startActivity(context, intent, true)
+                                                    }
+                                                }
+                                            }
                                         }
-                                        Logger.d(TAG, "发送 SFTP 服务器信息到 PC")
-                                        ProtocolSender.sendEncrypted(
-                                            deviceManager,
-                                            deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
-                                            "DATA_SFTP",
-                                            responseJson.toString()
-                                        )
-                                        Logger.i(TAG, "SFTP server started and info sent to PC (derived from sharedSecret)")
-                                    } else {
-                                        Logger.e(TAG, "SFTP 服务器启动失败")
-                                        val errorJson = JSONObject().apply {
-                                            put("action", "error")
-                                            put("message", "Failed to start SFTP server")
-                                        }
-                                        ProtocolSender.sendEncrypted(
-                                            deviceManager,
-                                            deviceManager.resolveDeviceInfo(remoteUuid, clientIp),
-                                            "DATA_SFTP",
-                                            errorJson.toString()
-                                        )
+
+                                        PERMISSION_DENIED -> TODO()
                                     }
                                 }
                                 "stop" -> {

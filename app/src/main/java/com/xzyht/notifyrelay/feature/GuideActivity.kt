@@ -48,6 +48,7 @@ import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.common.SetupSystemBars
 import com.xzyht.notifyrelay.common.core.repository.AppListHelper
 import com.xzyht.notifyrelay.common.core.util.IntentUtils
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.common.data.StorageManager
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -59,12 +60,15 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true, StorageManager.PrefsType.GENERAL)
         val fromInternal = intent.getBooleanExtra("fromInternal", false)
+        val fromSftp = intent.getBooleanExtra("fromSftp", false)
         // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
         if (!fromInternal && PermissionHelper.checkAllPermissions(this) && !isFirstLaunch) {
             startActivity(Intent(this, MainActivity::class.java))
@@ -86,6 +90,12 @@ class GuideActivity : ComponentActivity() {
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
                     StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false, StorageManager.PrefsType.GENERAL)
+                    
+                    if (fromSftp) {
+                        // 如果是从SFTP请求跳转过来的，尝试重新启动SFTP服务
+                        Logger.d("GuideActivity", "从SFTP请求跳转，尝试重新启动SFTP服务")
+                    }
+                    
                     startActivity(Intent(this@GuideActivity, MainActivity::class.java))
                     finish()
                 })
@@ -98,6 +108,17 @@ class GuideActivity : ComponentActivity() {
         super.onResume()
         // 当从系统设置页面返回时，刷新权限状态
         GuideScreen.refreshTrigger++
+        
+        // 检查是否从SFTP请求跳转过来，并且已经获取了文件管理权限
+        val fromSftp = intent.getBooleanExtra("fromSftp", false)
+        if (fromSftp && PermissionHelper.checkManageExternalStoragePermission(this)) {
+            // 从系统设置返回，并且已经获取了文件管理权限
+            Logger.d("GuideActivity", "从SFTP请求跳转，已经获取文件管理权限，尝试重新启动SFTP服务")
+            // 这里需要获取当前连接的PC设备的sharedSecret和deviceName
+            // 目前无法直接获取，需要后续优化，先关闭当前页面
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
     }
 
 object GuideScreen {
@@ -177,6 +198,14 @@ object GuideScreen {
     val trigger = GuideScreen.refreshTrigger
     LaunchedEffect(trigger) {
         refreshPermissions()
+    }
+    
+    // 定期检查权限状态，确保开关能正确显示当前权限状态
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000) // 每秒检查一次
+            refreshPermissions()
+        }
     }
 
     Scaffold(

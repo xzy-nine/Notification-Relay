@@ -124,11 +124,23 @@ object SftpServer {
         // 初始化方法不再需要，在start方法中动态创建
     }
 
-    fun start(sharedSecret: String, deviceName: String, context: Context): SftpServerInfo? {
+    // 定义SFTP启动结果状态
+    enum class StartResult {
+        SUCCESS,         // 启动成功
+        ALREADY_RUNNING, // 已在运行
+        PERMISSION_DENIED // 权限不足
+    }
+    
+    data class SftpStartResult(
+        val status: StartResult,
+        val serverInfo: SftpServerInfo? = null
+    )
+    
+    fun start(sharedSecret: String, deviceName: String, context: Context): SftpStartResult {
         Logger.i(TAG, "SFTP 服务器启动请求，设备名称: $deviceName")
         if (isRunning.get()) {
             Logger.i(TAG, "SFTP 服务器已在运行，返回当前服务器信息")
-            return serverInfo
+            return SftpStartResult(StartResult.ALREADY_RUNNING, serverInfo)
         }
         
         // 设置上下文
@@ -140,11 +152,9 @@ object SftpServer {
                 Logger.w(TAG, "SFTP 服务需要文件管理权限，当前未授权")
                 // 在UI线程中显示Toast提示用户
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    com.xzyht.notifyrelay.common.core.util.ToastUtils.showShortToast(context, "SFTP 服务需要文件管理权限，请先授权")
+                    com.xzyht.notifyrelay.common.core.util.ToastUtils.showShortToast(context, "SFTP 服务需要文件管理权限，当前仅能查看文件层级")
                 }
-                // 跳转到权限设置页面
-                com.xzyht.notifyrelay.common.PermissionHelper.requestManageExternalStoragePermission(context)
-                return null
+                // 即使没有文件权限，也继续启动SFTP服务，PC端可以获取文件层级
             }
         }
 
@@ -184,13 +194,13 @@ object SftpServer {
                 )
 
                 Logger.i(TAG, "SFTP server started: $ipAddress on port $port (derived from sharedSecret)")
-                return serverInfo
+                return SftpStartResult(StartResult.SUCCESS, serverInfo)
             } catch (e: Exception) {
                 Logger.e(TAG, "Failed to start SFTP server on port $port", e)
             }
         }
         Logger.e(TAG, "所有端口尝试失败，无法启动 SFTP 服务器")
-        return null
+        return SftpStartResult(StartResult.PERMISSION_DENIED)
     }
 
     fun stop() {
