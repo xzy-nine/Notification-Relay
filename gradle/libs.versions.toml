@@ -11,6 +11,8 @@ miuix = "0.7.2"
 uiText = "1.10.0"
 material3 = "1.4.0"
 foundationLayout = "1.10.0"
+runtime = "1.10.0"
+sshd = "2.13.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -23,6 +25,9 @@ miuix-android = { group = "top.yukonga.miuix.kmp", name = "miuix-android", versi
 androidx-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
+androidx-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "runtime" }
+apache-sshd = { group = "org.apache.sshd", name = "sshd-core", version.ref = "sshd" }
+apache-sshd-sftp = { group = "org.apache.sshd", name = "sshd-sftp", version.ref = "sshd" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -160,7 +160,8 @@ object SuperIslandProtocol {
             put("appName", appName ?: superPkg)
             put("time", time)
             put("isLocked", isLocked)
-            put("type", TYPE_FULL)
+            // NOTE: 不再在 JSON 中添加 type/featureKey 字段，使用通道头（DATA_SUPERISLAND）区分协议类型
+            // 但保留 featureKey 以便接收端能精确识别会话（尤其是结束包）
             put("featureKeyName", FEATURE_KEY_NAME)
             put("featureKeyValue", featureId)
         }
@@ -186,7 +187,8 @@ object SuperIslandProtocol {
             put("appName", appName ?: superPkg)
             put("time", time)
             put("isLocked", isLocked)
-            put("type", TYPE_DELTA)
+            // NOTE: 不再在 JSON 中添加 type/featureKey 字段，差异内容放在 "changes"
+            // 仍然携带 featureKey 以便接收端识别会话
             put("featureKeyName", FEATURE_KEY_NAME)
             put("featureKeyValue", featureId)
             put("changes", diff.toJson())
@@ -207,10 +209,11 @@ object SuperIslandProtocol {
             put("appName", appName ?: superPkg)
             put("time", time)
             put("isLocked", isLocked)
-            put("type", TYPE_END)
+            // 使用 terminateValue 表示结束包
+            put("terminateValue", TERMINATE_VALUE)
+            // 明确传回 featureKey 以便接收端立即按 featureId 精确关闭悬浮窗
             put("featureKeyName", FEATURE_KEY_NAME)
             put("featureKeyValue", featureId)
-            put("terminateValue", TERMINATE_VALUE)
         }
         obj.put("hash", sha256(obj.toString()))
         return obj

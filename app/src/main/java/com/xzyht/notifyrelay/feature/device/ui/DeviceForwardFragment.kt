@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.device.ui
+package com.xzyht.notifyrelay.feature.device.ui
 
 import android.os.Bundle
 import androidx.compose.foundation.background
@@ -58,14 +58,7 @@ class DeviceForwardFragment : Fragment() {
     }
 
     companion object {
-        // 全局单例，保证同一进程内所有页面共享同一个 deviceManager
-        @Volatile
-        private var sharedDeviceManager: DeviceConnectionManager? = null
-        fun getDeviceManager(context: android.content.Context): DeviceConnectionManager {
-            return sharedDeviceManager ?: synchronized(this) {
-                sharedDeviceManager ?: DeviceConnectionManager(context.applicationContext).also { sharedDeviceManager = it }
-            }
-        }
+        // 移除了兼容方法，直接使用 DeviceConnectionManagerSingleton
     }
 
     // 加载已认证设备uuid集合
@@ -105,7 +98,7 @@ class DeviceForwardFragment : Fragment() {
             setContent {
                 MiuixTheme {
                     DeviceForwardScreen(
-                        deviceManager = getDeviceManager(requireContext())
+                        deviceManager = com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton.getDeviceManager(requireContext())
                     )
                 }
             }
@@ -134,7 +127,7 @@ fun DeviceForwardScreen(
         }
     }
     // TabRow相关状态
-    val tabTitles = listOf("远程过滤", "聊天测试", "本地过滤", "超级岛")
+    val tabTitles = listOf("远程过滤", "本地过滤", "音频转发", "超级岛", "聊天测试")
     
     // Pager相关状态 - 使用Pager状态作为唯一数据源
     val pagerState = rememberPagerState(initialPage = 0) {
@@ -227,17 +220,21 @@ fun DeviceForwardScreen(
                         com.xzyht.notifyrelay.feature.notification.ui.filter.UIRemoteFilter()
                     }
                     1 -> {
-                        // 聊天测试 Tab：独立到 UIChatTest 组件
-                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
-                    }
-                    2 -> {
                         // 本地通知过滤 Tab
                         UILocalFilter()
+                    }
+                    2 -> {
+                        // 音频转发 Tab
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIAudioForwarding()
                     }
                     3 -> {
                         // 超级岛设置 Tab
                         //Logger.d("超级岛", "UI: 打开超级岛设置 Tab")
                         com.xzyht.notifyrelay.feature.notification.ui.filter.UISuperIslandSettings()
+                    }
+                    4 -> {
+                        // 聊天测试 Tab：独立到 UIChatTest 组件
+                        com.xzyht.notifyrelay.feature.notification.ui.filter.UIChatTest(deviceManager = deviceManager)
                     }
                 }
             }

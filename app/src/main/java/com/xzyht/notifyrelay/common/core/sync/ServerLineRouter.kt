@@ -1,11 +1,8 @@
-﻿package com.xzyht.notifyrelay.common.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
-import com.xzyht.notifyrelay.common.core.util.EncryptionManager
 import com.xzyht.notifyrelay.common.core.util.Logger
-import com.xzyht.notifyrelay.feature.device.service.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
@@ -13,36 +10,39 @@ import java.io.OutputStreamWriter
 import java.net.Socket
 
 /**
- * TCP 首行路由器：根据首行内容分发到不同协议处理逻辑。
+ * 服务端首行协议路由器
  *
  * 设计目标：
  * - 让 `DeviceConnectionManager.startServer()` 只负责「接受连接 + 读首行」，
- *   把「这行是 HANDSHAKE / HEARTBEAT / DATA / 其它」的判断与处理挪到这里，
+ *   把「这行是 HANDSHAKE / DATA / 其它」的判断与处理挪到这里，
  *   便于后续维护协议演进而不污染连接管理类。
  * - 不直接持有任何全局状态，只通过 `DeviceConnectionManager` 暴露的 internal 访问器
  *   读写设备缓存、认证表、心跳状态等。
- *
- * 注意：
- * - 本类只处理「首行」协议，DATA* 报文的解密与路由仍交给 `ProtocolRouter`，
- *   加密发送仍由 `ProtocolSender` / `HandshakeSender` / `HeartbeatSender` 负责。
  */
 object ServerLineRouter {
 
     private const val TAG = "ServerLineRouter"
 
-    fun handleClientLine(
+    /**
+     * 分发首行协议到对应处理器
+     *
+     * @param line 首行协议文本
+     * @param client 客户端 Socket
+     * @param reader 读取流（用于后续数据读取，如需要）
+     * @param deviceManager 设备管理器实例
+     * @param context 上下文（用于获取系统服务等）
+     */
+    fun routeLine(
         line: String,
         client: Socket,
         reader: BufferedReader,
         deviceManager: DeviceConnectionManager,
         context: Context
     ) {
-        // 按首行前缀分发：握手 / 心跳 / DATA 加密通道 / 其它（目前主要用于手动发现）
+        // 按首行前缀分发：握手 / DATA 加密通道 / 其它（目前主要用于手动发现）
         when {
             // HANDSHAKE：连接建立时的认证握手，决定是否建立「受信任设备」关系
             line.startsWith("HANDSHAKE:") -> handleHandshake(line, client, reader, deviceManager)
-            // HEARTBEAT：已认证设备的心跳包，用于维持在线状态并触发反向重连
-            line.startsWith("HEARTBEAT:") -> handleHeartbeat(line, client, reader, deviceManager)
             // DATA*：加密业务通道（通知 / 图标 / 应用列表等），解密与路由交给 ProtocolRouter
             line.startsWith("DATA") -> handleData(line, client, reader, deviceManager, context)
             // 其他：当前仅用于 NOTIFYRELAY_DISCOVER_MANUAL 等辅助协议（如手动发现）
@@ -56,6 +56,7 @@ object ServerLineRouter {
      * - 若已认证则直接回复 ACCEPT
      * - 否则触发 `onHandshakeRequest` 回调给 UI，由用户选择接受/拒绝
      * - 根据结果更新 `authenticatedDevices` / `rejectedDevices`
+     * 握手格式：HANDSHAKE:<uuid>:<publicKey>:<ipAddress>:<batteryLevel>:<deviceType>
      */
     private fun handleHandshake(
         line: String,
@@ -65,9 +66,13 @@ object ServerLineRouter {
     ) {
         try {
             val parts = line.split(":")
-            if (parts.size >= 3) {
+            if (parts.size >= 6) {
                 val remoteUuid = parts[1]
                 val remotePubKey = parts[2]
+                val remoteIp: String = parts.getOrNull(3) ?: client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
+                val remoteBattery: String = parts.getOrNull(4) ?: ""
+                val remoteDeviceType: String = parts.getOrNull(5) ?: "unknown"
+
                 val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
 
                 // 1. 同步更新设备 IP 缓存，端口保持原有或默认
@@ -100,20 +105,39 @@ object ServerLineRouter {
                 // 4. 已认证设备：自动 ACCEPT（静默建立信任链）
                 if (alreadyAuthed) {
                     val writer = OutputStreamWriter(client.getOutputStream())
-                    writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}\n")
+                    val localBattery = getLocalBatteryInfo(deviceManager)
+                    val localDeviceType = "android"
+                    val localIp = getLocalIpAddress(deviceManager)
+                    writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}:$localIp:$localBattery:$localDeviceType\n")
                     writer.flush()
                     writer.close()
                     reader.close()
                     client.close()
-                } else if (deviceManager.onHandshakeRequest != null) {
+                    
+                    // 更新已认证设备的 deviceType 和 lastIp
+                    synchronized(deviceManager.authenticatedDevices) {
+                        val auth = deviceManager.authenticatedDevices[remoteUuid]
+                        if (auth != null) {
+                            deviceManager.authenticatedDevices[remoteUuid] = auth.copy(
+                                deviceType = remoteDeviceType,
+                                lastIp = ip
+                            )
+                            deviceManager.saveAuthedDevicesInternal()
+                            Logger.d(TAG, "已更新已认证设备的 deviceType: $remoteDeviceType, lastIp: $ip")
+                        }
+                    }
+                } else if (deviceManager.handshakeRequestHandler != null) {
                     // 5. 未认证但有回调：交由 UI 确认是否接受连接
-                    deviceManager.onHandshakeRequest!!.invoke(remoteDevice, remotePubKey) { accepted ->
+                    deviceManager.handshakeRequestHandler!!.onHandshakeRequest(remoteDevice, remotePubKey) { accepted ->
                         if (accepted) {
                             // 用户点击“接受”：生成共享密钥并写入认证表
-                            val sharedSecret = EncryptionManager.generateSharedSecret(deviceManager.localPublicKey, remotePubKey)
+                            val sharedSecret = com.xzyht.notifyrelay.common.core.util.EncryptionManager.generateSharedSecret(deviceManager.localPublicKey, remotePubKey)
                             synchronized(deviceManager.authenticatedDevices) {
                                 deviceManager.authenticatedDevices.remove(remoteUuid)
-                                deviceManager.authenticatedDevices[remoteUuid] = AuthInfo(remotePubKey, sharedSecret, true, remoteDevice.displayName)
+                                deviceManager.authenticatedDevices[remoteUuid] = com.xzyht.notifyrelay.feature.device.service.AuthInfo(
+                                remotePubKey, sharedSecret, true, remoteDevice.displayName,
+                                deviceType = remoteDeviceType, battery = remoteBattery
+                            )
                                 deviceManager.saveAuthedDevicesInternal()
                             }
                             try { deviceManager.updateDeviceListInternal() } catch (_: Exception) {}
@@ -126,8 +150,11 @@ object ServerLineRouter {
                         // 6. 通过 TCP 回写 ACCEPT/REJECT 结果给对端
                         deviceManager.coroutineScopeInternal.launch {
                             val writer = OutputStreamWriter(client.getOutputStream())
+                            val localBattery = getLocalBatteryInfo(deviceManager)
+                            val localDeviceType = "android"
+                            val localIp = getLocalIpAddress(deviceManager)
                             if (accepted) {
-                                writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}\n")
+                                writer.write("ACCEPT:${deviceManager.uuid}:${deviceManager.localPublicKey}:$localIp:$localBattery:$localDeviceType\n")
                             } else {
                                 writer.write("REJECT:${deviceManager.uuid}\n")
                             }
@@ -162,75 +189,6 @@ object ServerLineRouter {
     }
 
     /**
-     * 处理心跳请求：
-     * - 仅接受已在认证表中的设备心跳
-     * - 使用心跳中的连接 IP 刷新设备缓存与认证信息的 lastIp
-     * - 更新 lastSeen / heartbeatedDevices，用于在线状态判断
-     * - 如果本机尚未向对方建立心跳，则自动发起反向 connectToDevice，形成双向心跳链路
-     */
-    private fun handleHeartbeat(
-        line: String,
-        client: Socket,
-        reader: BufferedReader,
-        deviceManager: DeviceConnectionManager
-    ) {
-        try {
-            val parts = line.split(":")
-            if (parts.size >= 3) {
-                val remoteUuid = parts[1]
-                // 仅已在认证表中的设备才接受心跳
-                val isAuthed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.containsKey(remoteUuid) }
-                //Logger.d(TAG, "收到HEARTBEAT: remoteUuid=$remoteUuid, isAuthed=$isAuthed, authedKeys=${deviceManager.authenticatedDevices.keys}")
-                if (isAuthed) {
-                    val ip: String = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                    // 1. 用最新 IP 更新设备缓存（端口只在其它渠道更新）
-                    synchronized(deviceManager.deviceInfoCacheInternal) {
-                        val old = deviceManager.deviceInfoCacheInternal[remoteUuid]
-                        val displayName = old?.displayName ?: "未知设备"
-                        deviceManager.deviceInfoCacheInternal[remoteUuid] = DeviceInfo(
-                            remoteUuid,
-                            displayName,
-                            ip,
-                            old?.port ?: 23333
-                        )
-                    }
-                    // 2. 更新认证信息中的 lastIp，便于后续重连
-                    synchronized(deviceManager.authenticatedDevices) {
-                        val auth = deviceManager.authenticatedDevices[remoteUuid]
-                        if (auth != null) {
-                            deviceManager.authenticatedDevices[remoteUuid] = auth.copy(lastIp = ip)
-                            deviceManager.saveAuthedDevicesInternal()
-                        }
-                    }
-                    // 3. 用心跳驱动在线状态：刷新 lastSeen + 标记已建立心跳
-                    deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
-                    deviceManager.heartbeatedDevicesInternal.add(remoteUuid)
-                        deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
-
-                    // 4. 若本端尚未给对方发心跳，则自动反向 connectToDevice，确保双向链路
-                    if (remoteUuid != deviceManager.uuid && !deviceManager.heartbeatJobsInternal.containsKey(remoteUuid)) {
-                        val info = deviceManager.getDeviceInfoInternal(remoteUuid)
-                        if (info != null && info.ip.isNotEmpty() && info.ip != "0.0.0.0") {
-                            //Logger.d(TAG, "收到HEARTBEAT后自动反向connectToDevice: $info")
-                            deviceManager.connectToDevice(info)
-                        }
-                    }
-                } else {
-                    // 未认证设备发来的心跳仅记录日志，不做任何状态变更
-                    Logger.w(TAG, "收到HEARTBEAT但未认证: remoteUuid=$remoteUuid, authedKeys=${deviceManager.authenticatedDevices.keys}")
-                }
-            } else {
-                Logger.w(TAG, "收到HEARTBEAT格式异常: $line")
-            }
-        } catch (e: Exception) {
-            Logger.e(TAG, "handleHeartbeat error: ${e.message}")
-        } finally {
-            try { reader.close() } catch (_: Exception) {}
-            try { client.close() } catch (_: Exception) {}
-        }
-    }
-
-    /**
      * 处理 DATA* 加密通道：
      * - 这里不做具体业务解析，只负责把首行和 client IP 交给 ProtocolRouter
      * - ProtocolRouter 再统一完成解密和按 DATA_* 头进行的业务路由
@@ -255,7 +213,7 @@ object ServerLineRouter {
 
     /**
      * 处理其它首行协议：
-     * - 当前用于 NOTIFYRELAY_DISCOVER_MANUAL（加密手动发现包）
+     * - 当前 only 用于处理手动发现 NOTIFYRELAY_DISCOVER_MANUAL（加密文本）
      * - 尝试用每个已认证设备的 sharedSecret 解密首行
      * - 匹配成功后更新 deviceInfoCache / authenticatedDevices 的 IP / 端口等信息
      */
@@ -266,47 +224,78 @@ object ServerLineRouter {
         deviceManager: DeviceConnectionManager
     ) {
         try {
-            // 当前 only 用于处理手动发现 NOTIFYRELAY_DISCOVER_MANUAL（加密文本）
-            try {
-                val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
-                for ((uuid, auth) in authed) {
-                    if (uuid == deviceManager.uuid) continue
-                    // 尝试用每个已认证设备的 sharedSecret 解密首行
-                    val decrypted = try { deviceManager.decryptDataInternal(line, auth.sharedSecret) } catch (_: Exception) { null }
-                    if (decrypted != null && decrypted.startsWith("NOTIFYRELAY_DISCOVER_MANUAL:")) {
-                        val parts = decrypted.split(":")
-                        if (parts.size >= 5) {
-                            val remoteUuid = parts[1]
-                            val displayName = parts[2]
-                            val port = parts[3].toIntOrNull() ?: 23333
-                            val sharedSecret = parts[4]
-                            // 只有 sharedSecret 完全匹配时才认为是该设备的手动发现包
-                            if (auth.sharedSecret == sharedSecret) {
-                                val ip = client.inetAddress.hostAddress.orEmpty().ifEmpty { "0.0.0.0" }
-                                val device = DeviceInfo(remoteUuid, displayName, ip, port)
-                                deviceManager.deviceLastSeenInternal[remoteUuid] = System.currentTimeMillis()
-                                synchronized(deviceManager.deviceInfoCacheInternal) { deviceManager.deviceInfoCacheInternal[remoteUuid] = device }
-                                synchronized(deviceManager.authenticatedDevices) {
-                                    val a = deviceManager.authenticatedDevices[remoteUuid]
-                                    if (a != null) {
-                                        deviceManager.authenticatedDevices[remoteUuid] = a.copy(lastIp = ip, lastPort = port)
-                                        deviceManager.saveAuthedDevicesInternal()
+            if (line.startsWith("NOTIFYRELAY_DISCOVER_MANUAL:")) {
+                val encryptedPart = line.substringAfter("NOTIFYRELAY_DISCOVER_MANUAL:")
+                val clientIp = client.inetAddress.hostAddress.orEmpty()
+
+                // 尝试用每个已认证设备的 sharedSecret 解密
+                synchronized(deviceManager.authenticatedDevices) {
+                    for ((uuid, auth) in deviceManager.authenticatedDevices) {
+                        try {
+                            val decrypted = deviceManager.decryptDataInternal(encryptedPart, auth.sharedSecret)
+                            if (decrypted.startsWith("NOTIFYRELAY_DISCOVER:")) {
+                                // 解密成功：更新设备缓存
+                                val parts = decrypted.split(":")
+                                if (parts.size >= 4) {
+                                    val remoteUuid = parts[1]
+                                    val rawDisplay = parts[2]
+                                    val displayName = try {
+                                        deviceManager.decodeDisplayNameFromTransportInternal(rawDisplay)
+                                    } catch (_: Exception) {
+                                        rawDisplay
+                                    }
+                                    val port = parts[3].toIntOrNull() ?: deviceManager.listenPort
+                                    if (remoteUuid == uuid && !clientIp.isNullOrEmpty() && uuid != deviceManager.uuid) {
+                                        val device = DeviceInfo(uuid, displayName, clientIp, port)
+                                        synchronized(deviceManager.deviceInfoCacheInternal) {
+                                            deviceManager.deviceInfoCacheInternal[uuid] = device
+                                        }
+                                        //Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
                                     }
                                 }
-                                // 同步更新全局设备名缓存，以便 UI 显示
-                                DeviceConnectionManagerUtil.updateGlobalDeviceName(remoteUuid, displayName)
-                                deviceManager.coroutineScopeInternal.launch { deviceManager.updateDeviceListInternal() }
-                                //Logger.d(TAG, "收到手动发现UDP: $decrypted, ip=$ip, uuid=$remoteUuid")
+                                break
                             }
+                        } catch (_: Exception) {
+                            // 解密失败，继续尝试下一个密钥
                         }
                     }
                 }
-            } catch (_: Exception) {
             }
-            //Logger.d(TAG, "未知请求: $line")
+        } catch (_: Exception) {
         } finally {
             try { reader.close() } catch (_: Exception) {}
             try { client.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun getLocalBatteryInfo(deviceManager: DeviceConnectionManager): String {
+        return try {
+            val batteryLevel = com.xzyht.notifyrelay.common.core.util.BatteryUtils.getBatteryLevel(deviceManager.contextInternal)
+            val isCharging = com.xzyht.notifyrelay.common.core.util.BatteryUtils.isCharging(deviceManager.contextInternal)
+            if (isCharging) "$batteryLevel+" else "$batteryLevel"
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun getLocalIpAddress(deviceManager: DeviceConnectionManager): String {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (address is java.net.Inet4Address && !address.isLoopbackAddress) {
+                        return address.hostAddress ?: "0.0.0.0"
+                    }
+                }
+            }
+            "0.0.0.0"
+        } catch (_: Exception) {
+            "0.0.0.0"
         }
     }
 }

@@ -1,7 +1,8 @@
-﻿package com.xzyht.notifyrelay.common.core.sync
+package com.xzyht.notifyrelay.common.core.sync
 
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.common.core.util.BatteryUtils
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -26,6 +27,7 @@ object HandshakeSender {
     /**
      * 主动向指定设备发起握手请求，并返回服务端的响应首行。
      * 不做认证表更新等副作用，由调用方处理。
+     * 握手格式：HANDSHAKE:<uuid>:<publicKey>:<ipAddress>:<batteryLevel>:<deviceType>
      */
     fun sendHandshake(
         manager: DeviceConnectionManager,
@@ -37,7 +39,15 @@ object HandshakeSender {
             socket.connect(InetSocketAddress(target.ip, target.port), connectTimeoutMs)
             val writer = OutputStreamWriter(socket.getOutputStream())
             val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-            writer.write("HANDSHAKE:${manager.uuid}:${manager.localPublicKey}\n")
+
+            val batteryLevel = BatteryUtils.getBatteryLevel(manager.contextInternal)
+            val isCharging = BatteryUtils.isCharging(manager.contextInternal)
+            val batteryStr = if (isCharging) "$batteryLevel+" else "$batteryLevel"
+            val localIp = getLocalIpAddress()
+            val deviceType = "android"
+
+            val handshake = "HANDSHAKE:${manager.uuid}:${manager.localPublicKey}:$localIp:$batteryStr:$deviceType\n"
+            writer.write(handshake)
             writer.flush()
             val resp = reader.readLine()
             //Logger.d(TAG, "handshake resp=$resp, target=${target.uuid}@${target.ip}:${target.port}")
@@ -50,25 +60,52 @@ object HandshakeSender {
             null
         }
     }
+
+    private fun getLocalIpAddress(): String {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (address is java.net.Inet4Address && !address.isLoopbackAddress) {
+                        return address.hostAddress ?: "0.0.0.0"
+                    }
+                }
+            }
+            "0.0.0.0"
+        } catch (e: Exception) {
+            "0.0.0.0"
+        }
+    }
 }
 
 /** 统一心跳发送器 */
 object HeartbeatSender {
 
     private const val TAG = "HeartbeatSender"
-
+    private const val HEARTBEAT_PORT = 23334 // 与发现端口一致
+    
     fun sendHeartbeat(manager: DeviceConnectionManager, target: DeviceInfo): Boolean {
+        var socket: DatagramSocket? = null
         return try {
-            val socket = Socket(target.ip, target.port)
-            val writer = OutputStreamWriter(socket.getOutputStream())
-            writer.write("HEARTBEAT:${manager.uuid}:${manager.localPublicKey}\n")
-            writer.flush()
-            try { writer.close() } catch (_: Exception) {}
-            try { socket.close() } catch (_: Exception) {}
+            socket = DatagramSocket()
+            // 心跳格式：HEARTBEAT:<deviceUuid><设备电量%>
+            val batteryLevel = BatteryUtils.getBatteryLevel(manager.contextInternal)
+            val payload = "HEARTBEAT:${manager.uuid}$batteryLevel"
+            val buf = payload.toByteArray()
+            val address = InetAddress.getByName(target.ip)
+            val packet = DatagramPacket(buf, buf.size, address, HEARTBEAT_PORT)
+            socket.send(packet)
             true
         } catch (e: Exception) {
             //Logger.d(TAG, "heartbeat failed to ${target.uuid}@${target.ip}:${target.port} - ${e.message}")
             false
+        } finally {
+            try { socket?.close() } catch (_: Exception) {}
         }
     }
 }

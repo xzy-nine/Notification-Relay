@@ -47,6 +47,7 @@ import com.xzyht.notifyrelay.common.SetupSystemBars
 import com.xzyht.notifyrelay.common.core.repository.AppRepository
 import com.xzyht.notifyrelay.common.core.util.IntentUtils
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.core.util.DeviceInfoManager
 import com.xzyht.notifyrelay.common.core.util.ServiceManager
 import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
@@ -157,6 +158,9 @@ class MainActivity : FragmentActivity() {
             return
         }
 
+        // 生成设备信息文件，用于 ADB 连接检测
+        DeviceInfoManager.generateDeviceInfoFile(this)
+        
         // 在后台线程初始化 NotificationRepository 和启动服务
         GlobalScope.launch {
             // 启动时加载本地历史通知

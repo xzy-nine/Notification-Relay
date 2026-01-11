@@ -1,4 +1,4 @@
-package com.xzyht.notifyrelay.feature.notification.model
+package com.xzyht.notifyrelay.common.core.notification.data
 
 // 数据库存储实体
 data class NotificationRecordEntity(

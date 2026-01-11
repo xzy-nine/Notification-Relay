@@ -25,9 +25,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore
+      - name: Decode keystore into app module
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -54,45 +54,31 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
-
-      - name: Sign universal debug APK
-        uses: r0adkll/sign-android-release@v1
-        id: sign_debug
-        with:
-          releaseDirectory: app/build/outputs/apk/debug
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
-          BUILD_TOOLS_VERSION: "34.0.0"
+          KEYSTORE_PATH: keystore.jks
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload signed universal debug APK
         uses: actions/upload-artifact@v4
         with:
           name: universal-debug-signed-apk
-          path: app/build/outputs/apk/debug/app-debug-signed.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Build release APKs (split by ABI)
         run: ./gradlew assembleRelease
-
-      - name: Sign release APKs
-        uses: r0adkll/sign-android-release@v1
-        id: sign_release
-        with:
-          releaseDirectory: app/build/outputs/apk/release
-          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-          alias: ${{ secrets.KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
-          BUILD_TOOLS_VERSION: "34.0.0"
+          KEYSTORE_PATH: keystore.jks
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload signed release APKs
         uses: actions/upload-artifact@v4
         with:
           name: release-signed-apks
-          path: app/build/outputs/apk/release/*-release-signed.apk
+          path: app/build/outputs/apk/release/*-release.apk
 
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
@@ -101,7 +87,7 @@ jobs:
           name: ${{ steps.version.outputs.version }}
           prerelease: true
           files: |
-            app/build/outputs/apk/release/*-release-signed.apk
-            app/build/outputs/apk/debug/app-debug-signed.apk
+            app/build/outputs/apk/release/*-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

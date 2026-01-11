@@ -1,25 +1,52 @@
-﻿package com.xzyht.notifyrelay.feature.notification.service
+package com.xzyht.notifyrelay.common.core.notification.servers
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Context
+import android.content.Intent
+import android.app.Notification
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.IBinder
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
+import android.os.Parcelable
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Base64
+import android.view.View
+import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.xzyht.notifyrelay.BuildConfig
+import com.xzyht.notifyrelay.R
+import com.xzyht.notifyrelay.common.core.sync.MessageSender
 import com.xzyht.notifyrelay.common.core.util.Logger
+import com.xzyht.notifyrelay.common.data.StorageManager
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
 import com.xzyht.notifyrelay.feature.notification.backend.BackendLocalFilter
 import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandManager
 import com.xzyht.notifyrelay.feature.notification.superisland.core.SuperIslandProtocol
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 class NotifyRelayNotificationListenerService : NotificationListenerService() {
     companion object {
         private const val MAX_CACHE_SIZE = 2000
         private const val CACHE_CLEANUP_THRESHOLD = 1500
         private const val CACHE_ENTRY_TTL = 24 * 60 * 60 * 1000L // 24小时TTL
+        // 最新的媒体播放通知（用于被外部工具查询并触发其 action）
+        @Volatile
+        var latestMediaSbn: StatusBarNotification? = null
     }
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         // 只补发本应用的前台服务通知（必须channelId和id都匹配）
@@ -34,33 +61,69 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             val notificationKey = sbn.key ?: (sbn.id.toString() + sbn.packageName)
             processedNotifications.remove(notificationKey)
             Logger.v("NotifyRelay", "通知移除，从缓存中清理: sbnKey=${sbn.key}, pkg=${sbn.packageName}")
-            // 超级岛：发送终止包
-            try {
-                val pair = superIslandFeatureByKey.remove(notificationKey)
-                if (pair != null) {
-                    val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
-                    val (superPkg, featureId) = pair
-                    com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandEnd(
+            
+            // 检查是否为媒体通知
+            val isMediaNotification = sbn.notification.category == Notification.CATEGORY_TRANSPORT
+            if (isMediaNotification) {
+                // 媒体通知被移除，发送媒体结束包
+                try {
+                    Logger.i("NotifyRelay-Media", "媒体通知被移除，发送结束包: pkg=${sbn.packageName}")
+                    val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                    var appName: String? = null
+                    try {
+                        val pm = applicationContext.packageManager
+                        val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                        appName = pm.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {
+                        appName = sbn.packageName
+                    }
+                    // 发送媒体结束包
+                    MessageSender.sendMediaPlayEndNotification(
                         applicationContext,
-                        superPkg,
-                        try { applicationContext.packageName } catch (_: Exception) { null },
+                        sbn.packageName,
+                        appName,
                         System.currentTimeMillis(),
-                        try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
-                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
-                        try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
-                        deviceManager,
-                        featureIdOverride = featureId
+                        deviceManager
                     )
+                    // 清理媒体状态缓存
+                    mediaPlayStateByKey.remove(notificationKey)
+                    // 更新全局最新媒体通知
+                    if (latestMediaSbn?.key == sbn.key) {
+                        latestMediaSbn = null
+                    }
+                } catch (e: Exception) {
+                    Logger.e("NotifyRelay-Media", "发送媒体结束包失败", e)
                 }
-            } catch (_: Exception) {}
+            } else {
+                // 超级岛：发送终止包
+                try {
+                    val pair = superIslandFeatureByKey.remove(notificationKey)
+                    if (pair != null) {
+                        val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                        val (superPkg, featureId) = pair
+                        MessageSender.sendSuperIslandEnd(
+                            applicationContext,
+                            superPkg,
+                            try { applicationContext.packageName } catch (_: Exception) { null },
+                            System.currentTimeMillis(),
+                            try { SuperIslandManager.extractSuperIslandData(sbn, applicationContext)?.paramV2Raw } catch (_: Exception) { null },
+                            try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") } catch (_: Exception) { null },
+                            try { NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") } catch (_: Exception) { null },
+                            deviceManager,
+                            featureIdOverride = featureId
+                        )
+                    }
+                } catch (_: Exception) {}
+            }
         }
     }
-    override fun onTaskRemoved(rootIntent: android.content.Intent?) {
+    override fun onTaskRemoved(rootIntent: Intent?) {
         Logger.i("黑影 NotifyRelay", "[NotifyListener] onTaskRemoved called, rootIntent=$rootIntent")
         super.onTaskRemoved(rootIntent)
         // 重新启动服务，防止被系统杀死
-        val restartIntent = android.content.Intent(applicationContext, NotifyRelayNotificationListenerService::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        val restartIntent =
+            Intent(applicationContext, NotifyRelayNotificationListenerService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             applicationContext.startForegroundService(restartIntent)
         } else {
             applicationContext.startService(restartIntent)
@@ -86,7 +149,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 确保本地历史缓存已加载，避免首次拉取时判重失效
         NotificationRepository.init(applicationContext)
         // 初始化设备连接管理器并启动发现
-        connectionManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+        connectionManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
         try {
             val discoveryField = connectionManager.javaClass.getDeclaredField("discoveryManager")
             discoveryField.isAccessible = true
@@ -96,23 +159,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             startMethod.invoke(discovery)
         } catch (_: Exception) {}
 
-        // 注册设备列表变化回调：立即刷新持久化通知（确保在主线程更新UI/通知）
-        try {
-            //Logger.d("黑影 NotifyRelay", "注册 onDeviceListChanged 回调到 connectionManager=$connectionManager")
-            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-            connectionManager.onDeviceListChanged = {
-                try {
-                    mainHandler.post {
-                        try { updateNotification() } catch (_: Exception) {}
-                    }
-                } catch (_: Exception) {}
-            }
-        } catch (e: Exception) {
-            Logger.w("黑影 NotifyRelay", "注册 onDeviceListChanged 失败: ${e.message}")
-        }
-
         // 监听设备状态变化，更新通知
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+        CoroutineScope(Dispatchers.Default).launch {
             connectionManager.devices.collect { deviceMap ->
                 // 设备状态发生变化时更新通知
                 updateNotification()
@@ -120,17 +168,17 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
 
         // 监听网络状态变化，更新通知
-        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) {
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
                 updateNotification()
             }
 
-            override fun onLost(network: android.net.Network) {
+            override fun onLost(network: Network) {
                 updateNotification()
             }
 
-            override fun onCapabilitiesChanged(network: android.net.Network, networkCapabilities: android.net.NetworkCapabilities) {
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 updateNotification()
             }
         }
@@ -139,7 +187,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         super.onCreate()
     }
 
-    override fun onBind(intent: android.content.Intent?): android.os.IBinder? {
+    override fun onBind(intent: Intent?): IBinder? {
         Logger.i("黑影 NotifyRelay", "[NotifyListener] onBind called, intent=$intent")
         return super.onBind(intent)
     }
@@ -148,15 +196,121 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private val NOTIFY_ID = 1001
 
     // 设备连接管理器
-    private lateinit var connectionManager: com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+    private lateinit var connectionManager: DeviceConnectionManager
 
     // 网络监听器
-    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     // 新增：已处理通知缓存，避免重复处理 (改进版：带时间戳的LRU缓存)
     private val processedNotifications = mutableMapOf<String, Long>()
     // 记录本机转发过的超级岛特征ID，用于在移除时发送终止包
     private val superIslandFeatureByKey = mutableMapOf<String, Pair<String, String>>() // sbnKey -> (superPkg, featureId)
+    
+    // 媒体播放通知状态管理：使用sbn.key作为会话键，跟踪每个媒体通知的状态
+    private val mediaPlayStateByKey = mutableMapOf<String, MediaPlayState>()
+    
+    // 媒体播放状态数据类
+    data class MediaPlayState(
+        val title: String,
+        val text: String,
+        val packageName: String,
+        val postTime: Long,
+        val coverUrl: String? = null,
+        val sentTime: Long = System.currentTimeMillis() // 添加发送时间戳
+    )
+    
+    /**
+     * 将Drawable转换为Bitmap
+     */
+    private fun Drawable.toBitmap(): Bitmap {
+        val bitmap = Bitmap.createBitmap(intrinsicWidth, intrinsicHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        setBounds(0, 0, canvas.width, canvas.height)
+        draw(canvas)
+        return bitmap
+    }
+    
+    /**
+     * 处理媒体播放通知
+     */
+    private fun processMediaNotification(sbn: StatusBarNotification) {
+        // 更新全局持有的最新媒体通知，方便外部通过工具类触发操作
+        try {
+            latestMediaSbn = sbn
+        } catch (_: Exception) {}
+        val sbnKey = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
+        val title = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title") ?: ""
+        val text = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text") ?: ""
+        
+        // 获取音乐封面图标
+        var coverUrl: String? = null
+        try {
+            // 尝试从通知的大图中获取封面
+            val largeIcon = sbn.notification.getLargeIcon()
+            if (largeIcon != null) {
+                // 将Drawable转换为Bitmap
+                val drawable = largeIcon.loadDrawable(applicationContext)
+                if (drawable != null) {
+                    val bitmap = drawable.toBitmap()
+                    val stream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+                    val bytes = stream.toByteArray()
+                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    coverUrl = "data:image/jpeg;base64,$base64"
+                }
+            }
+        } catch (e: Exception) {
+            Logger.e("NotifyRelay-Media", "获取音乐封面失败", e)
+        }
+        
+        // 记录日志
+        //Logger.v("NotifyRelay-Media", "processMediaNotification: title='$title', text='$text', sbnKey=$sbnKey, coverUrl=${coverUrl?.take(20)}...")
+        
+        // 检查状态是否变化，只在内容变化时发送
+        val currentState = MediaPlayState(title, text, sbn.packageName, sbn.postTime, coverUrl)
+        val lastState = mediaPlayStateByKey[sbnKey]
+        
+        // 发送条件：状态变化 或 距离上次发送超过15秒
+        val now = System.currentTimeMillis()
+        val sendRequired = lastState == null || 
+                          lastState.title != currentState.title || 
+                          lastState.text != currentState.text || 
+                          lastState.coverUrl != currentState.coverUrl ||
+                          (now - lastState.sentTime > 15 * 1000) // 超过15秒未发送
+        
+        if (sendRequired) {
+            // 状态变化或超时，发送消息
+            
+            try {
+                val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                var appName: String? = null
+                try {
+                    val pm = applicationContext.packageManager
+                    val appInfo = pm.getApplicationInfo(sbn.packageName, 0)
+                    appName = pm.getApplicationLabel(appInfo).toString()
+                } catch (_: Exception) {
+                    appName = sbn.packageName
+                }
+                
+                // 使用专门的协议前缀标记媒体通知,使用报文头（"type":"MEDIA_PLAY"）判断媒体消息
+                MessageSender.sendMediaPlayNotification(
+                    applicationContext,
+                    sbn.packageName,
+                    appName,
+                    title,
+                    text,
+                    coverUrl,
+                    sbn.postTime,
+                    deviceManager
+                )
+                
+                // 更新状态缓存，包含发送时间
+                mediaPlayStateByKey[sbnKey] = currentState.copy(sentTime = now)
+            } catch (e: Exception) {
+                Logger.e("NotifyRelay-Media", "发送媒体播放消息失败", e)
+            }
+        }
+    }
 
     private fun cleanupExpiredCacheEntries(currentTime: Long) {
         if (processedNotifications.size <= CACHE_CLEANUP_THRESHOLD) return
@@ -183,8 +337,16 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun processNotification(sbn: StatusBarNotification, checkProcessed: Boolean = false) {
         // 读取超级岛设置开关，决定是否按超级岛专用逻辑处理
         val superIslandEnabled = try {
-            com.xzyht.notifyrelay.common.data.StorageManager.getBoolean(applicationContext, "superisland_enabled", true)
+            StorageManager.getBoolean(applicationContext, "superisland_enabled", true)
         } catch (_: Exception) { true }
+
+        // 检查是否为媒体播放通知
+        val isMediaNotification = sbn.notification.category == Notification.CATEGORY_TRANSPORT
+        if (isMediaNotification) {
+            // 媒体播放消息，单独处理
+            processMediaNotification(sbn)
+            return
+        }
 
         // 在本机本地过滤前，尝试读取超级岛信息并单独转发
         // 当开关开启且检测到超级岛数据时，只发送超级岛分支，不再走普通通知转发
@@ -194,9 +356,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 if (superData != null) {
                     Logger.i("超级岛", "超级岛: 检测到超级岛数据，准备转发，pkg=${superData.sourcePackage}, title=${superData.title}")
                     try {
-                        val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
-                        // 使用专有前缀标记为超级岛数据，接收端会根据该前缀走悬浮窗复刻逻辑
-                        val superPkg = "superisland:${superData.sourcePackage ?: "unknown"}"
+                        val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
+                        // 不再使用包名前缀标记；通过通道头 DATA_SUPERISLAND 区分超级岛
+                        val superPkg = superData.sourcePackage ?: "unknown"
                         // 严格以通知 sbn.key 作为会话键：一条系统通知只对应一座“岛”
                         val sbnInstanceId = sbn.key ?: (sbn.id.toString() + "|" + sbn.packageName)
                         // 优先复用历史特征ID，避免因字段轻微变化导致“不同岛”的错判
@@ -211,7 +373,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                         val featureId = oldId ?: computedId
                         // 初次出现时登记；后续保持不变
                         try { if (oldId == null) superIslandFeatureByKey[sbnInstanceId] = superPkg to featureId } catch (_: Exception) {}
-                        com.xzyht.notifyrelay.common.core.util.MessageSender.sendSuperIslandData(
+                        MessageSender.sendSuperIslandData(
                             applicationContext,
                             superPkg,
                             superData.appName ?: "超级岛",
@@ -272,7 +434,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         // 更新缓存
         processedNotifications[notificationKey] = currentTime
 
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+        CoroutineScope(Dispatchers.Default).launch {
             try {
                 logSbnDetail("黑影 通过", sbn)
                 val added = NotificationRepository.addNotification(sbn, this@NotifyRelayNotificationListenerService)
@@ -294,7 +456,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     private fun forwardNotificationToRemoteDevices(sbn: StatusBarNotification) {
         Logger.i("狂鼠 NotifyRelay", "[NotifyListener] forwardNotificationToRemoteDevices called, sbnKey=${sbn.key}, pkg=${sbn.packageName}")
         try {
-            val deviceManager = com.xzyht.notifyrelay.feature.device.ui.DeviceForwardFragment.getDeviceManager(applicationContext)
+            val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(applicationContext)
             var appName: String? = null
             try {
                 val pm = applicationContext.packageManager
@@ -305,7 +467,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             }
 
             // 使用整合的消息发送工具
-            com.xzyht.notifyrelay.common.core.util.MessageSender.sendNotificationMessage(
+            MessageSender.sendNotificationMessage(
                 applicationContext,
                 sbn.packageName,
                 appName,
@@ -324,7 +486,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         Logger.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected called")
         super.onListenerConnected()
         // 检查监听服务是否启用
-        val enabledListeners = android.provider.Settings.Secure.getString(
+        val enabledListeners = Settings.Secure.getString(
             applicationContext.contentResolver,
             "enabled_notification_listeners"
         )
@@ -337,7 +499,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val actives = activeNotifications
         if (actives != null) {
             Logger.i("黑影 NotifyRelay", "[NotifyListener] onListenerConnected: activeNotifications.size=${actives.size}")
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            CoroutineScope(Dispatchers.Default).launch {
                 for (sbn in actives) {
                     processNotification(sbn, true)
                 }
@@ -349,12 +511,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         startForegroundService()
         // 定时拉取活跃通知，保证后台实时性
         foregroundJob?.cancel()
-        foregroundJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+        foregroundJob = CoroutineScope(Dispatchers.Default).launch {
             while (true) {
                 delay(5000)
                 val actives = activeNotifications
                 if (actives != null) {
-                    
+
                     for (sbn in actives) {
                         if (sbn.packageName == applicationContext.packageName) continue
                         processNotification(sbn, true)
@@ -387,18 +549,11 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                     stopMethod.isAccessible = true
                     stopMethod.invoke(discovery)
                 } catch (_: Exception) {}
-                // 注销设备列表变化回调
-                try {
-                    //Logger.d("黑影 NotifyRelay", "注销 onDeviceListChanged 回调 from connectionManager=$connectionManager")
-                    connectionManager.onDeviceListChanged = null
-                } catch (e: Exception) {
-                    Logger.w("黑影 NotifyRelay", "注销 onDeviceListChanged 失败: ${e.message}")
-                }
             }
         } catch (_: Exception) {}
         // 注销网络监听器
         try {
-            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
             networkCallback?.let { connectivityManager.unregisterNetworkCallback(it) }
             networkCallback = null
         } catch (_: Exception) {}
@@ -413,12 +568,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
 
-        val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("通知监听/转发中")
             .setContentText(getNotificationText())
-            .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         // Android 12+ 及以上不再指定特殊前台服务类型，避免权限崩溃
         startForeground(NOTIFY_ID, notification)
@@ -435,12 +590,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
         }
 
         // 没有设备连接时，显示网络状态
-        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork
         val capabilities = connectivityManager.getNetworkCapabilities(network)
-        val isWifi = capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
-        val isEthernet = capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
-        val isWifiDirect = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) == true
+        val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val isEthernet = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val isWifiDirect = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_WIFI_P2P) == true
 
         // 如果不是WiFi、以太网或WLAN直连，则认为是移动数据等非局域网
         if (!isWifi && !isEthernet && !isWifiDirect) {
@@ -458,12 +613,12 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
             !text.contains("无设备在线") && !text.contains("非局域网连接")
         }
         val title = if (canForward) "通知监听/转发中" else "通知监听中"
-        val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(getNotificationText())
-            .setSmallIcon(com.xzyht.notifyrelay.R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         manager.notify(NOTIFY_ID, notification)
         //Logger.d("黑影 NotifyRelay", "notify posted: id=$NOTIFY_ID, text=${getNotificationText()}")

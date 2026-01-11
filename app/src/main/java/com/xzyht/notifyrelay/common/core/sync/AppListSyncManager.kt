@@ -1,7 +1,9 @@
 package com.xzyht.notifyrelay.common.core.sync
 
 import android.content.Context
-import com.xzyht.notifyrelay.common.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.repository.AppListHelper
+import com.xzyht.notifyrelay.common.core.repository.AppRepository
+import com.xzyht.notifyrelay.common.core.sync.IconSyncManager
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
@@ -102,19 +104,73 @@ object AppListSyncManager {
 
     /**
      * 处理接收到的应用列表响应。
-     * 当前实现仅日志输出与占位，留给上层接入展示或缓存。
+     * 1. 解析响应数据，将应用列表缓存到 AppRepository
+     * 2. 将应用包名与来源设备关联
+     * 3. 检查并批量请求缺失的图标
      */
-    fun handleAppListResponse(responseData: String, context: Context) {
+    fun handleAppListResponse(responseData: String, context: Context, deviceUuid: String) {
         try {
-            context.hashCode()
             val json = JSONObject(responseData)
             if (json.optString("type") != "APP_LIST_RESPONSE") return
-            json.optInt("total", -1)
-            //Logger.d(TAG, "收到应用列表响应，共 $total 项")
-            // 如需缓存到本地，可在此扩展，例如：
-            // StorageManager.putString(context, "remote_app_list_cache", json.toString())
+            val total = json.optInt("total", -1)
+            //Logger.d(TAG, "收到应用列表响应，共 $total 项，来源设备：$deviceUuid")
+            
+            // 解析应用列表
+            val appsArray = json.optJSONArray("apps") ?: return
+            val appsMap = mutableMapOf<String, String>()
+            val packageNames = mutableListOf<String>()
+            for (i in 0 until appsArray.length()) {
+                val appItem = appsArray.optJSONObject(i) ?: continue
+                val packageName = appItem.optString("packageName")
+                val appName = appItem.optString("appName")
+                if (packageName.isNotEmpty() && appName.isNotEmpty()) {
+                    appsMap[packageName] = appName
+                    packageNames.add(packageName)
+                }
+            }
+            
+            // 缓存到 AppRepository
+            AppRepository.cacheRemoteAppList(appsMap)
+            
+            // 将应用包名与来源设备关联
+            AppRepository.associateAppsWithDevice(packageNames, deviceUuid)
         } catch (e: Exception) {
             Logger.e(TAG, "处理应用列表响应失败", e)
         }
+    }
+    
+    /**
+     * 检查并批量请求缺失的图标。
+     * 
+     * @param context 上下文
+     * @param packageNames 要检查的包名列表
+     * @param deviceManager 设备连接管理器
+     * @param sourceDevice 源设备信息
+     */
+    fun checkAndRequestMissingIcons(
+        context: Context,
+        packageNames: List<String>,
+        deviceManager: DeviceConnectionManager,
+        sourceDevice: DeviceInfo
+    ) {
+        // 检查缺失的图标
+        val missingIcons = AppRepository.getMissingIconsForPackages(packageNames)
+        if (missingIcons.isEmpty()) {
+            //Logger.d(TAG, "所有图标已缓存，无需请求")
+            return
+        }
+        
+        // 过滤掉本机已安装的应用（本机已安装的应用图标可直接获取，无需请求）
+        val installedPackages = AppRepository.getInstalledPackageNames(context)
+        val needRequestIcons = missingIcons.filter { !installedPackages.contains(it) }
+        
+        if (needRequestIcons.isEmpty()) {
+            //Logger.d(TAG, "所有缺失图标为本机已安装应用，无需请求")
+            return
+        }
+        
+        // 批量请求缺失的图标
+        IconSyncManager.requestIconsBatch(context, needRequestIcons, deviceManager, sourceDevice)
+        //Logger.d(TAG, "批量请求缺失图标：${needRequestIcons.size} 个")
     }
 }

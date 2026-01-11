@@ -140,6 +140,13 @@ class DatabaseRepository(private val database: AppDatabase) {
         return notificationRecordDao.countByDevice(deviceUuid)
     }
     
+    /**
+     * 根据包名和设备UUID删除通知记录
+     */
+    suspend fun deleteNotificationsByPackageAndDevice(packageName: String, deviceUuid: String) {
+        notificationRecordDao.deleteByPackageAndDevice(packageName, deviceUuid)
+    }
+    
     // 超级岛历史记录相关方法
     
     /**

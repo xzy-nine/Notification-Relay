@@ -72,4 +72,10 @@ interface NotificationRecordDao {
      */
     @Query("SELECT COUNT(*) FROM notification_records WHERE deviceUuid = :deviceUuid")
     suspend fun countByDevice(deviceUuid: String): Int
+    
+    /**
+     * 根据包名和设备UUID删除通知记录
+     */
+    @Query("DELETE FROM notification_records WHERE packageName = :packageName AND deviceUuid = :deviceUuid")
+    suspend fun deleteByPackageAndDevice(packageName: String, deviceUuid: String)
 }

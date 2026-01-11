@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.common.data
+package com.xzyht.notifyrelay.common.data
 
 import android.content.Context
 import com.google.gson.Gson
@@ -17,6 +17,9 @@ object PersistenceManager {
 
     /** 通知记录文件名的后缀（JSON 文件） */
     private const val NOTIFICATION_RECORDS_SUFFIX = ".json"
+    
+    /** 设备 UUID 存储键 */
+    private const val DEVICE_UUID_KEY = "device_uuid"
 
     /**
      * 根据设备标识构造用于存储通知记录的文件对象。
@@ -77,5 +80,14 @@ object PersistenceManager {
             it.name.startsWith(NOTIFICATION_RECORDS_PREFIX) && it.name.endsWith(NOTIFICATION_RECORDS_SUFFIX)
         } ?: emptyList()
     }
-
+    
+    /**
+     * 获取本地设备的 UUID。
+     *
+     * @param context 用于访问 StorageManager 的 Context
+     * @return 本地设备的 UUID，若不存在则返回空字符串
+     */
+    fun getLocalDeviceUuid(context: Context): String {
+        return StorageManager.getString(context, DEVICE_UUID_KEY, prefsType = StorageManager.PrefsType.GENERAL)
+    }
 }

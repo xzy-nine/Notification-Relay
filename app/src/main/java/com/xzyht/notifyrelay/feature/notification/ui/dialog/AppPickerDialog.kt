@@ -53,7 +53,7 @@ fun AppPickerDialog(
     if (!visible) return
 
     val context = LocalContext.current
-    val pm = context.packageManager
+    val pm = remember(context) { context.packageManager }
     val coroutineScope = rememberCoroutineScope()
 
     var showSystemApps by rememberSaveable { mutableStateOf(true) }
@@ -64,6 +64,22 @@ fun AppPickerDialog(
     // 监听 AppRepository 的状态
     val isLoading by AppRepository.isLoading.collectAsState()
     val allApps by AppRepository.apps.collectAsState()
+    val iconUpdateKey by AppRepository.iconUpdates.collectAsState()
+
+    val appLabelMap by remember(allApps, pm) {
+        derivedStateOf {
+            val result = mutableMapOf<String, String>()
+            allApps.forEach { info ->
+                val label = try {
+                    pm.getApplicationLabel(info).toString()
+                } catch (_: Exception) {
+                    info.packageName
+                }
+                result[info.packageName] = label
+            }
+            result
+        }
+    }
 
     // 计算过滤后的应用列表
     val filteredApps by remember(allApps, appSearchQuery, showSystemApps) {
@@ -157,11 +173,12 @@ fun AppPickerDialog(
                                     }
                                 }
                             } else {
-                                items(filteredApps) { appInfo: ApplicationInfo ->
+                                items(filteredApps, key = { it.packageName }) { appInfo: ApplicationInfo ->
                                     val pkg = appInfo.packageName
-                                    val label = try { pm.getApplicationLabel(appInfo).toString() } catch (_: Exception) { pkg }
-                                    // 使用缓存的图标（同步版本）
-                                    val iconBitmap = AppRepository.getAppIconSync(context, pkg)?.asImageBitmap()
+                                    val label = appLabelMap[pkg] ?: pkg
+                                    val iconBitmap = remember(iconUpdateKey, pkg) {
+                                        AppRepository.getAppIcon(pkg)?.asImageBitmap()
+                                    }
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()

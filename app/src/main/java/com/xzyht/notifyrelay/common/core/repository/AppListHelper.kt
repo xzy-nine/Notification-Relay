@@ -1,6 +1,8 @@
-﻿package com.xzyht.notifyrelay.common.core.util
+package com.xzyht.notifyrelay.common.core.repository
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import com.xzyht.notifyrelay.common.core.util.Logger
 
 object AppListHelper {
     /**
@@ -9,14 +11,14 @@ object AppListHelper {
      * @param context 用于访问 PackageManager 的 Context
      * @return 已安装应用的列表，若发生异常则返回空列表
      */
-    fun getInstalledApplications(context: Context): List<android.content.pm.ApplicationInfo> {
+    fun getInstalledApplications(context: Context): List<ApplicationInfo> {
         return try {
             val pm = context.packageManager
             val apps = pm.getInstalledApplications(0)
             // 过滤掉系统应用和自己
             apps.filter { appInfo ->
-                val isSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdatedSystemApp = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
                 val isSelf = appInfo.packageName == context.packageName
                 !isSystemApp && !isUpdatedSystemApp && !isSelf
             }
@@ -81,7 +83,7 @@ object AppListHelper {
     fun filterAppsByPackageNames(
         context: Context,
         packageNames: List<String>
-    ): List<android.content.pm.ApplicationInfo> {
+    ): List<ApplicationInfo> {
         val allApps = getInstalledApplications(context)
         return allApps.filter { appInfo ->
             packageNames.contains(appInfo.packageName)
@@ -99,8 +101,8 @@ object AppListHelper {
     fun searchApps(
         context: Context,
         query: String,
-        installedApps: List<android.content.pm.ApplicationInfo>? = null
-    ): List<android.content.pm.ApplicationInfo> {
+        installedApps: List<ApplicationInfo>? = null
+    ): List<ApplicationInfo> {
         val apps = installedApps ?: getInstalledApplications(context)
         if (query.isBlank()) return apps
 
@@ -108,6 +110,80 @@ object AppListHelper {
             val appName = getApplicationLabel(context, appInfo.packageName)
             appName.contains(query, ignoreCase = true) ||
             appInfo.packageName.contains(query, ignoreCase = true)
+        }
+    }
+    
+    /**
+     * 从 JSONArray 解析远程应用列表
+     *
+     * @param appsArray 包含应用信息的 JSONArray
+     * @return 解析后的应用列表，格式为 Map<包名, 应用名>
+     */
+    fun parseRemoteAppList(appsArray: org.json.JSONArray): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        for (i in 0 until appsArray.length()) {
+            val appItem = appsArray.optJSONObject(i) ?: continue
+            val packageName = appItem.optString("packageName")
+            val appName = appItem.optString("appName")
+            if (packageName.isNotEmpty() && appName.isNotEmpty()) {
+                result[packageName] = appName
+            }
+        }
+        return result
+    }
+    
+    /**
+     * 合并本地和远程应用列表
+     *
+     * @param context 用于访问 PackageManager 的 Context
+     * @param remoteApps 远程应用列表，格式为 Map<包名, 应用名>
+     * @return 合并后的应用列表，保留本地应用的名称
+     */
+    fun mergeLocalAndRemoteApps(
+        context: Context,
+        remoteApps: Map<String, String>
+    ): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val localApps = getInstalledApplications(context)
+        
+        // 添加本地应用
+        localApps.forEach {
+            val packageName = it.packageName
+            val appName = getApplicationLabel(context, packageName)
+            result[packageName] = appName
+        }
+        
+        // 添加远程应用（不覆盖本地应用）
+        remoteApps.forEach {
+            if (!result.containsKey(it.key)) {
+                result[it.key] = it.value
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * 获取应用名，优先使用本地应用名，其次使用远程应用名
+     *
+     * @param context 用于访问 PackageManager 的 Context
+     * @param packageName 应用包名
+     * @param remoteAppName 远程应用名
+     * @return 应用的显示名称
+     */
+    fun getAppNameWithFallback(
+        context: Context,
+        packageName: String,
+        remoteAppName: String? = null
+    ): String {
+        // 优先尝试获取本地应用名
+        return try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            // 本地获取失败，使用远程应用名或包名
+            remoteAppName ?: packageName
         }
     }
 }

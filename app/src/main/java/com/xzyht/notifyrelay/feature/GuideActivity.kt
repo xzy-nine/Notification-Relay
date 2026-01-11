@@ -46,8 +46,9 @@ import androidx.core.view.WindowCompat
 import com.xzyht.notifyrelay.common.NotifyRelayTheme
 import com.xzyht.notifyrelay.common.PermissionHelper
 import com.xzyht.notifyrelay.common.SetupSystemBars
-import com.xzyht.notifyrelay.common.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.repository.AppListHelper
 import com.xzyht.notifyrelay.common.core.util.IntentUtils
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.common.core.util.ToastUtils
 import com.xzyht.notifyrelay.common.data.StorageManager
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -59,12 +60,15 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class GuideActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true, StorageManager.PrefsType.GENERAL)
         val fromInternal = intent.getBooleanExtra("fromInternal", false)
+        val fromSftp = intent.getBooleanExtra("fromSftp", false)
         // 仅冷启动且权限满足时自动跳主界面，应用内跳转（fromInternal=true）始终渲染引导页
         if (!fromInternal && PermissionHelper.checkAllPermissions(this) && !isFirstLaunch) {
             startActivity(Intent(this, MainActivity::class.java))
@@ -86,6 +90,12 @@ class GuideActivity : ComponentActivity() {
                 GuideScreen(onContinue = {
                     // 首次启动后标记为已启动
                     StorageManager.putBoolean(this@GuideActivity, "isFirstLaunch", false, StorageManager.PrefsType.GENERAL)
+                    
+                    if (fromSftp) {
+                        // 如果是从SFTP请求跳转过来的，尝试重新启动SFTP服务
+                        Logger.d("GuideActivity", "从SFTP请求跳转，尝试重新启动SFTP服务")
+                    }
+                    
                     startActivity(Intent(this@GuideActivity, MainActivity::class.java))
                     finish()
                 })
@@ -98,6 +108,17 @@ class GuideActivity : ComponentActivity() {
         super.onResume()
         // 当从系统设置页面返回时，刷新权限状态
         GuideScreen.refreshTrigger++
+        
+        // 检查是否从SFTP请求跳转过来，并且已经获取了文件管理权限
+        val fromSftp = intent.getBooleanExtra("fromSftp", false)
+        if (fromSftp && PermissionHelper.checkManageExternalStoragePermission(this)) {
+            // 从系统设置返回，并且已经获取了文件管理权限
+            Logger.d("GuideActivity", "从SFTP请求跳转，已经获取文件管理权限，尝试重新启动SFTP服务")
+            // 这里需要获取当前连接的PC设备的sharedSecret和deviceName
+            // 目前无法直接获取，需要后续优化，先关闭当前页面
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
     }
 
 object GuideScreen {
@@ -106,25 +127,27 @@ object GuideScreen {
 }
 
 @Composable
-fun GuideScreen(onContinue: () -> Unit) {
-    val context = LocalContext.current
-    var permissionsGranted by remember { mutableStateOf(false) }
-    var showCheck by remember { mutableStateOf(false) }
-    var hasNotification by remember { mutableStateOf(false) }
-    var hasUsage by remember { mutableStateOf(false) }
-    var hasPost by remember { mutableStateOf(false) }
-    var canQueryApps by remember { mutableStateOf(false) }
-    // 可选权限状态
-    var hasFloatNotification by remember { mutableStateOf(false) }
-    var hasDevScreenShareProtectOff by remember { mutableStateOf(false) }
+    fun GuideScreen(onContinue: () -> Unit) {
+        val context = LocalContext.current
+        var permissionsGranted by remember { mutableStateOf(false) }
+        var showCheck by remember { mutableStateOf(false) }
+        var hasNotification by remember { mutableStateOf(false) }
+        var hasUsage by remember { mutableStateOf(false) }
+        var hasPost by remember { mutableStateOf(false) }
+        var canQueryApps by remember { mutableStateOf(false) }
+        // 可选权限状态
+        var hasFloatNotification by remember { mutableStateOf(false) }
+        var hasDevScreenShareProtectOff by remember { mutableStateOf(false) }
 
-    var hasBluetoothConnect by remember { mutableStateOf(false) }
-    // Android 15+ 敏感通知权限
-    var hasSensitiveNotification by remember { mutableStateOf(true) }
-    // 自启动权限状态
-    var hasSelfStart by remember { mutableStateOf(false) }
-    // 后台无限制权限状态 (可选)
-    var hasBackgroundUnlimited by remember { mutableStateOf(false) }
+        var hasBluetoothConnect by remember { mutableStateOf(false) }
+        // Android 15+ 敏感通知权限
+        var hasSensitiveNotification by remember { mutableStateOf(true) }
+        // 自启动权限状态
+        var hasSelfStart by remember { mutableStateOf(false) }
+        // 后台无限制权限状态 (可选)
+        var hasBackgroundUnlimited by remember { mutableStateOf(false) }
+        // 文件管理权限状态
+        var hasManageExternalStorage by remember { mutableStateOf(false) }
     // Toast工具
     fun showToast(msg: String) {
         ToastUtils.showShortToast(context, msg)
@@ -149,7 +172,6 @@ fun GuideScreen(onContinue: () -> Unit) {
         // 检查悬浮通知权限
         hasFloatNotification = PermissionHelper.checkOverlayPermission(context)
 
-
         // 使用 PermissionHelper 检查敏感通知权限
         hasSensitiveNotification = PermissionHelper.checkSensitiveNotificationPermission(context)
 
@@ -161,6 +183,9 @@ fun GuideScreen(onContinue: () -> Unit) {
 
         // 使用 PermissionHelper 检查自启动权限（通过通知监听器启用状态间接验证）
         hasSelfStart = PermissionHelper.checkNotificationListenerServiceCanStart(context)
+        
+        // 使用 PermissionHelper 检查文件管理权限
+        hasManageExternalStorage = PermissionHelper.checkManageExternalStoragePermission(context)
 
         permissionsGranted = hasNotification && canQueryApps && hasPost && hasSelfStart
 
@@ -173,6 +198,14 @@ fun GuideScreen(onContinue: () -> Unit) {
     val trigger = GuideScreen.refreshTrigger
     LaunchedEffect(trigger) {
         refreshPermissions()
+    }
+    
+    // 定期检查权限状态，确保开关能正确显示当前权限状态
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000) // 每秒检查一次
+            refreshPermissions()
+        }
     }
 
     Scaffold(
@@ -305,6 +338,21 @@ fun GuideScreen(onContinue: () -> Unit) {
                             } else {
                                 showToast("当前系统无需蓝牙连接权限")
                             }
+                        },
+                        enabled = true
+                    )
+                    HorizontalDivider(color = dividerColor, thickness = 1.dp)
+                    SuperSwitch(
+                        title = "文件管理权限",
+                        summary = if (hasManageExternalStorage) "已授权" else "用于支持SFTP功能，管理设备文件",
+                        checked = hasManageExternalStorage,
+                        onCheckedChange = {
+                            showToast("跳转文件管理权限设置")
+                            PermissionHelper.requestManageExternalStoragePermission(context)
+                        },
+                        onClick = {
+                            showToast("跳转文件管理权限设置")
+                            PermissionHelper.requestManageExternalStoragePermission(context)
                         },
                         enabled = true
                     )

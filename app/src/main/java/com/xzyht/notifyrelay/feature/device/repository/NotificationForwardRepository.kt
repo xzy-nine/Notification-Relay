@@ -1,4 +1,4 @@
-﻿package com.xzyht.notifyrelay.feature.device.repository
+package com.xzyht.notifyrelay.feature.device.repository
 
 import android.content.Context
 import androidx.compose.runtime.MutableState
@@ -32,86 +32,15 @@ suspend fun replicateNotification(
     val originalPackage = json.optString("packageName")
     json.put("packageName", result.mappedPkg)
         val pkg = result.mappedPkg
-        // 超级岛专属处理：以特殊前缀标记的包名会被视为超级岛数据，走悬浮窗复刻路径
-        // 同时根据 type 字段过滤 SI_END 结束包：结束包不再生成新的悬浮窗，只用于关闭已有浮窗
-    if (pkg.startsWith("superisland:")) {
-            try {
-                val type = json.optString("type", "")
-                val featureKeyName = json.optString("featureKeyName", "")
-                val featureKeyValue = json.optString("featureKeyValue", "")
-
-                // 结束包：只负责关闭对应 featureId 的悬浮窗，不生成任何 UI
-                if (type == SuperIslandProtocol.TYPE_END && featureKeyValue.isNotBlank()) {
-                    Logger.i("超级岛", "检测到超级岛结束包，准备关闭悬浮窗 featureId=$featureKeyValue")
-                    FloatingReplicaManager.dismissBySource(featureKeyValue)
-                    return
-                }
-
-                val title = json.optString("title")
-                val text = json.optString("text")
-                val paramV2 = if (json.has("param_v2_raw")) json.optString("param_v2_raw") else null
-                val pics = try { json.optJSONObject("pics") } catch (_: Exception) { null }
-                val picMap = mutableMapOf<String, String>()
-                if (pics != null) {
-                    val keys = pics.keys()
-                    while (keys.hasNext()) {
-                        val k = keys.next()
-                        try {
-                            val v = pics.optString(k)
-                            if (!v.isNullOrEmpty()) picMap[k] = v
-                        } catch (_: Exception) {}
-                    }
-                }
-                Logger.i("超级岛", "超级岛: 检测到超级岛数据，准备复刻悬浮窗，pkg=$pkg, title=$title, type=$type")
-                // 使用 featureKeyValue 作为 sourceId，确保结束包可以按 featureId 精确关闭
-                val sourceId = if (featureKeyName == SuperIslandProtocol.FEATURE_KEY_NAME && featureKeyValue.isNotBlank()) {
-                    featureKeyValue
-                } else {
-                    pkg
-                }
-                val isLocked = json.optBoolean("isLocked", false)
-                FloatingReplicaManager.showFloating(context, sourceId, title, text, paramV2, picMap, json.optString("appName"), isLocked)
-                val historyEntry = SuperIslandHistoryEntry(
-                    id = System.currentTimeMillis(),
-                    originalPackage = originalPackage.takeIf { it.isNotEmpty() },
-                    mappedPackage = pkg,
-                    appName = json.optString("appName").takeIf { it.isNotEmpty() },
-                    title = title.takeIf { it.isNotBlank() },
-                    text = text.takeIf { it.isNotBlank() },
-                    paramV2Raw = paramV2?.takeIf { it.isNotBlank() },
-                    picMap = picMap.toMap(),
-                    rawPayload = result.rawData
-                )
-                try {
-                    SuperIslandHistory.append(context, historyEntry)
-                } catch (_: Exception) {
-                    SuperIslandHistory.append(
-                        context,
-                        SuperIslandHistoryEntry(
-                            id = System.currentTimeMillis(),
-                            originalPackage = originalPackage.takeIf { it.isNotEmpty() },
-                            mappedPackage = pkg,
-                            rawPayload = result.rawData
-                        )
-                    )
-                }
-                return
-            } catch (e: Exception) {
-                Logger.w("超级岛", "超级岛: 复刻失败，回退到普通复刻: ${e.message}")
-            }
-        }
+        // 超级岛 由路由层按 DATA_SUPERISLAND 分流处理，不在此处特殊化包名处理
         val appName = json.optString("appName", pkg)
         val title = json.optString("title")
         val text = json.optString("text")
         val time = json.optLong("time", System.currentTimeMillis())
         var appIcon: android.graphics.Bitmap? = null
         try {
-            // 优先使用缓存的图标（同步版本）
-            appIcon = AppRepository.getAppIconSync(context, pkg)
-            if (appIcon == null) {
-                // 如果缓存中没有，尝试获取外部应用图标（来自其他设备的同步）
-                appIcon = AppRepository.getExternalAppIcon(pkg)
-            }
+            // 使用统一的图标获取方法，自动处理本地和外部应用
+            appIcon = AppRepository.getAppIconWithAutoRequest(context, pkg)
 
             // 如果初次没有获得图标，等待外部图标同步（最多等待2秒，每100ms轮询一次）。
             // 目的：在第一次获取不到远程同步到的图标时，给它短暂时间到达再复刻，避免某些情况下一直不复刻图标。
@@ -122,10 +51,10 @@ suspend fun replicateNotification(
                 //Logger.d("NotifyRelay(狂鼠)", "未找到图标，等待最多 ${waitMaxMs}ms 以尝试获取外部图标: $pkg")
                 try {
                     while (System.currentTimeMillis() - start < waitMaxMs) {
-                        // 尝试从外部缓存再次获取
-                        appIcon = AppRepository.getExternalAppIcon(pkg)
+                        // 尝试从统一方法再次获取
+                        appIcon = AppRepository.getAppIconWithAutoRequest(context, pkg)
                         if (appIcon != null) {
-                            //Logger.d("NotifyRelay(狂鼠)", "等待期间获取到外部图标: $pkg")
+                            //Logger.d("NotifyRelay(狂鼠)", "等待期间获取到图标: $pkg")
                             break
                         }
                         delay(intervalMs)
@@ -137,24 +66,7 @@ suspend fun replicateNotification(
                 }
             }
 
-            // 如果仍然没有图标，尝试直接获取（本地安装的应用）
-            if (appIcon == null) {
-                val pm = context.packageManager
-                val appInfo = pm.getApplicationInfo(pkg, 0)
-                val icon = pm.getApplicationIcon(appInfo)
-                if (icon is android.graphics.drawable.BitmapDrawable) {
-                    appIcon = icon.bitmap
-                } else {
-                    val iconDrawable = icon
-                    val width: Int = if (iconDrawable.intrinsicWidth > 0) iconDrawable.intrinsicWidth else 96
-                    val height: Int = if (iconDrawable.intrinsicHeight > 0) iconDrawable.intrinsicHeight else 96
-                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-                    val canvas = android.graphics.Canvas(bitmap)
-                    iconDrawable.setBounds(0, 0, width, height)
-                    iconDrawable.draw(canvas)
-                    appIcon = bitmap
-                }
-            }
+            // 统一方法已经处理了本地和外部图标的获取，无需额外逻辑
 
             if (appIcon != null) {
                 //Logger.d("NotifyRelay(狂鼠)", "成功获取应用图标: $pkg")

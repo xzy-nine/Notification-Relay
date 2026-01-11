@@ -1,11 +1,11 @@
-﻿package com.xzyht.notifyrelay.common.core.repository
+package com.xzyht.notifyrelay.common.core.repository
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import com.xzyht.notifyrelay.common.core.cache.IconCacheManager
 import com.xzyht.notifyrelay.common.core.repository.AppRepository.loadApps
-import com.xzyht.notifyrelay.common.core.util.AppListHelper
+import com.xzyht.notifyrelay.common.core.repository.AppListHelper
 import com.xzyht.notifyrelay.common.core.util.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,9 +30,19 @@ object AppRepository {
     private var cachedApps: List<ApplicationInfo>? = null
     private var isLoaded = false
 
+    // 缓存的远程应用列表 (包名 -> 应用名)
+    private var cachedRemoteApps: MutableMap<String, String> = mutableMapOf()
+    private var remoteAppsLoaded = false
+
+    // 应用包名到来源设备的映射 (包名 -> 设备UUID)
+    private var appPackageToDeviceMap: MutableMap<String, String> = mutableMapOf()
+
     // 缓存的应用图标 (包名 -> Bitmap)
     private var cachedIcons: MutableMap<String, Bitmap?> = mutableMapOf()
     private var iconsLoaded = false
+    
+    // 缺失图标的包名集合，避免重复请求
+    private var missingIcons: MutableSet<String> = mutableSetOf()
 
     // 状态流
     private val _isLoading = MutableStateFlow(false)
@@ -40,6 +50,13 @@ object AppRepository {
 
     private val _apps = MutableStateFlow<List<ApplicationInfo>>(emptyList())
     val apps: StateFlow<List<ApplicationInfo>> = _apps.asStateFlow()
+
+    private val _remoteApps = MutableStateFlow<Map<String, String>>(emptyMap())
+    val remoteApps: StateFlow<Map<String, String>> = _remoteApps.asStateFlow()
+    
+    // 图标更新事件流，用于通知UI层图标已更新
+    private val _iconUpdates = MutableStateFlow<String?>(null)
+    val iconUpdates: StateFlow<String?> = _iconUpdates.asStateFlow()
 
     /**
      * 加载应用列表并缓存。
@@ -142,14 +159,156 @@ object AppRepository {
         isLoaded = false
         _apps.value = emptyList()
 
+        // 清除远程应用列表缓存
+        cachedRemoteApps.clear()
+        remoteAppsLoaded = false
+        _remoteApps.value = emptyMap()
+        
+        // 清除应用包名与设备的关联
+        appPackageToDeviceMap.clear()
+
         // 清除图标内存缓存
         cachedIcons.clear()
         iconsLoaded = false
+        
+        // 清除缺失图标记录
+        missingIcons.clear()
 
         // 清除持久化缓存
         kotlinx.coroutines.runBlocking {
             IconCacheManager.clearAllCache()
         }
+    }
+
+    /**
+     * 缓存远程应用列表。
+     *
+     * @param apps 远程应用列表，格式为 Map<包名, 应用名>
+     */
+    fun cacheRemoteAppList(apps: Map<String, String>) {
+        cachedRemoteApps.clear()
+        cachedRemoteApps.putAll(apps)
+        remoteAppsLoaded = true
+        _remoteApps.value = cachedRemoteApps.toMap()
+        //Logger.d(TAG, "缓存远程应用列表成功，共 ${apps.size} 个应用")
+    }
+
+    /**
+     * 获取指定包名列表中缺失的图标。
+     *
+     * @param packageNames 要检查的包名列表
+     * @return 缺失图标的包名列表
+     */
+    fun getMissingIconsForPackages(packageNames: List<String>): List<String> {
+        return packageNames.filter { pkg ->
+            val hasIconInMemory = cachedIcons[pkg] != null
+            val hasIconInStorage = IconCacheManager.hasIcon(pkg)
+            val isMarkedMissing = isIconMarkedMissing(pkg)
+            !hasIconInMemory && !hasIconInStorage && !isMarkedMissing
+        }
+    }
+    
+    /**
+     * 标记一个图标为缺失。
+     *
+     * @param packageName 要标记的包名
+     */
+    fun markIconAsMissing(packageName: String) {
+        missingIcons.add(packageName)
+        //Logger.d(TAG, "标记图标为缺失：$packageName")
+    }
+    
+    /**
+     * 检查一个图标是否被标记为缺失。
+     *
+     * @param packageName 要检查的包名
+     * @return 如果被标记为缺失则返回 true，否则返回 false
+     */
+    fun isIconMarkedMissing(packageName: String): Boolean {
+        return missingIcons.contains(packageName)
+    }
+    
+    /**
+     * 清除缺失图标记录。
+     */
+    fun clearMissingIcons() {
+        missingIcons.clear()
+        //Logger.d(TAG, "清除所有缺失图标记录")
+    }
+    
+    /**
+     * 清除指定包名的缺失图标记录。
+     *
+     * @param packageName 要清除记录的包名
+     */
+    fun clearMissingIcon(packageName: String) {
+        missingIcons.remove(packageName)
+        //Logger.d(TAG, "清除缺失图标记录：$packageName")
+    }
+    
+    /**
+     * 将应用包名与设备UUID关联。
+     *
+     * @param packageName 应用包名
+     * @param deviceUuid 设备UUID
+     */
+    fun associateAppWithDevice(packageName: String, deviceUuid: String) {
+        appPackageToDeviceMap[packageName] = deviceUuid
+        //Logger.d(TAG, "关联应用包名与设备：$packageName -> $deviceUuid")
+    }
+    
+    /**
+     * 获取应用包名的来源设备UUID。
+     *
+     * @param packageName 应用包名
+     * @return 设备UUID，如果没有关联则返回null
+     */
+    fun getAppDeviceUuid(packageName: String): String? {
+        return appPackageToDeviceMap[packageName]
+    }
+    
+    /**
+     * 清除应用包名与设备的关联。
+     *
+     * @param packageName 应用包名
+     */
+    fun clearAppDeviceAssociation(packageName: String) {
+        appPackageToDeviceMap.remove(packageName)
+        //Logger.d(TAG, "清除应用包名与设备的关联：$packageName")
+    }
+    
+    /**
+     * 批量将应用包名与设备UUID关联。
+     *
+     * @param packageNames 应用包名列表
+     * @param deviceUuid 设备UUID
+     */
+    fun associateAppsWithDevice(packageNames: List<String>, deviceUuid: String) {
+        packageNames.forEach {
+            appPackageToDeviceMap[it] = deviceUuid
+        }
+        //Logger.d(TAG, "批量关联应用包名与设备：${packageNames.size} 个应用 -> $deviceUuid")
+    }
+
+    /**
+     * 获取本机已安装和已缓存图标的包名集合。
+     *
+     * @param context Android 上下文，用于获取已安装应用列表
+     * @return 已安装和已缓存图标的包名集合
+     */
+    fun getInstalledAndCachedPackageNames(context: Context): Set<String> {
+        val installedPackages = getInstalledPackageNames(context)
+        val cachedIconPackages = cachedIcons.keys + IconCacheManager.getAllIconKeys()
+        return installedPackages + cachedIconPackages
+    }
+
+    /**
+     * 获取所有已缓存图标的包名。
+     *
+     * @return 已缓存图标的包名集合
+     */
+    fun getAllCachedIconKeys(): Set<String> {
+        return cachedIcons.keys + IconCacheManager.getAllIconKeys()
     }
 
     /**
@@ -391,13 +550,18 @@ object AppRepository {
      */
     fun cacheExternalAppIcon(packageName: String, icon: Bitmap?) {
         cachedIcons[packageName] = icon
-
-        // 同时保存到持久化缓存
+        
+        // 如果缓存了有效图标，清除缺失状态
         if (icon != null) {
+            missingIcons.remove(packageName)
+            // 同时保存到持久化缓存
             kotlinx.coroutines.runBlocking {
                 IconCacheManager.saveIcon(packageName, icon)
             }
         }
+        
+        // 通知UI层图标已更新
+        _iconUpdates.value = packageName
 
         //Logger.d(TAG, "缓存外部应用图标: $packageName")
     }
@@ -441,6 +605,96 @@ object AppRepository {
         }
 
         return iconBitmap
+    }
+    
+    /**
+     * 统一获取应用图标，自动处理本地和外部应用，并支持自动请求缺失的图标。
+     *
+     * @param context 上下文
+     * @param packageName 应用包名
+     * @param deviceManager 设备连接管理器（可选，用于自动请求图标）
+     * @param sourceDevice 源设备信息（可选，用于自动请求图标）
+     * @return 应用图标，若无法获取则返回 null
+     */
+    fun getAppIconWithAutoRequest(
+        context: Context,
+        packageName: String,
+        deviceManager: com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager? = null,
+        sourceDevice: com.xzyht.notifyrelay.feature.device.service.DeviceInfo? = null
+    ): Bitmap? {
+        try {
+            // 1. 优先获取本地应用图标
+            val localIcon = getAppIconSync(context, packageName)
+            if (localIcon != null) {
+                return localIcon
+            }
+            
+            // 2. 尝试获取外部应用图标
+            val externalIcon = getExternalAppIcon(packageName)
+            if (externalIcon != null) {
+                return externalIcon
+            }
+            
+            // 3. 自动请求缺失的图标
+            if (deviceManager != null && sourceDevice != null) {
+                com.xzyht.notifyrelay.common.core.sync.IconSyncManager.checkAndSyncIcon(
+                    context,
+                    packageName,
+                    deviceManager,
+                    sourceDevice
+                )
+            }
+            
+            return null
+        } catch (e: Exception) {
+            //Logger.e(TAG, "获取应用图标失败: $packageName", e)
+            return null
+        }
+    }
+    
+    /**
+     * 异步获取应用图标，自动处理本地和外部应用，并支持自动请求缺失的图标。
+     *
+     * @param context 上下文
+     * @param packageName 应用包名
+     * @param deviceManager 设备连接管理器（可选，用于自动请求图标）
+     * @param sourceDevice 源设备信息（可选，用于自动请求图标）
+     * @return 应用图标，若无法获取则返回 null
+     */
+    suspend fun getAppIconWithAutoRequestAsync(
+        context: Context,
+        packageName: String,
+        deviceManager: com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager? = null,
+        sourceDevice: com.xzyht.notifyrelay.feature.device.service.DeviceInfo? = null
+    ): Bitmap? {
+        try {
+            // 1. 优先获取本地应用图标
+            val localIcon = getAppIconAsync(context, packageName)
+            if (localIcon != null) {
+                return localIcon
+            }
+            
+            // 2. 尝试获取外部应用图标
+            val externalIcon = getExternalAppIcon(packageName)
+            if (externalIcon != null) {
+                return externalIcon
+            }
+            
+            // 3. 自动请求缺失的图标
+            if (deviceManager != null && sourceDevice != null) {
+                com.xzyht.notifyrelay.common.core.sync.IconSyncManager.checkAndSyncIcon(
+                    context,
+                    packageName,
+                    deviceManager,
+                    sourceDevice
+                )
+            }
+            
+            return null
+        } catch (e: Exception) {
+            //Logger.e(TAG, "异步获取应用图标失败: $packageName", e)
+            return null
+        }
     }
 
     /**

@@ -1,8 +1,16 @@
-﻿package com.xzyht.notifyrelay.common.core.util
+package com.xzyht.notifyrelay.common.core.sync
 
+import android.R
+import android.app.KeyguardManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.graphics.Color
 import android.net.Uri
+import android.os.Handler
 import android.util.Base64
+import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
@@ -20,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 消息发送工具类
+ * 消息发送类
  * 整合聊天测试和普通通知转发的消息发送功能
  * 支持队列和限流，避免大量并发发送导致的通知丢失
  */
@@ -32,9 +40,9 @@ object MessageSender {
     private const val RETRY_DELAY_MS = 1000L // 重试延迟
 
     // 发送队列
-    private val sendChannel = Channel<SendTask>(Channel.UNLIMITED)
+    private val sendChannel = Channel<SendTask>(Channel.Factory.UNLIMITED)
     // 超级岛单独发送队列（不去重、持续发送）
-    private val superIslandSendChannel = Channel<SuperIslandTask>(Channel.UNLIMITED)
+    private val superIslandSendChannel = Channel<SuperIslandTask>(Channel.Factory.UNLIMITED)
     private val sendSemaphore = Semaphore(MAX_CONCURRENT_SENDS)
     private val activeSends = AtomicInteger(0)
     // 超级岛发送并发控制（独立于普通通知）
@@ -44,11 +52,127 @@ object MessageSender {
     // 去重集合：防止同一设备、同一数据在未完成前被重复入队
     private val pendingKeys = ConcurrentHashMap.newKeySet<String>()
     // 已发送记录（带 TTL），防止短时间内重复发送已成功发送的通知
-    private const val SENT_KEY_TTL_MS = 60_000L // 60秒内视为已发送，避免重复
+    private const val SENT_KEY_TTL_MS = 10_000L // 10秒内视为已发送，避免重复
     private val sentKeys = ConcurrentHashMap<String, Long>()
 
     // 超级岛：为实现“首次全量，后续差异”，需要跟踪每个设备下每个feature的上次完整状态
     private val siLastStatePerDevice = mutableMapOf<String, MutableMap<String, SuperIslandProtocol.State>>()
+    
+    // 媒体播放：为实现“首次全量，后续差异”，需要跟踪每个设备下每个媒体源的上次完整状态
+    private val mediaLastStatePerDevice = mutableMapOf<String, MutableMap<String, MediaPlayState>>()
+    
+    // 媒体播放状态数据类
+    data class MediaPlayState(
+        val title: String,
+        val text: String,
+        val packageName: String,
+        val coverUrl: String? = null,
+        val sentTime: Long = System.currentTimeMillis() // 添加发送时间戳
+    )
+    
+    // 媒体播放差异数据类
+    data class MediaPlayDiff(
+        val title: String? = null,
+        val text: String? = null,
+        val coverUrl: String? = null
+    ) {
+        fun isEmpty(): Boolean = title == null && text == null && coverUrl == null
+        
+        fun toJson(): JSONObject = JSONObject().apply {
+            if (title != null) put("title", title)
+            if (text != null) put("text", text)
+            if (coverUrl != null) put("coverUrl", coverUrl)
+        }
+    }
+    /**
+     * 计算媒体播放状态差异
+     */
+    private fun diffMediaPlay(old: MediaPlayState?, new: MediaPlayState): MediaPlayDiff {
+        if (old == null) return MediaPlayDiff(
+            title = new.title,
+            text = new.text,
+            coverUrl = new.coverUrl
+        )
+        var t: String? = null
+        var c: String? = null
+        var cover: String? = null
+        if (old.title != new.title) t = new.title
+        if (old.text != new.text) c = new.text
+        if (old.coverUrl != new.coverUrl) cover = new.coverUrl
+        return MediaPlayDiff(t, c, cover)
+    }
+    /**
+     * 构建媒体播放全量包
+     * 确保包含完整的当前状态信息
+     */
+    private fun buildMediaPlayFullPayload(
+        packageName: String,
+        appName: String?,
+        time: Long,
+        isLocked: Boolean,
+        state: MediaPlayState
+    ): JSONObject {
+        return JSONObject().apply {
+            put("packageName", packageName)
+            put("appName", appName ?: packageName)
+            // 全量包始终包含完整的title和text
+            put("title", state.title)
+            put("text", state.text)
+            // 如果有封面URL，添加到payload中
+            if (state.coverUrl != null) {
+                put("coverUrl", state.coverUrl)
+            }
+            put("time", System.currentTimeMillis()) // 使用当前时间戳
+            put("isLocked", isLocked)
+            put("type", "MEDIA_PLAY")
+            put("mediaType", "FULL") // 全量包
+        }
+    }
+    
+    /**
+     * 构建媒体播放差异包
+     */
+    private fun buildMediaPlayDeltaPayload(
+        packageName: String,
+        appName: String?,
+        time: Long,
+        isLocked: Boolean,
+        diff: MediaPlayDiff
+    ): JSONObject {
+        return JSONObject().apply {
+            put("packageName", packageName)
+            put("appName", appName ?: packageName)
+            if (diff.title != null) put("title", diff.title)
+            if (diff.text != null) put("text", diff.text)
+            if (diff.coverUrl != null) put("coverUrl", diff.coverUrl)
+            put("time", time)
+            put("isLocked", isLocked)
+            put("type", "MEDIA_PLAY")
+            put("mediaType", "DELTA") // 差异包
+        }
+    }
+    
+    /**
+     * 构建媒体播放结束包
+     */
+    private fun buildMediaPlayEndPayload(
+        packageName: String,
+        appName: String?,
+        time: Long,
+        isLocked: Boolean
+    ): JSONObject {
+        return JSONObject().apply {
+            put("packageName", packageName)
+            put("appName", appName ?: packageName)
+            put("time", time)
+            put("isLocked", isLocked)
+            put("type", "MEDIA_PLAY")
+            put("mediaType", "END") // 结束包标记
+            put("terminateValue", "__END__") // 统一结束标识
+            put("featureKeyName", "si_feature_id") // 与超级岛保持一致
+            put("featureKeyValue", "media_island_global") // 媒体会话全局特征ID
+        }
+    }
     // 超级岛：ACK 跟踪与强制全量发送控制
     private const val SI_ACK_TIMEOUT_MS = 4_000L
     private data class PendingAck(val hash: String, val ts: Long)
@@ -168,8 +292,12 @@ object MessageSender {
                     return
                 }
 
-                // 使用统一发送器
-                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                // 根据负载类型选择报文头（媒体播放使用 DATA_MEDIAPLAY，其它使用 DATA_NOTIFICATION）
+                val header = try {
+                    val obj = org.json.JSONObject(task.data)
+                    if (obj.optString("type", "").equals("MEDIA_PLAY", true)) "DATA_MEDIAPLAY" else "DATA_NOTIFICATION"
+                } catch (_: Exception) { "DATA_NOTIFICATION" }
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, header, task.data, 10000L)
                 success = true
                 try { sentKeys[task.dedupKey] = System.currentTimeMillis() } catch (_: Exception) {}
                 //Logger.d(TAG, "通知发送成功到设备: ${task.device.displayName}, data: ${task.data}")
@@ -204,7 +332,7 @@ object MessageSender {
                     return
                 }
 
-                com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+                ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_SUPERISLAND", task.data, 10000L)
                 success = true
                 //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
 
@@ -235,7 +363,7 @@ object MessageSender {
                 return
             }
 
-            com.xzyht.notifyrelay.common.core.sync.ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_JSON", task.data, 10000L)
+            ProtocolSender.sendEncrypted(task.deviceManager, task.device, "DATA_SUPERISLAND", task.data, 10000L)
             //Logger.d("超级岛", "超级岛: 发送成功到设备: ${task.device.displayName}")
         } catch (e: Exception) {
             Logger.w("超级岛", "超级岛: 实时发送失败: ${task.device.displayName}, 错误: ${e.message}")
@@ -305,6 +433,191 @@ object MessageSender {
     }
 
     /**
+     * 发送媒体播放通知
+     * 使用专门的协议前缀标记媒体通知，支持状态变化跟踪
+     * 保持差异发送，仅在封面发生变化时发送包含封面的包，否则仅发送文本部分
+     */
+    fun sendMediaPlayNotification(
+        context: Context,
+        packageName: String, // 应为实际应用包名，通过 payload 中的 type=MEDIA_PLAY 区分媒体消息
+        appName: String?,
+        title: String?,
+        text: String?,
+        coverUrl: String?,
+        time: Long,
+        deviceManager: DeviceConnectionManager
+    ) {
+        try {
+            // 获取所有已认证设备
+            val authenticatedDevices = getAuthenticatedDevices(deviceManager)
+
+            if (authenticatedDevices.isEmpty()) {
+                Logger.w(TAG, "没有已认证的设备")
+                return
+            }
+
+            // 获取锁屏状态
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            val isLocked = keyguardManager.isKeyguardLocked
+            
+            // 创建当前媒体播放状态
+            val currentState = MediaPlayState(
+                title = title ?: "",
+                text = text ?: "",
+                packageName = packageName, // 传入实际包名（不含前缀）
+                coverUrl = coverUrl
+            )
+            
+            // 全局只会存在一个媒体会话，使用固定的媒体源ID
+            val mediaSourceId = "global_media_session"
+
+            // 将发送任务加入队列（带去重）
+            authenticatedDevices.forEach { deviceInfo ->
+                // 读取该设备下该媒体源的上次状态
+                val deviceMap = synchronized(mediaLastStatePerDevice) {
+                    mediaLastStatePerDevice.getOrPut(deviceInfo.uuid) { mutableMapOf() }
+                }
+                val lastState = synchronized(mediaLastStatePerDevice) { deviceMap[mediaSourceId] }
+                
+                // 计算差异
+                val diff = diffMediaPlay(lastState, currentState)
+                
+                // 判断是否需要发送全量包：首次发送、封面变化、或超过15秒
+                val now = System.currentTimeMillis()
+                val needFullPayload = lastState == null || 
+                                      diff.coverUrl != null ||
+                                      (now - lastState.sentTime > 15 * 1000)
+                
+                // 构建发送数据
+                val payloadObj = if (needFullPayload) {
+                    // 首次发送、封面变化或超时，发送包含当前完整状态的全量包
+                    buildMediaPlayFullPayload(
+                        packageName,
+                        appName,
+                        time,
+                        isLocked,
+                        currentState
+                    )
+                } else {
+                    // 仅文本变化，发送差异包（仅文本部分）
+                    buildMediaPlayDeltaPayload(
+                        packageName,
+                        appName,
+                        time,
+                        isLocked,
+                        diff.copy(coverUrl = null) // 确保差异包不包含封面
+                    )
+                }
+                
+                val json = payloadObj.toString()
+                
+                // 立即更新本地lastState（用于后续差异计算），包含当前时间戳
+                val updatedState = currentState.copy(sentTime = System.currentTimeMillis())
+                synchronized(mediaLastStatePerDevice) { deviceMap[mediaSourceId] = updatedState }
+                
+                val dedupKey = buildDedupKey(deviceInfo.uuid, json)
+                // 检查是否正在等待发送或最近已发送过
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    //Logger.d(TAG, "跳过已发送的重复媒体播放通知(短期内): ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                if (!pendingKeys.add(dedupKey)) {
+                    //Logger.d(TAG, "跳过重复媒体播放通知入队: ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(deviceInfo, json, deviceManager, dedupKey = dedupKey)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        //Logger.d(TAG, "媒体播放通知已加入发送队列: ${deviceInfo.displayName}, type=${if (lastState == null || diff.coverUrl != null) "FULL_WITH_COVER" else "DELTA_TEXT_ONLY"}")
+                    } catch (e: Exception) {
+                        // 入队失败时及时移除去重键
+                        pendingKeys.remove(dedupKey)
+                        Logger.e(TAG, "加入发送队列失败: ${deviceInfo.displayName}", e)
+                    }
+                }
+            }
+
+            //Logger.i(TAG, "媒体播放通知已加入队列，共 ${authenticatedDevices.size} 个设备，当前活跃发送: ${activeSends.get()}")
+        } catch (e: Exception) {
+            Logger.e(TAG, "发送媒体播放通知失败", e)
+        }
+    }
+    
+    /**
+     * 发送媒体播放结束包
+     * 用于通知接收端关闭媒体会话超级岛
+     */
+    fun sendMediaPlayEndNotification(
+        context: Context,
+        packageName: String,
+        appName: String?,
+        time: Long,
+        deviceManager: DeviceConnectionManager
+    ) {
+        try {
+            // 获取所有已认证设备
+            val authenticatedDevices = getAuthenticatedDevices(deviceManager)
+
+            if (authenticatedDevices.isEmpty()) {
+                Logger.w(TAG, "没有已认证的设备")
+                return
+            }
+
+            // 获取锁屏状态
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            val isLocked = keyguardManager.isKeyguardLocked
+            
+            // 构建结束包
+            val payload = buildMediaPlayEndPayload(
+                packageName,
+                appName,
+                time,
+                isLocked
+            ).toString()
+
+            // 将发送任务加入队列（带去重）
+            authenticatedDevices.forEach { deviceInfo ->
+                val dedupKey = buildDedupKey(deviceInfo.uuid, payload)
+                // 检查最近是否已发送过相同消息，避免短时间内重复
+                val lastSent = sentKeys[dedupKey]
+                if (lastSent != null && System.currentTimeMillis() - lastSent <= SENT_KEY_TTL_MS) {
+                    //Logger.d(TAG, "跳过已发送的重复媒体结束消息(短期内): ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                if (!pendingKeys.add(dedupKey)) {
+                    //Logger.d(TAG, "跳过重复媒体结束消息入队: ${deviceInfo.displayName}")
+                    return@forEach
+                }
+                val task = SendTask(deviceInfo, payload, deviceManager, dedupKey = dedupKey)
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sendChannel.send(task)
+                        Logger.d(TAG, "媒体结束通知已加入发送队列: ${deviceInfo.displayName}")
+                    } catch (e: Exception) {
+                        // 入队失败时及时移除去重键
+                        pendingKeys.remove(dedupKey)
+                        Logger.e(TAG, "加入媒体结束发送队列失败: ${deviceInfo.displayName}", e)
+                    }
+                }
+            }
+            
+            // 清理媒体状态缓存
+            authenticatedDevices.forEach { deviceInfo ->
+                val deviceMap = synchronized(mediaLastStatePerDevice) {
+                    mediaLastStatePerDevice.getOrPut(deviceInfo.uuid) { mutableMapOf() }
+                }
+                // 全局只会存在一个媒体会话，使用固定的媒体源ID
+                val mediaSourceId = "global_media_session"
+                synchronized(mediaLastStatePerDevice) { deviceMap.remove(mediaSourceId) }
+            }
+            
+        } catch (e: Exception) {
+            Logger.e(TAG, "发送媒体播放结束通知失败", e)
+        }
+    }
+    /**
      * 发送普通通知转发消息
      * @param context 上下文
      * @param packageName 应用包名
@@ -333,7 +646,7 @@ object MessageSender {
             }
 
             // 获取锁屏状态
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
 
             // 构建标准 JSON 格式的通知数据
@@ -400,7 +713,7 @@ object MessageSender {
                 return
             }
 
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
 
             // 处理图片：若 picMap 中是本地 URI/file 路径则读取并编码为 base64 data URI，http(s) 地址或其他字符串保持不变
@@ -411,12 +724,16 @@ object MessageSender {
                     picMap.forEach { (k, v) ->
                         try {
                             val lower = v.lowercase()
-                            if (lower.startsWith("content://") || lower.startsWith("file://") || v.startsWith("/")) {
+                            if (lower.startsWith("content://") || lower.startsWith("file://") || v.startsWith(
+                                    "/"
+                                )
+                            ) {
                                 try {
                                     val uri = Uri.parse(v)
                                     context.contentResolver.openInputStream(uri)?.use { input ->
                                         val bytes = input.readBytes()
-                                        val mime = context.contentResolver.getType(uri) ?: "image/png"
+                                        val mime =
+                                            context.contentResolver.getType(uri) ?: "image/png"
                                         val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
                                         processedPics[k] = "data:$mime;base64,$b64"
                                     } ?: run {
@@ -516,7 +833,7 @@ object MessageSender {
         try {
             val authenticatedDevices = getAuthenticatedDevices(deviceManager)
             if (authenticatedDevices.isEmpty()) return
-            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
             val isLocked = keyguardManager.isKeyguardLocked
             val featureId = featureIdOverride ?: SuperIslandProtocol.computeFeatureId(
                 superPkg, paramV2Raw, title, text
@@ -552,33 +869,33 @@ object MessageSender {
      */
     fun sendHighPriorityNotification(context: Context, title: String?, text: String?) {
         try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channelId = "notifyrelay_temp"
 
             // 创建通知渠道（如果不存在）
             if (notificationManager.getNotificationChannel(channelId) == null) {
-                val channel = android.app.NotificationChannel(channelId, "跳转通知", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+                val channel = NotificationChannel(channelId, "跳转通知", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "应用内跳转指示通知"
                     enableLights(true)
-                    lightColor = android.graphics.Color.BLUE
+                    lightColor = Color.BLUE
                     enableVibration(false)
                     setSound(null, null)
-                    lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     setShowBadge(false)
-                    importance = android.app.NotificationManager.IMPORTANCE_HIGH
+                    importance = NotificationManager.IMPORTANCE_HIGH
                     setBypassDnd(true)
                 }
                 notificationManager.createNotificationChannel(channel)
             }
 
             // 构建通知
-            val builder = android.app.Notification.Builder(context, channelId).apply {
+            val builder = Notification.Builder(context, channelId).apply {
                 setContentTitle(title ?: "(无标题)")
                 setContentText(text ?: "(无内容)")
-                setSmallIcon(android.R.drawable.ic_dialog_info)
-                setCategory(android.app.Notification.CATEGORY_MESSAGE)
+                setSmallIcon(R.drawable.ic_dialog_info)
+                setCategory(Notification.CATEGORY_MESSAGE)
                 setAutoCancel(true)
-                setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+                setVisibility(Notification.VISIBILITY_PUBLIC)
                 setOngoing(false)
             }
 
@@ -587,7 +904,7 @@ object MessageSender {
             notificationManager.notify(notifyId, builder.build())
 
             // 5秒后自动销毁通知
-            android.os.Handler(context.mainLooper).postDelayed({
+            Handler(context.mainLooper).postDelayed({
                 notificationManager.cancel(notifyId)
             }, 5000)
 
