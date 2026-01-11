@@ -1,6 +1,7 @@
 package com.xzyht.notifyrelay.common.core.notification
 
 import android.content.Context
+import android.util.LruCache
 import com.xzyht.notifyrelay.common.core.util.Logger
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.notification.superisland.FloatingReplicaManager
@@ -11,7 +12,14 @@ import com.xzyht.notifyrelay.feature.notification.superisland.history.SuperIslan
 
 object SuperIslandProcessor {
     private const val TAG = "SuperIslandProcessor"
-    private val superIslandDeduplicationCache = mutableSetOf<String>()
+    private const val DEDUP_CACHE_MAX_SIZE = 1024
+    private val superIslandDeduplicationCache = object : LruCache<String, Boolean>(DEDUP_CACHE_MAX_SIZE) {
+        override fun entryRemoved(evicted: Boolean, key: String?, oldValue: Boolean?, newValue: Boolean?) {
+            if (evicted && key != null) {
+                try { Logger.i("超级岛", "去重缓存被驱逐: $key") } catch (_: Exception) {}
+            }
+        }
+    }
 
     fun process(
         context: Context,
@@ -114,11 +122,11 @@ object SuperIslandProcessor {
             val mText = try { json.optString("text", text.orEmpty()) } catch (_: Exception) { text.orEmpty() }
 
             if (isLocked) {
-                if (superIslandDeduplicationCache.contains(dedupKey)) {
+                if (superIslandDeduplicationCache.get(dedupKey) != null) {
                     Logger.i("超级岛", "锁屏重复通知去重: sourceKey=$sourceKey, title=${mTitle ?: "无标题"}")
                     return true
                 } else {
-                    superIslandDeduplicationCache.add(dedupKey)
+                    superIslandDeduplicationCache.put(dedupKey, true)
                     Logger.i("超级岛", "首次处理超级岛通知，添加到去重缓存: $dedupKey, title=${mTitle ?: "无标题"}")
                 }
             } else {
