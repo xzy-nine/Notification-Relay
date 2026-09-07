@@ -37,9 +37,16 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
-    // libxposed API 102：LSPosed 模块开发框架入口
-    api(libs.libxposed.api)
+    // libxposed API 102：LSPosed 模块开发框架入口（运行时由 LSPosed 提供，不可打包进 APK）
+    compileOnly(libs.libxposed.api)
+    // DexKit：DEX 文件分析框架，用于查找方法和字段
+    implementation(libs.dexkit)
 }
