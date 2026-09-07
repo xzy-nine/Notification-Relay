@@ -119,7 +119,7 @@ object FloatingReplicaListModeManager {
                     Logger.i(TAG, "超级岛: 内容无变更，跳过系统通知刷新，仅重置撤回计时器: sourceId=${entry.sourceId}")
                 } else if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
                     LiveUpdatesNotificationManager.initialize(context)
-                    LiveUpdatesNotificationManager.showLiveUpdate(
+                    val success = LiveUpdatesNotificationManager.showLiveUpdate(
                         entry.sourceId,
                         displayTitle,
                         displayText,
@@ -129,7 +129,9 @@ object FloatingReplicaListModeManager {
                     )
                     FloatingReplicaMappingManager.putNotificationId(entry.sourceId, LIST_MODE_NOTIFICATION_ID)
                     FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, LIST_MODE_NOTIFICATION_ID)
-                    FloatingReplicaMappingManager.setNotificationFingerprint(entry.sourceId, fingerprint)
+                    if (success) {
+                        FloatingReplicaMappingManager.setNotificationFingerprint(entry.sourceId, fingerprint)
+                    }
                 } else {
                     val notificationId =
                         NotificationGenerator.sendReplicaNotification(
