@@ -320,6 +320,7 @@ object BitmapUtils {
     /**
      * 清理位图缓存池（供公平运行内存回调使用，不释放可复用位图）。
      */
+    @Synchronized
     fun clearCache() {
         for (bitmaps in bitmapCache.values) {
             for (bitmap in bitmaps) {
