@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import notifyrelay.base.util.Logger
 import notifyrelay.base.util.PermissionHelper
 
 /**
@@ -38,6 +39,10 @@ class ConnectionDiscoveryManager(
     private val deviceManager: DeviceConnectionManager,
     private val scope: CoroutineScope,
 ) {
+    companion object {
+        private const val TAG = "死神-Discovery"
+    }
+
     private val context get() = deviceManager.contextInternal
     private val connectivityManager: ConnectivityManager
         get() = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -238,22 +243,32 @@ class ConnectionDiscoveryManager(
     }
 
     internal fun syncHeartbeatMode() {
-        val ctx = deviceManager.rustContextInternal ?: return
+        val ctx = deviceManager.rustContextInternal
+        if (ctx == null) {
+            Logger.w(TAG, "[syncHeartbeatMode] rustContext 为 null，跳过")
+            return
+        }
         try {
+            Logger.i(TAG, "[syncHeartbeatMode] 开始同步心跳模式")
             val isLocked = PermissionHelper.isDeviceLocked(context)
             val isWifiDirect = isWifiDirectNetworkInternal()
+            Logger.i(TAG, "[syncHeartbeatMode] isLocked=$isLocked, isWifiDirect=$isWifiDirect, udpEnabled=${deviceManager.udpDiscoveryEnabled}")
             // 锁屏或 WLAN 直连时启用 TCP 备用心跳
             NativeCore.setHeartbeatTcpBackup(ctx, isLocked || isWifiDirect)
             // UDP 广播始终保持运行（锁屏不停止），叠加 TCP 心跳
             if (deviceManager.udpDiscoveryEnabled) {
                 val displayName = deviceManager.localDisplayNameInternal()
                 val battery = getSignedBatteryLevel()
-                NativeCore.periodicBroadcast(ctx, 1, deviceManager.uuid, displayName, battery, "android")
+                Logger.i(TAG, "[syncHeartbeatMode] 调用 periodicBroadcast 启动广播: uuid=${deviceManager.uuid}, name=$displayName, battery=$battery")
+                val result = NativeCore.periodicBroadcast(ctx, 1, deviceManager.uuid, displayName, battery, "android")
+                Logger.i(TAG, "[syncHeartbeatMode] periodicBroadcast 返回: $result")
             } else {
                 // 用户关闭 UDP 发现时停止广播
+                Logger.i(TAG, "[syncHeartbeatMode] UDP 发现已关闭，停止广播")
                 NativeCore.periodicBroadcast(ctx, 0)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Logger.e(TAG, "[syncHeartbeatMode] 异常", e)
         }
     }
 
