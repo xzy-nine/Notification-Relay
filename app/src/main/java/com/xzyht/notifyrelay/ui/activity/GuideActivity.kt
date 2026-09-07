@@ -18,10 +18,17 @@ import com.xzyht.notifyrelay.ui.common.SetupSystemBars
 import com.xzyht.notifyrelay.ui.guide.GuideScreen
 import notifyrelay.base.util.Logger
 import notifyrelay.base.util.PermissionHelper
+import notifyrelay.base.util.GuidePermissionRequester
 import notifyrelay.base.util.ThemeSettingsManager
 import notifyrelay.data.StorageManager
 
 class GuideActivity : ComponentActivity() {
+    private val permissionRequester =
+        GuidePermissionRequester(this) {
+            // 运行时权限弹窗不会触发 onResume，必须主动刷新权限状态，否则授权后 UI 不更新
+            GuideScreen.refreshTrigger++
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val isFirstLaunch = StorageManager.getBoolean(this, "isFirstLaunch", true, StorageManager.PrefsType.GENERAL)
@@ -33,7 +40,7 @@ class GuideActivity : ComponentActivity() {
 
         // 声明式权限（AndroidManifest 中 <uses-permission> 声明的普通/危险权限）比对：
         // 读取上次已同意的权限集合，与当前声明的权限集合做差集，得到「本次更新新增、需重新同意」的权限。
-        val declaredPermissions = PermissionHelper.getDeclaredPermissions(this)
+        val declaredPermissions = PermissionHelper.getApplicableDeclaredPermissions(this)
         val agreedPermissions =
             StorageManager.getStringSet(
                 this,
@@ -94,6 +101,7 @@ class GuideActivity : ComponentActivity() {
                 NotifyRelayTheme(darkTheme = isDarkTheme) {
                     SetupSystemBars(isDarkTheme)
                     GuideScreen(
+                        permissionRequester = permissionRequester,
                         themeBaseIndex = themeBaseIndex,
                         reauth = debugReauth,
                         needConsent = debugNeedConsent,

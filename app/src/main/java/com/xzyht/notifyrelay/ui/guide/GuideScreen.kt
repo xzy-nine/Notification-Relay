@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.xzyht.notifyrelay.ui.activity.GuideActivity
+import notifyrelay.base.util.GuidePermissionRequester
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,6 +39,7 @@ internal enum class GuideStep {
 
 @Composable
 internal fun GuideScreen(
+    permissionRequester: GuidePermissionRequester,
     themeBaseIndex: Int,
     onThemeChanged: (Int) -> Unit,
     onContinue: () -> Unit,
@@ -112,6 +114,7 @@ internal fun GuideScreen(
                         } else {
                             // 仅授权掉落：引导重新开启必要权限，不重复同意协议。
                             GuideRequiredPermissionPage(
+                                permissionRequester = permissionRequester,
                                 permissionState = permissionState,
                                 onBack = { reauthAnimateTo(0) },
                                 onNext = { reauthAnimateTo(2) },
@@ -187,6 +190,7 @@ internal fun GuideScreen(
 
                     GuideStep.REQUIRED_PERMISSIONS ->
                         GuideRequiredPermissionPage(
+                            permissionRequester = permissionRequester,
                             permissionState = permissionState,
                             onBack = { animateTo(GuideStep.AGREEMENT) },
                             onNext = { animateTo(GuideStep.OPTIONAL_PERMISSIONS) },
@@ -194,6 +198,7 @@ internal fun GuideScreen(
 
                     GuideStep.OPTIONAL_PERMISSIONS ->
                         GuideOptionalPermissionPage(
+                            permissionRequester = permissionRequester,
                             permissionState = permissionState,
                             onBack = { animateTo(GuideStep.REQUIRED_PERMISSIONS) },
                             onNext = { animateTo(GuideStep.SETTINGS) },

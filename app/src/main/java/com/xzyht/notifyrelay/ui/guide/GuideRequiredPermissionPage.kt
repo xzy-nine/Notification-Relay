@@ -1,7 +1,5 @@
 package com.xzyht.notifyrelay.ui.guide
 
-import android.Manifest
-import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -19,16 +17,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import notifyrelay.base.util.IntentUtils
 import notifyrelay.base.util.ToastUtils
+import notifyrelay.base.util.GuidePermissionRequester
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun GuideRequiredPermissionPage(
+    permissionRequester: GuidePermissionRequester,
     permissionState: GuidePermissionUiState,
     onBack: () -> Unit,
     onNext: () -> Unit,
@@ -58,16 +57,8 @@ internal fun GuideRequiredPermissionPage(
                     }
             if (isMiuiOrPengpai) {
                 if (ContextCompat.checkSelfPermission(context, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
-                    (context as? Activity)?.let { act ->
-                        ActivityCompat.requestPermissions(
-                            act,
-                            arrayOf("com.android.permission.GET_INSTALLED_APPS"),
-                            999,
-                        )
-                        showToast("已请求应用列表权限，请在弹窗中允许")
-                    } ?: run {
-                        showToast("请在应用信息页面的权限管理-其他权限中允许<访问应用列表>")
-                    }
+                    permissionRequester.requestQueryApps()
+                    showToast("已请求应用列表权限，请在弹窗中允许")
                 } else {
                     showToast("已获得应用列表权限")
                 }
@@ -93,14 +84,17 @@ internal fun GuideRequiredPermissionPage(
 
     fun requestPostNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionRequester.requestPostNotifications()
             showToast("请求通知发送权限")
-            (context as? Activity)?.requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                100,
-            )
         } else {
             showToast("请在系统设置中开启通知权限")
         }
+    }
+
+    fun requestLocalNetworkPermission() {
+        // 委托给宿主 GuideActivity 持有的 GuidePermissionRequester（现代 ActivityResultLauncher），
+        // 统一处理「拒绝后引导至设置页」的逻辑，并保持旧安卓版本安全（实现内部有 SDK 守卫）。
+        permissionRequester.requestLocalNetwork()
     }
 
     fun openSelfStartSettings() {
@@ -118,6 +112,9 @@ internal fun GuideRequiredPermissionPage(
             add(permissionState.notificationListener)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 add(permissionState.postNotifications)
+            }
+            if (Build.VERSION.SDK_INT >= 37) {
+                add(permissionState.localNetworkGranted)
             }
             add(permissionState.queryApps)
         }
@@ -188,6 +185,20 @@ internal fun GuideRequiredPermissionPage(
                                 },
                             granted = permissionState.postNotifications,
                             onClick = ::requestPostNotificationPermission,
+                        )
+                    }
+                    if (Build.VERSION.SDK_INT >= 37) {
+                        val localNetworkGranted = permissionState.localNetworkGranted
+                        GuidePermissionItem(
+                            title = "本地网络权限",
+                            summary =
+                                if (localNetworkGranted) {
+                                    "已允许访问本地网络，可用于局域网设备发现"
+                                } else {
+                                    "Android 17 必需：用于局域网设备互发现，未授予会被系统屏蔽"
+                                },
+                            granted = localNetworkGranted,
+                            onClick = ::requestLocalNetworkPermission,
                         )
                     }
                 }
