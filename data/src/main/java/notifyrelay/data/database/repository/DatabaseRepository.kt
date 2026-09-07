@@ -125,8 +125,11 @@ class DatabaseRepository(
                     "DELETE FROM device_migration WHERE uuid = ?",
                     arrayOf<Any?>(uuid),
                 )
-            } catch (_: android.database.sqlite.SQLiteException) {
-                // 表不存在：迁移已完成，幂等忽略
+            } catch (e: android.database.sqlite.SQLiteException) {
+                // 仅忽略 "no such table" 错误（表不存在：迁移已完成），其他错误重新抛出
+                if (e.message?.contains("no such table") != true) {
+                    throw e
+                }
             }
         }
     }
