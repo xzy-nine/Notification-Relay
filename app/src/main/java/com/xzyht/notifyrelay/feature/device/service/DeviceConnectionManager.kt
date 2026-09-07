@@ -194,7 +194,7 @@ class DeviceConnectionManager(
         // 从 Rust 获取设备列表（含库内持久化的名称/IP），恢复已配对设备
         val json =
             ctx
-                ?.let { NativeCore.getDeviceList(it, 30_000L, 10_000L) }
+                ?.let { NativeCore.getDeviceList(it, 0L, 0L) }
                 ?: return
         try {
             val arr = JSONArray(json)
@@ -500,7 +500,7 @@ class DeviceConnectionManager(
         }
         localPublicKey = initPubKey
         loadAuthedDevices()
-        // 统一启动核心：TCP、心跳调度、离线检测、发送队列、已知设备扫描、重连状态机、mDNS 广告与发现
+        // 统一启动核心：TCP、心跳调度、离线检测、发送队列、已知设备扫描、重连状态机
         try {
             rustContext?.let { ctx ->
                 if (localPublicKey.isEmpty()) {
@@ -641,16 +641,25 @@ class DeviceConnectionManager(
         }
     }
 
-    // 统一设备状态管理：心跳回调（on_mdns_discovered / on_device_timeout）驱动
-    // refreshDevicesFromRust 消费 Rust 状态快照，无需平台侧固定轮询
+    // 统一设备状态管理：设备状态完全由 Rust core 维护，
+    // 平台端只消费 nrc_get_device_list 快照并渲染（不做在线判定与显示过滤）
     private fun updateDeviceList() {
         refreshDevicesFromRust()
     }
 
     /**
-     * 从 Rust 拉取设备状态快照（uuid/ip/电量/在线/配对等），回填 deviceInfoCache，
-     * 生成 _devices（未认证且不在线的设备过滤 = 显示策略），并刷新在线设备缓存。
-     * 1s 定时器（startOfflineDeviceCleaner）与心跳回调共同触发。
+     * 触发设备列表刷新（供 Rust 回调调用）。
+     * 运行在 JNA 回调线程，必须切到协程执行：避免在 Rust 回调内同步调用 core 接口造成重入。
+     */
+    internal fun triggerDeviceListRefreshFromCore() {
+        coroutineScope.launch { updateDeviceList() }
+    }
+
+    /**
+     * 从 Rust 拉取设备状态快照（uuid/ip/电量/在线/配对等），回填 deviceInfoCache 并生成 _devices。
+     * 在线判定与「是否进入列表」均由 Rust core 决定（传 0/0 使用 core 内建阈值），
+     * 平台端只负责展示，不再做任何过滤。
+     * 1s 定时器（startOfflineDeviceCleaner）与 core 发现/超时回调共同触发。
      */
     private fun refreshDevicesFromRust() {
         // 节流：心跳/连接回调并发触发时跳过重复刷新，避免同一时刻
@@ -671,7 +680,8 @@ class DeviceConnectionManager(
         val ctx = rustContext ?: return
         val json =
             try {
-                NativeCore.getDeviceList(ctx, 12_000L, 5_000L)
+                // 传 0/0：使用 Rust core 内建在线阈值（已认证 12s / 未认证 20s），判定完全归 core
+                NativeCore.getDeviceList(ctx, 0L, 0L)
             } catch (_: Exception) {
                 null
             } ?: return
@@ -717,8 +727,8 @@ class DeviceConnectionManager(
                             chargingStatus = chargingStatus,
                         )
                 }
-                // 显示策略：未认证且不在线的设备过滤
-                if (!isAuthed && !online) continue
+                // 可见性由 core 判定（未配对且未被平台登记且离线的设备 core 已不再返回），
+                // 平台端直接按快照渲染
                 synchronized(deviceInfoCache) {
                     deviceInfoCache[uuid]?.let { newMap[uuid] = it to online }
                 }
@@ -1496,79 +1506,31 @@ class DeviceConnectionManager(
         lib.nrc_set_on_data_cb(ctx, dataCb)
         rustCallbackRefs.add(dataCb)
 
-        // ---- on_mdns_discovered ----
-        val mdnsDiscoveredCb =
-            object : NotifyRelayCore.OnMdnsDiscoveredCb {
+        // ---- on_device_discovered (TCP 扫描发现) ----
+        // 设备状态（自身过滤、名称解码、状态登记、可见性）全部由 Rust core 负责，
+        // 平台端不解析业务字段，仅触发一次快照刷新
+        val deviceDiscoveredCb =
+            object : NotifyRelayCore.OnDeviceDiscoveredCb {
                 override fun invoke(
                     uuid: Pointer?,
                     name: Pointer?,
-                    ip: Pointer?,
                     port: Short,
                     battery: Int,
                     deviceType: Pointer?,
+                    ip: Pointer?,
                     userData: Pointer?,
                 ) {
                     Native.detach(false) // JNA 附加线程回调返回时不 detach，避免嵌套调用 JNA 时 abort
                     val dm = _callbackInstance ?: return
                     val remoteUuid = ptr2str(uuid) ?: return
-                    val remoteName = ptr2str(name) ?: return
-                    val remoteIp = ptr2str(ip) ?: "0.0.0.0"
-                    val remoteDeviceType = ptr2str(deviceType) ?: "unknown"
                     try {
-                        // 广告 TXT 携带 signed 电量（正=充电，负=放电，-101=未知），充电状态由符号推断
-                        val info =
-                            HeartbeatProcessor.HeartbeatInfo(
-                                uuid = remoteUuid,
-                                displayName = remoteName,
-                                port = port.toInt(),
-                                batteryLevel = battery,
-                                isCharging = battery > 0,
-                                deviceType = remoteDeviceType,
-                                ip = remoteIp,
-                            )
-                        if (info.uuid != dm.uuid) {
-                            HeartbeatProcessor.processHeartbeat(info, dm)
-                        }
-                    } catch (e: Exception) {
-                        Logger.e("CoreCb", "on_mdns_discovered error", e)
-                    }
-                }
-            }
-        lib.nrc_set_on_mdns_discovered_cb(ctx, mdnsDiscoveredCb)
-        rustCallbackRefs.add(mdnsDiscoveredCb)
-
-        // ---- on_device_discovered (TCP扫描发现回调) ----
-        val deviceDiscoveredCb =
-            object : NotifyRelayCore.OnDeviceDiscoveredCb {
-                override fun invoke(
-                    uuid: Pointer?,
-                    nameB64: Pointer?,
-                    port: Short,
-                    battery: Int,
-                    deviceType: Pointer?,
-                    ip: Pointer?,
-                    userData: Pointer?,
-                ) {
-                    Native.detach(false)
-                    val dm = _callbackInstance ?: return
-                    val remoteUuid = ptr2str(uuid) ?: return
-                    val remoteName = ptr2str(nameB64) ?: return
-                    val remoteIp = ptr2str(ip) ?: "0.0.0.0"
-                    val remoteDeviceType = ptr2str(deviceType) ?: "unknown"
-                    try {
-                        val info =
-                            HeartbeatProcessor.HeartbeatInfo(
-                                uuid = remoteUuid,
-                                displayName = remoteName,
-                                port = port.toInt(),
-                                batteryLevel = battery,
-                                isCharging = battery > 0,
-                                deviceType = remoteDeviceType,
-                                ip = remoteIp,
-                            )
-                        if (info.uuid != dm.uuid) {
-                            HeartbeatProcessor.processHeartbeat(info, dm)
-                        }
+                        Logger.d(
+                            "死神-NotifyRelay",
+                            "[on_device_discovered] uuid=$remoteUuid, ip=${ptr2str(ip) ?: ""}, port=$port, battery=$battery",
+                        )
+                        // 运行在 Rust 扫描线程：不得同步调用 nrc_get_device_list（会与 core 重入），
+                        // 交由协程异步刷新
+                        dm.triggerDeviceListRefreshFromCore()
                     } catch (e: Exception) {
                         Logger.e("CoreCb", "on_device_discovered error", e)
                     }

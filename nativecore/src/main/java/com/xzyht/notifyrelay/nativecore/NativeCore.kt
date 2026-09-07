@@ -366,11 +366,6 @@ object NativeCore {
     // ======== Local IP ========
     fun getLocalIp(): String? = NotifyRelayCore.ptrToStringAndFree(lib.nrc_get_local_ip())
 
-    // ======== mDNS ========
-    fun stopMdnsAdvertiser(ctx: Pointer): Int = lib.nrc_stop_mdns_advertiser(ctx)
-
-    fun stopMdnsDiscovery(ctx: Pointer): Int = lib.nrc_stop_mdns_discovery(ctx)
-
     // ======== Discovery ========
     fun addKnownDevice(
         ctx: Pointer,
@@ -506,7 +501,7 @@ object NativeCore {
     // ======== Version ========
     fun getGitHash(): String? = NotifyRelayCore.ptrToStringAndFree(lib.nrc_get_git_hash())
 
-    // ======== Initialize core (统一启动 TCP、心跳、离线检测、发送队列、扫描、重连、mDNS) ========
+    // ======== Initialize core (统一启动 TCP、心跳、离线检测、发送队列、扫描、重连) ========
     fun startCore(
         ctx: Pointer,
         uuid: String,

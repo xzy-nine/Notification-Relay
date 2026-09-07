@@ -299,7 +299,7 @@ class MainActivity : FragmentActivity() {
 
         PermissionHelper.AppForegroundDetector.initialize(this)
 
-        // 获取组播锁，确保 WLAN 休眠时仍能接收 mDNS 发现报文
+        // 获取组播锁，确保 WLAN 休眠时仍能接收组播发现报文（兼容旧版本基于组播的发现；当前发现已改为 TCP 扫描）
         if (multicastLock?.isHeld != true) {
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
             multicastLock = wifi.createMulticastLock("NotifyRelayDiscovery").apply {
