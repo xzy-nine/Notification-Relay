@@ -127,7 +127,7 @@ class DatabaseRepository(
                 )
             } catch (e: android.database.sqlite.SQLiteException) {
                 // 仅忽略 "no such table" 错误（表不存在：迁移已完成），其他错误重新抛出
-                if (e.message?.contains("no such table") != true) {
+                if (e.message?.contains("no such table", ignoreCase = true) != true) {
                     throw e
                 }
             }
