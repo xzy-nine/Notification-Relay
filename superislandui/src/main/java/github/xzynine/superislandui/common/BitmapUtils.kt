@@ -262,6 +262,7 @@ object BitmapUtils {
         }
     }
 
+    @Synchronized
     private fun getOrCreateBitmap(
         width: Int,
         height: Int,
@@ -299,6 +300,7 @@ object BitmapUtils {
         return newBitmap
     }
 
+    @Synchronized
     fun releaseResources() {
         reusableBitmap?.recycle()
         reusableBitmap = null
