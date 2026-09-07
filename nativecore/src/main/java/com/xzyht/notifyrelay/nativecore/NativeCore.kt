@@ -225,12 +225,6 @@ object NativeCore {
         deviceType: String,
     ) = lib.nrc_update_heartbeat_scheduler_params(ctx, name, battery, deviceType)
 
-    // ======== Heartbeat mode (广播主用 / TCP 备用) ========
-    fun setHeartbeatTcpBackup(
-        ctx: Pointer,
-        enabled: Boolean,
-    ) = lib.nrc_set_heartbeat_tcp_backup(ctx, if (enabled) 1 else 0)
-
     // ======== Device state snapshot ========
     fun getDeviceList(
         ctx: Pointer,
@@ -512,7 +506,7 @@ object NativeCore {
     // ======== Version ========
     fun getGitHash(): String? = NotifyRelayCore.ptrToStringAndFree(lib.nrc_get_git_hash())
 
-    // ======== Initialize core (统一启动 TCP/UDP、心跳、离线检测、发送队列、扫描、重连、mDNS) ========
+    // ======== Initialize core (统一启动 TCP、心跳、离线检测、发送队列、扫描、重连、mDNS) ========
     fun startCore(
         ctx: Pointer,
         uuid: String,

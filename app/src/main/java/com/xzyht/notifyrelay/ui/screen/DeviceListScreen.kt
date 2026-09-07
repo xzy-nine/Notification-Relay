@@ -137,7 +137,7 @@ fun DeviceListScreen(
 
     var authedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
-    var udpDiscoveryEnabled by remember { mutableStateOf(true) }
+    var discoveryEnabled by remember { mutableStateOf(true) }
 
     val deviceMap: Map<String, Pair<DeviceInfo, Boolean>> by deviceManager.devices.collectAsState(initial = emptyMap())
     val devices: List<DeviceInfo> = deviceMap.values.map { it.first }
@@ -154,7 +154,7 @@ fun DeviceListScreen(
     val allDevices: List<DeviceInfo?> = listOf<DeviceInfo?>(null) + devices
     val validAuthedDeviceUuids = authedDeviceUuids.intersect(devices.map { it.uuid }.toSet())
     val unauthedDevices =
-        if (udpDiscoveryEnabled) {
+        if (discoveryEnabled) {
             devices.filter { d ->
                 !validAuthedDeviceUuids.contains(d.uuid) && !rejectedDeviceUuids.contains(d.uuid)
             }
@@ -227,7 +227,7 @@ fun DeviceListScreen(
     val buttonMinHeight = 44.dp
 
     @Composable
-    fun UdpDiscoverySwitch() {
+    fun DiscoverySwitch() {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -240,8 +240,8 @@ fun DeviceListScreen(
                 modifier = Modifier.weight(1f),
             )
             Switch(
-                checked = udpDiscoveryEnabled,
-                onCheckedChange = { udpDiscoveryEnabled = it },
+                checked = discoveryEnabled,
+                onCheckedChange = { discoveryEnabled = it },
             )
         }
     }
@@ -454,7 +454,7 @@ fun DeviceListScreen(
                     .padding(12.dp)
                     .verticalScroll(rememberScrollState()),
         ) {
-            UdpDiscoverySwitch()
+            DiscoverySwitch()
             LocalDeviceButton()
 
             allDevices.forEach { device: DeviceInfo? ->
@@ -477,7 +477,7 @@ fun DeviceListScreen(
                     .background(colorScheme.background)
                     .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
         ) {
-            UdpDiscoverySwitch()
+            DiscoverySwitch()
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top,

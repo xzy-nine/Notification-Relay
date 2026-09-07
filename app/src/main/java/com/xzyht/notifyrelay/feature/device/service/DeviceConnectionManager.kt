@@ -428,12 +428,9 @@ class DeviceConnectionManager(
     // startCore 防重入节流（避免快速重启时重复启动核心服务）
     private val coreStarted = AtomicBoolean(false)
 
-    // UI全局开关：是否启用UDP发现，使用内存缓存避免频繁数据库访问
-    // 使用AppConfig管理UDP发现配置
-    var udpDiscoveryEnabled: Boolean
-        get() {
-            return AppConfig.getUdpDiscoveryEnabled(context)
-        }
+    // UI全局开关：是否启用设备发现，使用内存缓存避免频繁数据库访问
+    var discoveryEnabled: Boolean
+        get() = AppConfig.getUdpDiscoveryEnabled(context)
         set(value) {
             AppConfig.setUdpDiscoveryEnabled(context, value)
         }
@@ -503,7 +500,7 @@ class DeviceConnectionManager(
         }
         localPublicKey = initPubKey
         loadAuthedDevices()
-        // 统一启动核心：TCP/UDP、心跳调度、离线检测、发送队列、已知设备扫描、重连状态机、mDNS 广告与发现
+        // 统一启动核心：TCP、心跳调度、离线检测、发送队列、已知设备扫描、重连状态机、mDNS 广告与发现
         try {
             rustContext?.let { ctx ->
                 if (localPublicKey.isEmpty()) {
@@ -644,7 +641,7 @@ class DeviceConnectionManager(
         }
     }
 
-    // 统一设备状态管理：心跳回调（on_heartbeat_udp / on_mdns_discovered / on_device_timeout）驱动
+    // 统一设备状态管理：心跳回调（on_mdns_discovered / on_device_timeout）驱动
     // refreshDevicesFromRust 消费 Rust 状态快照，无需平台侧固定轮询
     private fun updateDeviceList() {
         refreshDevicesFromRust()
@@ -1499,47 +1496,6 @@ class DeviceConnectionManager(
         lib.nrc_set_on_data_cb(ctx, dataCb)
         rustCallbackRefs.add(dataCb)
 
-        // ---- on_heartbeat_udp ----
-        val heartbeatUdpCb =
-            object : NotifyRelayCore.OnHeartbeatUdpCb {
-                override fun invoke(
-                    uuid: Pointer?,
-                    name: Pointer?,
-                    port: Short,
-                    battery: Int,
-                    deviceType: Pointer?,
-                    ip: Pointer?,
-                    userData: Pointer?,
-                ) {
-                    Native.detach(false) // JNA 附加线程回调返回时不 detach，避免嵌套调用 JNA 时 abort
-                    val dm = _callbackInstance ?: return
-                    val remoteUuid = ptr2str(uuid) ?: return
-                    val remoteName = ptr2str(name) ?: return
-                    val remoteDeviceType = ptr2str(deviceType) ?: "unknown"
-                    val srcIp = ptr2str(ip)
-                    val resolvedIp = if (srcIp.isNullOrBlank() || srcIp == "0.0.0.0") "0.0.0.0" else srcIp
-                    try {
-                        val info =
-                            HeartbeatProcessor.HeartbeatInfo(
-                                uuid = remoteUuid,
-                                displayName = remoteName,
-                                port = port.toInt(),
-                                batteryLevel = battery,
-                                isCharging = battery > 0,
-                                deviceType = remoteDeviceType,
-                                ip = resolvedIp,
-                            )
-                        if (info.uuid != dm.uuid) {
-                            HeartbeatProcessor.processHeartbeat(info, dm)
-                        }
-                    } catch (e: Exception) {
-                        Logger.e("CoreCb", "on_heartbeat_udp error", e)
-                    }
-                }
-            }
-        lib.nrc_set_on_heartbeat_udp_cb(ctx, heartbeatUdpCb)
-        rustCallbackRefs.add(heartbeatUdpCb)
-
         // ---- on_mdns_discovered ----
         val mdnsDiscoveredCb =
             object : NotifyRelayCore.OnMdnsDiscoveredCb {
@@ -1580,6 +1536,46 @@ class DeviceConnectionManager(
             }
         lib.nrc_set_on_mdns_discovered_cb(ctx, mdnsDiscoveredCb)
         rustCallbackRefs.add(mdnsDiscoveredCb)
+
+        // ---- on_device_discovered (TCP扫描发现回调) ----
+        val deviceDiscoveredCb =
+            object : NotifyRelayCore.OnDeviceDiscoveredCb {
+                override fun invoke(
+                    uuid: Pointer?,
+                    nameB64: Pointer?,
+                    port: Short,
+                    battery: Int,
+                    deviceType: Pointer?,
+                    ip: Pointer?,
+                    userData: Pointer?,
+                ) {
+                    Native.detach(false)
+                    val dm = _callbackInstance ?: return
+                    val remoteUuid = ptr2str(uuid) ?: return
+                    val remoteName = ptr2str(nameB64) ?: return
+                    val remoteIp = ptr2str(ip) ?: "0.0.0.0"
+                    val remoteDeviceType = ptr2str(deviceType) ?: "unknown"
+                    try {
+                        val info =
+                            HeartbeatProcessor.HeartbeatInfo(
+                                uuid = remoteUuid,
+                                displayName = remoteName,
+                                port = port.toInt(),
+                                batteryLevel = battery,
+                                isCharging = battery > 0,
+                                deviceType = remoteDeviceType,
+                                ip = remoteIp,
+                            )
+                        if (info.uuid != dm.uuid) {
+                            HeartbeatProcessor.processHeartbeat(info, dm)
+                        }
+                    } catch (e: Exception) {
+                        Logger.e("CoreCb", "on_device_discovered error", e)
+                    }
+                }
+            }
+        lib.nrc_set_on_device_discovered_cb(ctx, deviceDiscoveredCb)
+        rustCallbackRefs.add(deviceDiscoveredCb)
 
         // ---- on_device_timeout (设备心跳超时回调) ----
         val deviceTimeoutCb =
