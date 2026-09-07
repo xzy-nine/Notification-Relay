@@ -521,7 +521,7 @@ class DeviceConnectionManager(
                 val batteryLevel = BatteryUtils.getBatteryLevel(context)
                 val battery = if (BatteryUtils.isCharging(context)) batteryLevel else -batteryLevel
                 lastSentSignedBattery = battery
-                NativeCore.startCore(
+                val started = NativeCore.startCore(
                     ctx = ctx,
                     uuid = uuid,
                     name = getLocalDisplayName(),
@@ -530,8 +530,13 @@ class DeviceConnectionManager(
                     tcpPort = listenPort.toShort(),
                     pubkey = localPublicKey,
                 )
+                if (!started) {
+                    coreStarted.set(false)
+                    Logger.e("死神-NotifyRelay", "Rust Core 启动失败，重置 coreStarted 允许重试")
+                }
             }
         } catch (e: Exception) {
+            coreStarted.set(false)
             Logger.e("死神-NotifyRelay", "启动 Rust Core 失败", e)
         }
         // 旧设备表迁移与平台存储清理（需在本机 uuid 已进入 Rust 后才可保证落盘）
