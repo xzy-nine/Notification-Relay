@@ -15,6 +15,7 @@ object SuperIslandRemoteStore {
     /**
      * 清空所有远端状态（供公平运行内存回调使用）。
      */
+    @Synchronized
     fun clear() {
         store.clear()
     }
