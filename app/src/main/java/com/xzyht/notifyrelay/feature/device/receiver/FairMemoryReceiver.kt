@@ -159,7 +159,6 @@ class FairMemoryReceiver : BroadcastReceiver() {
             data.writeInt(result)
             data.writeBundle(extra ?: Bundle())
             callbackBinder.transact(TRANSACTION_EXCEPTION_REPLY, data, reply, IBinder.FLAG_ONEWAY)
-            reply.readException()
             Logger.i(TAG, "回调系统成功: notifyType=$notifyType, result=$result")
         } catch (e: Exception) {
             Logger.e(TAG, "回调系统失败", e)
