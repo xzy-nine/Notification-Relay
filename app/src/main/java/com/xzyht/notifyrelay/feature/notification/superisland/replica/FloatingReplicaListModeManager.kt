@@ -127,10 +127,12 @@ object FloatingReplicaListModeManager {
                         formattedData,
                         overrideNotificationId = LIST_MODE_NOTIFICATION_ID,
                     )
-                    FloatingReplicaMappingManager.putNotificationId(entry.sourceId, LIST_MODE_NOTIFICATION_ID)
-                    FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, LIST_MODE_NOTIFICATION_ID)
                     if (success) {
+                        FloatingReplicaMappingManager.putNotificationId(entry.sourceId, LIST_MODE_NOTIFICATION_ID)
+                        FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, LIST_MODE_NOTIFICATION_ID)
                         FloatingReplicaMappingManager.setNotificationFingerprint(entry.sourceId, fingerprint)
+                    } else {
+                        FloatingReplicaMappingManager.removeNotificationFingerprint(entry.sourceId)
                     }
                 } else {
                     val notificationId =
