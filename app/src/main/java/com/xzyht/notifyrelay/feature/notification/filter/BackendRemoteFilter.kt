@@ -67,6 +67,15 @@ object BackendRemoteFilter {
     )
 
     /**
+     * 清空待处理列表（供公平运行内存回调使用）。
+     */
+    fun clearPending() {
+        synchronized(dedupCache) { dedupCache.clear() }
+        synchronized(pendingNotifications) { pendingNotifications.clear() }
+        synchronized(pendingPlaceholders) { pendingPlaceholders.clear() }
+    }
+
+    /**
      * 远程通知过滤结果
      */
     data class FilterResult(

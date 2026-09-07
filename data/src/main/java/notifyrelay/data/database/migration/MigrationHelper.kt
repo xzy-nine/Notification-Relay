@@ -9,16 +9,13 @@ import notifyrelay.data.StorageManager
 import notifyrelay.data.database.dao.AppConfigDao
 import notifyrelay.data.database.dao.AppDao
 import notifyrelay.data.database.dao.AppDeviceDao
-import notifyrelay.data.database.dao.DeviceDao
 import notifyrelay.data.database.dao.NotificationRecordDao
 import notifyrelay.data.database.dao.SuperIslandHistoryDao
 import notifyrelay.data.database.entity.AppConfigEntity
 import notifyrelay.data.database.entity.AppDeviceEntity
 import notifyrelay.data.database.entity.AppEntity
-import notifyrelay.data.database.entity.DeviceEntity
 import notifyrelay.data.database.entity.NotificationRecordEntity
 import notifyrelay.data.database.entity.SuperIslandHistoryEntity
-import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 
 /**
@@ -53,81 +50,16 @@ object MigrationHelper {
     }
 
     /**
-     * 迁移设备信息
-     */
-    suspend fun migrateDevices(
-        context: Context,
-        deviceDao: DeviceDao,
-    ) {
-        {
-            // Logger.d("MigrationHelper", "开始迁移设备信息")
-        }
-
-        // 从SharedPreferences读取设备数据
-        val devicesJson = StorageManager.getString(context, "authed_devices", "[]")
-        val devicesArray = JSONArray(devicesJson)
-
-        val deviceEntities = mutableListOf<DeviceEntity>()
-        for (i in 0 until devicesArray.length()) {
-            try {
-                val deviceObj = devicesArray.getJSONObject(i)
-                deviceEntities.add(
-                    DeviceEntity(
-                        uuid = deviceObj.getString("uuid"),
-                        publicKey = deviceObj.getString("publicKey"),
-                        sharedSecret = deviceObj.getString("sharedSecret"),
-                        isAccepted = deviceObj.getBoolean("isAccepted"),
-                        displayName = deviceObj.getString("displayName"),
-                        lastIp = deviceObj.getString("lastIp"),
-                        lastPort = deviceObj.getInt("lastPort"),
-                    ),
-                )
-            } catch (e: Exception) {
-                {
-                    Logger.e("MigrationHelper", "迁移设备信息失败: ${e.message}", e)
-                }
-            }
-        }
-
-        // 插入到数据库
-        if (deviceEntities.isNotEmpty()) {
-            deviceDao.insertAll(deviceEntities)
-            // Logger.d("MigrationHelper", "迁移设备信息完成，共${deviceEntities.size}条")
-        }
-    }
-
-    /**
-     * 迁移通知记录
+     * 迁移超级岛历史记录
      */
     suspend fun migrateNotifications(
         context: Context,
         notificationRecordDao: NotificationRecordDao,
-        deviceDao: DeviceDao,
     ) {
         // Logger.d("MigrationHelper", "开始迁移通知记录")
 
         // 获取所有通知文件
         val files = PersistenceManager.getAllNotificationFiles(context)
-
-        // 添加本地设备（如果不存在）- 仅在有本地通知记录时添加
-        val localDeviceUuid = "本机"
-        val hasLocalNotificationFiles = files.any { it.name == "notification_records_local.json" }
-
-        // 只有在有本地通知记录或者已经存在本地设备时才处理
-        val localDevice = deviceDao.getByUuid(localDeviceUuid)
-        if (localDevice == null && hasLocalNotificationFiles) {
-            deviceDao.insert(
-                DeviceEntity(
-                    uuid = localDeviceUuid,
-                    publicKey = "",
-                    sharedSecret = "",
-                    isAccepted = true,
-                    displayName = "本机",
-                    lastIp = "localhost",
-                    lastPort = 0,
-                ),
-            )
-        }
 
         val notificationEntities = mutableListOf<NotificationRecordEntity>()
 
@@ -144,24 +76,7 @@ object MigrationHelper {
 
                 // 转换为Room实体
                 for (oldRecord in oldRecords) {
-                    val deviceUuid = if (deviceId == "local") localDeviceUuid else deviceId
-
-                    // 确保设备存在
-                    val device = deviceDao.getByUuid(deviceUuid)
-                    if (device == null) {
-                        // 创建未知设备
-                        deviceDao.insert(
-                            DeviceEntity(
-                                uuid = deviceUuid,
-                                publicKey = "",
-                                sharedSecret = "",
-                                isAccepted = false,
-                                displayName = "未知设备($deviceId)",
-                                lastIp = "",
-                                lastPort = 0,
-                            ),
-                        )
-                    }
+                    val deviceUuid = if (deviceId == "local") "本机" else deviceId
 
                     // 转换为新实体
                     notificationEntities.add(

@@ -2,13 +2,14 @@ package notifyrelay.data.database.repository
 
 import android.content.Context
 import androidx.paging.PagingSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import notifyrelay.data.database.AppDatabase
 import notifyrelay.data.database.dao.PackageCount
 import notifyrelay.data.database.entity.AppConfigEntity
 import notifyrelay.data.database.entity.AppDeviceEntity
 import notifyrelay.data.database.entity.AppEntity
 import notifyrelay.data.database.entity.BlackListEntryEntity
-import notifyrelay.data.database.entity.DeviceEntity
 import notifyrelay.data.database.entity.FilterEntryEntity
 import notifyrelay.data.database.entity.NotificationRecordEntity
 import notifyrelay.data.database.entity.PackageGroupEntity
@@ -35,9 +36,6 @@ class DatabaseRepository(
 
     // 应用设备关联相关
     private val appDeviceDao = database.appDeviceDao()
-
-    // 设备相关
-    private val deviceDao = database.deviceDao()
 
     // 通知记录相关
     val notificationRecordDao = database.notificationRecordDao()
@@ -73,40 +71,77 @@ class DatabaseRepository(
     }
 
     /**
-     * 获取所有设备
-     */
-    suspend fun getDevices(): List<DeviceEntity> = deviceDao.getAll()
-
-    /**
-     * 根据UUID获取设备
-     */
-    suspend fun getDeviceByUuid(uuid: String): DeviceEntity? = deviceDao.getByUuid(uuid)
-
-    /**
-     * 保存设备
-     */
-    suspend fun saveDevice(device: DeviceEntity) {
-        deviceDao.insert(device)
-    }
-
-    /**
-     * 删除设备
-     */
-    suspend fun deleteDevice(device: DeviceEntity) {
-        deviceDao.delete(device)
-    }
-
-    /**
-     * 根据UUID删除设备
-     */
-    suspend fun deleteDeviceByUuid(uuid: String) {
-        deviceDao.deleteByUuid(uuid)
-    }
-
-    /**
      * 根据设备UUID获取通知记录
      */
     suspend fun getNotificationsByDevice(deviceUuid: String): List<NotificationRecordEntity> = notificationRecordDao.getByDevice(deviceUuid)
+
+    // ===== 设备表退役迁移（MIGRATION_8_9 → device_migration 临时表）=====
+
+    /**
+     * 读取旧 devices 表迁移出的设备行（应用层一次性迁移至 Rust 库后清理）
+     * 幂等：表已被前述迁移 DROP 时返回空列表（二次启动不再报错）
+     */
+    suspend fun queryDeviceMigrationRows(): List<DeviceMigrationRow> =
+        withContext(Dispatchers.IO) {
+            val rows = mutableListOf<DeviceMigrationRow>()
+            try {
+                database.openHelper.readableDatabase.query(
+                    "SELECT uuid, publicKey, sharedSecret, isAccepted, displayName, lastIp, lastPort FROM device_migration",
+                    emptyArray<Any?>(),
+                ).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        rows.add(
+                            DeviceMigrationRow(
+                                uuid = cursor.getString(cursor.getColumnIndexOrThrow("uuid")),
+                                publicKey = cursor.getString(cursor.getColumnIndexOrThrow("publicKey")),
+                                sharedSecret = cursor.getString(cursor.getColumnIndexOrThrow("sharedSecret")),
+                                isAccepted = cursor.getInt(cursor.getColumnIndexOrThrow("isAccepted")) != 0,
+                                displayName = cursor.getString(cursor.getColumnIndexOrThrow("displayName")),
+                                lastIp = cursor.getString(cursor.getColumnIndexOrThrow("lastIp")),
+                                lastPort = cursor.getInt(cursor.getColumnIndexOrThrow("lastPort")),
+                            ),
+                        )
+                    }
+                }
+            } catch (e: android.database.sqlite.SQLiteException) {
+                // 仅表不存在视为幂等（迁移已完成，返回空）；
+                // 其他查询失败必须抛出，由调用方暂缓清理旧存储并在下次启动重试，
+                // 否则迁移会被静默跳过导致密钥永久丢失
+                if (e.message?.contains("no such table", ignoreCase = true) != true) {
+                    throw e
+                }
+            }
+            rows
+        }
+
+    /**
+     * 删除指定 UUID 的设备迁移行（设备在迁移前被移除时）
+     * 幂等：表已被前述迁移 DROP 时忽略（二次启动/删除设备不再崩溃）
+     */
+    suspend fun deleteDeviceMigrationByUuid(uuid: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                database.openHelper.writableDatabase.execSQL(
+                    "DELETE FROM device_migration WHERE uuid = ?",
+                    arrayOf<Any?>(uuid),
+                )
+            } catch (e: android.database.sqlite.SQLiteException) {
+                // 仅忽略 "no such table" 错误（表不存在：迁移已完成），其他错误重新抛出
+                if (e.message?.contains("no such table", ignoreCase = true) != true) {
+                    throw e
+                }
+            }
+        }
+    }
+
+    /**
+     * 迁移完成后丢弃临时表
+     */
+    suspend fun dropDeviceMigrationTable() {
+        withContext(Dispatchers.IO) {
+            database.openHelper.writableDatabase.execSQL("DROP TABLE IF EXISTS device_migration")
+        }
+    }
 
     /**
      * 获取通知记录的分页数据源
@@ -697,3 +732,14 @@ class DatabaseRepository(
             }
     }
 }
+
+/** 旧 devices 表迁移行（MIGRATION_8_9 → device_migration 临时表） */
+data class DeviceMigrationRow(
+    val uuid: String,
+    val publicKey: String,
+    val sharedSecret: String,
+    val isAccepted: Boolean,
+    val displayName: String,
+    val lastIp: String,
+    val lastPort: Int,
+)

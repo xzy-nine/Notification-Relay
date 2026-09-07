@@ -48,11 +48,13 @@ object FloatingReplicaNotificationManager {
                     title?.takeIf { it.isNotBlank() }
                         ?: paramV2?.highlightInfo?.title?.takeIf { it.isNotBlank() }
                         ?: paramV2?.baseInfo?.title?.takeIf { it.isNotBlank() }
+                        ?: "未知"
 
                 val displayText =
                     text?.takeIf { it.isNotBlank() }
                         ?: paramV2?.highlightInfo?.content?.takeIf { it.isNotBlank() }
                         ?: paramV2?.baseInfo?.content?.takeIf { it.isNotBlank() }
+                        ?: "未知"
 
                 val entryKey = sourceId
 
@@ -60,10 +62,25 @@ object FloatingReplicaNotificationManager {
 
                 val isProgressType = SuperIslandDataFormatter.isProgressType(paramV2)
 
-                if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                // 内容与上次成功发出的通知一致且通知仍在展示时，跳过系统通知刷新（不调用 notify），
+                // 仅重置下方的撤回计时器；通知被撤回后指纹随之清理，会重新发出
+                val fingerprint =
+                    FloatingReplicaMappingManager.computeNotificationFingerprint(
+                        displayTitle,
+                        displayText,
+                        formattedData.paramV2Raw,
+                        formattedData.resolvedPicMap,
+                    )
+                val canSkipRefresh =
+                    !FloatingReplicaMappingManager.getNotificationIdsBySourceId(sourceId).isNullOrEmpty() &&
+                        fingerprint == FloatingReplicaMappingManager.getNotificationFingerprint(sourceId)
+
+                if (canSkipRefresh) {
+                    Logger.i(TAG, "超级岛: 内容无变更，跳过系统通知刷新，仅重置撤回计时器: sourceId=$sourceId")
+                } else if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
                     runWithErrorHandlingSuspend("发送Live Updates复合通知") {
                         LiveUpdatesNotificationManager.initialize(context)
-                        LiveUpdatesNotificationManager.showLiveUpdate(
+                        val success = LiveUpdatesNotificationManager.showLiveUpdate(
                             sourceId,
                             displayTitle,
                             displayText,
@@ -73,11 +90,18 @@ object FloatingReplicaNotificationManager {
                         val liveUpdateNotificationId = sourceId.hashCode().and(0xffff) + 10000
                         FloatingReplicaMappingManager.putNotificationId(entryKey, liveUpdateNotificationId)
                         FloatingReplicaMappingManager.addSourceIdMapping(sourceId, entryKey, liveUpdateNotificationId)
+                        // 仅在确认发出成功后记录指纹，发送异常被吞时留空，避免后续保活包被误跳过
+                        if (success) {
+                            FloatingReplicaMappingManager.setNotificationFingerprint(sourceId, fingerprint)
+                        }
                         Logger.i(TAG, "浮窗功能关闭时发送Live Updates复合通知: sourceId=$sourceId, notificationId=$liveUpdateNotificationId")
                     }
                 } else {
                     val notificationId = NotificationGenerator.sendReplicaNotification(context, entryKey, displayTitle, displayText, appName, formattedData.paramV2, formattedData.paramV2Raw, formattedData.resolvedPicMap, sourceId, FloatingReplicaWindowManager.getFloatingWindowManager())
                     FloatingReplicaMappingManager.addSourceIdMapping(sourceId, entryKey, notificationId)
+                    if (notificationId != null) {
+                        FloatingReplicaMappingManager.setNotificationFingerprint(sourceId, fingerprint)
+                    }
                     Logger.i(TAG, "浮窗功能关闭时发送传统复刻通知: sourceId=$sourceId, notificationId=$notificationId")
                 }
 
@@ -179,6 +203,9 @@ object FloatingReplicaNotificationManager {
                 FloatingReplicaMappingManager.removeNotificationId(entryKey)
             }
         }
+
+        // 通知已撤回，清理内容指纹，保证后续保活包（即使无变更）会重新发出通知
+        FloatingReplicaMappingManager.removeNotificationFingerprint(sourceId)
 
         if (reason == FloatingWindowManager.RemovalReason.REMOTE || reason == FloatingWindowManager.RemovalReason.TIMEOUT) {
             FloatingReplicaMappingManager.removeBlockedInstance(sourceId)

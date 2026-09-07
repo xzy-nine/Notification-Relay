@@ -240,15 +240,18 @@ class ConnectionDiscoveryManager(
     internal fun syncHeartbeatMode() {
         val ctx = deviceManager.rustContextInternal ?: return
         try {
-            val tcpBackup = PermissionHelper.isDeviceLocked(context) || isWifiDirectNetworkInternal()
-            NativeCore.setHeartbeatTcpBackup(ctx, tcpBackup)
-            if (tcpBackup) {
-                NativeCore.periodicBroadcast(ctx, 0)
-            } else if (deviceManager.udpDiscoveryEnabled) {
+            val isLocked = PermissionHelper.isDeviceLocked(context)
+            val isWifiDirect = isWifiDirectNetworkInternal()
+            // 锁屏或 WLAN 直连时启用 TCP 备用心跳
+            NativeCore.setHeartbeatTcpBackup(ctx, isLocked || isWifiDirect)
+            // UDP 广播始终保持运行（锁屏不停止），叠加 TCP 心跳
+            if (deviceManager.udpDiscoveryEnabled) {
                 val displayName = deviceManager.localDisplayNameInternal()
-                // 问题 4 修复：心跳报文电量需带符号（正=充电，负=放电），否则远端会误判全部设备为充电中。
                 val battery = getSignedBatteryLevel()
                 NativeCore.periodicBroadcast(ctx, 1, deviceManager.uuid, displayName, battery, "android")
+            } else {
+                // 用户关闭 UDP 发现时停止广播
+                NativeCore.periodicBroadcast(ctx, 0)
             }
         } catch (_: Exception) {
         }

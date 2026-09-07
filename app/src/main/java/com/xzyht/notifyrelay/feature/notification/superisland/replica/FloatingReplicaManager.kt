@@ -1,7 +1,7 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.replica
 
 import android.content.Context
-import com.xzyht.notifyrelay.feature.notification.superisland.notification.list.SuperIslandListManager
+import com.xzyht.notifyrelay.feature.notification.superisland.notification.SuperIslandListManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
 import com.xzyht.notifyrelay.feature.notification.superisland.config.SuperIslandConfigUtils
 import notifyrelay.base.util.Logger

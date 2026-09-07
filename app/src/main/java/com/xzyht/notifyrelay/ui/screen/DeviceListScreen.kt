@@ -609,7 +609,7 @@ fun DeviceListScreen(
                                     if (removed) {
                                         authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
                                     } else {
-                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或已被删除")
+                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
                                     }
                                 } catch (e: Exception) {
                                     ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")
@@ -629,7 +629,7 @@ fun DeviceListScreen(
                                     if (removed) {
                                         authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
                                     } else {
-                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或已被删除")
+                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
                                     }
                                 } catch (e: Exception) {
                                     ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")

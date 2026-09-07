@@ -42,6 +42,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Android 14+ 媒体播放前台服务权限声明：用于媒体播放前台服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Wake Lock 权限：锁屏期间保持 CPU 不休眠，确保心跳线程正常运行 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- 屏幕音频捕获（Android 13+ 播放捕获输入）所需权限：用于屏幕音频捕获 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- 文件管理权限：用于 FTP / 本地文件转发等访问设备存储 -->
@@ -155,6 +157,15 @@
             android:name=".ui.activity.DeveloperModeActivity"
             android:exported="false"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+
+        <!-- 公平运行内存适配（小米 HyperOS / 金标联盟） -->
+        <receiver
+            android:name=".feature.device.receiver.FairMemoryReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="itgsa.intent.action.TRIM" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -4,7 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.widget.Toast
-import com.xzyht.notifyrelay.feature.notification.superisland.notification.list.SuperIslandListManager
+import com.xzyht.notifyrelay.feature.notification.superisland.notification.SuperIslandListManager
 import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
 import com.xzyht.notifyrelay.feature.notification.superisland.formatter.SuperIslandDataFormatter
 import com.xzyht.notifyrelay.feature.notification.superisland.image.SuperIslandImageStore
@@ -66,6 +66,7 @@ object FloatingReplicaListModeManager {
     fun sendListModeNotification(
         context: Context,
         entry: SuperIslandListManager.ListEntry,
+        forceRefresh: Boolean = false,
     ) {
         CoroutineScope(Dispatchers.Main).launch {
             runWithErrorHandlingSuspend("发送列表模式通知") {
@@ -99,9 +100,26 @@ object FloatingReplicaListModeManager {
                         ?: paramV2?.highlightInfo?.content?.takeIf { it.isNotBlank() }
                         ?: paramV2?.baseInfo?.content?.takeIf { it.isNotBlank() }
                 val isProgressType = SuperIslandDataFormatter.isProgressType(paramV2)
-                if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+
+                // 内容与上次成功发出的通知一致时，跳过系统通知刷新（不调用 notify），仅重置下方撤回计时器；
+                // 切换/移除后展示下一条（forceRefresh）时必须强制刷新，避免通知内容停留旧条目
+                val fingerprint =
+                    FloatingReplicaMappingManager.computeNotificationFingerprint(
+                        displayTitle,
+                        displayText,
+                        formattedData.paramV2Raw,
+                        formattedData.resolvedPicMap,
+                    )
+                val canSkipRefresh =
+                    !forceRefresh &&
+                        !FloatingReplicaMappingManager.getNotificationIdsBySourceId(entry.sourceId).isNullOrEmpty() &&
+                        fingerprint == FloatingReplicaMappingManager.getNotificationFingerprint(entry.sourceId)
+
+                if (canSkipRefresh) {
+                    Logger.i(TAG, "超级岛: 内容无变更，跳过系统通知刷新，仅重置撤回计时器: sourceId=${entry.sourceId}")
+                } else if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
                     LiveUpdatesNotificationManager.initialize(context)
-                    LiveUpdatesNotificationManager.showLiveUpdate(
+                    val success = LiveUpdatesNotificationManager.showLiveUpdate(
                         entry.sourceId,
                         displayTitle,
                         displayText,
@@ -109,8 +127,13 @@ object FloatingReplicaListModeManager {
                         formattedData,
                         overrideNotificationId = LIST_MODE_NOTIFICATION_ID,
                     )
-                    FloatingReplicaMappingManager.putNotificationId(entry.sourceId, LIST_MODE_NOTIFICATION_ID)
-                    FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, LIST_MODE_NOTIFICATION_ID)
+                    if (success) {
+                        FloatingReplicaMappingManager.putNotificationId(entry.sourceId, LIST_MODE_NOTIFICATION_ID)
+                        FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, LIST_MODE_NOTIFICATION_ID)
+                        FloatingReplicaMappingManager.setNotificationFingerprint(entry.sourceId, fingerprint)
+                    } else {
+                        FloatingReplicaMappingManager.removeNotificationFingerprint(entry.sourceId)
+                    }
                 } else {
                     val notificationId =
                         NotificationGenerator.sendReplicaNotification(
@@ -126,7 +149,11 @@ object FloatingReplicaListModeManager {
                             floatingWindowManager = FloatingReplicaWindowManager.getFloatingWindowManager(),
                             overrideNotificationId = LIST_MODE_NOTIFICATION_ID,
                         )
-                    if (notificationId != null) FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, notificationId)
+                    if (notificationId != null) {
+                        FloatingReplicaMappingManager.addSourceIdMapping(entry.sourceId, entry.sourceId, notificationId)
+                        // 仅在确认发出成功后记录指纹，失败时留空以便下次保活包重试
+                        FloatingReplicaMappingManager.setNotificationFingerprint(entry.sourceId, fingerprint)
+                    }
                 }
                 scheduleListModeTimeoutFor(entry.sourceId)
             }
@@ -151,7 +178,7 @@ object FloatingReplicaListModeManager {
             Toast
                 .makeText(context, "切换", Toast.LENGTH_SHORT)
                 .show()
-            sendListModeNotification(context, next)
+            sendListModeNotification(context, next, forceRefresh = true)
         }
     }
 
@@ -162,7 +189,7 @@ object FloatingReplicaListModeManager {
         FloatingReplicaMappingManager.removeSourceIdMappings(sourceId)
         val next = SuperIslandListManager.remove(sourceId)
         if (next != null) {
-            sendListModeNotification(context, next)
+            sendListModeNotification(context, next, forceRefresh = true)
         } else {
             val nm = context.getSystemService(NotificationManager::class.java)
             nm?.cancel(LIST_MODE_NOTIFICATION_ID)

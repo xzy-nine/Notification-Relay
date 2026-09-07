@@ -1,6 +1,6 @@
 package github.xzynine.superislandui.model.core
 
-import github.xzynine.superislandui.floating.SmallIsland.core.parseBigIslandArea
+import github.xzynine.superislandui.floating.smallisland.core.parseBigIslandArea
 import github.xzynine.superislandui.model.components.ActionInfo
 import github.xzynine.superislandui.model.components.AnimTextInfo
 import github.xzynine.superislandui.model.components.MultiProgressInfo

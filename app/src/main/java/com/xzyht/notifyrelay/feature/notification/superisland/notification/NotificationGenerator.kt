@@ -22,21 +22,21 @@ import com.xzyht.notifyrelay.feature.notification.superisland.replica.FloatingRe
 import github.xzynine.superislandui.common.BitmapUtils
 import github.xzynine.superislandui.common.CapsuleScrollManager
 import github.xzynine.superislandui.common.TextSplitter
-import github.xzynine.superislandui.floating.SmallIsland.left.AComponent
-import github.xzynine.superislandui.floating.SmallIsland.left.aContent
-import github.xzynine.superislandui.floating.SmallIsland.left.aPicKey
-import github.xzynine.superislandui.floating.SmallIsland.left.aTitle
-import github.xzynine.superislandui.floating.SmallIsland.right.BComponent
-import github.xzynine.superislandui.floating.SmallIsland.right.BSameWidthDigitInfo
-import github.xzynine.superislandui.floating.SmallIsland.right.bContent
-import github.xzynine.superislandui.floating.SmallIsland.right.bPicKey
-import github.xzynine.superislandui.floating.SmallIsland.right.bProgress
-import github.xzynine.superislandui.floating.SmallIsland.right.bProgressColorReach
-import github.xzynine.superislandui.floating.SmallIsland.right.bProgressColorUnReach
-import github.xzynine.superislandui.floating.SmallIsland.right.bProgressIsCCW
-import github.xzynine.superislandui.floating.SmallIsland.right.bTitle
-import github.xzynine.superislandui.floating.SmallIsland.right.isTimerType
-import github.xzynine.superislandui.floating.SmallIsland.right.textToRender
+import github.xzynine.superislandui.floating.smallisland.left.AComponent
+import github.xzynine.superislandui.floating.smallisland.left.aContent
+import github.xzynine.superislandui.floating.smallisland.left.aPicKey
+import github.xzynine.superislandui.floating.smallisland.left.aTitle
+import github.xzynine.superislandui.floating.smallisland.right.BComponent
+import github.xzynine.superislandui.floating.smallisland.right.BSameWidthDigitInfo
+import github.xzynine.superislandui.floating.smallisland.right.bContent
+import github.xzynine.superislandui.floating.smallisland.right.bPicKey
+import github.xzynine.superislandui.floating.smallisland.right.bProgress
+import github.xzynine.superislandui.floating.smallisland.right.bProgressColorReach
+import github.xzynine.superislandui.floating.smallisland.right.bProgressColorUnReach
+import github.xzynine.superislandui.floating.smallisland.right.bProgressIsCCW
+import github.xzynine.superislandui.floating.smallisland.right.bTitle
+import github.xzynine.superislandui.floating.smallisland.right.isTimerType
+import github.xzynine.superislandui.floating.smallisland.right.textToRender
 import github.xzynine.superislandui.model.core.ParamV2
 import notifyrelay.base.util.DeviceUtils
 import notifyrelay.base.util.Logger
@@ -294,7 +294,7 @@ object NotificationGenerator {
                     NotificationCompat
                         .Builder(context, NOTIFICATION_CHANNEL_ID)
                         .setContentTitle(appName ?: "媒体应用") // 使用实际应用名作为通知标题
-                        .setContentText(title ?: "")
+                        .setContentText(title ?: "未知")
                         .setSmallIcon(R.drawable.stat_notify_more) // 使用系统默认图标
                         // 调整为不可被一键清除的属性，只能手动划去
                         .setOngoing(true) // 不允许通知被一键清除
@@ -405,14 +405,28 @@ object NotificationGenerator {
                     }
                 } else {
                     // 没有图标文本时，尝试使用专辑图作为小图标
+                    var albumIconSet = false
                     val coverKey = "miui.focus.pic_cover"
                     if (!picMap.isNullOrEmpty() && picMap.containsKey(coverKey)) {
                         val coverUrl = picMap[coverKey]
                         if (!coverUrl.isNullOrBlank()) {
-                            // 同步下载专辑图
                             val bitmap = downloadBitmap(context, coverUrl)
                             if (bitmap != null) {
                                 injectSmallIcon(notification, bitmap, key)
+                                albumIconSet = true
+                            }
+                        }
+                    }
+                    // 专辑图加载失败时，尝试使用应用图标作为小图标
+                    if (!albumIconSet) {
+                        val appIconKey = "miui.focus.pic_app_icon"
+                        if (!picMap.isNullOrEmpty() && picMap.containsKey(appIconKey)) {
+                            val appIconUrl = picMap[appIconKey]
+                            if (!appIconUrl.isNullOrBlank()) {
+                                val bitmap = downloadBitmap(context, appIconUrl)
+                                if (bitmap != null) {
+                                    injectSmallIcon(notification, bitmap, key)
+                                }
                             }
                         }
                     }
@@ -1036,6 +1050,9 @@ object NotificationGenerator {
             // 清空映射
             FloatingReplicaMappingManager
                 .clearAllNotificationIds()
+            // 清空所有内容指纹
+            FloatingReplicaMappingManager
+                .clearAllNotificationFingerprints()
             // 清空所有滚动更新
             clearAllScrollUpdates()
             Logger.i(TAG, "超级岛 清除所有复刻通知成功")

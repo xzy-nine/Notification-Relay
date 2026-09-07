@@ -50,7 +50,6 @@ import notifyrelay.data.FilterConfigDefaults
 import notifyrelay.data.database.dao.AppConfigDao
 import notifyrelay.data.database.dao.AppDao
 import notifyrelay.data.database.dao.AppDeviceDao
-import notifyrelay.data.database.dao.DeviceDao
 import notifyrelay.data.database.dao.FilterListDao
 import notifyrelay.data.database.dao.NotificationRecordDao
 import notifyrelay.data.database.dao.SuperIslandHistoryDao
@@ -60,7 +59,6 @@ import notifyrelay.data.database.entity.AppConfigEntity
 import notifyrelay.data.database.entity.AppDeviceEntity
 import notifyrelay.data.database.entity.AppEntity
 import notifyrelay.data.database.entity.BlackListEntryEntity
-import notifyrelay.data.database.entity.DeviceEntity
 import notifyrelay.data.database.entity.FilterEntryEntity
 import notifyrelay.data.database.entity.NotificationRecordEntity
 import notifyrelay.data.database.entity.PackageGroupEntity
@@ -124,7 +122,6 @@ import notifyrelay.data.database.migration.MigrationHelper
         AppConfigEntity::class,
         AppEntity::class,
         AppDeviceEntity::class,
-        DeviceEntity::class,
         NotificationRecordEntity::class,
         SuperIslandHistoryEntity::class,
         SuperIslandImageEntity::class,
@@ -136,7 +133,7 @@ import notifyrelay.data.database.migration.MigrationHelper
         PackageGroupEntity::class,
         PackageGroupItemEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -146,8 +143,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appDao(): AppDao
 
     abstract fun appDeviceDao(): AppDeviceDao
-
-    abstract fun deviceDao(): DeviceDao
 
     abstract fun notificationRecordDao(): NotificationRecordDao
 
@@ -190,7 +185,7 @@ abstract class AppDatabase : RoomDatabase() {
                                 }
                             }
                         },
-                    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build()
                     .also { instance = it }
             }
@@ -456,6 +451,38 @@ abstract class AppDatabase : RoomDatabase() {
                 }
             }
 
+        // ---------- MIGRATION_8_9 辅助方法 ----------
+
+        /**
+         * MIGRATION_8_9：设备表退役（uuid/密钥移交 Rust 私有库）
+         * - 将 devices 表数据转存到 device_migration 临时表（含 sharedSecret，
+         *   供应用层一次性迁移到 Rust 后 DROP）
+         * - 删除 devices 表（Room 后续不再管理该表）
+         */
+        private val MIGRATION_8_9 =
+            object : Migration(8, 9) {
+                override fun migrate(database: SupportSQLiteDatabase) {
+                    database.execSQL(
+                        "CREATE TABLE IF NOT EXISTS device_migration (" +
+                            "uuid TEXT NOT NULL PRIMARY KEY, " +
+                            "publicKey TEXT NOT NULL DEFAULT '', " +
+                            "sharedSecret TEXT NOT NULL DEFAULT '', " +
+                            "isAccepted INTEGER NOT NULL DEFAULT 0, " +
+                            "displayName TEXT NOT NULL DEFAULT '', " +
+                            "lastIp TEXT NOT NULL DEFAULT '', " +
+                            "lastPort INTEGER NOT NULL DEFAULT 0, " +
+                            "createdAt INTEGER NOT NULL DEFAULT 0, " +
+                            "updatedAt INTEGER NOT NULL DEFAULT 0)",
+                    )
+                    database.execSQL(
+                        "INSERT OR IGNORE INTO device_migration " +
+                            "(uuid, publicKey, sharedSecret, isAccepted, displayName, lastIp, lastPort, createdAt, updatedAt) " +
+                            "SELECT uuid, publicKey, sharedSecret, isAccepted, displayName, lastIp, lastPort, createdAt, updatedAt FROM devices",
+                    )
+                    database.execSQL("DROP TABLE IF EXISTS devices")
+                }
+            }
+
         // ---------- MIGRATION_7_8 辅助方法 ----------
 
         private fun readConfigValue(
@@ -638,17 +665,10 @@ abstract class AppDatabase : RoomDatabase() {
                     database.appConfigDao(),
                 )
 
-                // 迁移设备信息
-                MigrationHelper.migrateDevices(
-                    context,
-                    database.deviceDao(),
-                )
-
-                // 迁移通知记录
+                // 迁移通知记录（设备表已退役，不再创建设备记录）
                 MigrationHelper.migrateNotifications(
                     context,
                     database.notificationRecordDao(),
-                    database.deviceDao(),
                 )
 
                 // 迁移应用信息和图标

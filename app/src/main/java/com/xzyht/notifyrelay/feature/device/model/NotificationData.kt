@@ -333,24 +333,26 @@ object NotificationRepository {
     // 设备列表，自动维护
     val deviceList: MutableList<String> = mutableListOf("本机")
 
-    // 扫描数据库中的设备，自动识别所有设备
+    // 扫描设备列表：设备信息由 Rust 私有库持有（uuid 仅平台端兜底），
+    // 列表数据源改为 DeviceConnectionManager 的已认证设备集合
     fun scanDeviceList(context: Context) {
-        // 从Room数据库中获取所有已认证设备
-        val allDevicesFromDb =
-            runBlocking {
-                DatabaseRepository.getInstance(context).getDevices()
-            }
-
         // 添加本机设备
         val found = mutableSetOf<String>()
         found.add("本机")
 
-        // 添加数据库中的所有已认证设备UUID
-        allDevicesFromDb.forEach { device ->
-            val uuid = device.uuid
-            if (!uuid.isNullOrEmpty() && uuid != "本机") {
-                found.add(uuid)
-            }
+        // 添加已认证设备 UUID（来自 DeviceConnectionManager 内存态，Rust 库为准）
+        try {
+            com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+                .getInstance(context)
+                .getAuthenticatedDevices()
+                .keys
+                .forEach { uuid ->
+                    if (!uuid.isNullOrEmpty() && uuid != "本机") {
+                        found.add(uuid)
+                    }
+                }
+        } catch (e: Exception) {
+            Logger.w("NotifyRelay", "[scanDeviceList] 获取已认证设备失败", e)
         }
 
         // 保证本机在首位

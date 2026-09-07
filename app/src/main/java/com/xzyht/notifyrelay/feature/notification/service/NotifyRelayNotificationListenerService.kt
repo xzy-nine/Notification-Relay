@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.IBinder
+import android.os.PowerManager
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -250,9 +251,13 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
         // 监听设备状态变化，更新通知
         CoroutineScope(Dispatchers.Default).launch {
-            connectionManager.devices.collect { _ ->
-                // 设备状态发生变化时更新通知
-                updateNotification()
+            try {
+                connectionManager.devices.collect {
+                    // 设备状态发生变化时更新通知
+                    updateNotification()
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "设备状态监听协程异常退出，通知将不再自动更新", e)
             }
         }
 
@@ -305,6 +310,9 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     // MediaSession 监控服务实例
     private lateinit var mediaSessionMonitorService: MediaSessionMonitorService
+
+    // Wake Lock：锁屏期间保持 CPU 不休眠，确保心跳线程正常运行
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // 使用通用工具将 Drawable 转换为 Bitmap（参照项目中其他模块的实现）
 
@@ -620,6 +628,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        // 释放 WakeLock（避免权限掉落时持有唤醒锁导致耗电）
+        releaseWakeLock()
         // 停止 MediaSession 监控服务
         mediaSessionMonitorService.stopMonitoring()
 
@@ -641,6 +651,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         Logger.i(TAG, "[NotifyListener] onDestroy called")
+        // 释放 Wake Lock
+        releaseWakeLock()
         // 清空服务实例引用
         instance = null
         super.onDestroy()
@@ -686,6 +698,31 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
         val notification = buildNotification()
         startForeground(notifyId, notification)
+        acquireWakeLock()
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            try {
+                val pm = getSystemService(POWER_SERVICE) as PowerManager
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "notifyrelay:core").apply {
+                    acquire()
+                }
+                Logger.i(TAG, "Wake Lock 已获取")
+            } catch (e: SecurityException) {
+                Logger.w(TAG, "获取 Wake Lock 失败（缺少权限）", e)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+                Logger.i(TAG, "Wake Lock 已释放")
+            }
+        }
+        wakeLock = null
     }
 
     private fun buildNotification(): Notification {
@@ -734,6 +771,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
                 false
             }
         // Logger.d(TAG, "getNotificationText: authenticatedOnlineCount=$onlineDevices")
+        Logger.d(TAG, "getNotificationText: authenticatedOnlineCount=$onlineDevices")
 
         // 优先显示设备连接数，如果有设备连接
         if (onlineDevices > 0) {
@@ -769,9 +807,14 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
     }
 
     private fun updateNotification() {
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val notification = buildNotification()
-        manager.notify(notifyId, notification)
+        try {
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            val notification = buildNotification()
+            manager.notify(notifyId, notification)
+            Logger.d(TAG, "updateNotification: ${getNotificationText()}")
+        } catch (e: Exception) {
+            Logger.e(TAG, "更新通知失败", e)
+        }
     }
 
     // 保留通知历史，不做移除处理

@@ -307,7 +307,7 @@ object SuperIslandProcessor {
                         }
                     } else {
                         null
-                    }
+                    } ?: "未知"
 
             val finalText =
                 merged?.text?.takeIf { it.isNotBlank() }
@@ -324,7 +324,7 @@ object SuperIslandProcessor {
                         }
                     } else {
                         null
-                    }
+                    } ?: "未知"
 
             val rawPics = merged?.pics ?: emptyMap()
             val mPics = if (rawPics.isEmpty()) rawPics else rawPics.filterKeys { it != "miui.focus.pics" }

@@ -12,6 +12,14 @@ import java.util.concurrent.ConcurrentHashMap
 object SuperIslandRemoteStore {
     private val store = ConcurrentHashMap<String, DiffSystem.State>()
 
+    /**
+     * 清空所有远端状态（供公平运行内存回调使用）。
+     */
+    @Synchronized
+    fun clear() {
+        store.clear()
+    }
+
     @Synchronized
     fun applyIncoming(
         sourceId: String,

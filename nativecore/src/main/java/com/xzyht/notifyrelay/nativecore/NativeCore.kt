@@ -75,6 +75,15 @@ object NativeCore {
         deviceUuid: String,
     ): String? = NotifyRelayCore.ptrToStringAndFree(lib.nrc_export_device_key(ctx, deviceUuid))
 
+    // ======== Persistence（Rust 私有库：uuid/密钥由 Rust 持有）=======
+    fun getLocalUuid(ctx: Pointer): String? = NotifyRelayCore.ptrToStringAndFree(lib.nrc_get_local_uuid(ctx))
+
+    fun renameDevice(
+        ctx: Pointer,
+        deviceUuid: String,
+        name: String,
+    ): Boolean = lib.nrc_rename_device(ctx, deviceUuid, name) == 0
+
     // ======== Process ========
     fun periodicBroadcast(
         ctx: Pointer,

@@ -337,6 +337,14 @@ interface NotifyRelayCore : Library {
         deviceUuid: String,
     ): Pointer
 
+    fun nrc_get_local_uuid(ctx: Pointer): Pointer
+
+    fun nrc_rename_device(
+        ctx: Pointer,
+        deviceUuid: String,
+        name: String,
+    ): Int
+
     fun nrc_free_string(s: Pointer)
 
     // ======== Network layer ========
