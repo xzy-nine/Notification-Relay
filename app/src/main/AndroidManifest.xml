@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- WLAN 状态：获取 Wi-Fi 连接信息以优化局域网转发 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 组播锁：接收 UDP 组播/广播设备发现报文所需 -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- 附近 Wi-Fi 设备：Android 13+ 发现并连接局域网内设备所需 -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
     <!-- 触觉反馈：用于超级岛关闭指示器的振动效果 -->
