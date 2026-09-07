@@ -98,10 +98,10 @@ object LiveUpdatesNotificationManager {
         appName: String?,
         formattedData: FormattedSuperIslandData,
         overrideNotificationId: Int? = null,
-    ) {
+    ): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) {
             Logger.w(TAG, "当前Android版本不支持Live Updates")
-            return
+            return false
         }
 
         // 验证规范信息注入开关状态，确保至少有一种开启
@@ -127,7 +127,7 @@ object LiveUpdatesNotificationManager {
             // 仅处理进度类型通知
             if (!SuperIslandDataFormatter.isProgressType(paramV2)) {
                 Logger.i(TAG, "非进度类型通知，跳过处理 $sourceId")
-                return
+                return false
             }
 
             // 检查浮窗功能是否开启
@@ -273,9 +273,11 @@ object LiveUpdatesNotificationManager {
 
             // 异步加载图标并更新通知，确保图标正确显示
             loadIconsAndUpdateNotification(sourceId, notificationId, paramV2, formattedData.resolvedPicMap)
+            return true
         } catch (e: Exception) {
             Logger.e(TAG, "发送Live Update通知失败: ${e.message}")
             e.printStackTrace()
+            return false
         }
     }
 

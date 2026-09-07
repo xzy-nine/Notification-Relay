@@ -249,6 +249,9 @@ class ConnectionDiscoveryManager(
                 val displayName = deviceManager.localDisplayNameInternal()
                 val battery = getSignedBatteryLevel()
                 NativeCore.periodicBroadcast(ctx, 1, deviceManager.uuid, displayName, battery, "android")
+            } else {
+                // 用户关闭 UDP 发现时停止广播
+                NativeCore.periodicBroadcast(ctx, 0)
             }
         } catch (_: Exception) {
         }

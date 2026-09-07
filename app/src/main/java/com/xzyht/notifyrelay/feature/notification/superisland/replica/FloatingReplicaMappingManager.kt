@@ -9,6 +9,7 @@ import com.xzyht.notifyrelay.feature.notification.superisland.notification.LiveU
 import kotlinx.coroutines.Job
 import notifyrelay.base.util.Logger
 import java.lang.ref.WeakReference
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.collections.iterator
@@ -152,7 +153,10 @@ object FloatingReplicaMappingManager {
                 ?.sortedBy { it.key }
                 ?.joinToString(",") { "${it.key}=${it.value}" }
                 .orEmpty()
-        return (title.orEmpty() + "\u0001" + text.orEmpty() + "\u0001" + paramV2Raw.orEmpty() + "\u0001" + pics).hashCode().toString()
+        val input = title.orEmpty() + "\u0001" + text.orEmpty() + "\u0001" + paramV2Raw.orEmpty() + "\u0001" + pics
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(input.toByteArray(Charsets.UTF_8))
+        return hash.joinToString("") { "%02x".format(it) }
     }
 
     fun getNotificationFingerprint(sourceId: String): String? = lastNotificationFingerprints[sourceId]

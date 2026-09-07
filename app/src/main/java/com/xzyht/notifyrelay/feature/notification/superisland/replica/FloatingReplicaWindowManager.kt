@@ -191,7 +191,7 @@ object FloatingReplicaWindowManager {
                         } else if (isProgressType && Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
                             runWithErrorHandlingSuspend("发送Live Updates复合通知") {
                                 LiveUpdatesNotificationManager.initialize(context)
-                                LiveUpdatesNotificationManager.showLiveUpdate(
+                                val success = LiveUpdatesNotificationManager.showLiveUpdate(
                                     sourceId,
                                     displayTitle,
                                     displayText,
@@ -202,7 +202,9 @@ object FloatingReplicaWindowManager {
                                 FloatingReplicaMappingManager.putNotificationId(entryKey, liveUpdateNotificationId)
                                 FloatingReplicaMappingManager.addSourceIdMapping(sourceId, entryKey, liveUpdateNotificationId)
                                 // 仅在确认发出成功后记录指纹，发送异常被吞时留空，避免后续保活包被误跳过
-                                FloatingReplicaMappingManager.setNotificationFingerprint(sourceId, fingerprint)
+                                if (success) {
+                                    FloatingReplicaMappingManager.setNotificationFingerprint(sourceId, fingerprint)
+                                }
                                 Logger.i(TAG, "浮窗创建时发送Live Updates复合通知作为生命周期管理: sourceId=$sourceId, notificationId=$liveUpdateNotificationId")
                             }
                         } else {

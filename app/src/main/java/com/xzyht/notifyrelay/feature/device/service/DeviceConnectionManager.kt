@@ -11,6 +11,7 @@ import android.os.Environment
 import android.util.Base64
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import java.util.concurrent.atomic.AtomicBoolean
 import com.xzyht.notifyrelay.feature.audio.AudioRelayPlayer
 import com.xzyht.notifyrelay.feature.audio.service.AudioRelayForegroundService
 import com.xzyht.notifyrelay.feature.notification.filter.BackendRemoteFilter
@@ -424,6 +425,9 @@ class DeviceConnectionManager(
     // 上次同步给 Rust 心跳调度器的带符号电量（正=充电，负=放电），用于防抖
     private var lastSentSignedBattery: Int = Int.MIN_VALUE
 
+    // startCore 防重入节流（避免快速重启时重复启动核心服务）
+    private val coreStarted = AtomicBoolean(false)
+
     // UI全局开关：是否启用UDP发现，使用内存缓存避免频繁数据库访问
     // 使用AppConfig管理UDP发现配置
     var udpDiscoveryEnabled: Boolean
@@ -506,10 +510,18 @@ class DeviceConnectionManager(
                     Logger.e("死神-NotifyRelay", "本机 ECDH 公钥为空，跳过 Rust Core 启动")
                     return@let
                 }
+                if (uuid.isEmpty()) {
+                    Logger.e("死神-NotifyRelay", "本机 UUID 为空，跳过 Rust Core 启动")
+                    return@let
+                }
+                if (!coreStarted.compareAndSet(false, true)) {
+                    Logger.w("死神-NotifyRelay", "Rust Core 已启动，跳过重复启动")
+                    return@let
+                }
                 val batteryLevel = BatteryUtils.getBatteryLevel(context)
                 val battery = if (BatteryUtils.isCharging(context)) batteryLevel else -batteryLevel
                 lastSentSignedBattery = battery
-                NativeCore.startCore(
+                val started = NativeCore.startCore(
                     ctx = ctx,
                     uuid = uuid,
                     name = getLocalDisplayName(),
@@ -518,8 +530,13 @@ class DeviceConnectionManager(
                     tcpPort = listenPort.toShort(),
                     pubkey = localPublicKey,
                 )
+                if (!started) {
+                    coreStarted.set(false)
+                    Logger.e("死神-NotifyRelay", "Rust Core 启动失败，重置 coreStarted 允许重试")
+                }
             }
         } catch (e: Exception) {
+            coreStarted.set(false)
             Logger.e("死神-NotifyRelay", "启动 Rust Core 失败", e)
         }
         // 旧设备表迁移与平台存储清理（需在本机 uuid 已进入 Rust 后才可保证落盘）

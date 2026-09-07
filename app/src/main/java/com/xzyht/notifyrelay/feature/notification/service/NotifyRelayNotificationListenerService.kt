@@ -628,6 +628,8 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        // 释放 WakeLock（避免权限掉落时持有唤醒锁导致耗电）
+        releaseWakeLock()
         // 停止 MediaSession 监控服务
         mediaSessionMonitorService.stopMonitoring()
 
