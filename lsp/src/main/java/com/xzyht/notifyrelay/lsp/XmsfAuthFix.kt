@@ -74,7 +74,9 @@ object XmsfAuthFix {
             xposed.log(android.util.Log.INFO, TAG, "AuthSession hook 注入成功 (getAuthError)")
         } catch (e: Throwable) {
             xposed.log(android.util.Log.ERROR, TAG, "hook 失败: ${e.message}")
-            e.printStackTrace()
+            // 不吞异常：让 ensureDexKitLoaded / DexKit 查找 / hook 注册失败传播到热重载聚合事务，
+            // 由框架保留旧 hook；静默吞掉会导致新世代在无 hook 状态下继续。
+            throw e
         }
     }
 
