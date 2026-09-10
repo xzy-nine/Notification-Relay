@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,14 +45,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.R
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.callback.HandshakeRequestHandler
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.ui.common.DoubleClickConfirmButton
 import com.xzyht.notifyrelay.ui.dialog.PairingCodeDialog
 import com.xzyht.notifyrelay.ui.dialog.PairingMode
 import com.xzyht.notifyrelay.ui.dialog.RejectedDevicesDialog
 import com.xzyht.notifyrelay.ui.navigation.Navigator
+import kotlinx.coroutines.launch
 import notifyrelay.base.util.ToastUtils
 import notifyrelay.core.util.BatteryIconConverter
 import notifyrelay.core.util.BatteryUtils
@@ -134,6 +136,7 @@ fun DeviceListScreen(
     val colorScheme = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val deviceManager = remember { DeviceConnectionManagerSingleton.getDeviceManager(context) }
+    val coroutineScope = rememberCoroutineScope()
 
     var authedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var rejectedDeviceUuids by rememberSaveable { mutableStateOf(setOf<String>()) }
@@ -185,7 +188,7 @@ fun DeviceListScreen(
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     DisposableEffect(deviceManager) {
         val handler =
-            object : DeviceConnectionManager.HandshakeRequestHandler {
+            object : HandshakeRequestHandler {
                 override fun onPairingInitRequest(
                     deviceInfo: DeviceInfo,
                     tmpPublicKey: String,
@@ -512,7 +515,7 @@ fun DeviceListScreen(
                 if (success) {
                     state.showPairingCodeDialog = false
                     try {
-                        deviceManager.updateDeviceListInternal()
+                        deviceManager.triggerDeviceListRefresh()
                         val authMap = deviceManager.getAuthenticatedDevices()
                         authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                     } catch (_: Exception) {
@@ -538,7 +541,7 @@ fun DeviceListScreen(
                     state.showPairingCodeDialog = false
                     state.pendingConnectDevice = null
                     try {
-                        deviceManager.updateDeviceListInternal()
+                        deviceManager.triggerDeviceListRefresh()
                         val authMap = deviceManager.getAuthenticatedDevices()
                         authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                     } catch (_: Exception) {
@@ -604,40 +607,44 @@ fun DeviceListScreen(
                         TextButton(
                             text = "仅删除设备",
                             onClick = {
-                                try {
-                                    val removed = deviceManager.removeAuthenticatedDevice(deviceToDelete.uuid, deleteHistory = false)
-                                    if (removed) {
-                                        authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
-                                    } else {
-                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
+                                coroutineScope.launch {
+                                    try {
+                                        val removed = deviceManager.removeAuthenticatedDevice(deviceToDelete.uuid, deleteHistory = false)
+                                        if (removed) {
+                                            authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
+                                        } else {
+                                            ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
+                                        }
+                                    } catch (e: Exception) {
+                                        ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")
                                     }
-                                } catch (e: Exception) {
-                                    ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")
+                                    selectedDevice = null
+                                    GlobalSelectedDeviceHolder.selectedDevice = null
+                                    showDeleteHistoryDialog = false
+                                    pendingDeleteDevice = null
                                 }
-                                selectedDevice = null
-                                GlobalSelectedDeviceHolder.selectedDevice = null
-                                showDeleteHistoryDialog = false
-                                pendingDeleteDevice = null
                             },
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(
                             text = "删除并清除历史",
                             onClick = {
-                                try {
-                                    val removed = deviceManager.removeAuthenticatedDevice(deviceToDelete.uuid, deleteHistory = true)
-                                    if (removed) {
-                                        authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
-                                    } else {
-                                        ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
+                                coroutineScope.launch {
+                                    try {
+                                        val removed = deviceManager.removeAuthenticatedDevice(deviceToDelete.uuid, deleteHistory = true)
+                                        if (removed) {
+                                            authedDeviceUuids = authedDeviceUuids - deviceToDelete.uuid
+                                        } else {
+                                            ToastUtils.showShortToast(context, "删除设备失败: 设备不存在或持久化删除未完成，请重试")
+                                        }
+                                    } catch (e: Exception) {
+                                        ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")
                                     }
-                                } catch (e: Exception) {
-                                    ToastUtils.showShortToast(context, "删除设备失败: ${e.message ?: "未知错误"}")
+                                    selectedDevice = null
+                                    GlobalSelectedDeviceHolder.selectedDevice = null
+                                    showDeleteHistoryDialog = false
+                                    pendingDeleteDevice = null
                                 }
-                                selectedDevice = null
-                                GlobalSelectedDeviceHolder.selectedDevice = null
-                                showDeleteHistoryDialog = false
-                                pendingDeleteDevice = null
                             },
                             modifier = Modifier.weight(1f),
                         )

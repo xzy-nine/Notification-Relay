@@ -49,4 +49,8 @@ dependencies {
     compileOnly(libs.libxposed.api)
     // DexKit：DEX 文件分析框架，用于查找方法和字段
     implementation(libs.dexkit)
+    // EzHookTool：libxposed API 102 热重载世代快照/状态迁移/旧 hook 原子替换框架
+    // hook-xposed-102 的 POM 中 core 为 runtime scope，编译期需显式声明 core
+    implementation(libs.ezhooktool.core)
+    implementation(libs.ezhooktool.xposed102)
 }

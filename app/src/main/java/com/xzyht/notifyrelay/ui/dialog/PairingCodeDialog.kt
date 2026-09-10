@@ -17,12 +17,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -50,13 +52,14 @@ fun PairingCodeDialog(
     if (!show) return
 
     val colorScheme = MiuixTheme.colorScheme
+    val context = LocalContext.current.applicationContext
 
     if (mode == PairingMode.CLIENT_MODE) {
         val clipboardManager = LocalClipboardManager.current
         val scope = rememberCoroutineScope()
         val displayCode =
             remember {
-                deviceManager.rustContextInternal?.let { NativeCore.generatePairingCode(it) }
+                NativeCore.getContext()?.let { NativeCore.generatePairingCode(it) }
             }
 
         LaunchedEffect(show) {
@@ -67,20 +70,20 @@ fun PairingCodeDialog(
                     return@LaunchedEffect
                 }
                 delay(500)
-                val handshakeDeferred = deviceManager.registerHandshakeWaiter(targetDevice.uuid)
+                val handshakeDeferred = DeviceConnectionManagerSingleton.getHandshakeWaiters(context).register(targetDevice.uuid)
                 try {
                     val initSuccess =
                         withContext(Dispatchers.IO) {
-                            val ctx = deviceManager.rustContextInternal
+                            val ctx = NativeCore.getContext()
                             if (ctx == null) {
                                 false
                             } else {
                                 val batteryLevel =
                                     notifyrelay.core.util.BatteryUtils
-                                        .getBatteryLevel(deviceManager.contextInternal)
+                                        .getBatteryLevel(context)
                                 val isCharging =
                                     notifyrelay.core.util.BatteryUtils
-                                        .isCharging(deviceManager.contextInternal)
+                                        .isCharging(context)
                                 val battery = if (isCharging) batteryLevel else -batteryLevel
                                 NativeCore.sendPairingInit(ctx, deviceManager.uuid, targetDevice!!.uuid, displayCode, battery, "android") == 0
                             }
@@ -110,7 +113,7 @@ fun PairingCodeDialog(
                         onDismiss()
                     }
                 } finally {
-                    deviceManager.cancelHandshakeWaiter(targetDevice.uuid, handshakeDeferred)
+                    DeviceConnectionManagerSingleton.getHandshakeWaiters(context).cancel(targetDevice.uuid, handshakeDeferred)
                 }
             }
         }
@@ -164,7 +167,7 @@ fun PairingCodeDialog(
                     TextButton(
                         text = "取消",
                         onClick = {
-                            deviceManager.rustContextInternal?.let { NativeCore.clearPairingCode(it) }
+                            NativeCore.getContext()?.let { NativeCore.clearPairingCode(it) }
                             onDismiss()
                         },
                     )
@@ -246,21 +249,21 @@ fun PairingCodeDialog(
                                 isPairing = true
 
                                 serverScope.launch {
-                                    val handshakeDeferred = deviceManager.registerHandshakeWaiter(remoteUuid)
+                                    val handshakeDeferred = DeviceConnectionManagerSingleton.getHandshakeWaiters(context).register(remoteUuid)
                                     try {
                                         val result =
                                             withContext(Dispatchers.IO) {
                                                 try {
-                                                    val ctx = deviceManager.rustContextInternal
+                                                    val ctx = NativeCore.getContext()
                                                     if (ctx == null) return@withContext "配对失败：未初始化"
                                                     val ltPubKey = deviceManager.localPublicKey
                                                     // 与发起方/保活/扫描路径一致：上报本机真实带符号电量（正=充电，负=放电）
                                                     val batteryLevel =
                                                         notifyrelay.core.util.BatteryUtils
-                                                            .getBatteryLevel(deviceManager.contextInternal)
+                                                            .getBatteryLevel(context)
                                                     val isCharging =
                                                         notifyrelay.core.util.BatteryUtils
-                                                            .isCharging(deviceManager.contextInternal)
+                                                            .isCharging(context)
                                                     val battery = if (isCharging) batteryLevel else -batteryLevel
                                                     val sendOk = NativeCore.sendPairingResp(ctx, remoteUuid, ltPubKey, code, remoteIp, battery, "android")
                                                     if (sendOk != 0) return@withContext "配对失败：发送响应失败"
@@ -287,7 +290,7 @@ fun PairingCodeDialog(
                                             errorMsg = result
                                         }
                                     } finally {
-                                        deviceManager.cancelHandshakeWaiter(remoteUuid, handshakeDeferred)
+                                        DeviceConnectionManagerSingleton.getHandshakeWaiters(context).cancel(remoteUuid, handshakeDeferred)
                                     }
                                 }
                             },

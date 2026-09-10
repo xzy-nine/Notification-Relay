@@ -4,9 +4,13 @@ import android.content.Context
 import com.xzyht.notifyrelay.feature.appslist.AppListHelper
 import com.xzyht.notifyrelay.feature.appslist.AppRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import com.xzyht.notifyrelay.sync.ProtocolSender
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import notifyrelay.base.util.Logger
 import notifyrelay.data.database.entity.AppDeviceEntity
@@ -30,6 +34,27 @@ import org.json.JSONObject
 object AppListSyncManager {
     private const val TAG = "AppListSyncManager"
     private const val REQ_TIMEOUT = 15000L
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** 按设备 uuid 跟踪的在途同步任务；设备被移除时按 uuid 取消，避免残留协程回写已删设备数据。 */
+    private val deviceJobs = java.util.concurrent.ConcurrentHashMap<String, MutableSet<Job>>()
+
+    /** 取消指定设备的全部在途同步任务（设备被移除时调用）。 */
+    fun cancelForDevice(deviceUuid: String) {
+        deviceJobs.remove(deviceUuid)?.forEach { it.cancel() }
+    }
+
+    private fun trackJob(
+        deviceUuid: String,
+        job: Job,
+    ) {
+        val set = deviceJobs.computeIfAbsent(deviceUuid) { java.util.Collections.synchronizedSet(mutableSetOf()) }
+        set.add(job)
+        job.invokeOnCompletion {
+            set.remove(job)
+            if (set.isEmpty()) deviceJobs.remove(deviceUuid, set)
+        }
+    }
 
     /**
      * 主动向目标设备请求其“用户应用”列表。
@@ -147,7 +172,7 @@ object AppListSyncManager {
             }
 
             // 缓存到 AppRepository
-            deviceManager.coroutineScopeInternal.launch {
+            val job = ioScope.launch {
                 AppRepository.cacheRemoteAppList(context, appsMap, deviceUuid)
 
                 // 关联应用包名与设备（替代原 associateAppsWithDevice 方法）
@@ -166,6 +191,7 @@ object AppListSyncManager {
                 val sourceDevice = deviceManager.resolveDeviceInfo(deviceUuid, null, 23333)
                 sourceDevice?.let { checkAndRequestMissingIcons(context, packageNames, deviceManager, it) }
             }
+            trackJob(deviceUuid, job)
         } catch (e: Exception) {
             Logger.e(TAG, "处理应用列表响应失败", e)
         }
@@ -185,7 +211,7 @@ object AppListSyncManager {
         deviceManager: DeviceConnectionManager,
         sourceDevice: DeviceInfo,
     ) {
-        deviceManager.coroutineScopeInternal.launch {
+        val job = ioScope.launch {
             // 检查缺失的图标（替代原 getMissingIconsForPackages 方法）
             val databaseRepository = DatabaseRepository.getInstance(context)
             val missingIcons =
@@ -211,5 +237,6 @@ object AppListSyncManager {
             IconSyncManager.requestIconsBatch(context, needRequestIcons, deviceManager, sourceDevice)
             // Logger.d(TAG, "批量请求缺失图标：${needRequestIcons.size} 个")
         }
+        trackJob(sourceDevice.uuid, job)
     }
 }

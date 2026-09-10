@@ -96,7 +96,7 @@ object ClipboardSyncManager {
             val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(context)
             val resultJson =
                 NativeCore.clipboardOnReceived(
-                    deviceManager.rustContextInternal,
+                    NativeCore.getContext(),
                     jsonData,
                     System.currentTimeMillis(),
                 )
@@ -289,7 +289,7 @@ object ClipboardSyncManager {
                             handleSendResult(
                                 context,
                                 NativeCore.clipboardOnChanged(
-                                    deviceManager.rustContextInternal,
+                                    NativeCore.getContext(),
                                     NativeCore.senderQueuePtr,
                                     buildTargetsJson(devices.map { it.uuid }),
                                     if (type == CLIPBOARD_TYPE_IMAGE) MIME_IMAGE else MIME_TEXT,
@@ -338,7 +338,7 @@ object ClipboardSyncManager {
                 handleSendResult(
                     context,
                     NativeCore.clipboardOnChanged(
-                        deviceManager.rustContextInternal,
+                        NativeCore.getContext(),
                         NativeCore.senderQueuePtr,
                         buildTargetsJson(devices.map { it.uuid }),
                         MIME_TEXT,

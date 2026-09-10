@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Modifier
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.window.WindowDialog

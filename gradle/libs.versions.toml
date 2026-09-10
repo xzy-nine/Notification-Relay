@@ -49,6 +49,7 @@ timber = "5.0.1"
 jna = "5.19.1"
 libxposed = "102.0.0"
 dexkit = "2.2.0"
+ezhooktool = "1.1.3"
 ktlint = "14.2.0"
 
 
@@ -110,6 +111,8 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
 dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
+ezhooktool-core = { group = "io.github.lingqiqi5211.ezhooktool", name = "core", version.ref = "ezhooktool" }
+ezhooktool-xposed102 = { group = "io.github.lingqiqi5211.ezhooktool", name = "hook-xposed-102", version.ref = "ezhooktool" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
 
 
