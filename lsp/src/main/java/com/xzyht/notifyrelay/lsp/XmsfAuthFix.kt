@@ -119,6 +119,8 @@ object XmsfAuthFix {
                         }
                         val errorCode = field.get(error)
                         xposed.log(android.util.Log.INFO, TAG, "发现错误分发: $errorCode，正在拦截并强制返回成功")
+                        // 对齐 HyperCeiler UnlockFoucsAuth：先无条件将错误码置 0，再返回 getAuthSuccess() 的结果
+                        field.set(error, 0)
                         val successMethod = getAuthSuccess
                         if (successMethod == null) {
                             xposed.log(android.util.Log.WARN, TAG, "getAuthSuccess 为 null，跳过拦截")
@@ -126,9 +128,6 @@ object XmsfAuthFix {
                         }
                         val successBundle = successMethod.invoke(chain.getThisObject()) as? Bundle
                         if (successBundle != null) {
-                            // 仅在确定能返回成功 Bundle 时才改动错误码，
-                            // 保证回退到 chain.proceed() 时仍携带原始 errorCode
-                            field.set(error, 0)
                             xposed.log(android.util.Log.INFO, TAG, "已将鉴权错误强改为成功")
                             return successBundle
                         } else {
