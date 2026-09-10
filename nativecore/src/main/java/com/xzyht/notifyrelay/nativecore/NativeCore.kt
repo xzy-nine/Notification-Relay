@@ -322,6 +322,7 @@ object NativeCore {
 
     // 推送「全量」超级岛/媒体状态；Rust 内部计算差异、合并、ACK 与心跳，接收端经 on_data 回传全量。
     // isQuery：true=查询回调响应推送（心跳查询发现变更后由平台推送），false=正常主动推送。
+    /** @return true=入队成功；false=上下文/队列不可用或原生入队失败（调用方可重试） */
     fun pushSuperislandState(
         ctx: Pointer?,
         queuePtr: Long,
@@ -329,11 +330,13 @@ object NativeCore {
         fullJson: String,
         isEnd: Boolean,
         isQuery: Boolean = false,
-    ) {
-        val c = ctx ?: return
-        lib.nrc_push_superisland_state(c, queuePtr, deviceUuid, fullJson, if (isEnd) 1 else 0, if (isQuery) 1 else 0)
+    ): Boolean {
+        val c = ctx ?: return false
+        if (queuePtr == 0L) return false
+        return lib.nrc_push_superisland_state(c, queuePtr, deviceUuid, fullJson, if (isEnd) 1 else 0, if (isQuery) 1 else 0) == 0
     }
 
+    /** @return true=入队成功；false=上下文/队列不可用或原生入队失败（调用方可重试） */
     fun pushMediaState(
         ctx: Pointer?,
         queuePtr: Long,
@@ -341,9 +344,10 @@ object NativeCore {
         fullJson: String,
         isEnd: Boolean,
         isQuery: Boolean = false,
-    ) {
-        val c = ctx ?: return
-        lib.nrc_push_media_state(c, queuePtr, deviceUuid, fullJson, if (isEnd) 1 else 0, if (isQuery) 1 else 0)
+    ): Boolean {
+        val c = ctx ?: return false
+        if (queuePtr == 0L) return false
+        return lib.nrc_push_media_state(c, queuePtr, deviceUuid, fullJson, if (isEnd) 1 else 0, if (isQuery) 1 else 0) == 0
     }
 
     // 注册状态查询回调（Rust 心跳线程锁外调用，返回 0=不存在 / 1=存在无变更 / 2=存在有变更）

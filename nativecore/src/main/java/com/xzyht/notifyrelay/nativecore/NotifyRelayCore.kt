@@ -431,7 +431,7 @@ interface NotifyRelayCore : Library {
         fullJson: String,
         isEnd: Int,
         isQuery: Int,
-    )
+    ): Int
 
     fun nrc_push_media_state(
         ctx: Pointer?,
@@ -440,7 +440,7 @@ interface NotifyRelayCore : Library {
         fullJson: String,
         isEnd: Int,
         isQuery: Int,
-    )
+    ): Int
 
     // ======== Network change ========
     fun nrc_on_network_changed(

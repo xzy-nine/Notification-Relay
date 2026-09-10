@@ -126,7 +126,8 @@ class StateQueryResponder(
                         featureId,
                     )
                 }
-            pushState(remoteUuid, featureId, content, isMedia = false)
+            // 仅当原生入队成功才写入比较键并返回“有变更”，否则保留原键以便下次查询重试
+            if (!pushState(remoteUuid, featureId, content, isMedia = false)) return 1
             trimKeys(remoteUuid)
             stateQueryKeys[cacheKey] = lightKey
             return 2
@@ -182,30 +183,38 @@ class StateQueryResponder(
                 coverUrl,
                 System.currentTimeMillis(),
             )
-        pushState(remoteUuid, featureId, content, isMedia = true)
+        // 仅当原生入队成功才写入比较键并返回“有变更”，否则保留原键以便下次查询重试
+        if (!pushState(remoteUuid, featureId, content, isMedia = true)) return 1
         trimKeys(remoteUuid)
         stateQueryKeys[cacheKey] = lightKey
         return 2
     }
 
-    /** 查询响应推送：仅推给查询对应的远端设备（isQuery=1），差异/合并/保活由 Rust 负责。 */
+    /**
+     * 查询响应推送：仅推给查询对应的远端设备（isQuery=1），差异/合并/保活由 Rust 负责。
+     *
+     * @return true=原生入队成功；false=上下文/队列不可用、入队失败或异常（调用方可重试）
+     */
     private fun pushState(
         remoteUuid: String,
         featureId: String,
         fullJson: String,
         isMedia: Boolean,
-    ) {
+    ): Boolean =
         try {
-            val ctx = NativeCore.getContext() ?: return
+            val ctx = NativeCore.getContext() ?: return false
             val queuePtr = NativeCore.senderQueuePtr
-            if (queuePtr == 0L) return
-            if (isMedia) {
-                NativeCore.pushMediaState(ctx, queuePtr, remoteUuid, fullJson, false, true)
-            } else {
-                NativeCore.pushSuperislandState(ctx, queuePtr, remoteUuid, fullJson, false, true)
-            }
+            if (queuePtr == 0L) return false
+            val ok =
+                if (isMedia) {
+                    NativeCore.pushMediaState(ctx, queuePtr, remoteUuid, fullJson, false, true)
+                } else {
+                    NativeCore.pushSuperislandState(ctx, queuePtr, remoteUuid, fullJson, false, true)
+                }
+            if (!ok) Logger.w(TAG, "查询响应入队失败: $remoteUuid fid=$featureId")
+            ok
         } catch (e: Exception) {
             Logger.w(TAG, "查询响应推送失败: $remoteUuid fid=$featureId", e)
+            false
         }
-    }
 }
