@@ -7,7 +7,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.appslist.AppRepository.loadApps
 import com.xzyht.notifyrelay.feature.appslist.model.RemoteAppInfo
 import com.xzyht.notifyrelay.feature.appslist.sync.IconSyncManager

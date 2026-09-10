@@ -105,7 +105,7 @@ object NotificationProcessor {
 
                 if (remoteUuid != null) {
                     try {
-                        val sourceDevice = manager.getDeviceInfoInternal(remoteUuid)
+                        val sourceDevice = manager.lookupDevice(remoteUuid)
                         if (sourceDevice != null) {
                             IconSyncManager.checkAndSyncIcon(
                                 context,

@@ -44,9 +44,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xzyht.notifyrelay.R
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.service.callback.HandshakeRequestHandler
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.ui.common.DoubleClickConfirmButton
 import com.xzyht.notifyrelay.ui.dialog.PairingCodeDialog
 import com.xzyht.notifyrelay.ui.dialog.PairingMode
@@ -185,7 +185,7 @@ fun DeviceListScreen(
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     DisposableEffect(deviceManager) {
         val handler =
-            object : DeviceConnectionManager.HandshakeRequestHandler {
+            object : HandshakeRequestHandler {
                 override fun onPairingInitRequest(
                     deviceInfo: DeviceInfo,
                     tmpPublicKey: String,
@@ -512,7 +512,7 @@ fun DeviceListScreen(
                 if (success) {
                     state.showPairingCodeDialog = false
                     try {
-                        deviceManager.updateDeviceListInternal()
+                        deviceManager.refreshDevices()
                         val authMap = deviceManager.getAuthenticatedDevices()
                         authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                     } catch (_: Exception) {
@@ -538,7 +538,7 @@ fun DeviceListScreen(
                     state.showPairingCodeDialog = false
                     state.pendingConnectDevice = null
                     try {
-                        deviceManager.updateDeviceListInternal()
+                        deviceManager.refreshDevices()
                         val authMap = deviceManager.getAuthenticatedDevices()
                         authedDeviceUuids = authMap.filter { (_, auth) -> auth.isAccepted }.keys.toSet()
                     } catch (_: Exception) {

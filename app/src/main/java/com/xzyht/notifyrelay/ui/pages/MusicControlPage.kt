@@ -121,11 +121,12 @@ fun MusicControlPage() {
 
                     try {
                         val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(context)
+                        val audioRelay = DeviceConnectionManagerSingleton.getAudioRelay(context)
                         val relayMode = StorageManager.getInt(context, "audio_relay_mode", 0)
 
                         if (relayMode == 1) {
                             // 中继模式：先请求 MediaProjection 授权，再启动发送
-                            deviceManager.startSendTo(selectedDevice.ip, selectedDevice.displayName, selectedDevice.uuid)
+                            audioRelay.requestSendTo(selectedDevice.ip, selectedDevice.displayName, selectedDevice.uuid)
                         } else {
                             // scrcpy 模式：发送 audioRequest（现有逻辑）
                             val success = deviceManager.requestAudioForwarding(selectedDevice)
@@ -158,8 +159,10 @@ fun MusicControlPage() {
 
                         if (relayMode == 1) {
                             // 中继模式：Rust 内部自动发控制消息
-                            val deviceManager = DeviceConnectionManagerSingleton.getDeviceManager(context)
-                            deviceManager.audioRelayPlayer.start("recv", remoteUuid = selectedDevice.uuid)
+                            DeviceConnectionManagerSingleton
+                                .getAudioRelay(context)
+                                .player
+                                .start("recv", remoteUuid = selectedDevice.uuid)
                             ToastUtils.showShortToast(context, "已启动中继音频接收")
                         } else {
                             // scrcpy 模式：启动 scrcpy 音频转发（现有逻辑）
@@ -193,7 +196,7 @@ fun MusicControlPage() {
             onClick = {
                 io.github.miuzarte.scrcpyforandroid.services.AudioForwardingService
                     .stopAudioForwarding(context)
-                DeviceConnectionManagerSingleton.getDeviceManager(context).stopAudioRelay()
+                DeviceConnectionManagerSingleton.getAudioRelay(context).stop()
                 ToastUtils.showShortToast(context, "已停止音频转发")
             },
             modifier = Modifier.fillMaxWidth(),

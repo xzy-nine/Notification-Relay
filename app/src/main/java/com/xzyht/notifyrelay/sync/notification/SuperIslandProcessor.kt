@@ -3,6 +3,7 @@ package com.xzyht.notifyrelay.sync.notification
 import android.content.Context
 import android.os.Build
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
 import com.xzyht.notifyrelay.feature.notification.filter.RemoteFilterConfig
 import com.xzyht.notifyrelay.feature.notification.superisland.replica.FloatingReplicaManager
 import com.xzyht.notifyrelay.feature.notification.superisland.tracker.LocalSuperIslandTracker
@@ -45,7 +46,7 @@ object SuperIslandProcessor {
         manager: DeviceConnectionManager,
         dedupKey: String,
     ): Boolean {
-        val ctx = manager.rustContextInternal ?: return false
+        val ctx = NativeCore.getContext() ?: return false
         return NativeCore.dedup(ctx, 0, dedupKey, SI_DEDUP_TTL_MS, 0L) == 0
     }
 
@@ -54,7 +55,7 @@ object SuperIslandProcessor {
         manager: DeviceConnectionManager,
         dedupKey: String,
     ) {
-        val ctx = manager.rustContextInternal ?: return
+        val ctx = NativeCore.getContext() ?: return
         try {
             NativeCore.dedup(ctx, 2, dedupKey, 0L, 0L)
         } catch (_: Exception) {
@@ -192,7 +193,7 @@ object SuperIslandProcessor {
                     ""
                 }
             if (isEnd) {
-                manager.removeStateQueryKey(remoteUuid, featureId)
+                DeviceConnectionManagerSingleton.getStateQueryResponder(context).removeKey(remoteUuid, featureId)
                 try {
                     // 优先用显式的 featureKeyValue 进行 dismiss（若有）
                     if (!explicitFeatureKey.isNullOrBlank()) {

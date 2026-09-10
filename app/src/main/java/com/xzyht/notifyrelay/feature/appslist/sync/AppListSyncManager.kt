@@ -4,9 +4,12 @@ import android.content.Context
 import com.xzyht.notifyrelay.feature.appslist.AppListHelper
 import com.xzyht.notifyrelay.feature.appslist.AppRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import com.xzyht.notifyrelay.sync.ProtocolSender
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import notifyrelay.base.util.Logger
 import notifyrelay.data.database.entity.AppDeviceEntity
@@ -30,6 +33,7 @@ import org.json.JSONObject
 object AppListSyncManager {
     private const val TAG = "AppListSyncManager"
     private const val REQ_TIMEOUT = 15000L
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * 主动向目标设备请求其“用户应用”列表。
@@ -147,7 +151,7 @@ object AppListSyncManager {
             }
 
             // 缓存到 AppRepository
-            deviceManager.coroutineScopeInternal.launch {
+            ioScope.launch {
                 AppRepository.cacheRemoteAppList(context, appsMap, deviceUuid)
 
                 // 关联应用包名与设备（替代原 associateAppsWithDevice 方法）
@@ -185,7 +189,7 @@ object AppListSyncManager {
         deviceManager: DeviceConnectionManager,
         sourceDevice: DeviceInfo,
     ) {
-        deviceManager.coroutineScopeInternal.launch {
+        ioScope.launch {
             // 检查缺失的图标（替代原 getMissingIconsForPackages 方法）
             val databaseRepository = DatabaseRepository.getInstance(context)
             val missingIcons =

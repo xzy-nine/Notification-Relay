@@ -6,8 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerUtil
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -35,6 +34,7 @@ import notifyrelay.base.util.PermissionHelper
  *   - 心跳状态（heartbeatedDevices/deviceLastSeen）已迁移至 Rust DeviceRegistry。
  */
 class ConnectionDiscoveryManager(
+    private val context: Context,
     private val deviceManager: DeviceConnectionManager,
     private val scope: CoroutineScope,
 ) {
@@ -42,33 +42,11 @@ class ConnectionDiscoveryManager(
         private const val TAG = "死神-Discovery"
     }
 
-    private val context get() = deviceManager.contextInternal
     private val connectivityManager: ConnectivityManager
         get() = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var reconnectRefreshJob: Job? = null
-
-    /**
-     * 更新设备信息缓存并触发设备列表更新
-     */
-    private fun updateDeviceInfoCache(device: DeviceInfo) {
-        synchronized(deviceManager.deviceInfoCacheInternal) {
-            deviceManager.deviceInfoCacheInternal[device.uuid] = device
-        }
-
-        // 同时更新已认证设备表中的设备名称
-        synchronized(deviceManager.authenticatedDevices) {
-            val auth = deviceManager.authenticatedDevices[device.uuid]
-            if (auth != null && auth.displayName != device.displayName) {
-                deviceManager.authenticatedDevices[device.uuid] = auth.copy(displayName = device.displayName)
-                deviceManager.saveAuthedDevicesInternal()
-            }
-        }
-
-        DeviceConnectionManagerUtil.updateGlobalDeviceName(device.uuid, device.displayName)
-        scope.launch { deviceManager.updateDeviceListInternal() }
-    }
 
     /**
      * 连接到已认证设备
@@ -113,29 +91,6 @@ class ConnectionDiscoveryManager(
     }
 
     internal fun isWifiDirectNetworkInternal(): Boolean = getCurrentNetworkType() == NetworkType.WIFI_DIRECT
-
-    // 获取WLAN直连下的设备IP范围（通常是192.168.49.x或类似）
-    internal fun getWifiDirectIpRangeInternal(): List<String> {
-        val possibleRanges = listOf("192.168.49.", "192.168.43.", "192.168.42.", "10.0.0.")
-        val ips = mutableListOf<String>()
-        for (range in possibleRanges) {
-            for (i in 1..254) {
-                ips.add("$range$i")
-            }
-        }
-        return ips
-    }
-
-    /**
-     * 解码并清洗从网络接收到的名称：
-     * - Base64 解码后再走 sanitizeDisplayNameInternal，保证入库/展示口径一致。
-     */
-    internal fun decodeDisplayNameFromTransportInternal(encoded: String): String =
-        try {
-            deviceManager.decodeDisplayNameFromTransportInternal(encoded)
-        } catch (_: Exception) {
-            encoded
-        }
 
     fun registerNetworkCallback() {
         val cm = connectivityManager
@@ -189,13 +144,8 @@ class ConnectionDiscoveryManager(
 
     private fun updateLocalIpAndRestartDiscovery() {
         val newIp = getLocalIpAddressInternal()
-        val displayName = deviceManager.localDisplayNameInternal()
-        synchronized(deviceManager.deviceInfoCacheInternal) {
-            deviceManager.deviceInfoCacheInternal[deviceManager.uuid] = DeviceInfo(deviceManager.uuid, displayName, newIp, deviceManager.listenPort)
-        }
-        // Logger.d("死神-NotifyRelay", "本地IP更新为: $newIp")
-        // 通知 Rust core 网络变化
-        val ctx = deviceManager.rustContextInternal
+        // 本机 IP 由 core 维护（nrc_get_local_ip）；此处只需告知 core 网络变化
+        val ctx = NativeCore.getContext()
         if (ctx != null) {
             NativeCore.onNetworkChanged(ctx, newIp)
         }
@@ -211,7 +161,7 @@ class ConnectionDiscoveryManager(
             reconnectRefreshJob =
                 scope.launch {
                     delay(1000)
-                    deviceManager.refreshAllReconnectTargetsInternal()
+                    deviceManager.refreshAllReconnectTargets()
                 }
         }
     }
@@ -227,7 +177,7 @@ class ConnectionDiscoveryManager(
      * Rust 侧：battery > 0 视为充电中，battery < 0 视为放电中。
      */
     private fun getSignedBatteryLevel(): Int {
-        val ctx = deviceManager.contextInternal
+        val ctx = context
         val level =
             notifyrelay.core.util.BatteryUtils
                 .getBatteryLevel(ctx)
@@ -241,7 +191,7 @@ class ConnectionDiscoveryManager(
     }
 
     internal fun syncHeartbeatMode() {
-        val ctx = deviceManager.rustContextInternal
+        val ctx = NativeCore.getContext()
         if (ctx == null) {
             Logger.w(TAG, "[syncHeartbeatMode] rustContext 为 null，跳过")
             return
@@ -253,7 +203,7 @@ class ConnectionDiscoveryManager(
             Logger.i(TAG, "[syncHeartbeatMode] isLocked=$isLocked, isWifiDirect=$isWifiDirect, discoveryEnabled=${deviceManager.discoveryEnabled}")
             // 根据开关控制 TCP 扫描发现的启停（不影响已认证设备的重连）
             if (deviceManager.discoveryEnabled) {
-                val displayName = deviceManager.localDisplayNameInternal()
+                val displayName = deviceManager.localDisplayName()
                 val battery = getSignedBatteryLevel()
                 Logger.i(TAG, "[syncHeartbeatMode] 调用 periodicBroadcast 启动扫描发现: uuid=${deviceManager.uuid}, name=$displayName, battery=$battery")
                 val result = NativeCore.periodicBroadcast(ctx, 1, deviceManager.uuid, displayName, battery, "android")
@@ -269,7 +219,7 @@ class ConnectionDiscoveryManager(
     }
 
     fun stopDiscovery() {
-        val ctx = deviceManager.rustContextInternal
+        val ctx = NativeCore.getContext()
         if (ctx != null) {
             NativeCore.periodicBroadcast(ctx, 0)
         }
@@ -278,7 +228,7 @@ class ConnectionDiscoveryManager(
     fun startDiscovery() {
         syncHeartbeatMode()
 
-        if (deviceManager.isWifiDirectNetworkInternal()) {
+        if (isWifiDirectNetworkInternal()) {
             // WLAN 直连模式下的持续重连/发现交由 Rust known_device_scanner 处理
             return
         }
@@ -288,7 +238,7 @@ class ConnectionDiscoveryManager(
             val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
             for ((uuid, _) in authed) {
                 if (uuid == deviceManager.uuid) continue
-                val info = deviceManager.getDeviceInfoInternal(uuid)
+                val info = deviceManager.lookupDevice(uuid)
                 val ip = info?.ip
                 val port = info?.port ?: deviceManager.listenPort
                 if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {

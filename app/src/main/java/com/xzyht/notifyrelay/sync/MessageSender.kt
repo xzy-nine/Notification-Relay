@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Handler
 import android.util.Base64
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.data.ChatMemory
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import kotlinx.coroutines.Dispatchers
@@ -118,7 +118,7 @@ object MessageSender {
     ) {
         try {
             // 推送「全量」媒体状态：差异计算（FULL/DELTA）、合并与 ACK 均由 Rust 合并引擎负责。
-            val ctx = deviceManager.rustContextInternal ?: return
+            val ctx = NativeCore.getContext() ?: return
             val queuePtr = NativeCore.senderQueuePtr
             if (queuePtr == 0L) return
 
@@ -155,7 +155,7 @@ object MessageSender {
         deviceManager: DeviceConnectionManager,
         tag: String = "",
     ): Boolean {
-        val ctx = deviceManager.rustContextInternal
+        val ctx = NativeCore.getContext()
         if (ctx == null) {
             Logger.w(TAG, "Rust 未初始化，跳过入队: ${deviceInfo.displayName}")
             return false
@@ -185,7 +185,7 @@ object MessageSender {
     ) {
         try {
             // 推送结束标记：Rust 合并引擎会回传 terminateValue="__END__" 全量，接收端据此移除媒体卡片。
-            val ctx = deviceManager.rustContextInternal ?: return
+            val ctx = NativeCore.getContext() ?: return
             val queuePtr = NativeCore.senderQueuePtr
             if (queuePtr == 0L) return
 
@@ -358,7 +358,7 @@ object MessageSender {
                 return
             }
 
-            val ctx = deviceManager.rustContextInternal ?: return
+            val ctx = NativeCore.getContext() ?: return
             val queuePtr = NativeCore.senderQueuePtr
             if (queuePtr == 0L) return
 
@@ -404,7 +404,7 @@ object MessageSender {
     ) {
         try {
             // 推送结束标记：Rust 合并引擎会回传 terminateValue="__END__" 全量，接收端据此移除该超级岛卡片。
-            val ctx = deviceManager.rustContextInternal ?: return
+            val ctx = NativeCore.getContext() ?: return
             val queuePtr = NativeCore.senderQueuePtr
             if (queuePtr == 0L) return
 

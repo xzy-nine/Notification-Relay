@@ -1,7 +1,7 @@
 package com.xzyht.notifyrelay.sync
 
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import notifyrelay.base.util.Logger
 
@@ -38,7 +38,7 @@ object ProtocolSender {
             return EnqueueResult.QUEUE_UNINITIALIZED
         }
 
-        val ctx = deviceManager.rustContextInternal ?: return EnqueueResult.MISSING_CONTEXT
+        val ctx = NativeCore.getContext() ?: return EnqueueResult.MISSING_CONTEXT
         return try {
             NativeCore.enqueueMessage(ctx, queuePtr, target.uuid, header, plaintext, dedupKey)
             EnqueueResult.SUCCESS

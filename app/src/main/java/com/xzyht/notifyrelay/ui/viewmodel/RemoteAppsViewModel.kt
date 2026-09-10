@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.appslist.AppRepository
 import com.xzyht.notifyrelay.feature.appslist.model.RemoteAppInfo
 import com.xzyht.notifyrelay.feature.appslist.model.RemoteAppsState

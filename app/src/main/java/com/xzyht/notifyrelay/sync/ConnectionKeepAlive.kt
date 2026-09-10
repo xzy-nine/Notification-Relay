@@ -1,7 +1,8 @@
 package com.xzyht.notifyrelay.sync
 
+import android.content.Context
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ import notifyrelay.core.util.BatteryUtils
  * 不直接操作其 private 字段，保持边界清晰。
  */
 class ConnectionKeepAlive(
+    private val context: Context,
     private val deviceManager: DeviceConnectionManager,
     private val scope: CoroutineScope,
 ) {
@@ -35,12 +37,12 @@ class ConnectionKeepAlive(
      * - 失败原因通过 (Boolean, String?) 形式返回
      */
     suspend fun performDeviceConnectionWithRetry(device: DeviceInfo): Pair<Boolean, String?> {
-        val ctx = deviceManager.rustContextInternal
+        val ctx = NativeCore.getContext()
         if (ctx == null) return Pair(false, "未初始化")
         // 无效 IP 直接快速失败，避免 Rust 侧按重试与超时消耗更长时间后才失败
         if (device.ip.isBlank() || device.ip == "0.0.0.0") return Pair(false, "设备 IP 无效")
-        val batteryLevel = BatteryUtils.getBatteryLevel(deviceManager.contextInternal)
-        val isCharging = BatteryUtils.isCharging(deviceManager.contextInternal)
+        val batteryLevel = BatteryUtils.getBatteryLevel(context)
+        val isCharging = BatteryUtils.isCharging(context)
         val battery = if (isCharging) batteryLevel else -batteryLevel
 
         val result =
@@ -49,7 +51,7 @@ class ConnectionKeepAlive(
             }
         if (result == 0) {
             try {
-                scope.launch { deviceManager.updateDeviceListInternal() }
+                scope.launch { deviceManager.refreshDevices() }
             } catch (_: Exception) {
             }
             return Pair(true, null)

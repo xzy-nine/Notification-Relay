@@ -63,6 +63,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.xzyht.notifyrelay.feature.device.model.NotificationRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
+import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManagerSingleton
 import com.xzyht.notifyrelay.feature.notification.superisland.notification.LiveUpdatesNotificationManager
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import com.xzyht.notifyrelay.feature.appslist.AppRepository
@@ -140,8 +141,8 @@ class MainActivity : FragmentActivity() {
             val projection = mpm.getMediaProjection(pending.first, pending.second)
             if (projection != null) {
                 pendingScreenCapture = null
-                val deviceManager = DeviceConnectionManager.getInstance(this)
-                deviceManager.audioRelayPlayer.stopSendCapture()
+                val audioRelay = DeviceConnectionManagerSingleton.getAudioRelay(this)
+                audioRelay.player.stopSendCapture()
                 NativeCore.mediaProjection?.stop()
                 NativeCore.mediaProjection = projection
                 projection.registerCallback(
@@ -151,13 +152,13 @@ class MainActivity : FragmentActivity() {
                             // 避免主动 stop 旧投影时其 onStop 回调误杀新会话的捕获。
                             if (NativeCore.mediaProjection === projection) {
                                 NativeCore.mediaProjection = null
-                                deviceManager.audioRelayPlayer.stopSendCapture()
+                                audioRelay.player.stopSendCapture()
                             }
                         }
                     },
                     Handler(Looper.getMainLooper()),
                 )
-                deviceManager.startPendingAudioRelaySend()
+                audioRelay.startPendingSend()
             } else {
                 pendingScreenCapture = null
                 stopService(Intent(this, MediaProjectionForegroundService::class.java))
@@ -241,8 +242,8 @@ class MainActivity : FragmentActivity() {
             MediaProjectionForegroundService.onForegroundReady = null
         }
         registeredOnForegroundReady = null
-        if (DeviceConnectionManager.getInstance(this).onRequestMediaProjection === registeredOnRequestMediaProjection) {
-            DeviceConnectionManager.getInstance(this).onRequestMediaProjection = null
+        if (DeviceConnectionManagerSingleton.getAudioRelay(this).onRequestMediaProjection === registeredOnRequestMediaProjection) {
+            DeviceConnectionManagerSingleton.getAudioRelay(this).onRequestMediaProjection = null
         }
         registeredOnRequestMediaProjection = null
         pendingScreenCapture = null
@@ -413,7 +414,7 @@ class MainActivity : FragmentActivity() {
             }
         }
         registeredOnRequestMediaProjection = projectionRequestCallback
-        DeviceConnectionManager.getInstance(this).onRequestMediaProjection = projectionRequestCallback
+        DeviceConnectionManagerSingleton.getAudioRelay(this).onRequestMediaProjection = projectionRequestCallback
 
         // 后台初始化，避免阻塞 UI 线程
         lifecycleScope.launch(Dispatchers.Default) {

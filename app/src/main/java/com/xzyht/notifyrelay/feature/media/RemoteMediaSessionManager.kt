@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.notification.superisland.store.SuperIslandRemoteStore
 import com.xzyht.notifyrelay.feature.notification.superisland.media.MediaCapsulePresenter
 import com.xzyht.notifyrelay.feature.notification.superisland.replica.FloatingReplicaManager

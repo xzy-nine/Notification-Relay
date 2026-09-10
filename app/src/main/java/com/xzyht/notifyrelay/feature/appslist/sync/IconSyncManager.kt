@@ -8,7 +8,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.util.Base64
 import com.xzyht.notifyrelay.feature.appslist.AppRepository
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
-import com.xzyht.notifyrelay.feature.device.service.DeviceInfo
+import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.nativecore.NativeCore
 import com.xzyht.notifyrelay.sync.ProtocolSender
 import kotlinx.coroutines.CoroutineScope
@@ -65,7 +65,7 @@ object IconSyncManager {
         // Rust 内部完成过滤（缓存/已安装/pending/设备关联）并构造请求报文
         val requestJson =
             NativeCore.appSyncPrepareIconRequest(
-                deviceManager.rustContextInternal,
+                NativeCore.getContext(),
                 listOf(packageName),
                 installedPackages.toList(),
                 cachedPackages,
@@ -87,10 +87,10 @@ object IconSyncManager {
                         lastUpdated = System.currentTimeMillis(),
                     )
                 databaseRepository.saveAppDeviceAssociations(listOf(appDeviceEntity))
-                NativeCore.appSyncClearIconPending(deviceManager.rustContextInternal, listOf(packageName))
+                NativeCore.appSyncClearIconPending(NativeCore.getContext(), listOf(packageName))
             } catch (e: Exception) {
                 Logger.e(TAG, "请求图标失败：$packageName", e)
-                NativeCore.appSyncClearIconPending(deviceManager.rustContextInternal, listOf(packageName))
+                NativeCore.appSyncClearIconPending(NativeCore.getContext(), listOf(packageName))
             }
         }
     }
@@ -122,7 +122,7 @@ object IconSyncManager {
         // Rust 内部完成过滤（缓存/已安装/pending/设备关联）并构造请求报文
         val requestJson =
             NativeCore.appSyncPrepareIconRequest(
-                deviceManager.rustContextInternal,
+                NativeCore.getContext(),
                 packageNames,
                 installedPackages.toList(),
                 cachedPackages,
@@ -146,10 +146,10 @@ object IconSyncManager {
                     )
                 }
             databaseRepository.saveAppDeviceAssociations(appDeviceEntities)
-            NativeCore.appSyncClearIconPending(deviceManager.rustContextInternal, need)
+            NativeCore.appSyncClearIconPending(NativeCore.getContext(), need)
         } catch (e: Exception) {
             Logger.e(TAG, "批量请求失败：$packageNames", e)
-            NativeCore.appSyncClearIconPending(deviceManager.rustContextInternal, parseRequestedPackages(requestJson))
+            NativeCore.appSyncClearIconPending(NativeCore.getContext(), parseRequestedPackages(requestJson))
         }
     }
 
