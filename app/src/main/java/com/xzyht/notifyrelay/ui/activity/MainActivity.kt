@@ -7,7 +7,6 @@ import android.content.res.Configuration
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
-import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -118,7 +117,6 @@ class MainActivity : FragmentActivity() {
     private var pendingScreenCapture: Pair<Int, Intent>? = null
     private var registeredOnForegroundReady: (() -> Unit)? = null
     private var registeredOnRequestMediaProjection: (() -> Unit)? = null
-    private var multicastLock: WifiManager.MulticastLock? = null
 
     private fun processPendingScreenCapture() {
         if (pendingScreenCapture == null) return
@@ -232,11 +230,6 @@ class MainActivity : FragmentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            multicastLock?.let { if (it.isHeld) it.release() }
-        } catch (_: Exception) {
-        }
-        multicastLock = null
         if (MediaProjectionForegroundService.onForegroundReady === registeredOnForegroundReady) {
             MediaProjectionForegroundService.onForegroundReady = null
         }
@@ -298,15 +291,6 @@ class MainActivity : FragmentActivity() {
         DeveloperModeActivity.initDebugUiConfig(this)
 
         PermissionHelper.AppForegroundDetector.initialize(this)
-
-        // 获取组播锁，确保 WLAN 休眠时仍能接收组播发现报文（兼容旧版本基于组播的发现；当前发现已改为 TCP 扫描）
-        if (multicastLock?.isHeld != true) {
-            val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-            multicastLock = wifi.createMulticastLock("NotifyRelayDiscovery").apply {
-                setReferenceCounted(false)
-                acquire()
-            }
-        }
 
         WindowCompat.setDecorFitsSystemWindows(this.window, false)
         this.window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
