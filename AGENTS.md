@@ -15,7 +15,7 @@
 
 ### 应用 API 版本
 
-minSdk = 29 (Android 10)，不兼容 API 29 以下版本，请勿使用相应的兼容性代码。
+minSdk：`:app`（主应用）与 `:core`（核心库）minSdk = 31（Android 12），其余库模块（`:base`、`:data`、`:superislandui`、`:lsp`、`:nativecore` 等）minSdk = 29（Android 10）。请勿为任一模块声明的 minSdk 以下版本编写兼容性代码。
 
 - 代码风格遵循 Kotlin 官方规范（`kotlin.code.style=official`）。
 - 如需扩展功能或集成新依赖，优先查阅 Miuix 官方文档与本项目现有实现。

@@ -7,9 +7,8 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 /**
  * Notify-Relay LSPosed 模块入口。
  *
- * 通过 libxposed API 102 在两个目标进程注入超岛白名单/鉴权绕过：
+ * 通过 libxposed API 102 在目标进程注入超岛鉴权绕过：
  * - com.xiaomi.xmsf：AuthSession 鉴权错误强改成功（服务框架侧）
- * - com.android.systemui：焦点通知白名单放行 + HyperOS3 onAuthResult 置 0（系统 UI 侧）
  */
 class XposedInit : XposedModule() {
 
@@ -21,14 +20,11 @@ class XposedInit : XposedModule() {
         when (param.packageName) {
             PKG_XMSF -> runCatching { XmsfAuthFix.hook(this, param) }
                 .onFailure { log(android.util.Log.WARN, TAG, "XmsfAuthFix 注入失败: ${it.message}") }
-            PKG_SYSTEM_UI -> runCatching { SystemUiFocusFix.hook(this, param) }
-                .onFailure { log(android.util.Log.WARN, TAG, "SystemUiFocusFix 注入失败: ${it.message}") }
         }
     }
 
     companion object {
         private const val TAG = "NotifyRelay-LSP"
         private const val PKG_XMSF = "com.xiaomi.xmsf"
-        private const val PKG_SYSTEM_UI = "com.android.systemui"
     }
 }

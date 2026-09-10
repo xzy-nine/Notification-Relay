@@ -48,6 +48,7 @@ reorderable = "3.1.0"
 timber = "5.0.1"
 jna = "5.19.1"
 libxposed = "102.0.0"
+dexkit = "2.2.0"
 ktlint = "14.2.0"
 
 
@@ -108,6 +109,7 @@ reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.r
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
+dexkit = { module = "org.luckypray:dexkit", version.ref = "dexkit" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
 
 
