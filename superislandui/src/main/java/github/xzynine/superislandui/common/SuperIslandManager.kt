@@ -94,12 +94,20 @@ object SuperIslandManager {
             var title: String? = null
             var text: String? = null
             var appName: String? = null
+            // 系统短信App在锁屏状态下会把真实验证码放在 verify_code 字段
+            val verifyCode = extras.getString("verify_code")
             val rawExtras = mutableMapOf<String, Any?>()
 
             if (!islandParamStr.isNullOrEmpty()) {
                 try {
                     val root = JSONObject(islandParamStr)
                     val pv = if (root.has("param_v2")) root.getJSONObject("param_v2") else root
+
+                    // 锁屏态验证码在 param_v2 中会被系统替换为 ******，这里用 verify_code 的真实值回填 raw，
+                    // 使接收端（PC/其他设备）直接按 raw 渲染即可显示真实验证码，而不依赖各自本地替换
+                    if (!verifyCode.isNullOrEmpty()) {
+                        replaceVerifyCodePlaceholder(pv, verifyCode)
+                    }
 
                     // 提取 baseInfo (焦点通知数据) 中的 title/content
                     if (pv.has("baseInfo")) {
@@ -145,8 +153,7 @@ object SuperIslandManager {
             }
 
             // 其次：尝试直接从 android 标准 title/text 补全
-            // 优先读取 verify_code 字段（系统短信App在锁屏状态下也会暴露实际验证码）
-            val verifyCode = extras.getString("verify_code")
+            // 优先使用 verify_code 字段（系统短信App在锁屏状态下也会暴露实际验证码）
             if (text == null && !verifyCode.isNullOrEmpty()) {
                 text = verifyCode
                 Logger.i("超级岛", "超级岛: 读取到 verify_code 字段: $verifyCode")
@@ -330,6 +337,42 @@ object SuperIslandManager {
         } catch (e: Exception) {
             Logger.w("超级岛", "超级岛: 提取超级岛数据时发生错误: ${e.message}")
             return null
+        }
+    }
+
+    /**
+     * 将 param_v2 中的 ****** 占位符替换为真实验证码。
+     * 锁屏态系统短信App会把验证码显示为 ******，真实值位于 verify_code 字段；
+     * 回填后 raw 直接携带真实验证码，接收端无需再做替换。
+     */
+    private fun replaceVerifyCodePlaceholder(
+        paramV2: JSONObject,
+        verifyCode: String,
+    ) {
+        try {
+            // iconTextInfo.title
+            paramV2.optJSONObject("iconTextInfo")?.let { iconTextInfo ->
+                val title = iconTextInfo.optString("title", "")
+                if (title.contains("******") || title.contains("****")) {
+                    iconTextInfo.put("title", verifyCode)
+                    Logger.i("超级岛", "超级岛: 验证码回填 iconTextInfo.title: $title -> $verifyCode")
+                }
+            }
+
+            // param_island.bigIslandArea.textInfo.title
+            paramV2
+                .optJSONObject("param_island")
+                ?.optJSONObject("bigIslandArea")
+                ?.optJSONObject("textInfo")
+                ?.let { textInfo ->
+                    val title = textInfo.optString("title", "")
+                    if (title.contains("******") || title.contains("****")) {
+                        textInfo.put("title", verifyCode)
+                        Logger.i("超级岛", "超级岛: 验证码回填 bigIslandArea.textInfo.title: $title -> $verifyCode")
+                    }
+                }
+        } catch (e: Exception) {
+            Logger.w("超级岛", "超级岛: 验证码回填失败: ${e.message}")
         }
     }
 }
