@@ -73,7 +73,9 @@ internal fun GuideScreen(
         // 简化 3 级页流程：
         // - reauth：仅因包名变更导致授权掉落、无新增权限，不重复同意协议；
         // - needConsent：版本更新新增了声明式权限，必须重新阅读并同意使用须知与授权说明。
-        val reauthPagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
+        // 简化流程：needConsent 须依次展示「协议页 → 必要权限页 → 完成页」（共 4 页），
+        // 仅授权掉落（reauth）则跳过协议页（共 3 页）。
+        val reauthPagerState = rememberPagerState(initialPage = 0, pageCount = { if (needConsent) 4 else 3 })
         val reauthScope = rememberCoroutineScope()
 
         fun reauthAnimateTo(index: Int) {
@@ -122,9 +124,29 @@ internal fun GuideScreen(
                             )
                         }
                     2 ->
+                        if (needConsent) {
+                            // needConsent：协议页之后必须展示必要权限页，再进入完成页。
+                            GuideRequiredPermissionPage(
+                                permissionRequester = permissionRequester,
+                                permissionState = permissionState,
+                                onBack = { reauthAnimateTo(1) },
+                                onNext = { reauthAnimateTo(3) },
+                                reauth = reauth,
+                                // needConsent 紧凑流程为「欢迎 → 协议 → 必要权限 → 完成」共 4 页，
+                                // 必要权限页为第 3 步，独立于 reauth 标签
+                                stepLabel = "3 / 4",
+                            )
+                        } else {
+                            GuideCompletePage(
+                                requiredGranted = permissionState.requiredGranted,
+                                onBackToPermissions = { reauthAnimateTo(1) },
+                                onEnter = onContinue,
+                            )
+                        }
+                    3 ->
                         GuideCompletePage(
                             requiredGranted = permissionState.requiredGranted,
-                            onBackToPermissions = { reauthAnimateTo(1) },
+                            onBackToPermissions = { reauthAnimateTo(2) },
                             onEnter = onContinue,
                         )
                 }

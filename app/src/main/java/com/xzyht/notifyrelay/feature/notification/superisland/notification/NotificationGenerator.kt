@@ -426,6 +426,8 @@ object NotificationGenerator {
                 // 生成并注入动态图标
                 if (isSuperIslandEnabled) {
                     // 超级岛模式：不注入小图标（左岛由图文组件渲染专辑图，V3 模板不依赖小图标）
+                    // 清除 setSmallIcon 设置的默认图标（替换为透明占位），避免默认图抢占左岛专辑图展示
+                    clearSmallIcon(notification)
                     Logger.i(TAG, "超级岛 超级岛注入模式：不注入小图标，左岛由图文组件渲染专辑图")
                 } else if (iconText.isNotEmpty()) {
                     val albumBitmap = loadAlbumBitmapOrNull(context, picMap, iconText.length)

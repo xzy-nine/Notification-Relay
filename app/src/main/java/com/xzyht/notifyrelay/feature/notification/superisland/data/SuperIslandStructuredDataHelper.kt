@@ -1,9 +1,12 @@
 package com.xzyht.notifyrelay.feature.notification.superisland.data
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.drawable.Icon
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.CancellationException
 import notifyrelay.base.util.Logger
 import notifyrelay.core.util.image.ImageUtils
 import org.json.JSONObject
@@ -14,6 +17,11 @@ import org.json.JSONObject
  */
 object SuperIslandStructuredDataHelper {
     private const val TAG = "SuperIslandStructuredDataHelper"
+
+    // 媒体图片注入上限：缩放最长边并限制总字节数，避免通知事务过大
+    private const val MAX_MEDIA_PIC_DIMENSION = 512
+    private const val MAX_MEDIA_PIC_PER_IMAGE_BYTES = 256 * 1024
+    private const val MAX_MEDIA_PIC_TOTAL_BYTES = 768 * 1024
 
     // FocusTemplate V3 序列化标识（对齐 Xiaomi-SuperIsland-Playground）
     private const val FOCUS_V3_SERIAL_NAME =
@@ -197,6 +205,9 @@ object SuperIslandStructuredDataHelper {
             extras.putBoolean("miui.showBadge", false)
 
             Logger.i(TAG, "添加媒体类型超级岛结构化数据成功")
+        } catch (e: CancellationException) {
+            // 协程取消必须原样抛出，避免被当作普通异常吞掉
+            throw e
         } catch (e: Exception) {
             Logger.w(TAG, "添加媒体类型超级岛结构化数据失败: ${e.message}")
             e.printStackTrace()
@@ -324,24 +335,67 @@ object SuperIslandStructuredDataHelper {
         picMap?.let { map ->
             val picsBundle = Bundle()
             var count = 0
+            var totalBytes = 0
             map.forEach { (picKey, picUrl) ->
                 if (!picKey.startsWith("miui.focus.pic_") || picUrl.isBlank()) return@forEach
+                if (totalBytes >= MAX_MEDIA_PIC_TOTAL_BYTES) {
+                    Logger.w(TAG, "媒体图片总大小已达上限，跳过后续图片: $picKey")
+                    return@forEach
+                }
                 val bitmap = try {
                     ImageUtils.loadBitmap(context, picUrl)
+                } catch (e: CancellationException) {
+                    // 协程取消必须原样抛出，避免被当作普通异常吞掉
+                    throw e
                 } catch (e: Exception) {
                     Logger.w(TAG, "媒体图片加载失败 ${picKey}: ${e.message}")
                     null
                 }
                 if (bitmap != null) {
-                    picsBundle.putParcelable(picKey, Icon.createWithBitmap(bitmap))
+                    // 按比例缩放到上限尺寸并压缩，限制单张与总体大小，避免通知事务过大
+                    val data = encodePicData(scaleDownBitmap(bitmap, MAX_MEDIA_PIC_DIMENSION))
+                    if (totalBytes + data.size > MAX_MEDIA_PIC_TOTAL_BYTES) {
+                        Logger.w(TAG, "媒体图片超过总大小限制，跳过: $picKey (${data.size} bytes)")
+                        return@forEach
+                    }
+                    picsBundle.putParcelable(picKey, Icon.createWithData(data, 0, data.size))
+                    totalBytes += data.size
                     count++
                 }
             }
             if (count > 0) {
                 extras.putBundle("miui.focus.pics", picsBundle)
-                Logger.i(TAG, "媒体图片资源注入成功，共 $count 个图片")
+                Logger.i(TAG, "媒体图片资源注入成功，共 $count 个图片（总计 $totalBytes bytes）")
             }
         }
+    }
+
+    /**
+     * 按比例缩小位图，使最长边不超过 [maxDimension]；已在范围内则原样返回。
+     */
+    private fun scaleDownBitmap(
+        bitmap: Bitmap,
+        maxDimension: Int,
+    ): Bitmap {
+        val longest = maxOf(bitmap.width, bitmap.height)
+        if (longest <= maxDimension || longest <= 0) return bitmap
+        val ratio = maxDimension.toFloat() / longest
+        val targetWidth = (bitmap.width * ratio).toInt().coerceAtLeast(1)
+        val targetHeight = (bitmap.height * ratio).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+    }
+
+    /**
+     * 将位图编码为图标数据：优先 PNG（保留透明度），过大时改用 JPEG 压缩以减小体积。
+     */
+    private fun encodePicData(bitmap: Bitmap): ByteArray {
+        val pngOut = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, pngOut)
+        val png = pngOut.toByteArray()
+        if (png.size <= MAX_MEDIA_PIC_PER_IMAGE_BYTES) return png
+        val jpegOut = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, jpegOut)
+        return jpegOut.toByteArray()
     }
 
     private fun addActionBundlesToExtras(extras: Bundle) {
