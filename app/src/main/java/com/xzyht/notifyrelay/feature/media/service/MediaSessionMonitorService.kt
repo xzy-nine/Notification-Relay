@@ -24,6 +24,10 @@ class MediaSessionMonitorService(
 
         // 歌词字段判定所需的最小连续观测次数
         private const val LYRIC_FIELD_CONFIRM_THRESHOLD = 2
+
+        // 歌词字段观测状态：按包名保存，且需跨服务实例保留
+        // （监听服务会被系统频繁解绑重建，实例字段会导致学习状态丢失）
+        private val lyricFieldProbes = ConcurrentHashMap<String, LyricFieldProbe>()
     }
 
     // 歌词所在字段
@@ -37,8 +41,6 @@ class MediaSessionMonitorService(
         var streak: Int = 0
         var confirmed: LyricField? = null
     }
-
-    private val lyricFieldProbes = ConcurrentHashMap<String, LyricFieldProbe>()
 
     // 服务连接状态
     private var isConnected = false
@@ -218,8 +220,8 @@ class MediaSessionMonitorService(
                                     // 优先级可能已更改
                                     val primary = getPrimaryController()
                                     if (primary != null && primary.packageName == controller.packageName) {
-                                        // 有问题的应用程序并不总是触发 onMetadataChanged
-                                        // 我们在这里手动计算未解析的哈希值
+                                        // 多数应用（尤其车载/NAS/第三方播放器）不回调 onMetadataChanged，
+                                        // 歌词更新只能在此兜底：手动比对元数据哈希，变化即按新元数据处理
                                         val meta = primary.metadata
                                         if (meta != null) {
                                             val artHash = (meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART))?.hashCode() ?: 0
@@ -232,7 +234,6 @@ class MediaSessionMonitorService(
                                                     artHash,
                                                 )
                                             if (currentHash != lastMetadataHash) {
-                                                Logger.d(TAG, "Caught unannounced metadata change via playback state!")
                                                 updateMetadataIfPrimary(primary)
                                             }
                                         }
@@ -330,8 +331,6 @@ class MediaSessionMonitorService(
         }
         lastMetadataHash = metadataHash
 
-        Logger.i(TAG, "Processing MediaSession: $pkg - $rawTitle")
-
         // 歌词字段映射：歌词位于 title（多数应用）还是 artist（如 fnos 音乐）
         val (mappedTitle, mappedArtist) = resolveLyricField(pkg, rawTitle ?: "", rawArtist ?: "")
 
@@ -350,7 +349,8 @@ class MediaSessionMonitorService(
      *
      * 判定依据：歌词会随播放进度持续变化，歌名/歌手相对稳定。
      * - 仅 title 变化 → 歌词在 title；仅 artist 变化 → 歌词在 artist
-     * - 两字段同时变化视为切歌（或两个都未变），不计分，保留已确认结论
+     * - 两字段同时变化（切歌）或内容未变化（同一状态被本链路反复处理）：不参与判定，也不打断已有计数
+     * - 结论按包名常驻内存（跨服务重建、跨切歌保留），仅在该应用行为确实反转时才切换
      * - 同向连续 [LYRIC_FIELD_CONFIRM_THRESHOLD] 次后确认；未确认前默认 TITLE（兼容既有行为）
      *
      * @return Pair(歌词位文本, 歌手位文本)
@@ -371,18 +371,10 @@ class MediaSessionMonitorService(
             if (prevTitle != null || prevArtist != null) {
                 val titleChanged = prevTitle != title
                 val artistChanged = prevArtist != artist
-                val current =
-                    when {
-                        titleChanged && !artistChanged -> LyricField.TITLE
-                        artistChanged && !titleChanged -> LyricField.ARTIST
-                        else -> null
-                    }
-
-                if (current == null) {
-                    // 切歌（两字段同时变化）或无变化：不计分，保留已确认结论
-                    probe.candidate = null
-                    probe.streak = 0
-                } else {
+                // 只有单一字段变化才是有效观测（歌词滚动）；
+                // 切歌（两字段同变）与重复帧（均未变）都不参与判定，也不打断已有计数
+                if (titleChanged != artistChanged) {
+                    val current = if (titleChanged) LyricField.TITLE else LyricField.ARTIST
                     if (current == probe.candidate) {
                         probe.streak += 1
                     } else {
@@ -391,16 +383,13 @@ class MediaSessionMonitorService(
                     }
                     if (probe.streak >= LYRIC_FIELD_CONFIRM_THRESHOLD && probe.confirmed != current) {
                         probe.confirmed = current
-                        Logger.i(TAG, "歌词字段判定: $pkg -> $current (连续 ${probe.streak} 次)")
-                    } else {
-                        Logger.d(TAG, "歌词字段观测: $pkg -> 候选 $current, 连续 ${probe.streak} 次")
+                        Logger.i(TAG, "歌词字段切换: $pkg -> $current (title=$title, artist=$artist)")
                     }
                 }
             }
 
             if (probe.confirmed == LyricField.ARTIST) {
                 // artist 为歌词位时互换，保证下游拿到的 title 始终是歌词
-                Logger.d(TAG, "歌词字段映射(artist->title): $pkg, title=$artist, artist=$title")
                 artist to title
             } else {
                 title to artist
