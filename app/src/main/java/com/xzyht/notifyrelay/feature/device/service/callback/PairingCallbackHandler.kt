@@ -235,15 +235,17 @@ class PairingCallbackHandler(
         }
         Logger.d(TAG, "配对成功: $uuid")
         val keyJson = NativeCore.getContext()?.let { NativeCore.exportDeviceKey(it, uuid) }
-        if (keyJson != null) {
-            val ltPub = JSONObject(keyJson).optString("remote_pub_key", "")
-            if (ltPub.isNotEmpty()) {
-                host.completePairingWithLongTermKeys(uuid, ltPub)
-                // 登记已知设备（uuid+ip），心跳由 Rust 调度器自动启动
-                host.registerKnownDevice(uuid, host.deviceInfoOf(uuid)?.ip ?: "")
-            }
+        val ltPub =
+            keyJson
+                ?.let { runCatching { JSONObject(it).optString("remote_pub_key", "") }.getOrDefault("") }
+                .orEmpty()
+        // 仅当长期密钥齐全且完成配对成功时，才登记已知设备并唤醒等待者
+        val completed = ltPub.isNotEmpty() && host.completePairingWithLongTermKeys(uuid, ltPub)
+        if (completed) {
+            // 登记已知设备（uuid+ip），心跳由 Rust 调度器自动启动
+            host.registerKnownDevice(uuid, host.deviceInfoOf(uuid)?.ip ?: "")
         }
-        host.handshakeWaiters.resolve(uuid, true)
+        host.handshakeWaiters.resolve(uuid, completed)
     }
 
     /** TCP 心跳：把对端名称/电量/类型/IP 交给心跳处理器。 */

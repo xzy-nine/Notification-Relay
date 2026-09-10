@@ -67,7 +67,11 @@ class PairingCoordinator(
     ): Boolean {
         return try {
             val ctx = NativeCore.getContext()
-            if (ctx != null && !NativeCore.deriveSharedSecret(ctx, uuid, remoteLtPubKey)) {
+            if (ctx == null) {
+                Logger.e(TAG, "Rust core 上下文不可用，长期密钥配对失败: $uuid")
+                return false
+            }
+            if (!NativeCore.deriveSharedSecret(ctx, uuid, remoteLtPubKey)) {
                 Logger.e(TAG, "长期密钥派生失败: $uuid")
                 return false
             }

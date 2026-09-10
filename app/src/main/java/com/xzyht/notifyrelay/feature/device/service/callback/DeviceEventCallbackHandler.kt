@@ -13,8 +13,8 @@ import notifyrelay.base.util.Logger
  * 关键约束：
  * - 这些回调运行在 Rust 扫描/心跳/连接线程上，同步调用 `nrc_get_device_list` 会与 core 重入，
  *   因此 `on_device_discovered` 通过 [DeviceCallbackHost.triggerDeviceListRefresh] 切到协程异步刷新。
- * - `on_device_timeout` / `on_device_connected` / `on_device_disconnected` 沿用重构前的既有语义，
- *   仍调用 [DeviceCallbackHost.updateDeviceListNow]（**同步**刷新）；如需调整须单独评估重入风险。
+ * - `on_device_timeout` / `on_device_connected` / `on_device_disconnected` 同样通过
+ *   [DeviceCallbackHost.triggerDeviceListRefresh] 切到协程**异步**刷新，避免在 Rust 回调线程同步调用 core 造成重入。
  * - `on_state_query` 是唯一必须**同步**返回 0/1/2 的回调，
  *   因此直接委托给 [DeviceCallbackHost.stateQueryResponder]。
  *
@@ -82,7 +82,7 @@ class DeviceEventCallbackHandler(
                 val auth = synchronized(host.authenticatedDeviceTable) { host.authenticatedDeviceTable[uuid] }
                 if (auth != null) host.registerReconnectTarget(uuid, auth.lastIp ?: "")
                 // 触发快照刷新，UI 立即反映离线状态（替代原 1s 轮询的离线更新职责）
-                runCatching { host.updateDeviceListNow() }
+                host.triggerDeviceListRefresh()
             }
         }
 
@@ -99,7 +99,7 @@ class DeviceEventCallbackHandler(
                 if (uuid == host.localUuid) return
                 // 连接来源 IP 由 core registry 维护，此处只需触发快照刷新
                 // （替代原 1s 轮询的在线更新职责）
-                runCatching { host.updateDeviceListNow() }
+                host.triggerDeviceListRefresh()
             }
         }
 
@@ -113,7 +113,7 @@ class DeviceEventCallbackHandler(
                 Native.detach(false) // JNA 附加线程回调返回时不 detach，避免嵌套调用 JNA 时 abort
                 val uuid = NotifyRelayCore.ptrToString(uuidPtr) ?: return
                 if (uuid == host.localUuid) return
-                runCatching { host.updateDeviceListNow() }
+                host.triggerDeviceListRefresh()
             }
         }
 
