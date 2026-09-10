@@ -145,6 +145,12 @@ object SuperIslandManager {
             }
 
             // 其次：尝试直接从 android 标准 title/text 补全
+            // 优先读取 verify_code 字段（系统短信App在锁屏状态下也会暴露实际验证码）
+            val verifyCode = extras.getString("verify_code")
+            if (text == null && !verifyCode.isNullOrEmpty()) {
+                text = verifyCode
+                Logger.i("超级岛", "超级岛: 读取到 verify_code 字段: $verifyCode")
+            }
             if (title == null) title = extras.getString("android.title") ?: extras.getCharSequence("android.title")?.toString()
             if (text == null) text = extras.getString("android.text") ?: extras.getCharSequence("android.text")?.toString()
 

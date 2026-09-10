@@ -290,7 +290,13 @@ object SuperIslandProcessor {
 
             val merged = SuperIslandRemoteStore.applyIncoming(sourceKey, json)
 
-            val mParam2 = merged?.paramV2Raw ?: paramV2Raw
+            var mParam2 = merged?.paramV2Raw ?: paramV2Raw
+
+            // 如果 text 字段是验证码格式（4-8位字母数字），则替换 paramV2Raw 中的 ****** 占位符
+            // 这样对端显示时能看到实际验证码而不是 *****
+            if (!mText.isNullOrBlank() && isVerifyCode(mText)) {
+                mParam2 = replaceVerifyCodePlaceholder(mParam2, mText)
+            }
 
             // 解析 title/text 的优先级：merged > 顶层包字段 > paramV2Raw.iconTextInfo
             val finalTitle =
@@ -399,6 +405,61 @@ object SuperIslandProcessor {
         } catch (e: Exception) {
             Logger.e(TAG, "SuperIslandProcessor.process 异常: ${e.message}")
             return false
+        }
+    }
+
+    /**
+     * 判断文本是否为验证码格式（4-8位字母数字混合）
+     */
+    private fun isVerifyCode(text: String): Boolean {
+        val trimmed = text.trim()
+        // 验证码格式：4-8位，只包含字母和数字
+        val regex = Regex("^[A-Za-z0-9]{4,8}$")
+        return regex.matches(trimmed)
+    }
+
+    /**
+     * 替换 paramV2Raw 中的 ****** 占位符为实际验证码
+     * 系统短信App在锁屏状态下会将验证码显示为 ******，但实际验证码在 text 字段中
+     * @param paramV2Raw 原始 paramV2Raw JSON 字符串
+     * @param verifyCode 实际验证码
+     * @return 替换后的 paramV2Raw JSON 字符串
+     */
+    private fun replaceVerifyCodePlaceholder(
+        paramV2Raw: String?,
+        verifyCode: String,
+    ): String? {
+        if (paramV2Raw.isNullOrBlank()) return paramV2Raw
+
+        return try {
+            val json = JSONObject(paramV2Raw)
+
+            // 替换 iconTextInfo.title 中的 ******
+            json.optJSONObject("iconTextInfo")?.let { iconTextInfo ->
+                val title = iconTextInfo.optString("title", "")
+                if (title.contains("******") || title.contains("****")) {
+                    iconTextInfo.put("title", verifyCode)
+                    Logger.i(TAG, "替换 iconTextInfo.title: $title -> $verifyCode")
+                }
+            }
+
+            // 替换 param_island.bigIslandArea.textInfo.title 中的 ******
+            json.optJSONObject("param_island")?.let { paramIsland ->
+                paramIsland.optJSONObject("bigIslandArea")?.let { bigIslandArea ->
+                    bigIslandArea.optJSONObject("textInfo")?.let { textInfo ->
+                        val title = textInfo.optString("title", "")
+                        if (title.contains("******") || title.contains("****")) {
+                            textInfo.put("title", verifyCode)
+                            Logger.i(TAG, "替换 bigIslandArea.textInfo.title: $title -> $verifyCode")
+                        }
+                    }
+                }
+            }
+
+            json.toString()
+        } catch (e: Exception) {
+            Logger.w(TAG, "替换验证码占位符失败: ${e.message}")
+            paramV2Raw
         }
     }
 }

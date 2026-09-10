@@ -234,7 +234,8 @@ object NotificationRepository {
         }
         // 保证 title 是实际通知标题
         val title = getStringCompat(notification.extras, Notification.EXTRA_TITLE)
-        val text = getStringCompat(notification.extras, Notification.EXTRA_TEXT)
+        // 使用 getNotificationTextWithVerifyCode 读取文本，优先读取 verify_code 字段
+        val text = getNotificationTextWithVerifyCode(sbn)
         val packageName = sbn.packageName
         val device = "本机"
         // 本地通知的 key 也需要包含设备信息，确保不同设备的相同通知不会冲突
@@ -322,6 +323,41 @@ object NotificationRepository {
         try {
             val charSeq = bundle.getCharSequence(key)
             return charSeq?.toString()
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    /**
+     * 读取通知的 verify_code 字段（系统短信App在锁屏状态下也会暴露实际验证码）
+     * @return 验证码字符串，如果没有则返回 null
+     */
+    fun getVerifyCode(sbn: StatusBarNotification): String? {
+        return try {
+            val extras = sbn.notification.extras ?: return null
+            extras.getString("verify_code")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 获取通知文本，优先使用 verify_code 字段（系统短信App在锁屏状态下会暴露实际验证码）
+     * @return 实际显示的文本
+     */
+    fun getNotificationTextWithVerifyCode(sbn: StatusBarNotification): String? {
+        try {
+            val extras = sbn.notification.extras ?: return null
+
+            // 优先尝试读取 verify_code 字段（系统短信App的隐藏字段）
+            val verifyCode = extras.getString("verify_code")
+            if (!verifyCode.isNullOrEmpty()) {
+                Logger.d("NotifyRelay", "读取到 verify_code: $verifyCode")
+                return verifyCode
+            }
+
+            // 如果没有 verify_code，则使用标准的 android.text 字段
+            return getStringCompat(extras, Notification.EXTRA_TEXT)
         } catch (e: Exception) {
             return null
         }

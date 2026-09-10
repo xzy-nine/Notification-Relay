@@ -830,7 +830,7 @@ class NotifyRelayNotificationListenerService : NotificationListenerService() {
 
     private fun getNotificationTitle(sbn: StatusBarNotification): String? = NotificationRepository.getStringCompat(sbn.notification.extras, "android.title")
 
-    private fun getNotificationText(sbn: StatusBarNotification): String? = NotificationRepository.getStringCompat(sbn.notification.extras, "android.text")
+    private fun getNotificationText(sbn: StatusBarNotification): String? = NotificationRepository.getNotificationTextWithVerifyCode(sbn)
 
     internal fun getNotificationKey(
         sbn: StatusBarNotification,
