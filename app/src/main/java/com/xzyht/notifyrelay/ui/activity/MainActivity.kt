@@ -146,11 +146,12 @@ class MainActivity : FragmentActivity() {
                 projection.registerCallback(
                     object : MediaProjection.Callback() {
                         override fun onStop() {
-                            // 仅当被停止的投影仍是当前投影时才清理捕获，
-                            // 避免主动 stop 旧投影时其 onStop 回调误杀新会话的捕获。
+                            // 仅当被停止的投影仍是当前投影时才清理，
+                            // 避免主动 stop 旧投影时其 onStop 回调误杀新会话。
                             if (NativeCore.mediaProjection === projection) {
                                 NativeCore.mediaProjection = null
-                                audioRelay.player.stopSendCapture()
+                                // 投影被系统回收：完整清理（停播放/捕获、注销停止广播、停前台服务并通知远端结束）
+                                audioRelay.stop()
                             }
                         }
                     },

@@ -103,7 +103,12 @@ class AudioRelayController(
         pendingSend = null
         val projection = NativeCore.mediaProjection ?: return
         currentRemoteUuid = pending.remoteUuid
-        player.start("send", remoteUuid = pending.remoteUuid)
+        if (!player.start("send", remoteUuid = pending.remoteUuid)) {
+            // 启动失败：清理本次会话状态与投影资源，不进入捕获/前台通知流程
+            currentRemoteUuid = null
+            cleanupMediaProjection()
+            return
+        }
         player.startSendCapture(projection)
         showRelayNotification(pending.deviceName, direction = "send")
     }
@@ -158,7 +163,12 @@ class AudioRelayController(
     ) {
         val device = resolveDeviceInfo(remoteUuid)
         currentRemoteUuid = remoteUuid
-        player.start("recv", sampleRate, channels, remoteUuid = remoteUuid)
+        if (!player.start("recv", sampleRate, channels, remoteUuid = remoteUuid)) {
+            // 启动失败：清理本次会话状态与投影资源，不进入前台通知流程
+            currentRemoteUuid = null
+            cleanupMediaProjection()
+            return
+        }
         showRelayNotification(device?.displayName ?: device?.ip ?: "", remoteUuid = remoteUuid)
     }
 
