@@ -238,10 +238,10 @@ class ConnectionDiscoveryManager(
             val authed = synchronized(deviceManager.authenticatedDevices) { deviceManager.authenticatedDevices.toMap() }
             for ((uuid, _) in authed) {
                 if (uuid == deviceManager.uuid) continue
-                val info = deviceManager.lookupDevice(uuid)
-                val ip = info?.ip
-                val port = info?.port ?: deviceManager.listenPort
-                if (!ip.isNullOrEmpty() && ip != "0.0.0.0") {
+                val info = deviceManager.lookupDevice(uuid) ?: continue
+                val ip = info.ip
+                val port = info.port
+                if (ip.isNotEmpty() && ip != "0.0.0.0") {
                     connectToAuthedDevice(DeviceInfo(uuid, info.displayName, ip, port))
                 }
             }

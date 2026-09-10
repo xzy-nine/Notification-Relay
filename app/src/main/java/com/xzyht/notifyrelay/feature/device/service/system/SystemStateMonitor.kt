@@ -127,10 +127,10 @@ class SystemStateMonitor(
                                 status == BatteryManager.BATTERY_STATUS_FULL
                         val signed = if (charging) batteryLevel else -batteryLevel
                         if (signed == lastSentSignedBattery) return
+                        // 仅在上下文可用且上报调用未抛异常时才更新去重值；否则保留原值以便后续相同电量重试
+                        val ctx = NativeCore.getContext() ?: return
+                        NativeCore.updateHeartbeatSchedulerParams(ctx, localDisplayName(), signed, "android")
                         lastSentSignedBattery = signed
-                        NativeCore.getContext()?.let {
-                            NativeCore.updateHeartbeatSchedulerParams(it, localDisplayName(), signed, "android")
-                        }
                     } catch (_: Exception) {
                     }
                 }

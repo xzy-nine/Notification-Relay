@@ -1,5 +1,6 @@
 package com.xzyht.notifyrelay.sync
 
+import android.os.SystemClock
 import com.xzyht.notifyrelay.feature.device.service.DeviceConnectionManager
 import java.util.concurrent.atomic.AtomicLong
 
@@ -32,7 +33,7 @@ object HeartbeatProcessor {
     ) {
         if (info.uuid == deviceManager.uuid) return
 
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         val prev = lastRefreshAt.get()
         if (now - prev < REFRESH_MIN_INTERVAL_MS || !lastRefreshAt.compareAndSet(prev, now)) return
         deviceManager.triggerDeviceListRefresh()

@@ -172,9 +172,8 @@ class DeviceSnapshotStore(
         obj: org.json.JSONObject,
         uuid: String,
     ): DeviceSnapshot {
-        val rawBattery = obj.optInt("battery", -101)
-        val old = projection[uuid]
-        val battery = if (kotlin.math.abs(rawBattery) > DeviceSnapshot.BATTERY_UNKNOWN_THRESHOLD) (old?.battery ?: rawBattery) else rawBattery
+        // 电量一律以 core 为准；未知值（|v|>100）不沿用上帧，交由 batteryPercent 统一转为 -1
+        val battery = obj.optInt("battery", -101)
 
         val rawType = obj.optString("deviceType", DeviceSnapshot.UNKNOWN_DEVICE_TYPE)
         val rawName = obj.optString("name")

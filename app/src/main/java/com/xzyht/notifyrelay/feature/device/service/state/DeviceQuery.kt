@@ -39,7 +39,12 @@ class DeviceQuery(
         authenticatedDeviceTable().mapValues { (uuid, auth) ->
             val snap = store.snapshot(uuid)
             auth.copy(
-                displayName = store.displayName(uuid) ?: auth.displayName,
+                // 回退顺序：有效快照名 → AuthInfo.displayName → DeviceNameCache/UUID
+                // （避免 DeviceSnapshotStore.displayName 直接返回 UUID 阻断 AuthInfo.displayName 回退）
+                displayName =
+                    snap?.name?.takeIf { it.isNotBlank() }
+                        ?: auth.displayName?.takeIf { it.isNotBlank() }
+                        ?: store.displayName(uuid),
                 deviceType = store.deviceType(uuid) ?: auth.deviceType,
                 lastIp = snap?.ip?.takeIf { it.isNotEmpty() && it != "0.0.0.0" } ?: auth.lastIp,
                 lastPort = snap?.port ?: auth.lastPort,
