@@ -13,6 +13,7 @@ import android.service.notification.NotificationListenerService
 import com.xzyht.notifyrelay.feature.notification.service.NotifyRelayNotificationListenerService
 import notifyrelay.base.util.Logger
 import java.util.Objects
+import java.util.concurrent.ConcurrentHashMap
 
 class MediaSessionMonitorService(
     private val service: NotificationListenerService,
@@ -20,7 +21,24 @@ class MediaSessionMonitorService(
     companion object {
         private const val TAG = "MediaSessionMonitorService"
         var instance: MediaSessionMonitorService? = null
+
+        // 歌词字段判定所需的最小连续观测次数
+        private const val LYRIC_FIELD_CONFIRM_THRESHOLD = 2
     }
+
+    // 歌词所在字段
+    private enum class LyricField { TITLE, ARTIST }
+
+    // 按包名的歌词字段观测状态
+    private class LyricFieldProbe {
+        var lastTitle: String? = null
+        var lastArtist: String? = null
+        var candidate: LyricField? = null
+        var streak: Int = 0
+        var confirmed: LyricField? = null
+    }
+
+    private val lyricFieldProbes = ConcurrentHashMap<String, LyricFieldProbe>()
 
     // 服务连接状态
     private var isConnected = false
@@ -314,13 +332,79 @@ class MediaSessionMonitorService(
 
         Logger.i(TAG, "Processing MediaSession: $pkg - $rawTitle")
 
+        // 歌词字段映射：歌词位于 title（多数应用）还是 artist（如 fnos 音乐）
+        val (mappedTitle, mappedArtist) = resolveLyricField(pkg, rawTitle ?: "", rawArtist ?: "")
+
         // 通知 NotifyRelayNotificationListenerService 有新的媒体会话数据
         NotifyRelayNotificationListenerService.onMediaSessionUpdated(
             pkg,
-            rawTitle ?: "",
-            rawArtist ?: "",
+            mappedTitle,
+            mappedArtist,
             duration,
             artBitmap,
         )
+    }
+
+    /**
+     * 判定歌词所在字段并完成字段映射（仅作用于获取层，下游仍按 title=歌词位 约定处理）。
+     *
+     * 判定依据：歌词会随播放进度持续变化，歌名/歌手相对稳定。
+     * - 仅 title 变化 → 歌词在 title；仅 artist 变化 → 歌词在 artist
+     * - 两字段同时变化视为切歌（或两个都未变），不计分，保留已确认结论
+     * - 同向连续 [LYRIC_FIELD_CONFIRM_THRESHOLD] 次后确认；未确认前默认 TITLE（兼容既有行为）
+     *
+     * @return Pair(歌词位文本, 歌手位文本)
+     */
+    private fun resolveLyricField(
+        pkg: String,
+        title: String,
+        artist: String,
+    ): Pair<String, String> {
+        val probe = lyricFieldProbes.computeIfAbsent(pkg) { LyricFieldProbe() }
+        return synchronized(probe) {
+            val prevTitle = probe.lastTitle
+            val prevArtist = probe.lastArtist
+            probe.lastTitle = title
+            probe.lastArtist = artist
+
+            // 首次观测无基线，不作判定（保持默认 title）
+            if (prevTitle != null || prevArtist != null) {
+                val titleChanged = prevTitle != title
+                val artistChanged = prevArtist != artist
+                val current =
+                    when {
+                        titleChanged && !artistChanged -> LyricField.TITLE
+                        artistChanged && !titleChanged -> LyricField.ARTIST
+                        else -> null
+                    }
+
+                if (current == null) {
+                    // 切歌（两字段同时变化）或无变化：不计分，保留已确认结论
+                    probe.candidate = null
+                    probe.streak = 0
+                } else {
+                    if (current == probe.candidate) {
+                        probe.streak += 1
+                    } else {
+                        probe.candidate = current
+                        probe.streak = 1
+                    }
+                    if (probe.streak >= LYRIC_FIELD_CONFIRM_THRESHOLD && probe.confirmed != current) {
+                        probe.confirmed = current
+                        Logger.i(TAG, "歌词字段判定: $pkg -> $current (连续 ${probe.streak} 次)")
+                    } else {
+                        Logger.d(TAG, "歌词字段观测: $pkg -> 候选 $current, 连续 ${probe.streak} 次")
+                    }
+                }
+            }
+
+            if (probe.confirmed == LyricField.ARTIST) {
+                // artist 为歌词位时互换，保证下游拿到的 title 始终是歌词
+                Logger.d(TAG, "歌词字段映射(artist->title): $pkg, title=$artist, artist=$title")
+                artist to title
+            } else {
+                title to artist
+            }
+        }
     }
 }
