@@ -4,8 +4,6 @@ import android.content.Context
 import com.xzyht.notifyrelay.feature.device.model.AuthInfo
 import com.xzyht.notifyrelay.feature.device.service.statequery.StateQueryResponder
 import com.xzyht.notifyrelay.nativecore.NativeCore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import notifyrelay.base.util.Logger
 import notifyrelay.data.database.repository.DatabaseRepository
 
@@ -17,11 +15,11 @@ import notifyrelay.data.database.repository.DatabaseRepository
  * 2. `nrc_remove_device` 删除 core 侧密钥与 registry 状态 —— **落库失败则中止**，
  *    否则内存已删但库未同步，重启后设备会经旧 state/行复活，造成两端不一致；
  * 3. 断开会话、移除重连与扫描目标（心跳调度随之停止）；
- * 4. 移除平台侧内存记录与快照投影，异步清理关联数据。
+ * 4. 可等待地清理关联数据（迁移残留行 / 通知历史 / 应用关联），全部成功后才移除内存记录与快照投影；
+ *    数据库清理失败则返回 false 并保留内存状态不变。
  */
 class PairedDeviceRemover(
     private val context: Context,
-    private val scope: CoroutineScope,
     private val registry: DeviceTargetRegistry,
     private val snapshotStore: DeviceSnapshotStore,
     private val stateQueryResponder: StateQueryResponder,
@@ -36,7 +34,7 @@ class PairedDeviceRemover(
      * @return true 表示该设备存在并已移除；
      * false 表示没有该 uuid，或 core 持久化删除未完成（已中止平台侧清理）
      */
-    fun remove(
+    suspend fun remove(
         uuid: String,
         deleteHistory: Boolean = false,
     ): Boolean {
@@ -49,26 +47,30 @@ class PairedDeviceRemover(
             }
 
             val ctx = NativeCore.getContext()
-            if (ctx != null && !NativeCore.removeDevice(ctx, uuid)) {
+            if (ctx == null || !NativeCore.removeDevice(ctx, uuid)) {
                 Logger.w(TAG, "removeAuthenticatedDevice: Rust 删除未完成，中止平台侧清理: $uuid")
                 return false
             }
 
             registry.removeAllTargets(uuid)
 
-            synchronized(authenticatedDeviceTable) {
-                if (authenticatedDeviceTable.containsKey(uuid)) {
-                    // 删除设备迁移残留行（若旧表数据尚未迁移）及关联数据
-                    scope.launch {
-                        val repository = DatabaseRepository.getInstance(context)
-                        repository.deleteDeviceMigrationByUuid(uuid)
-                        if (deleteHistory) {
-                            repository.deleteNotificationsByDevice(uuid)
-                            repository.deleteAppDeviceAssociationsByDeviceUuid(uuid)
-                        }
+            val present = synchronized(authenticatedDeviceTable) { authenticatedDeviceTable.containsKey(uuid) }
+            if (present) {
+                // 先完成数据库清理（可等待）：迁移残留行与 deleteHistory=true 的通知/关联数据全部成功后，
+                // 才移除内存记录与快照投影，避免 db 失败时内存已删但库未同步（重启后经旧行复活）
+                try {
+                    val repository = DatabaseRepository.getInstance(context)
+                    repository.deleteDeviceMigrationByUuid(uuid)
+                    if (deleteHistory) {
+                        repository.deleteNotificationsByDevice(uuid)
+                        repository.deleteAppDeviceAssociationsByDeviceUuid(uuid)
                     }
-                    authenticatedDeviceTable.remove(uuid)
-                    existed = true
+                } catch (e: Exception) {
+                    Logger.w(TAG, "removeAuthenticatedDevice 数据库清理失败，保留内存状态: ${e.message}")
+                    return false
+                }
+                synchronized(authenticatedDeviceTable) {
+                    if (authenticatedDeviceTable.remove(uuid) != null) existed = true
                 }
             }
 

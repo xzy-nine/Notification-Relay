@@ -8,6 +8,7 @@ import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.model.DeviceNameCache
 import com.xzyht.notifyrelay.feature.device.model.DeviceSnapshot
 import com.xzyht.notifyrelay.feature.device.model.PendingPairing
+import com.xzyht.notifyrelay.feature.appslist.sync.AppListSyncManager
 import com.xzyht.notifyrelay.feature.device.service.audio.AudioRelayController
 import com.xzyht.notifyrelay.feature.device.service.callback.DeviceCallbackHost
 import com.xzyht.notifyrelay.feature.device.service.callback.HandshakeRequestHandler
@@ -253,7 +254,6 @@ class DeviceConnectionManager(
     private val deviceRemover =
         PairedDeviceRemover(
             context = context,
-            scope = coroutineScope,
             registry = targetRegistry,
             snapshotStore = snapshotStore,
             stateQueryResponder = stateQueryResponder,
@@ -498,11 +498,16 @@ class DeviceConnectionManager(
      * - 从内存中移除设备信息并刷新快照
      * 返回 true 表示存在并已移除，false 表示没有该uuid 或 Rust 持久化删除未完成
      */
-    fun removeAuthenticatedDevice(
+    suspend fun removeAuthenticatedDevice(
         uuid: String,
         deleteHistory: Boolean = false,
     ): Boolean {
-        return deviceRemover.remove(uuid, deleteHistory)
+        val removed = deviceRemover.remove(uuid, deleteHistory)
+        if (removed) {
+            // 设备已移除：取消其在途的应用列表同步任务，避免残留协程回写已删设备数据
+            AppListSyncManager.cancelForDevice(uuid)
+        }
+        return removed
     }
 
 }
