@@ -58,7 +58,14 @@ object XmsfAuthFix {
                     // 对齐 HyperCeiler UnlockFoucsAuth：先无条件将错误码置 0，再返回 getAuthSuccess() 的结果
                     field.set(error, 0)
                     val successMethod = getAuthSuccess ?: return@createBeforeHook
-                    param.result = successMethod.invoke(thisObject)
+                    // 与旧实现一致：取不到成功 Bundle 时放行原方法。
+                    // 直接给 result 赋 null 也会置 skipped=true，导致原方法被跳过并返回 null。
+                    val successBundle = successMethod.invoke(thisObject)
+                    if (successBundle == null) {
+                        xposed.log(android.util.Log.WARN, TAG, "getAuthSuccess 返回 null，放行原方法")
+                        return@createBeforeHook
+                    }
+                    param.result = successBundle
                     xposed.log(android.util.Log.INFO, TAG, "已将鉴权错误强改为成功")
                 } catch (e: Throwable) {
                     xposed.log(android.util.Log.ERROR, TAG, "鉴权拦截失败: ${e.message}")

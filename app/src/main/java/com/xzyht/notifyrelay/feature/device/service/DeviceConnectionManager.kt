@@ -6,6 +6,7 @@ import com.xzyht.notifyrelay.nativecore.NativeCore
 import com.xzyht.notifyrelay.feature.device.model.AuthInfo
 import com.xzyht.notifyrelay.feature.device.model.DeviceInfo
 import com.xzyht.notifyrelay.feature.device.model.DeviceNameCache
+import com.xzyht.notifyrelay.feature.device.model.DeviceSnapshot
 import com.xzyht.notifyrelay.feature.device.model.PendingPairing
 import com.xzyht.notifyrelay.feature.device.service.audio.AudioRelayController
 import com.xzyht.notifyrelay.feature.device.service.callback.DeviceCallbackHost
@@ -80,11 +81,42 @@ class DeviceConnectionManager(
             }
         }
         targetRegistry.rehydrateFromCore(paired)
+        // 首帧快照的寻址/展示元数据立即回填（刷新回调早于本表写入，需在此补一次）
+        syncAuthenticatedDeviceMetadata(snapshotStore.snapshots())
     }
 
     // 保存已认证设备（密钥落盘由 Rust 自动；此处仅刷新快照与 UI 状态）
     override fun saveAuthedDevices() {
         snapshotStore.requestRefresh()
+    }
+
+    /**
+     * 把 core 快照中的寻址/展示元数据回填到已认证设备表。
+     *
+     * 认证表记录的是「平台侧决策」（isAccepted / publicKey），但 lastIp / deviceType / displayName
+     * 仍被超时回调（重新登记重连目标）与 DATA_FTP 处理（PC 判定）直接读取，因此必须随快照刷新，
+     * 否则进程重启后这些字段会长期为空：超时重连登记退化为空操作、PC 发起的 FTP 请求被静默丢弃。
+     *
+     * 由 [DeviceSnapshotStore] 在每次刷新后回调，纯内存更新，不再触发额外刷新。
+     */
+    internal fun syncAuthenticatedDeviceMetadata(snapshots: Map<String, DeviceSnapshot>) {
+        synchronized(authenticatedDevices) {
+            for ((deviceUuid, snap) in snapshots) {
+                if (!snap.paired) continue
+                val auth = authenticatedDevices[deviceUuid] ?: continue
+                val effectiveIp = snap.ip.takeIf { it.isNotEmpty() && it != "0.0.0.0" }
+                val knownType = snap.deviceType.takeIf { it.isNotBlank() && it != DeviceSnapshot.UNKNOWN_DEVICE_TYPE }
+                val knownName = snap.name.takeIf { it.isNotBlank() }
+                val updated =
+                    auth.copy(
+                        displayName = knownName ?: auth.displayName,
+                        lastIp = effectiveIp ?: auth.lastIp,
+                        lastPort = snap.port,
+                        deviceType = knownType ?: auth.deviceType,
+                    )
+                if (updated != auth) authenticatedDevices[deviceUuid] = updated
+            }
+        }
     }
 
     /**
@@ -161,6 +193,7 @@ class DeviceConnectionManager(
             localUuidProvider = { uuid },
             defaultPort = listenPort,
             onlineDevicesCache = onlineDevicesCache,
+            onSnapshotRefreshed = { syncAuthenticatedDeviceMetadata(it) },
         )
 
     /** 同步查询入口（只读快照投影）。 */

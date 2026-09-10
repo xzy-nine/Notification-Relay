@@ -18,8 +18,8 @@ import kotlinx.coroutines.CoroutineScope
  *
  * 注意：所有 `on_*` 回调都运行在 **JNA 附加线程**（非主线程、非协程），因此：
  * - 回调首行必须调用 `Native.detach(false)`；
- * - 严禁在回调内同步调用 `nrc_get_device_list`（会与 core 重入导致崩溃），
- *   需要刷新时统一走 [triggerDeviceListRefresh] / [updateDeviceListAsync]。
+ * - 回调内同步调用 `nrc_get_device_list` 会与 core 重入，优先走 [triggerDeviceListRefresh]（协程异步）；
+ *   [updateDeviceListNow] 为同步版本，仅用于沿用既有语义的超时/连接/断开回调。
  */
 interface DeviceCallbackHost {
     /** 应用上下文（供各 Processor 与系统服务使用）。 */

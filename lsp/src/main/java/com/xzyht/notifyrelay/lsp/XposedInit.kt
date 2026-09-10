@@ -48,12 +48,18 @@ class XposedInit : XposedModule() {
 
     override fun onHotReloaded(param: HotReloadedParam) {
         if (!param.processName.startsWith(PKG_XMSF)) return
-        // 必须用命名参数：尾随 lambda 会绑定到 onExtra 而非 targetReady
-        EzXposed.handleHotReloadedWithTargetReady(
-            this,
-            param,
-            targetReady = { XmsfAuthFix.install(this) },
-        )
+        runCatching {
+            // 必须用命名参数：尾随 lambda 会绑定到 onExtra 而非 targetReady
+            EzXposed.handleHotReloadedWithTargetReady(
+                this,
+                param,
+                targetReady = { XmsfAuthFix.install(this) },
+            )
+        }.onFailure {
+            // 此时 onHotReloading 已返回 true，无法回退，只能记录交由框架保留旧 hook
+            log(android.util.Log.ERROR, TAG, "热重载重建失败: ${it.message}")
+            it.printStackTrace()
+        }
     }
 
     companion object {

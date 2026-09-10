@@ -45,6 +45,13 @@ class DeviceSnapshotStore(
     private val localUuidProvider: () -> String,
     private val defaultPort: Int,
     private val onlineDevicesCache: OnlineDevicesCache,
+    /**
+     * 投影更新后的回调（在刷新线程内同步执行）。
+     *
+     * 供装配方把快照中的寻址/展示元数据回填到自身派生表（如认证设备表的 lastIp/deviceType），
+     * 避免这些字段各自再维护一条刷新链路。回调内不得再次触发刷新（会造成递归）。
+     */
+    private val onSnapshotRefreshed: (Map<String, DeviceSnapshot>) -> Unit = {},
 ) {
     companion object {
         private const val TAG = "死神-NotifyRelay"
@@ -65,12 +72,14 @@ class DeviceSnapshotStore(
     @Volatile
     private var projection: Map<String, DeviceSnapshot> = emptyMap()
 
-    /** name/deviceType 的上帧兜底（core 重启首帧可能为空）。 */
-    private val displayFallback = java.util.concurrent.ConcurrentHashMap<String, Pair<String, String>>()
+    /** 保护 [projection] 的读-改-写，避免 [forget] 与 [doRefresh] 的整体替换互相覆盖。 */
+    private val projectionLock = Any()
+
+    /** name/deviceType 的上帧兜底（core 重启首帧可能为空）；按插入顺序淘汰最旧条目。 */
+    private val displayFallback = LinkedHashMap<String, Pair<String, String>>()
 
     /** 刷新节流：心跳/连接回调并发触发时跳过重复刷新，避免同一时刻多个协程并发进入 JNA。 */
-    @Volatile
-    private var refreshBusy = false
+    private val refreshBusy = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // ==================== 刷新入口 ====================
 
@@ -81,12 +90,11 @@ class DeviceSnapshotStore(
 
     /** 同步刷新（沿用既有回调语义：超时/连接/断开回调直接刷新）。 */
     fun refresh() {
-        if (refreshBusy) return
-        refreshBusy = true
+        if (!refreshBusy.compareAndSet(false, true)) return
         try {
             doRefresh()
         } finally {
-            refreshBusy = false
+            refreshBusy.set(false)
         }
     }
 
@@ -113,8 +121,8 @@ class DeviceSnapshotStore(
 
     /** 清除某设备的兜底缓存（设备被移除时调用）。 */
     fun forget(uuid: String) {
-        displayFallback.remove(uuid)
-        projection = projection - uuid
+        synchronized(displayFallback) { displayFallback.remove(uuid) }
+        synchronized(projectionLock) { projection = projection - uuid }
         _devices.value = _devices.value - uuid
     }
 
@@ -144,9 +152,12 @@ class DeviceSnapshotStore(
                 newMap[uuid] =
                     parsed.toDeviceInfo(DeviceNameCache.getDisplayNameByUuid(uuid)) to parsed.online
             }
-            projection = newProjection
+            synchronized(projectionLock) { projection = newProjection }
             _devices.value = newMap
             onlineDevicesCache.update(newMap, newProjection)
+            // 回填装配方的派生表（如认证设备的 lastIp/deviceType）；回调失败不得影响本次刷新
+            runCatching { onSnapshotRefreshed(newProjection) }
+                .onFailure { Logger.e(TAG, "[DeviceSnapshotStore] 快照刷新回调失败", it) }
             Logger.d(
                 TAG,
                 "[DeviceSnapshotStore] 列表: ${newMap.size} 台, 在线: ${newMap.count { it.value.second }}, 已配对: ${newProjection.count { it.value.paired }}",
@@ -167,14 +178,19 @@ class DeviceSnapshotStore(
 
         val rawType = obj.optString("deviceType", DeviceSnapshot.UNKNOWN_DEVICE_TYPE)
         val rawName = obj.optString("name")
-        val fallback = displayFallback[uuid]
+        val fallback = synchronized(displayFallback) { displayFallback[uuid] }
         val deviceType = if (rawType.isBlank() || rawType == DeviceSnapshot.UNKNOWN_DEVICE_TYPE) (fallback?.second ?: rawType) else rawType
         val name = if (rawName.isBlank()) (fallback?.first ?: "") else rawName
 
         if (name.isNotBlank() || deviceType.isNotBlank()) {
-            displayFallback[uuid] = name to deviceType
-            if (displayFallback.size > FALLBACK_MAX_ENTRIES) {
-                displayFallback.remove(displayFallback.keys.first())
+            synchronized(displayFallback) {
+                // 先移除再插入：LinkedHashMap 的重复 put 不更新既有键的插入顺序，
+                // 否则「淘汰最旧」可能删掉刚写入的这一条
+                displayFallback.remove(uuid)
+                displayFallback[uuid] = name to deviceType
+                if (displayFallback.size > FALLBACK_MAX_ENTRIES) {
+                    displayFallback.keys.firstOrNull()?.let { displayFallback.remove(it) }
+                }
             }
         }
 

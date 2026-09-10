@@ -11,10 +11,11 @@ import notifyrelay.base.util.Logger
  * `on_device_disconnected` / `on_state_query`。
  *
  * 关键约束：
- * - 这些回调运行在 Rust 扫描/心跳/连接线程上，**禁止同步调用 `nrc_get_device_list`**
- *   （会与 core 重入导致崩溃），因此快照刷新一律走 [DeviceCallbackHost.triggerDeviceListRefresh] /
- *   [DeviceCallbackHost.updateDeviceListAsync]（内部切到协程）。
- * - `on_state_query` 是唯一例外：必须**同步**返回 0/1/2，
+ * - 这些回调运行在 Rust 扫描/心跳/连接线程上，同步调用 `nrc_get_device_list` 会与 core 重入，
+ *   因此 `on_device_discovered` 通过 [DeviceCallbackHost.triggerDeviceListRefresh] 切到协程异步刷新。
+ * - `on_device_timeout` / `on_device_connected` / `on_device_disconnected` 沿用重构前的既有语义，
+ *   仍调用 [DeviceCallbackHost.updateDeviceListNow]（**同步**刷新）；如需调整须单独评估重入风险。
+ * - `on_state_query` 是唯一必须**同步**返回 0/1/2 的回调，
  *   因此直接委托给 [DeviceCallbackHost.stateQueryResponder]。
  *
  * 时序：
