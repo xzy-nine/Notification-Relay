@@ -74,7 +74,10 @@ object LegacyDeviceMigrator {
                 if (row.lastIp.isNotBlank()) {
                     try {
                         NativeCore.addKnownDevice(ctx, row.uuid, row.lastIp)
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        // 登记失败同样视为迁移未完成，保留 device_migration 表以便下次启动重试
+                        Logger.w(TAG, "已知设备登记失败 ${row.uuid}，暂缓清理旧平台存储", e)
+                        migrationFailed = true
                     }
                 }
             }
