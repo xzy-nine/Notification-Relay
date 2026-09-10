@@ -440,7 +440,7 @@ object SuperIslandProcessor {
                 if (title.contains("******") || title.contains("****")) {
                     val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
                     iconTextInfo.put("title", replaced)
-                    Logger.i(TAG, "替换 iconTextInfo.title: $title -> $replaced")
+                    Logger.i(TAG, "已替换 iconTextInfo.title 中的验证码占位符")
                 }
             }
 
@@ -452,7 +452,7 @@ object SuperIslandProcessor {
                         if (title.contains("******") || title.contains("****")) {
                             val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
                             textInfo.put("title", replaced)
-                            Logger.i(TAG, "替换 bigIslandArea.textInfo.title: $title -> $replaced")
+                            Logger.i(TAG, "已替换 bigIslandArea.textInfo.title 中的验证码占位符")
                         }
                     }
                 }

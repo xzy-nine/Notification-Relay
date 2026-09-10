@@ -352,7 +352,7 @@ object NotificationRepository {
             // 优先尝试读取 verify_code 字段（系统短信App的隐藏字段）
             val verifyCode = extras.getString("verify_code")
             if (!verifyCode.isNullOrEmpty()) {
-                Logger.d("NotifyRelay", "读取到 verify_code: $verifyCode")
+                Logger.d("NotifyRelay", "读取到 verify_code 字段(len=${verifyCode.length})")
                 return verifyCode
             }
 

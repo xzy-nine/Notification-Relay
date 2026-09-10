@@ -156,7 +156,7 @@ object SuperIslandManager {
             // 优先使用 verify_code 字段（系统短信App在锁屏状态下也会暴露实际验证码）
             if (text == null && !verifyCode.isNullOrEmpty()) {
                 text = verifyCode
-                Logger.i("超级岛", "超级岛: 读取到 verify_code 字段: $verifyCode")
+                Logger.i("超级岛", "超级岛: 读取到 verify_code 字段(len=${verifyCode.length})")
             }
             if (title == null) title = extras.getString("android.title") ?: extras.getCharSequence("android.title")?.toString()
             if (text == null) text = extras.getString("android.text") ?: extras.getCharSequence("android.text")?.toString()
@@ -318,7 +318,15 @@ object SuperIslandManager {
             } catch (_: Exception) {
             }
 
-            Logger.i("超级岛", "超级岛: 提取数据 pkg=$pkg, title=$title, text=$text, keys=${extras.keySet()}")
+            // 验证码场景（此时 text 即真实验证码）不打印具体值，其余情况保持原样便于排查
+            val isVerifyCodeLog = text != null && Regex("^[A-Za-z0-9]{4,8}$").matches(text.trim())
+            val titleTextLog =
+                if (isVerifyCodeLog) {
+                    "title=[已隐藏 len=${title?.length ?: 0}], text=[已隐藏 len=${text?.length ?: 0}]"
+                } else {
+                    "title=$title, text=$text"
+                }
+            Logger.i("超级岛", "超级岛: 提取数据 pkg=$pkg, $titleTextLog, keys=${extras.keySet()}")
             try {
                 picMap.entries.take(6).joinToString(",") { (k, v) -> "$k=${v?.take(80)}" }
                 // Logger.d("超级岛", "超级岛: pic_map keys=${picMap.keys.size}, sample={$sample}")
@@ -356,7 +364,7 @@ object SuperIslandManager {
                 if (title.contains("******") || title.contains("****")) {
                     val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
                     iconTextInfo.put("title", replaced)
-                    Logger.i("超级岛", "超级岛: 验证码回填 iconTextInfo.title: $title -> $replaced")
+                    Logger.i("超级岛", "超级岛: 已回填 iconTextInfo.title 中的验证码占位符")
                 }
             }
 
@@ -370,7 +378,7 @@ object SuperIslandManager {
                     if (title.contains("******") || title.contains("****")) {
                         val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
                         textInfo.put("title", replaced)
-                        Logger.i("超级岛", "超级岛: 验证码回填 bigIslandArea.textInfo.title: $title -> $replaced")
+                        Logger.i("超级岛", "超级岛: 已回填 bigIslandArea.textInfo.title 中的验证码占位符")
                     }
                 }
         } catch (e: Exception) {
