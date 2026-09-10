@@ -203,6 +203,8 @@ class MediaSessionMonitorService(
         // 停止启动重试和重试机制
         handler.removeCallbacks(startupRetryRunnable)
         handler.removeCallbacks(retryRunnable)
+        // 清理已排队的歌词复核任务，避免停止监听后残留任务读取新的 activeControllers
+        handler.removeCallbacks(lyricProbeRecheckRunnable)
 
         mediaSessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
 
@@ -443,6 +445,9 @@ class MediaSessionMonitorService(
             } else {
                 val titleChanged = prevTitle != title
                 val artistChanged = prevArtist != artist
+                // 本轮是否发生切歌：切歌时 prevPosition 仍为上首歌的残留值，
+                // 需跳过本轮基于位置的超时推进，避免新歌首帧即被判定为 INSTRUMENTAL
+                var songSwitched = false
 
                 if (songId != probe.songId) {
                     // 切歌：结算上一首（带歌词/纯音乐），状态按歌曲重置，不沿用上一首结论
@@ -460,6 +465,7 @@ class MediaSessionMonitorService(
                     probe.streak = 0
                     // 切歌后重置播放位置基准，确保新歌的进度判定不与上首歌残留位置比较
                     probe.lastPosition = position
+                    songSwitched = true
                     scheduleLyricProbeRechecks(probe)
                 } else if (titleChanged != artistChanged) {
                     // 单一字段变化：歌词滚动
@@ -485,7 +491,9 @@ class MediaSessionMonitorService(
 
                 // 软/硬超时推进（帧驱动 + 定时复核双保险）
                 // LYRIC 状态粘滞：同一 songId 内即使长时间无歌词变化（前奏/间奏）也不回退
-                if (probe.state == LyricState.PENDING_LYRIC || probe.state == LyricState.PENDING_INSTRUMENTAL) {
+                if (!songSwitched &&
+                    (probe.state == LyricState.PENDING_LYRIC || probe.state == LyricState.PENDING_INSTRUMENTAL)
+                ) {
                     val threshold = instrumentalThreshold(probe)
                     if (position >= 0) {
                         // 播放位置可用：仅用歌曲内进度判定（暂停不推进，暂停期间不会因墙钟误判为纯音乐）
@@ -561,18 +569,19 @@ class MediaSessionMonitorService(
             val primary = getPrimaryController() ?: return@Runnable
             val pkg = primary.packageName
             val probe = lyricFieldProbes[pkg] ?: return@Runnable
-            val cachedTitle = probe.lastTitle ?: return@Runnable
-            val cachedArtist = probe.lastArtist ?: ""
+            // 读取当前元数据（而非 probe 缓存），使歌词滚动变化能触发 resolveLyricField 的切字段分支
+            val primaryMetadata = primary.metadata
+            val currentTitle = primaryMetadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: return@Runnable
+            val currentArtist = primaryMetadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
             val before = probe.state
             val position = primary.playbackState?.position ?: -1L
             // 复核所需封面按需从当前 MediaController.metadata 重新读取，避免长期持有 Bitmap。
-            val primaryMetadata = primary.metadata
             val artBitmap =
-                primaryMetadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                    ?: primaryMetadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-            val mediaId = primaryMetadata?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) ?: ""
+                primaryMetadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                    ?: primaryMetadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            val mediaId = primaryMetadata.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) ?: ""
             val (mappedTitle, mappedArtist) =
-                resolveLyricField(pkg, cachedTitle, cachedArtist, probe.lastDuration, mediaId, position)
+                resolveLyricField(pkg, currentTitle, currentArtist, probe.lastDuration, mediaId, position)
             // 仅在状态确实推进时重新上报，避免重复推送
             if (probe.state != before) {
                 NotifyRelayNotificationListenerService.onMediaSessionUpdated(

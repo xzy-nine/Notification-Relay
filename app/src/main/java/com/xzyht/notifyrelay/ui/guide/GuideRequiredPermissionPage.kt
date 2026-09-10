@@ -32,6 +32,7 @@ internal fun GuideRequiredPermissionPage(
     onBack: () -> Unit,
     onNext: () -> Unit,
     reauth: Boolean = false,
+    stepLabel: String? = null,
 ) {
     val context = LocalContext.current
     val colorScheme = MiuixTheme.colorScheme
@@ -127,7 +128,7 @@ internal fun GuideRequiredPermissionPage(
                 .statusBarsPadding(),
     ) {
         GuidePageHeader(
-            stepLabel = if (reauth) "2 / 3" else "3 / 6",
+            stepLabel = stepLabel ?: if (reauth) "2 / 3" else "3 / 6",
             title = if (reauth) "重新授权必要权限" else "必要权限",
             subtitle =
                 if (reauth) {

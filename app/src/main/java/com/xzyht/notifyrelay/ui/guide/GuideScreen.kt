@@ -132,6 +132,9 @@ internal fun GuideScreen(
                                 onBack = { reauthAnimateTo(1) },
                                 onNext = { reauthAnimateTo(3) },
                                 reauth = reauth,
+                                // needConsent 紧凑流程为「欢迎 → 协议 → 必要权限 → 完成」共 4 页，
+                                // 必要权限页为第 3 步，独立于 reauth 标签
+                                stepLabel = "3 / 4",
                             )
                         } else {
                             GuideCompletePage(
