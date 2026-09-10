@@ -148,6 +148,7 @@ suspend fun replicateNotification(
         if (pendingIntent != null) {
             builder.setContentIntent(pendingIntent)
         }
+
         // Logger.d("智能去重", if (startMonitoring) "发送通知并启动监控 - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId" else "发送通知（不启用监控） - 包名:$pkg, 标题:$title, 内容:$text, 通知ID:$notifyId")
         // 修复：发出通知前写入dedupCache，确保本地和远程都能去重
         BackendRemoteFilter

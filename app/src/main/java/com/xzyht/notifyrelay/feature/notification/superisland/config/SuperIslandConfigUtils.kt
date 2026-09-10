@@ -20,11 +20,13 @@ object SuperIslandConfigUtils {
 
     // 注入方式枚举
     enum class SpecInjectionMode {
-        SUPER_ISLAND, // 仅超级岛规范信息注入
+        SUPER_ISLAND, // 仅超级岛规范信息注入（需要 XMSF 鉴权，未注册 scope 的构建不生效）
         LIVE_UPDATES, // 仅Live Updates规范信息注入
-        BOTH, // 两者都注入
         NONE, // 都不注入（不应该使用，但为了完整性保留）
     }
+
+    // 旧版本默认值（两者都注入），用于迁移判断；旧默认视为"未显式修改"，跟随新默认
+    private const val LEGACY_BOTH_ORDINAL = 2
 
     /**
      * 检查浮窗功能是否开启
@@ -76,34 +78,38 @@ object SuperIslandConfigUtils {
     }
 
     /**
-     * 获取规范信息注入模式
+     * 获取规范信息注入模式。
+     * 迁移逻辑：
+     * - 无存储值 / 旧默认 BOTH（视为"仍为默认"，用户未显式修改过）→ 固定默认 LIVE_UPDATES
+     * - 存储为显式 SUPER_ISLAND / LIVE_UPDATES → 保持用户修改
      */
     fun getSpecInjectionMode(context: Context): SpecInjectionMode {
-        val modeOrdinal = StorageManager.getInt(context, SPEC_INJECTION_MODE_KEY, SpecInjectionMode.BOTH.ordinal)
-        return SpecInjectionMode.entries.toTypedArray().getOrElse(modeOrdinal) { SpecInjectionMode.BOTH }
+        val modeOrdinal = StorageManager.getInt(context, SPEC_INJECTION_MODE_KEY, -1)
+        if (modeOrdinal == -1 || modeOrdinal == LEGACY_BOTH_ORDINAL) {
+            // 无存储或旧默认 BOTH：固定默认 Live Updates
+            return SpecInjectionMode.LIVE_UPDATES
+        }
+        return SpecInjectionMode.entries.toTypedArray().getOrElse(modeOrdinal) { SpecInjectionMode.LIVE_UPDATES }
     }
 
     /**
      * 检查超级岛规范信息注入是否开启
      */
-    fun isSuperIslandSpecInjectionEnabled(context: Context): Boolean {
-        val mode = getSpecInjectionMode(context)
-        return mode == SpecInjectionMode.SUPER_ISLAND || mode == SpecInjectionMode.BOTH
-    }
+    fun isSuperIslandSpecInjectionEnabled(context: Context): Boolean =
+        getSpecInjectionMode(context) == SpecInjectionMode.SUPER_ISLAND
 
     /**
      * 检查Live Updates规范信息注入是否开启
      */
-    fun isLiveUpdatesSpecInjectionEnabled(context: Context): Boolean {
-        val mode = getSpecInjectionMode(context)
-        return mode == SpecInjectionMode.LIVE_UPDATES || mode == SpecInjectionMode.BOTH
-    }
+    fun isLiveUpdatesSpecInjectionEnabled(context: Context): Boolean =
+        getSpecInjectionMode(context) == SpecInjectionMode.LIVE_UPDATES
 
     /**
      * 检查是否至少有一种规范信息注入开启
      * @return true 如果至少有一种注入开启，false 如果都关闭
      */
-    fun isAnySpecInjectionEnabled(context: Context): Boolean = isSuperIslandSpecInjectionEnabled(context) || isLiveUpdatesSpecInjectionEnabled(context)
+    fun isAnySpecInjectionEnabled(context: Context): Boolean =
+        getSpecInjectionMode(context) != SpecInjectionMode.NONE
 
     /**
      * 创建通知移除时的删除 PendingIntent
@@ -123,12 +129,12 @@ object SuperIslandConfigUtils {
 
     /**
      * 验证规范信息注入开关状态，确保至少有一种开启
-     * 如果都关闭，则默认开启两者都注入
+     * 如果都关闭，则重置为固定默认 Live Updates
      */
     fun validateSpecInjectionSwitches(context: Context) {
         if (!isAnySpecInjectionEnabled(context)) {
-            StorageManager.putInt(context, SPEC_INJECTION_MODE_KEY, SpecInjectionMode.BOTH.ordinal)
-            Logger.w(TAG, "规范信息注入模式无效，已默认设置为两者都注入")
+            StorageManager.putInt(context, SPEC_INJECTION_MODE_KEY, SpecInjectionMode.LIVE_UPDATES.ordinal)
+            Logger.w(TAG, "规范信息注入模式无效，已重置为 Live Updates")
         }
     }
 }

@@ -15,13 +15,14 @@ internal data class GuidePermissionUiState(
     val notificationListener: Boolean = false,
     val queryApps: Boolean = false,
     val postNotifications: Boolean = false,
+    val localNetworkGranted: Boolean = false,
     val bluetoothConnect: Boolean = false,
     val manageExternalStorage: Boolean = false,
     val backgroundUnlimited: Boolean = false,
     val overlay: Boolean = false,
 ) {
     val requiredGranted: Boolean
-        get() = notificationListener && queryApps && postNotifications
+        get() = notificationListener && queryApps && postNotifications && localNetworkGranted
 }
 
 internal fun readGuidePermissionState(context: Context): GuidePermissionUiState {
@@ -73,6 +74,7 @@ internal fun readGuidePermissionState(context: Context): GuidePermissionUiState 
                 true
             },
         bluetoothConnect = PermissionHelper.checkBluetoothConnectPermission(context),
+        localNetworkGranted = PermissionHelper.checkLocalNetworkPermission(context),
         manageExternalStorage = PermissionHelper.checkManageExternalStoragePermission(context),
         backgroundUnlimited = PermissionHelper.checkBackgroundUnlimitedPermission(context),
         overlay = PermissionHelper.checkOverlayPermission(context),

@@ -67,7 +67,6 @@ val specInjectionOptions =
     listOf(
         "仅超级岛规范信息注入" to SpecInjectionMode.SUPER_ISLAND,
         "仅Live Updates规范信息注入" to SpecInjectionMode.LIVE_UPDATES,
-        "两者都注入" to SpecInjectionMode.BOTH,
     )
 
 @Composable
@@ -79,8 +78,7 @@ fun UISuperIslandSettings() {
     var floatingWindowEnabled by remember { mutableStateOf(StorageManager.getBoolean(context, SUPER_ISLAND_FLOATING_WINDOW_KEY, FloatingReplicaManager.getDefaultFloatingWindowEnabled())) }
     var notificationListEnabled by remember { mutableStateOf(SuperIslandConfigUtils.isNotificationListMode(context)) }
 
-    val savedInjectionModeOrdinal = StorageManager.getInt(context, SPEC_INJECTION_MODE_KEY, SpecInjectionMode.BOTH.ordinal)
-    val savedInjectionMode = SpecInjectionMode.values().getOrElse(savedInjectionModeOrdinal) { SpecInjectionMode.BOTH }
+    val savedInjectionMode = SuperIslandConfigUtils.getSpecInjectionMode(context)
     var specInjectionMode by remember { mutableStateOf(savedInjectionMode) }
 
     val hasFloatingWindowSetting = StorageManager.getString(context, SUPER_ISLAND_FLOATING_WINDOW_KEY, "") != ""
@@ -187,6 +185,9 @@ fun UISuperIslandSettings() {
                         if (index in specInjectionOptions.indices) {
                             specInjectionMode = specInjectionOptions[index].second
                             StorageManager.putInt(context, SPEC_INJECTION_MODE_KEY, specInjectionMode.ordinal)
+                            if (specInjectionMode == SpecInjectionMode.SUPER_ISLAND) {
+                                ToastUtils.showLongToast(context, "请通过lsp模块关闭超级岛白名单否则大概率无法展示")
+                            }
                         }
                     },
                 )

@@ -154,6 +154,12 @@ android {
     packaging {
         resources {
             excludes += "META-INF/DEPENDENCIES"
+            // LSPosed 模块入口声明：合并 library AAR 中的 META-INF/xposed/java_init.list 到 APK 根目录
+            merges += "META-INF/xposed/*"
+        }
+        jniLibs {
+            // 16KB 页面大小支持：使用未压缩的共享库
+            useLegacyPackaging = false
         }
     }
 }
@@ -245,6 +251,8 @@ dependencies {
     implementation(project(":checkupdata"))
     // 依赖superislandui模块
     implementation(project(":superislandui"))
+    // 依赖lsp模块（LSPosed 超级岛鉴权绕过）
+    implementation(project(":lsp"))
     // 依赖scrcpy模块
     implementation(project(":scrcpy"))
     // 依赖nativecore模块（Rust FFI 绑定 + JNA）

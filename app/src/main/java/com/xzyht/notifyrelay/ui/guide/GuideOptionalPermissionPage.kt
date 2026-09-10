@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import notifyrelay.base.util.IntentUtils
 import notifyrelay.base.util.PermissionHelper
+import notifyrelay.base.util.GuidePermissionRequester
 import notifyrelay.base.util.ToastUtils
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
@@ -36,6 +37,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 internal fun GuideOptionalPermissionPage(
+    permissionRequester: GuidePermissionRequester,
     permissionState: GuidePermissionUiState,
     onBack: () -> Unit,
     onNext: () -> Unit,
@@ -81,9 +83,7 @@ internal fun GuideOptionalPermissionPage(
                             },
                         granted = permissionState.bluetoothConnect,
                         onClick = {
-                            (context as? Activity)?.let { act ->
-                                PermissionHelper.requestBluetoothConnectPermission(act)
-                            }
+                            permissionRequester.requestBluetoothConnect()
                             showToast("开启后可优化设备发现速度，并以设备实际名称而非型号作为设备名")
                         },
                     )

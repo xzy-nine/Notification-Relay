@@ -62,7 +62,7 @@
     private java.lang.String localPublicKey;
     private java.lang.String localPrivateKey;
     private int listenPort;
-    private boolean udpDiscoveryEnabled;
+    private boolean discoveryEnabled;
 }
 
 # Keep data classes used by DeviceConnectionManager

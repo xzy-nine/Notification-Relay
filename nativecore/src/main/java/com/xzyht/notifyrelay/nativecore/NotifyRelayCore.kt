@@ -75,7 +75,11 @@ interface NotifyRelayCore : Library {
         )
     }
 
-    interface OnHeartbeatUdpCb : Callback {
+    /**
+     * TCP 扫描发现回调（Rust core 已完成自身过滤、名称解码与状态登记，
+     * 此处仅作为「设备状态有变化，请重新拉取快照」的信号）
+     */
+    interface OnDeviceDiscoveredCb : Callback {
         fun invoke(
             uuid: Pointer?,
             name: Pointer?,
@@ -83,18 +87,6 @@ interface NotifyRelayCore : Library {
             battery: Int,
             deviceType: Pointer?,
             ip: Pointer?,
-            userData: Pointer?,
-        )
-    }
-
-    interface OnMdnsDiscoveredCb : Callback {
-        fun invoke(
-            uuid: Pointer?,
-            name: Pointer?,
-            ip: Pointer?,
-            port: Short,
-            battery: Int,
-            deviceType: Pointer?,
             userData: Pointer?,
         )
     }
@@ -237,11 +229,6 @@ interface NotifyRelayCore : Library {
         cb: OnStateQueryCb?,
     )
 
-    fun nrc_set_on_heartbeat_udp_cb(
-        ctx: Pointer,
-        cb: OnHeartbeatUdpCb?,
-    )
-
     // ======== Send functions ========
     fun nrc_send_handshake(
         ctx: Pointer,
@@ -353,7 +340,7 @@ interface NotifyRelayCore : Library {
         uuid: String,
     ): Int
 
-    // ======== Core start (统一启动 TCP/UDP、心跳、离线检测、发送队列、扫描、重连、mDNS) ========
+    // ======== Core start (统一启动 TCP、心跳、离线检测、发送队列、扫描、重连) ========
     fun nrc_start_core(
         ctx: Pointer,
         uuid: String,
@@ -375,12 +362,6 @@ interface NotifyRelayCore : Library {
         battery: Int,
         deviceType: String,
     )
-
-    // 心跳模式切换：1=TCP 备用（锁屏/WLAN直连），0=广播主用（默认）
-    fun nrc_set_heartbeat_tcp_backup(
-        ctx: Pointer,
-        enabled: Int,
-    ): Int
 
     // ======== Device state snapshot ========
     fun nrc_get_device_list(
@@ -532,15 +513,10 @@ interface NotifyRelayCore : Library {
         cb: OnTcpErrorCb?,
     )
 
-    fun nrc_set_on_mdns_discovered_cb(
+    fun nrc_set_on_device_discovered_cb(
         ctx: Pointer,
-        cb: OnMdnsDiscoveredCb?,
+        cb: OnDeviceDiscoveredCb?,
     )
-
-    // ======== mDNS ========
-    fun nrc_stop_mdns_advertiser(ctx: Pointer): Int
-
-    fun nrc_stop_mdns_discovery(ctx: Pointer): Int
 
     companion object {
         private val _instance: NotifyRelayCore by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {

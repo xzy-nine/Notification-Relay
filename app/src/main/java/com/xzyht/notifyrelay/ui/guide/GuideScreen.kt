@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.xzyht.notifyrelay.ui.activity.GuideActivity
+import notifyrelay.base.util.GuidePermissionRequester
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,6 +39,7 @@ internal enum class GuideStep {
 
 @Composable
 internal fun GuideScreen(
+    permissionRequester: GuidePermissionRequester,
     themeBaseIndex: Int,
     onThemeChanged: (Int) -> Unit,
     onContinue: () -> Unit,
@@ -71,7 +73,9 @@ internal fun GuideScreen(
         // 简化 3 级页流程：
         // - reauth：仅因包名变更导致授权掉落、无新增权限，不重复同意协议；
         // - needConsent：版本更新新增了声明式权限，必须重新阅读并同意使用须知与授权说明。
-        val reauthPagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
+        // 简化流程：needConsent 须依次展示「协议页 → 必要权限页 → 完成页」（共 4 页），
+        // 仅授权掉落（reauth）则跳过协议页（共 3 页）。
+        val reauthPagerState = rememberPagerState(initialPage = 0, pageCount = { if (needConsent) 4 else 3 })
         val reauthScope = rememberCoroutineScope()
 
         fun reauthAnimateTo(index: Int) {
@@ -112,6 +116,7 @@ internal fun GuideScreen(
                         } else {
                             // 仅授权掉落：引导重新开启必要权限，不重复同意协议。
                             GuideRequiredPermissionPage(
+                                permissionRequester = permissionRequester,
                                 permissionState = permissionState,
                                 onBack = { reauthAnimateTo(0) },
                                 onNext = { reauthAnimateTo(2) },
@@ -119,9 +124,29 @@ internal fun GuideScreen(
                             )
                         }
                     2 ->
+                        if (needConsent) {
+                            // needConsent：协议页之后必须展示必要权限页，再进入完成页。
+                            GuideRequiredPermissionPage(
+                                permissionRequester = permissionRequester,
+                                permissionState = permissionState,
+                                onBack = { reauthAnimateTo(1) },
+                                onNext = { reauthAnimateTo(3) },
+                                reauth = reauth,
+                                // needConsent 紧凑流程为「欢迎 → 协议 → 必要权限 → 完成」共 4 页，
+                                // 必要权限页为第 3 步，独立于 reauth 标签
+                                stepLabel = "3 / 4",
+                            )
+                        } else {
+                            GuideCompletePage(
+                                requiredGranted = permissionState.requiredGranted,
+                                onBackToPermissions = { reauthAnimateTo(1) },
+                                onEnter = onContinue,
+                            )
+                        }
+                    3 ->
                         GuideCompletePage(
                             requiredGranted = permissionState.requiredGranted,
-                            onBackToPermissions = { reauthAnimateTo(1) },
+                            onBackToPermissions = { reauthAnimateTo(2) },
                             onEnter = onContinue,
                         )
                 }
@@ -187,6 +212,7 @@ internal fun GuideScreen(
 
                     GuideStep.REQUIRED_PERMISSIONS ->
                         GuideRequiredPermissionPage(
+                            permissionRequester = permissionRequester,
                             permissionState = permissionState,
                             onBack = { animateTo(GuideStep.AGREEMENT) },
                             onNext = { animateTo(GuideStep.OPTIONAL_PERMISSIONS) },
@@ -194,6 +220,7 @@ internal fun GuideScreen(
 
                     GuideStep.OPTIONAL_PERMISSIONS ->
                         GuideOptionalPermissionPage(
+                            permissionRequester = permissionRequester,
                             permissionState = permissionState,
                             onBack = { animateTo(GuideStep.REQUIRED_PERMISSIONS) },
                             onNext = { animateTo(GuideStep.SETTINGS) },

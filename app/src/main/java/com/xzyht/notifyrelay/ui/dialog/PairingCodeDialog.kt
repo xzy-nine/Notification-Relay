@@ -254,7 +254,15 @@ fun PairingCodeDialog(
                                                     val ctx = deviceManager.rustContextInternal
                                                     if (ctx == null) return@withContext "配对失败：未初始化"
                                                     val ltPubKey = deviceManager.localPublicKey
-                                                    val sendOk = NativeCore.sendPairingResp(ctx, remoteUuid, ltPubKey, code, remoteIp, 50, "android")
+                                                    // 与发起方/保活/扫描路径一致：上报本机真实带符号电量（正=充电，负=放电）
+                                                    val batteryLevel =
+                                                        notifyrelay.core.util.BatteryUtils
+                                                            .getBatteryLevel(deviceManager.contextInternal)
+                                                    val isCharging =
+                                                        notifyrelay.core.util.BatteryUtils
+                                                            .isCharging(deviceManager.contextInternal)
+                                                    val battery = if (isCharging) batteryLevel else -batteryLevel
+                                                    val sendOk = NativeCore.sendPairingResp(ctx, remoteUuid, ltPubKey, code, remoteIp, battery, "android")
                                                     if (sendOk != 0) return@withContext "配对失败：发送响应失败"
                                                     val success =
                                                         withTimeoutOrNull(30_000L) {

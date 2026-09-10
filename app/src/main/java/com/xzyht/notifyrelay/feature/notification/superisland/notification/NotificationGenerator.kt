@@ -13,11 +13,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import com.xzyht.notifyrelay.feature.notification.superisland.receiver.NotificationBroadcastReceiver
-import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
-import com.xzyht.notifyrelay.feature.notification.superisland.formatter.SuperIslandDataFormatter
 import com.xzyht.notifyrelay.feature.notification.superisland.config.SuperIslandConfigUtils
 import com.xzyht.notifyrelay.feature.notification.superisland.data.SuperIslandStructuredDataHelper
+import com.xzyht.notifyrelay.feature.notification.superisland.floating.FloatingWindowManager
+import com.xzyht.notifyrelay.feature.notification.superisland.formatter.SuperIslandDataFormatter
+import com.xzyht.notifyrelay.feature.notification.superisland.receiver.NotificationBroadcastReceiver
 import com.xzyht.notifyrelay.feature.notification.superisland.replica.FloatingReplicaMappingManager
 import github.xzynine.superislandui.common.BitmapUtils
 import github.xzynine.superislandui.common.CapsuleScrollManager
@@ -87,6 +87,7 @@ object NotificationGenerator {
         notificationId: Int,
         originalBuilder: NotificationCompat.Builder,
         notificationManager: NotificationManager,
+        progressStyle: NotificationCompat.ProgressStyle? = null,
     ) {
         // 移除旧的滚动Runnable
         scrollRunnable.remove(key)?.let {
@@ -128,6 +129,10 @@ object NotificationGenerator {
                             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                             .setRequestPromotedOngoing(true)
                             .setShortCriticalText(displayText)
+                            .apply {
+                                // 保留 ProgressStyle，避免滚动更新后丢失 Live Updates（超级岛）渲染
+                                progressStyle?.let { setStyle(it) }
+                            }
 
                     // 复制extras
                     val updatedNotification = updatedBuilder.build()
@@ -290,10 +295,13 @@ object NotificationGenerator {
 
             // 对于媒体类型，使用HyperCeiler焦点歌词的特殊处理
             if (isMediaType) {
+                // 检查规范信息注入模式
+                val isSuperIslandEnabled = SuperIslandConfigUtils.isSuperIslandSpecInjectionEnabled(context)
+                val isLiveUpdatesEnabled = SuperIslandConfigUtils.isLiveUpdatesSpecInjectionEnabled(context)
+
                 val builder =
                     NotificationCompat
                         .Builder(context, NOTIFICATION_CHANNEL_ID)
-                        .setContentTitle(appName ?: "媒体应用") // 使用实际应用名作为通知标题
                         .setContentText(title ?: "未知")
                         .setSmallIcon(R.drawable.stat_notify_more) // 使用系统默认图标
                         // 调整为不可被一键清除的属性，只能手动划去
@@ -303,7 +311,13 @@ object NotificationGenerator {
                         .setWhen(System.currentTimeMillis())
                         .setOnlyAlertOnce(true)
                         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                        .setRequestPromotedOngoing(true)
+                        .apply {
+                            // 仅在 Live Updates 模式下设置提升标记；
+                            // 超级岛模式设置后 SystemUI 会误判为 LiveUpdates 类并用 custom 结构渲染（左岛空白）
+                            if (isLiveUpdatesEnabled) {
+                                setRequestPromotedOngoing(true)
+                            }
+                        }
 
                 // 浮窗或列表模式下设置删除意图和点击意图
                 if (needClickIntent) {
@@ -312,31 +326,12 @@ object NotificationGenerator {
                         .setContentIntent(pendingContentIntent)
                 }
 
-                // 添加胶囊形式支持
-                try {
-                    // 使用 ProgressStyle 设置胶囊样式
-                    val segment = NotificationCompat.ProgressStyle.Segment(100)
-                    val segments = ArrayList<NotificationCompat.ProgressStyle.Segment>()
-                    segments.add(segment)
-
-                    val progressStyle =
-                        NotificationCompat
-                            .ProgressStyle()
-                            .setProgressSegments(segments)
-                            .setStyledByProgress(true)
-                            .setProgress(0)
-
-                    builder.setStyle(progressStyle)
-                } catch (e: Exception) {
-                    Logger.e(TAG, "设置胶囊样式失败: ${e.message}")
-                }
-
                 // 处理歌词拆分和显示
                 val lyricText = title ?: ""
                 var capsuleText = lyricText
                 var iconText = ""
 
-                // 检查歌词分割模式设置                // 0=默认（平板不分割，手机分割）�?=分割�?=不分�?
+                // 检查歌词分割模式设置                // 0=默认（平板不分割，手机分割）1=分割 2=不分割
                 val lyricsSplitMode = StorageManager.getInt(context, "lyrics_split_mode", 0)
                 val shouldSplit =
                     when (lyricsSplitMode) {
@@ -347,7 +342,7 @@ object NotificationGenerator {
 
                 if (shouldSplit) {
                     // 当歌词超过阈值时，拆分为图标文本和胶囊文本
-                    // 远端和本地都保持6字符开始分�?
+                    // 远端和本地都保持6字符开始分割
                     val threshold = 12
                     val textLength = TextSplitter.calculateTextLength(lyricText)
                     if (textLength > threshold) {
@@ -366,38 +361,75 @@ object NotificationGenerator {
                 val scrollKey = "${key}_scroll"
                 val displayText = CapsuleScrollManager.getCurrentDisplayText(scrollKey, capsuleText)
 
-                // 设置胶囊文本
-                builder.setShortCriticalText(displayText)
+                // 设置右侧文本为拆分后的歌词
+                builder.setContentTitle(capsuleText)
 
-                // 设置滚动更新机制
-                setupScrollUpdate(
-                    key,
-                    scrollKey,
-                    capsuleText,
-                    context,
-                    notificationId,
-                    originalBuilder = builder,
-                    notificationManager,
-                )
+                // 仅 Live Updates 模式时注入胶囊文本和添加 ProgressStyle
+                var progressStyle: NotificationCompat.ProgressStyle? = null
+                if (isLiveUpdatesEnabled) {
+                    // 设置胶囊文本
+                    builder.setShortCriticalText(displayText)
+
+                    // 添加 ProgressStyle
+                    try {
+                        val segment = NotificationCompat.ProgressStyle.Segment(100)
+                        val segments = ArrayList<NotificationCompat.ProgressStyle.Segment>()
+                        segments.add(segment)
+
+                        progressStyle =
+                            NotificationCompat
+                                .ProgressStyle()
+                                .setProgressSegments(segments)
+                                .setStyledByProgress(true)
+                                .setProgress(0)
+
+                        builder.setStyle(progressStyle)
+                    } catch (e: Exception) {
+                        Logger.e(TAG, "设置胶囊样式失败: ${e.message}")
+                    }
+                }
 
                 // picMap 已在调用方通过 SuperIslandDataFormatter 解析，直接使用
                 val resolvedPicMap = picMap ?: emptyMap()
 
-                // ... (后续构建extras的代码保持不变)
-                // 添加焦点歌词相关的结构化数据
-                SuperIslandStructuredDataHelper.addMediaSuperIslandStructuredData(
-                    builder = builder,
-                    context = context,
-                    title = title,
-                    text = text,
-                    picMap = resolvedPicMap,
-                )
+                // 仅超级岛模式时注入超级岛结构化数据
+                if (isSuperIslandEnabled) {
+                    SuperIslandStructuredDataHelper.addMediaSuperIslandStructuredData(
+                        builder = builder,
+                        context = context,
+                        title = title,
+                        text = text,
+                        picMap = resolvedPicMap,
+                        iconText = iconText,
+                        capsuleText = capsuleText,
+                    )
+                }
+
+                // 仅 Live Updates 模式时设置滚动更新机制
+                // 需在结构化数据注入之后启动，确保滚动更新首次执行时 extras 完整（模拟渲染不丢失）
+                if (isLiveUpdatesEnabled) {
+                    setupScrollUpdate(
+                        key,
+                        scrollKey,
+                        capsuleText,
+                        context,
+                        notificationId,
+                        originalBuilder = builder,
+                        notificationManager,
+                        progressStyle = progressStyle,
+                    )
+                }
 
                 // 构建通知
                 val notification = builder.build()
 
                 // 生成并注入动态图标
-                if (iconText.isNotEmpty()) {
+                if (isSuperIslandEnabled) {
+                    // 超级岛模式：不注入小图标（左岛由图文组件渲染专辑图，V3 模板不依赖小图标）
+                    // 清除 setSmallIcon 设置的默认图标（替换为透明占位），避免默认图抢占左岛专辑图展示
+                    clearSmallIcon(notification)
+                    Logger.i(TAG, "超级岛 超级岛注入模式：不注入小图标，左岛由图文组件渲染专辑图")
+                } else if (iconText.isNotEmpty()) {
                     val albumBitmap = loadAlbumBitmapOrNull(context, picMap, iconText.length)
                     val iconBitmap = BitmapUtils.textToBitmap(iconText, albumBitmap = albumBitmap)
                     if (iconBitmap != null) {
@@ -405,35 +437,22 @@ object NotificationGenerator {
                     }
                 } else {
                     // 没有图标文本时，尝试使用专辑图作为小图标
-                    var albumIconSet = false
                     val coverKey = "miui.focus.pic_cover"
                     if (!picMap.isNullOrEmpty() && picMap.containsKey(coverKey)) {
                         val coverUrl = picMap[coverKey]
                         if (!coverUrl.isNullOrBlank()) {
+                            // 同步下载专辑图
                             val bitmap = downloadBitmap(context, coverUrl)
                             if (bitmap != null) {
                                 injectSmallIcon(notification, bitmap, key)
-                                albumIconSet = true
-                            }
-                        }
-                    }
-                    // 专辑图加载失败时，尝试使用应用图标作为小图标
-                    if (!albumIconSet) {
-                        val appIconKey = "miui.focus.pic_app_icon"
-                        if (!picMap.isNullOrEmpty() && picMap.containsKey(appIconKey)) {
-                            val appIconUrl = picMap[appIconKey]
-                            if (!appIconUrl.isNullOrBlank()) {
-                                val bitmap = downloadBitmap(context, appIconUrl)
-                                if (bitmap != null) {
-                                    injectSmallIcon(notification, bitmap, key)
-                                }
                             }
                         }
                     }
                 }
 
                 // 检查是否已经有图标文本，如果有，就不再生成新的图标
-                if (iconText.isEmpty()) {
+                // 超级岛注入模式下不注入小图标（小图标会抢占左岛展示，左岛应由图文组件渲染专辑图）
+                if (!isSuperIslandEnabled && iconText.isEmpty()) {
                     // 尝试从A/B区数据中获取图标或生成位图
                     var smallIconBitmap: Bitmap? = null
 
@@ -484,11 +503,11 @@ object NotificationGenerator {
                         injectSmallIcon(notification, smallIconBitmap, key)
                     } else {
                         // 保留之前的图标，不进行修改
-                        Logger.i(TAG, "超级�? 保留之前的小图标，不进行修改")
+                        Logger.i(TAG, "超级岛 保留之前的小图标，不进行修改")
                     }
                 } else {
                     // 已经有图标文本，保留之前的图标，不进行修改
-                    Logger.i(TAG, "超级�? 已有图标文本，保留之前的小图标，不进行修改")
+                    Logger.i(TAG, "超级岛 已有图标文本，保留之前的小图标，不进行修改")
                 }
 
                 // 发送通知
@@ -681,9 +700,9 @@ object NotificationGenerator {
                         builtNotification
                     }
 
-                // 发送通知
-                notificationManager.notify(notificationId, notification)
-            }
+                    // 发送通知
+                    notificationManager.notify(notificationId, notification)
+                }
 
             // 保存entryKey到notificationId的映射
             FloatingReplicaMappingManager
@@ -799,6 +818,25 @@ object NotificationGenerator {
     }
 
     // ---- 图标注入辅助方法 ----
+
+    /**
+     * 清除小图标（超级岛模式用）：
+     * 系统需要小图标字段合法存在（不可为 null），因此将 mSmallIcon 替换为透明占位图标。
+     * 目的：左岛小图标优先级高于图文组件时，避免默认图抢占左岛专辑图展示。
+     */
+    private fun clearSmallIcon(notification: Notification) {
+        try {
+            val transparentIcon = Icon.createWithBitmap(
+                Bitmap.createBitmap(1, 1, Bitmap.Config.ALPHA_8).apply { eraseColor(android.graphics.Color.TRANSPARENT) },
+            )
+            val field = Notification::class.java.getDeclaredField("mSmallIcon")
+            field.isAccessible = true
+            field.set(notification, transparentIcon)
+            Logger.i(TAG, "超级岛 已清除小图标（注入透明占位图）")
+        } catch (e: Exception) {
+            Logger.w(TAG, "超级岛 清除小图标失败: ${e.message}")
+        }
+    }
 
     /**
      * 注入小图标到通知，同时缓存供滚动更新复用

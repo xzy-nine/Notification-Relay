@@ -9,7 +9,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -66,48 +65,11 @@ object PermissionHelper {
                 true
             }
 
-        return hasNotification && canQueryApps && hasPost
-    }
+        // 本地网络权限：仅 Android 17+（API 37）需要；低版本由 INTERNET 隐式授予，
+        // checkLocalNetworkPermission 内部已做 SDK 守卫，低版本直接返回 true，不影响必需权限判定。
+        val hasLocalNetwork = checkLocalNetworkPermission(context)
 
-    /**
-     * 请求所有必要权限并引导用户到相应的系统设置或触发运行时权限弹窗。
-     *
-     * 行为说明：
-     * - 会打开通知监听设置页面以引导用户开启通知监听权限；
-     * - 在 MIUI/澎湃系统上会尝试动态请求 `com.android.permission.GET_INSTALLED_APPS`；
-     * - 在非 MIUI/澎湃系统上会打开「使用情况访问」设置页面；
-     * - 在 Android 13+（API 33）会请求 `POST_NOTIFICATIONS` 运行时权限。
-     *
-     * @param activity 用于启动设置页面和请求运行时权限的 Activity 实例。
-     */
-    fun requestAllPermissions(activity: Activity) {
-        // 判断是否为 MIUI/澎湃系统（厂商或系统包识别）
-        val isMiui = detectMiuiOrPengpai(activity)
-
-        // 通知访问权限：引导用户打开通知监听器设置
-        val intentNotification = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-        activity.startActivity(intentNotification)
-
-        if (isMiui) {
-            // MIUI/澎湃优先动态申请应用列表权限
-            if (ContextCompat.checkSelfPermission(activity, "com.android.permission.GET_INSTALLED_APPS") != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(activity, arrayOf("com.android.permission.GET_INSTALLED_APPS"), 999)
-            }
-        } else {
-            // 非 MIUI/澎湃，使用原生应用使用情况访问权限
-            val intentUsage = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-            activity.startActivity(intentUsage)
-        }
-
-        // 通知发送权限（Android 13+）：运行时请求
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            activity.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
-        }
-
-        // 敏感通知权限现在为可选，不再强制请求
-        // if (Build.VERSION.SDK_INT >= 35 && !checkSensitiveNotificationPermission(activity)) {
-        //     requestSensitiveNotificationPermission(activity)
-        // }
+        return hasNotification && canQueryApps && hasPost && hasLocalNetwork
     }
 
     /**
@@ -192,17 +154,6 @@ object PermissionHelper {
         } else {
             true
         }
-
-    /**
-     * 请求蓝牙连接权限（Android 12+）。
-     *
-     * @param activity 用于触发运行时权限请求的 Activity。
-     */
-    fun requestBluetoothConnectPermission(activity: Activity) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 1001)
-        }
-    }
 
     /**
      * 检查应用是否具有悬浮窗（覆盖层）权限。
@@ -320,6 +271,55 @@ object PermissionHelper {
                 ?.toSet()
                 .orEmpty()
         }.getOrElse { emptySet() }
+
+    /**
+     * 本地网络访问权限名（Android 17 / API 37 新增的运行时权限）。
+     * 低版本系统中该权限不存在，因此始终以字符串字面量引用，避免编译/运行期依赖未定义的常量。
+     */
+    const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
+
+    /**
+     * 判断当前设备是否需要本地网络权限。
+     *
+     * 仅 Android 17 (API 37) 及以上、且应用 targetSdk >= 37 时返回 true。
+     * 低版本由 INTERNET 权限隐式授予本地网络访问，无需也不会请求该权限，
+     * 从而确保不影响其他旧安卓版本（避免在旧设备上把该权限当作必需权限而卡死引导流程）。
+     */
+    fun isLocalNetworkPermissionRequired(): Boolean = Build.VERSION.SDK_INT >= 37
+
+    /**
+     * 检查本地网络权限是否已授予。
+     * 低版本（不需要该权限）直接返回 true，避免影响旧安卓设备的权限判断与引导流程。
+     */
+    fun checkLocalNetworkPermission(context: Context): Boolean {
+        if (!isLocalNetworkPermissionRequired()) return true
+        return context.checkSelfPermission(LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * 从声明权限集合中剔除「当前设备版本不需要 / 无法授予」的权限。
+     *
+     * 例如 ACCESS_LOCAL_NETWORK 仅在 Android 17+ 适用；在旧安卓设备上虽然 Manifest 已声明，
+     * 但系统无法授予，若纳入「新增权限需重新同意」比对会导致旧设备误触发同意流程。
+     * 因此低版本直接剔除该权限名，从而不影响其他旧安卓版本。
+     */
+    fun getApplicableDeclaredPermissions(context: Context): Set<String> {
+        val declared = getDeclaredPermissions(context)
+        return if (isLocalNetworkPermissionRequired()) declared else declared - LOCAL_NETWORK_PERMISSION
+    }
+
+    /**
+     * 跳转到本应用详情设置页，用于引导用户在系统设置中手动授予被拒绝的权限
+     * （例如用户勾选「不再询问」后的本地网络权限）。
+     */
+    fun openAppDetailsSettings(context: Context) {
+        val intent =
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = "package:${context.packageName}".toUri()
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        context.startActivity(intent)
+    }
 
     /**
      * 检查开发者选项-停用屏幕共享保护是否已开启。

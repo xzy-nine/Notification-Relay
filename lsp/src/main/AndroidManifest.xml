@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:description="@string/xposed_description">
+        <!-- LSPosed 模块声明（静态作用域通过 META-INF/xposed/scope.list 声明） -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposedlibversion"
+            android:value="102.0.0" />
+    </application>
+</manifest>
