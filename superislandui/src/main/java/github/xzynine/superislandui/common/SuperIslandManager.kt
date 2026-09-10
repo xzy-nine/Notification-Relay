@@ -354,8 +354,9 @@ object SuperIslandManager {
             paramV2.optJSONObject("iconTextInfo")?.let { iconTextInfo ->
                 val title = iconTextInfo.optString("title", "")
                 if (title.contains("******") || title.contains("****")) {
-                    iconTextInfo.put("title", verifyCode)
-                    Logger.i("超级岛", "超级岛: 验证码回填 iconTextInfo.title: $title -> $verifyCode")
+                    val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
+                    iconTextInfo.put("title", replaced)
+                    Logger.i("超级岛", "超级岛: 验证码回填 iconTextInfo.title: $title -> $replaced")
                 }
             }
 
@@ -367,8 +368,9 @@ object SuperIslandManager {
                 ?.let { textInfo ->
                     val title = textInfo.optString("title", "")
                     if (title.contains("******") || title.contains("****")) {
-                        textInfo.put("title", verifyCode)
-                        Logger.i("超级岛", "超级岛: 验证码回填 bigIslandArea.textInfo.title: $title -> $verifyCode")
+                        val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
+                        textInfo.put("title", replaced)
+                        Logger.i("超级岛", "超级岛: 验证码回填 bigIslandArea.textInfo.title: $title -> $replaced")
                     }
                 }
         } catch (e: Exception) {

@@ -438,8 +438,9 @@ object SuperIslandProcessor {
             json.optJSONObject("iconTextInfo")?.let { iconTextInfo ->
                 val title = iconTextInfo.optString("title", "")
                 if (title.contains("******") || title.contains("****")) {
-                    iconTextInfo.put("title", verifyCode)
-                    Logger.i(TAG, "替换 iconTextInfo.title: $title -> $verifyCode")
+                    val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
+                    iconTextInfo.put("title", replaced)
+                    Logger.i(TAG, "替换 iconTextInfo.title: $title -> $replaced")
                 }
             }
 
@@ -449,8 +450,9 @@ object SuperIslandProcessor {
                     bigIslandArea.optJSONObject("textInfo")?.let { textInfo ->
                         val title = textInfo.optString("title", "")
                         if (title.contains("******") || title.contains("****")) {
-                            textInfo.put("title", verifyCode)
-                            Logger.i(TAG, "替换 bigIslandArea.textInfo.title: $title -> $verifyCode")
+                            val replaced = title.replace("******", verifyCode).replace("****", verifyCode)
+                            textInfo.put("title", replaced)
+                            Logger.i(TAG, "替换 bigIslandArea.textInfo.title: $title -> $replaced")
                         }
                     }
                 }
